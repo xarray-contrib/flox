@@ -1,0 +1,6 @@
+include LICENSE
+include README.rst
+
+recursive-include dask_groupby *.py
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]

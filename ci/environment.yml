@@ -1,0 +1,13 @@
+name: sandbox-devel
+channels:
+  - conda-forge
+dependencies:
+  - codecov
+  - netcdf4
+  - pip
+  - pytest
+  - pytest-cov
+  - xarray
+  - numpydoc
+  - nbsphinx
+  - pre-commit

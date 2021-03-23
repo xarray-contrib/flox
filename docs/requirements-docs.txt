@@ -1,0 +1,6 @@
+numpydoc
+pydata-sphinx-theme
+nbsphinx
+ipython
+ipykernel
+- r ../requirements.txt

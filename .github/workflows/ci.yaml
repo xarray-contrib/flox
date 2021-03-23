@@ -1,0 +1,82 @@
+name: CI
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    branches:
+      - "*"
+  schedule:
+    - cron: "0 0 * * *" # Daily “At 00:00”
+  workflow_dispatch: # allows you to trigger manually
+
+jobs:
+  build:
+    name: Build (${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest"]
+        python-version: ["3.6", "3.7", "3.8"]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cache conda
+        uses: actions/cache@v2
+        env:
+          # Increase this value to reset cache if ci/environment.yml has not changed
+          CACHE_NUMBER: 0
+        with:
+          path: ~/conda_pkgs_dir
+          key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('ci/environment.yml') }}
+      - uses: goanpeca/setup-miniconda@v1
+        with:
+          activate-environment: sandbox-devel # Defined in ci/environment.yml
+          auto-update-conda: false
+          python-version: ${{ matrix.python-version }}
+          environment-file: ci/environment.yml
+          use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
+      - name: Set up conda environment
+        shell: bash -l {0}
+        run: |
+          python -m pip install -e .
+          conda list
+
+      - name: Run Tests
+        shell: bash -l {0}
+        run: |
+          pytest --cov=./ --cov-report=xml
+
+      - name: Upload code coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          env_vars: OS,PYTHON
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  docs-build:
+    name: Documentation build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+            python-version: 3.8
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install -r docs/requirements-docs.txt
+
+      - name: Build docs
+        run: |
+          cd docs
+          make html
