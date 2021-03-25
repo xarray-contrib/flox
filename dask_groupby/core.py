@@ -165,6 +165,14 @@ def groupby_agg(
     return result
 
 
+# TODO: move to _npg_aggregate?
+def reindex_(array, groups, output_groups, axis):
+    idx = np.array([np.argwhere(groups == bb)[0, 0] for bb in output_groups])
+    indexer = [slice(None, None)] * array.ndim
+    indexer[axis] = idx
+    return array[tuple(indexer)]
+
+
 def groupby_reduce(
     array: DaskArray,
     to_group: DaskArray,
@@ -186,5 +194,20 @@ def groupby_reduce(
     for reduction in func:
         if reduction == "mean":
             result["mean"] = intermediate["sum"] / intermediate["count"]
+        else:
+            result[reduction] = intermediate[reduction]
+
+    if expected_groups is not None:
+        for key in result:
+            if key == "groups":
+                result[key] = np.array(expected_groups)
+            else:
+                result[key] = result[key].map_blocks(
+                    reindex_,
+                    intermediate["groups"],
+                    expected_groups,
+                    axis=-1,
+                    meta=result[key]._meta,
+                )
 
     return result
