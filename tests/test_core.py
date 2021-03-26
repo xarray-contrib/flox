@@ -58,3 +58,6 @@ def test_groupby_agg(array, to_group):
     expected = aggregate(to_group.compute(), array.compute(), func="sum", axis=-1)
     actual = groupby_reduce(array, to_group, func=("sum",), expected_groups=[0, 1, 2])["sum"]
     assert_array_equal(expected, actual)
+
+    actual = groupby_reduce(array, to_group, func=("sum",), expected_groups=[0, 2, 1])["sum"]
+    assert_array_equal(expected, actual[..., [0, 2, 1]])

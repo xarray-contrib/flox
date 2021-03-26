@@ -155,7 +155,7 @@ def groupby_agg(
             dtype=object,  # TODO: change appropriately
         )
     else:
-        result["groups"] = np.array(expected_groups)
+        result["groups"] = np.sort(expected_groups)
 
     for reduction in func:
         result[reduction] = DaskArray(
