@@ -33,20 +33,22 @@ def chunk_reduce(array, to_group, func, fill_value=0, size=None):
     # TODO: deal with NaNs in to_group
     # assert (axis == np.sort(axis)).all()
 
-    newshape = (np.prod(array.shape[: to_group.ndim]),) + array.shape[to_group.ndim :]
+    # reshape to 1D along group dimensions
+    newshape = array.shape[: array.ndim - to_group.ndim] + (np.prod(array.shape[-to_group.ndim :]),)
     array = array.reshape(newshape)
 
     # mask = np.logical_not(np.isnan(to_group))
     # group_idx = digitized[mask].astype(int)
 
-    results = {"groups": groups}
+    sortidx = np.argsort(groups)
+    results = {"groups": groups[sortidx]}
     for reduction in func:
         results[reduction] = npg.aggregate_numpy.aggregate(
             group_idx,
             array,
-            axis=0,
+            axis=-1,
             func=reduction,
-        )
+        )[..., sortidx]
     return results
 
 
@@ -67,7 +69,7 @@ def _npg_aggregate(x_chunk, func, axis, keepdims):
 
         # some magic
         mapped = deepmap(lambda x: x[key], x_chunk)
-        return _concatenate2(mapped, axes=(0,))
+        return _concatenate2(mapped, axes=(-1,))
 
     groups = _conc2("groups")
     # print(groups)
@@ -93,12 +95,12 @@ def groupby_agg(
     # TODO: Make gufunc compatible by expecting aggregated dimensions at the end
     #       instead of at the beginning
     inds = tuple(range(array.ndim))
-    axis = tuple(range(to_group.ndim))
-    assert array.shape[: to_group.ndim] == to_group.shape
+    axis = tuple(array.ndim - np.arange(to_group.ndim) - 1)
+    assert array.shape[-to_group.ndim :] == to_group.shape
 
     group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
     output_chunks = tuple(array.chunks[i] for i in range(array.ndim) if i not in axis)
-    output_chunks = (group_chunks,) + (output_chunks)
+    output_chunks = output_chunks + (group_chunks,)
 
     # apply reduction on chunk
     applied = dask.array.blockwise(
@@ -107,7 +109,7 @@ def groupby_agg(
         array,
         inds,
         to_group,
-        inds[: to_group.ndim],
+        inds[-to_group.ndim :],
         concatenate=False,
         dtype=array.dtype,
         meta=array._meta,
@@ -126,9 +128,9 @@ def groupby_agg(
     )
 
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
-    ichunks = (range(1),) * len(axis) + tuple(
-        range(len(chunks_v)) for chunks_v in array.chunks[len(axis) :]
-    )
+    ichunks = tuple(range(len(chunks_v)) for chunks_v in array.chunks[len(axis) :]) + (
+        range(1),
+    ) * len(axis)
     # TODO: write as dict comprehension
     # TODO: check that inchunk is right
     # extract results from the dict
