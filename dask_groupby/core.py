@@ -264,6 +264,9 @@ def groupby_reduce(
 ) -> Mapping[str, DaskArray]:
     rewrite_func = {"mean": (("sum", "count"))}
 
+    if not isinstance(array, DaskArray) and not isinstance(to_group, DaskArray):
+        return chunk_reduce(array, to_group, func, axis, expected_groups)
+
     if isinstance(func, str):
         func = [func]
 

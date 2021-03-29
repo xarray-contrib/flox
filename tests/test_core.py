@@ -21,6 +21,7 @@ def assert_equal(a, b):
     func(a, b)
 
 
+@pytest.mark.parametrize("reduce_", [chunk_reduce, groupby_reduce])
 @pytest.mark.parametrize(
     "array, to_group",
     [
@@ -29,10 +30,10 @@ def assert_equal(a, b):
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_chunk_reduce(array, to_group):
+def test_chunk_reduce(array, to_group, reduce_):
     expected = aggregate(to_group, array, func="sum", size=None, axis=-1)
 
-    result = chunk_reduce(array, to_group, func=("sum",))
+    result = reduce_(array, to_group, func=("sum",))
     actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=-1)
     assert_equal(expected, actual)
 
