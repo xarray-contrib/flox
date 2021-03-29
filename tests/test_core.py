@@ -61,3 +61,24 @@ def test_groupby_agg(array, to_group):
 
     actual = groupby_reduce(array, to_group, func=("sum",), expected_groups=[0, 2, 1])["sum"]
     assert_array_equal(expected, actual[..., [0, 2, 1]])
+
+
+def test_axis_subset():
+
+    newlabels = np.array([labels[:5], np.flip(labels[:5])])
+    to_group = newlabels
+    array = np.ones_like(to_group)
+    result = chunk_reduce(array, to_group, ("count",), axis=1)
+    assert_array_equal(result["count"], [[2, 3], [2, 3]])
+
+    to_group = np.broadcast_to(newlabels, (3, *newlabels.shape))
+    array = np.ones_like(to_group)
+    result = chunk_reduce(array, to_group, ("count",), axis=1)
+    sub = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]])
+    expected = np.tile(sub, (3, 1, 1))
+    assert_array_equal(result["count"], expected)
+
+    result = chunk_reduce(array, to_group, ("count",), axis=2)
+    sub = np.array([[2, 3], [2, 3]])
+    expected = np.tile(sub, (3, 1, 1))
+    assert_array_equal(result["count"], expected)

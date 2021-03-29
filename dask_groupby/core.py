@@ -16,24 +16,77 @@ DaskArray = dask.array.Array
 _agg_reduction = {"count": "sum"}
 
 
-def chunk_reduce(array, to_group, func, fill_value=0, size=None):
+def offset_labels(a):
+    """
+    Offset group labels by dimension.
+    Copied from https://stackoverflow.com/questions/46256279/bin-elements-per-row-vectorized-2d-bincount-for-numpy
+    """
+    N = a.max() + 1
+    offset = a + np.arange(np.prod(a.shape[:-1])).reshape((*a.shape[:-1], -1)) * N
+    # print("N =", N, "offset = ", offset)
+    size = np.prod(a.shape[:-1]) * N
+    return offset, N, size
+
+
+def chunk_reduce(array, to_group, func, axis=None):
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
     mD ``to_group``.
+
+    Core groupby reduction using numpy_groupies. Uses ``pandas.factorize`` to factorize
+    ``to_group``. Offsets the groups if not reducing along all dimensions of ``to_group``.
+    Always ravels ``to_group`` to 1D, flattens appropriate dimensions of array.
+
+    When dask arrays are passed to groupby_reduce, this function is called on every
+    block.
+
+    Parameters
+    ----------
+    array: numpy.ndarray
+        Array of values to reduced
+    to_group: numpy.ndarray
+        Array to group by.
+    func: str or Tuple[str]
+        Name of reduction, passed to numpy_groupies. Supports multiple reductions.
+    axis: (optional) int or Tuple[int]
+        If None, reduce along all dimensions of to_group.
+        Else reduce along specified axes
+
+    Returns
+    -------
+    dict
     """
 
-    # if indices = [2, 2, 2], npg assumes groups are (0, 1, 2);
+    if isinstance(func, str):
+        func = (func,)
+
+    if to_group.ndim == 1:
+        assert axis in (0, None)
+        axis = None
+
+    if np.isscalar(axis) and axis != -1 and axis != to_group.ndim:
+        to_group = np.swapaxes(to_group, axis, -1)
+        array = np.swapaxes(array, axis, -1)
+
+    # if indices=[2,2,2], npg assumes groups are (0, 1, 2);
     # and will return a result that is bigger than necessary
     # avoid by factorizing again so indices=[2,2,2] is changed to
-    # indices=[0,0,0]
-
+    # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
     group_idx, groups = pd.factorize(to_group.ravel())
+    final_shape = to_group.shape[:-1]
+    size = None
+
+    if axis is not None:
+        # Not reducing along all dimensions of to_group
+        # offset the group ids
+        group_idx, N, size = offset_labels(group_idx.reshape(to_group.shape))
+        group_idx = group_idx.ravel()
 
     # TODO: deal with NaNs in to_group
     # assert (axis == np.sort(axis)).all()
 
-    # reshape to 1D along group dimensions
+    # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - to_group.ndim] + (np.prod(array.shape[-to_group.ndim :]),)
     array = array.reshape(newshape)
 
@@ -43,12 +96,16 @@ def chunk_reduce(array, to_group, func, fill_value=0, size=None):
     sortidx = np.argsort(groups)
     results = {"groups": groups[sortidx]}
     for reduction in func:
-        results[reduction] = npg.aggregate_numpy.aggregate(
+        result = npg.aggregate_numpy.aggregate(
             group_idx,
             array,
             axis=-1,
             func=reduction,
-        )[..., sortidx]
+            size=size,
+        )
+        if axis is not None:
+            result = result.reshape(*final_shape, N)
+        results[reduction] = result[..., sortidx]
     return results
 
 
