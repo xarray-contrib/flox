@@ -9,15 +9,13 @@ import numpy_groupies as npg
 import pandas as pd
 from dask.highlevelgraph import HighLevelGraph
 
-DaskArray = dask.array.Array
-
 # how to aggregate results after first round of reduction
 # e.g. we "sum" the "count" to aggregate counts across blocks
 _agg_reduction = {"count": "sum"}
 fill_values = {"count": 0}
 
 
-def reindex_(array, from_, to, fill_value=0, axis=-1):
+def reindex_(array: np.ndarray, from_, to, fill_value=0, axis=-1):
 
     assert axis in (0, -1)
     idx = np.array([np.argwhere(np.array(from_) == bb)[0, 0] if bb in from_ else -1 for bb in to])
@@ -32,7 +30,7 @@ def reindex_(array, from_, to, fill_value=0, axis=-1):
     return reindexed
 
 
-def offset_labels(a):
+def offset_labels(a: np.ndarray):
     """
     Offset group labels by dimension.
     Copied from https://stackoverflow.com/questions/46256279/bin-elements-per-row-vectorized-2d-bincount-for-numpy
@@ -44,7 +42,13 @@ def offset_labels(a):
     return offset, N, size
 
 
-def chunk_reduce(array, to_group, func, axis=None, expected_groups=None):
+def chunk_reduce(
+    array: np.ndarray,
+    to_group: np.ndarray,
+    func: Union[str, Iterable[str]],
+    expected_groups: Iterable = None,
+    axis: Union[int, Iterable[int]] = None,
+):
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
     mD ``to_group``.
@@ -62,9 +66,9 @@ def chunk_reduce(array, to_group, func, axis=None, expected_groups=None):
         Array of values to reduced
     to_group: numpy.ndarray
         Array to group by.
-    func: str or Tuple[str]
+    func: str or Iterable[str]
         Name of reduction, passed to numpy_groupies. Supports multiple reductions.
-    axis: (optional) int or Tuple[int]
+    axis: (optional) int or Iterable[int]
         If None, reduce along all dimensions of to_group.
         Else reduce along specified axes
 
@@ -77,7 +81,7 @@ def chunk_reduce(array, to_group, func, axis=None, expected_groups=None):
         func = (func,)
 
     if isinstance(axis, Iterable) and len(axis) == 1:
-        axis = axis[0]
+        axis = next(iter(axis))
 
     if to_group.ndim == 1:
         assert axis in (0, -1, array.ndim - 1, None)
@@ -174,8 +178,8 @@ def _npg_aggregate(x_chunk, func, expected_groups, axis, keepdims):
 
 
 def groupby_agg(
-    array: DaskArray,
-    to_group: DaskArray,
+    array: dask.array.Array,
+    to_group: dask.array.Array,
     func: Union[str, Iterable[str]],
     expected_groups: Iterable = None,
     axis=None,
@@ -190,8 +194,6 @@ def groupby_agg(
     else:
         reduced_ndim = 1
     axis = tuple(array.ndim - np.arange(reduced_ndim) - 1)
-
-    assert array.shape[-to_group.ndim :] == to_group.shape
 
     # apply reduction on chunk
     applied = dask.array.blockwise(
@@ -236,7 +238,7 @@ def groupby_agg(
 
     result = {}
     if expected_groups is None:
-        result["groups"] = DaskArray(
+        result["groups"] = dask.array.Array(
             HighLevelGraph.from_collections("groups", layer, dependencies=[reduced]),
             "groups",
             chunks=(group_chunks,),
@@ -246,7 +248,7 @@ def groupby_agg(
         result["groups"] = np.sort(expected_groups)  # TODO: check
 
     for reduction in func:
-        result[reduction] = DaskArray(
+        result[reduction] = dask.array.Array(
             HighLevelGraph.from_collections(reduction, layer, dependencies=[reduced]),
             reduction,
             chunks=output_chunks,
@@ -256,16 +258,41 @@ def groupby_agg(
 
 
 def groupby_reduce(
-    array: DaskArray,
-    to_group: DaskArray,
+    array: Union[np.ndarray, dask.array.Array],
+    to_group: Union[np.ndarray, dask.array.Array],
     func: Union[str, Iterable[str]],
     expected_groups: Iterable = None,
     axis=None,
-) -> Mapping[str, DaskArray]:
+) -> Mapping[str, Union[dask.array.Array, np.ndarray]]:
+    """
+    Dask-aware GroupBy reductions
+
+    Parameters
+    ----------
+    array: numpy.ndarray, dask.array.Array
+        Array to be reduced, nD
+    to_group: numpy.ndarray, dask.array.Array
+        Array of labels to group over. Must be aligned with `array` so that
+            ``array.shape[-to_group.ndim :] == to_group.shape``
+    func: str or Iterable[str]
+        Single function name or an Iterable of function names
+    expected_groups: (optional) Iterable
+        Expected unique labels.
+    axis: (optional) None or int or Iterable[int]
+        Axes over which to reduce.
+
+    Returns
+    -------
+    dict[str, [np.ndarray, dask.array.Array]]
+        Keys include ``"groups"`` and ``func``.
+    """
+
+    assert array.shape[-to_group.ndim :] == to_group.shape
+
     rewrite_func = {"mean": (("sum", "count"))}
 
-    if not isinstance(array, DaskArray) and not isinstance(to_group, DaskArray):
-        return chunk_reduce(array, to_group, func, axis, expected_groups)
+    if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
+        return chunk_reduce(array, to_group, func, axis, expected_groups)  # type: ignore
 
     if isinstance(func, str):
         func = [func]
