@@ -105,6 +105,7 @@ def test_groupby_reduce_axis_subset():
             da.from_array(to_group, chunks=(2, 2)),
             ("count",),
             axis=1,
+            expected_groups=[0, 2],
         )
     assert_equal(result["count"], [[2, 3], [2, 3]])
 
@@ -118,6 +119,7 @@ def test_groupby_reduce_axis_subset():
             da.from_array(to_group, chunks=(2, 2, 2)),
             ("count",),
             axis=1,
+            expected_groups=[0, 2],
         )
     assert_equal(result["count"], expected)
 
@@ -129,5 +131,23 @@ def test_groupby_reduce_axis_subset():
             da.from_array(to_group, chunks=(2, 2, 2)),
             ("count",),
             axis=2,
+            expected_groups=[0, 2],
         )
     assert_equal(result["count"], expected)
+
+    with pytest.raises(NotImplementedError):
+        groupby_reduce(
+            da.from_array(array, chunks=(1, 2, 3)),
+            da.from_array(to_group, chunks=(2, 2, 2)),
+            ("count",),
+            axis=2,
+        )
+
+
+def test_reindex():
+    array = np.array([1, 2])
+    groups = np.array(["a", "b"])
+    expected_groups = ["a", "b", "c"]
+    fill_value = 0
+    result = reindex_(array, groups, expected_groups, fill_value, axis=-1)
+    assert_equal(result, np.array([1, 2, 0]))
