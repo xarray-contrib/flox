@@ -22,18 +22,18 @@ def assert_equal(a, b):
 
 
 @pytest.mark.parametrize(
-    "array, to_group, size, axis",
+    "array, to_group",
     [
-        (np.ones((12,)), labels, None, -1),  # form 1
-        (np.ones((2, 12)), labels, None, -1)  # form 3
-        # (np.ones((12,)), np.array([labels, labels]), (3, 3)),  # form 4
+        (np.ones((12,)), labels),  # form 1
+        (np.ones((2, 12)), labels),  # form 3
+        # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_chunk_reduce(array, to_group, size, axis):
-    expected = aggregate(to_group, array, func="sum", size=size, axis=axis)
+def test_chunk_reduce(array, to_group):
+    expected = aggregate(to_group, array, func="sum", size=None, axis=-1)
 
     result = chunk_reduce(array, to_group, func=("sum",))
-    actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=axis)
+    actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=-1)
     assert_equal(expected, actual)
 
 

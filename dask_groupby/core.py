@@ -193,17 +193,6 @@ def groupby_agg(
 
     assert array.shape[-to_group.ndim :] == to_group.shape
 
-    chunks, (array, to_group) = dask.array.unify_chunks(
-        array, inds, to_group, inds[-to_group.ndim :]
-    )
-
-    # TODO: blockwise could rechunk; do unify_chunks manually
-    group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
-    output_chunks = tuple(array.chunks[i] for i in range(array.ndim) if i not in axis)
-    output_chunks = output_chunks + (group_chunks,)
-    # print(output_chunks)
-    # print(chunks)
-
     # apply reduction on chunk
     applied = dask.array.blockwise(
         partial(chunk_reduce, func=func, axis=axis, expected_groups=expected_groups),
@@ -216,10 +205,10 @@ def groupby_agg(
         dtype=array.dtype,
         meta=array._meta,
         name="groupby-chunk-reduce",
-        align_arrays=False,
     )
 
-    # reduced is a dict mapping reduction name to array and "groups" to an array of group labels
+    # reduced is really a dict mapping reduction name to array
+    # and "groups" to an array of group labels
     reduced = dask.array.reductions._tree_reduce(
         applied,
         aggregate=partial(_npg_aggregate, func=func, expected_groups=expected_groups),
@@ -230,14 +219,11 @@ def groupby_agg(
         concatenate=False,
     )
 
-    ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
-    # ichunks = tuple(range(len(chunks_v)) for chunks_v in array.chunks[len(axis) :]) + (
-    #    range(1),
-    # ) * len(axis)
-    # print(ochunks, ichunks)
-    # TODO: write as dict comprehension
-    # TODO: check that inchunk is right
+    group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
+    output_chunks = reduced.chunks[:-1] + (group_chunks,)
+
     # extract results from the dict
+    ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
     layer = {}
     for reduction in func:
         for ochunk in itertools.product(*ochunks):
@@ -248,8 +234,6 @@ def groupby_agg(
     layer[("groups", 0)] = (getitem, (reduced.name, *first_block), "groups")
     print(layer)
 
-    # TODO: is this the best way to create multiple output arrays from a single graph?
-    # it looks like the approach in dask.array.apply_gufunc
     result = {}
     if expected_groups is None:
         result["groups"] = DaskArray(
