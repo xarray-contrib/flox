@@ -12,7 +12,10 @@ from dask.highlevelgraph import HighLevelGraph
 # how to aggregate results after first round of reduction
 # e.g. we "sum" the "count" to aggregate counts across blocks
 _agg_reduction = {"count": "sum"}
-fill_values = {"count": 0}
+
+# These are used to reindex to expected_groups.
+# They should make sense when aggregated together with results from other blocks
+fill_values = {"count": 0, "sum": 0}
 
 
 def reindex_(array: np.ndarray, from_, to, fill_value=0, axis=-1):
@@ -134,7 +137,9 @@ def chunk_reduce(
         if axis is not None:
             result = result.reshape(*final_shape, N)
         if expected_groups:
-            results[reduction] = reindex_(result, groups, expected_groups)
+            results[reduction] = reindex_(
+                result, groups, expected_groups, fill_value=fill_values[reduction]
+            )
         else:
             results[reduction] = result[..., sortidx]
 
@@ -326,4 +331,6 @@ def groupby_reduce(
         else:
             result[reduction] = intermediate[reduction]
 
+    # TODO: deal with NaNs and fill_values here if there are labels in
+    # expected_groups that are missing
     return result
