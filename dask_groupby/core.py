@@ -231,17 +231,16 @@ def groupby_agg(
     )
 
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
-    ichunks = tuple(range(len(chunks_v)) for chunks_v in array.chunks[len(axis) :]) + (
-        range(1),
-    ) * len(axis)
-    print(ochunks, ichunks)
+    # ichunks = tuple(range(len(chunks_v)) for chunks_v in array.chunks[len(axis) :]) + (
+    #    range(1),
+    # ) * len(axis)
+    # print(ochunks, ichunks)
     # TODO: write as dict comprehension
     # TODO: check that inchunk is right
     # extract results from the dict
     layer = {}
     for reduction in func:
         for ochunk in itertools.product(*ochunks):
-            # print(ochunk)
             layer[(reduction, *ochunk)] = (getitem, (reduced.name, *ochunk), reduction)
 
     # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
