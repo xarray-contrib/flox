@@ -170,6 +170,8 @@ def test_groupby_reduce_nans():
     to_group = np.full((3, 5, 2), fill_value=np.nan)
     array = np.ones_like(to_group)
 
+    # along an axis; requires expected_group
+    # TODO: this should check for fill_value
     result = chunk_reduce(
         da.from_array(array, chunks=(2, 2, 3)),
         da.from_array(to_group, chunks=(2, 2, 2)),
@@ -178,6 +180,23 @@ def test_groupby_reduce_nans():
         axis=2,
     )
     assert_equal(result["count"], np.zeros(array.shape[:-1] + (3,)))
+
+    # global reduction; 0 shaped group axis
+    result = chunk_reduce(
+        da.from_array(array, chunks=(2, 2, 3)),
+        da.from_array(to_group, chunks=(2, 2, 2)),
+        ("count",),
+        expected_groups=[0, 1, 2],
+    )
+    assert_equal(result["count"], np.zeros((3,)))
+
+    # global reduction; 0 shaped group axis
+    result = chunk_reduce(
+        da.from_array(array, chunks=(2, 2, 3)),
+        da.from_array(to_group, chunks=(2, 2, 2)),
+        ("count",),
+    )
+    assert_equal(result["count"], np.zeros((0,)))
 
     # now when subsets are NaN
     labels = np.array([0, 0, 1, 1, 1], dtype=float)
