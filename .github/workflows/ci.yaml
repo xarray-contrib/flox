@@ -2,7 +2,7 @@ name: CI
 on:
   push:
     branches:
-      - "*"
+      - "main"
   pull_request:
     branches:
       - "*"
@@ -14,28 +14,49 @@ jobs:
   build:
     name: Build (${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -l {0}
     strategy:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest"]
-        python-version: ["3.6", "3.7", "3.8"]
+        python-version: ["3.7", "3.8", "3.9"]
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # Fetch all history for all branches and tags.
+      - name: Set environment variables
+        run: |
+          if [[ ${{ matrix.os }} == windows* ]] ;
+          then
+            echo "CONDA_ENV_FILE=ci/environment-windows.yml" >> $GITHUB_ENV
+          else
+            echo "CONDA_ENV_FILE=ci/environment.yml" >> $GITHUB_ENV
+
+          fi
+          echo "PYTHON_VERSION=${{ matrix.python-version }}" >> $GITHUB_ENV
       - name: Cache conda
         uses: actions/cache@v2
-        env:
-          # Increase this value to reset cache if ci/environment.yml has not changed
-          CACHE_NUMBER: 0
         with:
           path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('ci/environment.yml') }}
-      - uses: goanpeca/setup-miniconda@v1
+          key:
+            ${{ runner.os }}-conda-py${{ matrix.python-version }}-${{
+            hashFiles('ci/requirements/**.yml') }}
+      - uses: conda-incubator/setup-miniconda@v2
         with:
-          activate-environment: sandbox-devel # Defined in ci/environment.yml
+          channels: conda-forge
+          channel-priority: strict
+          mamba-version: "*"
+          activate-environment: sandbox-devel
           auto-update-conda: false
           python-version: ${{ matrix.python-version }}
-          environment-file: ci/environment.yml
-          use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
+          use-only-tar-bz2: true
+
+      - name: Install conda dependencies
+        run: |
+          mamba env update -f $CONDA_ENV_FILE
+
       - name: Set up conda environment
         shell: bash -l {0}
         run: |
@@ -52,7 +73,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
-          env_vars: OS,PYTHON
+          env_vars: RUNNER_OS,PYTHON_VERSION
           name: codecov-umbrella
           fail_ci_if_error: false
 

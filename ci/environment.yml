@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - codecov
+  - dask
   - netcdf4
   - pip
   - pytest
@@ -11,3 +12,4 @@ dependencies:
   - numpydoc
   - nbsphinx
   - pre-commit
+  - numpy_groupies
