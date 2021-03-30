@@ -36,8 +36,8 @@ jobs:
 
           fi
           echo "PYTHON_VERSION=${{ matrix.python-version }}" >> $GITHUB_ENV
-            - name: Cache conda
-      - uses: actions/cache@v2
+      - name: Cache conda
+        uses: actions/cache@v2
         with:
           path: ~/conda_pkgs_dir
           key:
