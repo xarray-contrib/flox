@@ -119,31 +119,45 @@ def chunk_reduce(
     array = array.reshape(newshape)
 
     # pd.factorize uses -1 to indicate NaNs
+    assert group_idx.ndim == 1
     mask = np.logical_not(group_idx == -1)
+    empty = np.all(~mask) or np.prod(to_group.shape) == 0
+    if empty:
+        print("empty!")
 
-    # print(array)
-    if expected_groups:
+    if expected_groups is not None:
         results = {"groups": expected_groups}
+        ngroups = len(expected_groups)
     else:
-        sortidx = np.argsort(groups)
-        results = {"groups": groups[sortidx]}
+        if empty:
+            results = {"groups": np.array([])}
+            ngroups = 0
+        else:
+            sortidx = np.argsort(groups)
+            results = {"groups": groups[sortidx]}
 
     for reduction in func:
-        result = npg.aggregate_numpy.aggregate(
-            group_idx[..., mask],
-            array[..., mask],
-            axis=-1,
-            func=reduction,
-            size=size,
-        )
-        if axis is not None:
-            result = result.reshape(*final_shape, N)
-        if expected_groups:
-            results[reduction] = reindex_(
-                result, groups, expected_groups, fill_value=fill_values[reduction]
+        if empty:
+            results[reduction] = np.full(
+                shape=final_shape + (ngroups,), fill_value=fill_values[reduction]
             )
         else:
-            results[reduction] = result[..., sortidx]
+            result = npg.aggregate_numpy.aggregate(
+                group_idx[..., mask],
+                array[..., mask],
+                axis=-1,
+                func=reduction,
+                size=size,
+            )
+            if axis is not None:
+                result = result.reshape(*final_shape, N)
+            if expected_groups is not None:
+                print(groups, expected_groups)
+                results[reduction] = reindex_(
+                    result, groups, expected_groups, fill_value=fill_values[reduction]
+                )
+            else:
+                results[reduction] = result[..., sortidx]
 
     return results
 
