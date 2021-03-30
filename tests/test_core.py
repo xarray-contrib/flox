@@ -38,16 +38,18 @@ def assert_equal(a, b):
         (np.ones((12,)), nan_labels, [1, 4, 2]),  # form 1
         (np.ones((2, 12)), labels, [[3, 4, 5], [3, 4, 5]]),  # form 3
         (np.ones((2, 12)), nan_labels, [[1, 4, 2], [1, 4, 2]]),  # form 3
+        (np.ones((2, 12)), np.array([labels, labels]), [6, 8, 10]),  # form 1 after reshape
+        (np.ones((2, 12)), np.array([nan_labels, nan_labels]), [2, 8, 4]),  # form 1 after reshape
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_chunk_reduce(array, to_group, expected, reduce_, expected_groups):
+def test_numpy_reduce(array, to_group, expected, reduce_, expected_groups):
     result = reduce_(array, to_group, func=("sum",), expected_groups=expected_groups)
     assert_equal(expected, result["sum"])
 
 
 @pytest.mark.parametrize("reduce_", [chunk_reduce, groupby_reduce])
-def test_chunk_reduce_nd_md(reduce_):
+def test_numpy_reduce_nd_md(reduce_):
     array = np.ones((2, 12))
     to_group = np.array([labels] * 2)
 
