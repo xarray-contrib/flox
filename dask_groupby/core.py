@@ -85,11 +85,18 @@ def chunk_reduce(
     if isinstance(func, str):
         func = (func,)
 
-    if isinstance(axis, Iterable) and len(axis) == 1:
-        axis = next(iter(axis))
+    if isinstance(axis, Iterable):
+        if len(axis) == 1:
+            axis = next(iter(axis))
+        elif np.all(np.sort(axis) == np.arange(array.ndim)):
+            # None indicates reduction along all axes
+            axis = None
 
     if to_group.ndim == 1:
-        assert axis in (0, -1, array.ndim - 1, None)
+        # This asserton doesn't work with dask reducing across all dimensions
+        # when to_group.ndim == array.ndim
+        # the intermediates are 1D but axis=range(array.ndim)
+        # assert axis in (0, -1, array.ndim - 1, None)
         axis = None
 
     if np.isscalar(axis) and axis != -1 and axis != to_group.ndim:
@@ -102,7 +109,6 @@ def chunk_reduce(
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
     group_idx, groups = pd.factorize(to_group.ravel())
-    final_shape = to_group.shape[:-1]
     size = None
 
     if axis is not None:
@@ -117,6 +123,10 @@ def chunk_reduce(
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - to_group.ndim] + (np.prod(array.shape[-to_group.ndim :]),)
     array = array.reshape(newshape)
+    if axis is None:
+        final_shape = array.shape[:-1]
+    else:
+        final_shape = to_group.shape[:-1]
 
     # pd.factorize uses -1 to indicate NaNs
     assert group_idx.ndim == 1
@@ -238,6 +248,8 @@ def groupby_agg(
 
     # reduced is really a dict mapping reduction name to array
     # and "groups" to an array of group labels
+    # Note: it does not make sense to interpret axis relative to
+    # shape of intermediate results after the blockwise call
     reduced = dask.array.reductions._tree_reduce(
         applied,
         aggregate=partial(_npg_aggregate, func=func, expected_groups=expected_groups),
