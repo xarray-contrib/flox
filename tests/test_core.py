@@ -9,10 +9,16 @@ from dask_groupby.core import chunk_reduce, groupby_reduce, reindex_
 from . import raise_if_dask_computes
 
 labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
+nan_labels = labels.astype(float)  # copy
+nan_labels[:5] = np.nan
 labels2d = np.array([labels[:5], np.flip(labels[:5])])
 
 
 def assert_equal(a, b):
+    if isinstance(a, list):
+        a = np.array(a)
+    if isinstance(b, list):
+        b = np.array(b)
     if isinstance(a, da.Array) or isinstance(b, da.Array):
         # does some validation of the dask graph
         func = da.utils.assert_eq
@@ -23,27 +29,28 @@ def assert_equal(a, b):
 
 @pytest.mark.parametrize("reduce_", [chunk_reduce, groupby_reduce])
 @pytest.mark.parametrize(
-    "array, to_group",
+    "array, to_group, expected",
     [
-        (np.ones((12,)), labels),  # form 1
-        (np.ones((2, 12)), labels),  # form 3
+        (np.ones((12,)), labels, [3, 4, 5]),  # form 1
+        (np.ones((12,)), nan_labels, [1, 4, 2]),  # form 1
+        (np.ones((2, 12)), labels, [[3, 4, 5], [3, 4, 5]]),  # form 3
+        (np.ones((2, 12)), nan_labels, [[1, 4, 2], [1, 4, 2]]),  # form 3
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_chunk_reduce(array, to_group, reduce_):
-    expected = aggregate(to_group, array, func="sum", size=None, axis=-1)
-
+def test_chunk_reduce(array, to_group, reduce_, expected):
     result = reduce_(array, to_group, func=("sum",))
     actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=-1)
     assert_equal(expected, actual)
 
 
-def test_chunk_reduce_nd_md():
+@pytest.mark.parametrize("reduce_", [chunk_reduce, groupby_reduce])
+def test_chunk_reduce_nd_md(reduce_):
     array = np.ones((2, 12))
     to_group = np.array([labels] * 2)
 
     expected = aggregate(to_group.ravel(), array.ravel(), func="sum")
-    result = chunk_reduce(array, to_group, func=("sum",))
+    result = reduce_(array, to_group, func=("sum",))
     actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=0)
     np.testing.assert_equal(expected, actual)
 
@@ -51,7 +58,7 @@ def test_chunk_reduce_nd_md():
     to_group = np.array([labels] * 2)
 
     expected = aggregate(to_group.ravel(), array.reshape(4, 24), func="sum", axis=-1)
-    result = chunk_reduce(array, to_group, func=("sum",))
+    result = reduce_(array, to_group, func=("sum",))
     actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=-1)
     assert_equal(expected, actual)
 
