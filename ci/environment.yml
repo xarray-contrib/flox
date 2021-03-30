@@ -12,3 +12,4 @@ dependencies:
   - numpydoc
   - nbsphinx
   - pre-commit
+  - numpy_groupies
