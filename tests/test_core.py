@@ -40,8 +40,7 @@ def assert_equal(a, b):
 )
 def test_chunk_reduce(array, to_group, reduce_, expected):
     result = reduce_(array, to_group, func=("sum",))
-    actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=-1)
-    assert_equal(expected, actual)
+    assert_equal(expected, result["sum"])
 
 
 @pytest.mark.parametrize("reduce_", [chunk_reduce, groupby_reduce])

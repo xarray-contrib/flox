@@ -40,6 +40,8 @@ def offset_labels(a: np.ndarray):
     """
     N = a.max() + 1
     offset = a + np.arange(np.prod(a.shape[:-1])).reshape((*a.shape[:-1], -1)) * N
+    # -1 indicates NaNs. preserve these otherwise we aggregate in the wrong groups!
+    offset[a == -1] = -1
     # print("N =", N, "offset = ", offset)
     size = np.prod(a.shape[:-1]) * N
     return offset, N, size
@@ -116,8 +118,8 @@ def chunk_reduce(
     newshape = array.shape[: array.ndim - to_group.ndim] + (np.prod(array.shape[-to_group.ndim :]),)
     array = array.reshape(newshape)
 
-    # mask = np.logical_not(np.isnan(to_group))
-    # group_idx = digitized[mask].astype(int)
+    # pd.factorize uses -1 to indicate NaNs
+    mask = np.logical_not(group_idx == -1)
 
     # print(array)
     if expected_groups:
@@ -128,8 +130,8 @@ def chunk_reduce(
 
     for reduction in func:
         result = npg.aggregate_numpy.aggregate(
-            group_idx,
-            array,
+            group_idx[..., mask],
+            array[..., mask],
             axis=-1,
             func=reduction,
             size=size,
