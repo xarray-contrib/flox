@@ -15,6 +15,8 @@ labels2d = np.array([labels[:5], np.flip(labels[:5])])
 
 
 def assert_equal(a, b):
+    __tracebackhide__ = True
+
     if isinstance(a, list):
         a = np.array(a)
     if isinstance(b, list):
@@ -28,6 +30,7 @@ def assert_equal(a, b):
 
 
 @pytest.mark.parametrize("reduce_", [chunk_reduce, groupby_reduce])
+@pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
 @pytest.mark.parametrize(
     "array, to_group, expected",
     [
@@ -38,8 +41,8 @@ def assert_equal(a, b):
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_chunk_reduce(array, to_group, reduce_, expected):
-    result = reduce_(array, to_group, func=("sum",))
+def test_chunk_reduce(array, to_group, expected, reduce_, expected_groups):
+    result = reduce_(array, to_group, func=("sum",), expected_groups=expected_groups)
     assert_equal(expected, result["sum"])
 
 
@@ -49,7 +52,7 @@ def test_chunk_reduce_nd_md(reduce_):
     to_group = np.array([labels] * 2)
 
     expected = aggregate(to_group.ravel(), array.ravel(), func="sum")
-    result = reduce_(array, to_group, func=("sum",))
+    result = reduce_(array, to_group, func="sum")
     actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=0)
     np.testing.assert_equal(expected, actual)
 

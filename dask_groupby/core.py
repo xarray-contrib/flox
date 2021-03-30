@@ -157,12 +157,18 @@ def _npg_aggregate(x_chunk, func, expected_groups, axis, keepdims):
     if isinstance(x_chunk, dict):
         x_chunk = [x_chunk]
 
-    def _conc(key):
-        return np.concatenate([xx[key] for xx in x_chunk])
+    # dump empty chunks since we can't concatenate them
+    # happens when to_group is all NaN in a block
+    # x_chunk = [chunk for chunk in x_chunk if chunk["groups"]]
+
+    # empty = not bool(x_chunk)
+    # if empty:
+    #    results = {k: np.array([]) for k in func}
+    #    results["groups"] = np.array([])
+    #    return results
 
     def _conc2(key):
         """ copied from dask.array.reductions.mean_combine"""
-
         # some magic
         mapped = deepmap(lambda x: x[key], x_chunk)
         return _concatenate2(mapped, axes=(-1,))
@@ -299,7 +305,7 @@ def groupby_reduce(
     rewrite_func = {"mean": (("sum", "count"))}
 
     if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
-        return chunk_reduce(array, to_group, func, axis, expected_groups)  # type: ignore
+        return chunk_reduce(array, to_group, func=func, axis=axis, expected_groups=expected_groups)  # type: ignore
 
     if isinstance(func, str):
         func = [func]
