@@ -66,6 +66,13 @@ def test_numpy_reduce_nd_md(reduce_):
     actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=-1)
     assert_equal(expected, actual)
 
+    array = np.ones((4, 2, 12))
+    to_group = np.broadcast_to(np.array([labels] * 2), array.shape)
+    expected = aggregate(to_group.ravel(), array.ravel(), func="sum", axis=-1)
+    result = reduce_(array, to_group, func=("sum",))
+    actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=-1)
+    assert_equal(expected, actual)
+
 
 @pytest.mark.parametrize("add_nan", [False, True])
 @pytest.mark.parametrize(
