@@ -125,7 +125,8 @@ def chunk_reduce(
     group_idx, groups = pd.factorize(to_group.ravel())
     size = None
 
-    if axis is not None:
+    if axis is not None and np.isscalar(axis):
+        # print(f"offsetting because axis={axis}")
         # Not reducing along all dimensions of to_group
         # offset the group ids
         group_idx, N, size = offset_labels(group_idx.reshape(to_group.shape))
@@ -173,10 +174,9 @@ def chunk_reduce(
                 func=reduction,
                 size=size,
             )
-            if axis is not None:
+            if axis is not None and np.isscalar(axis):
                 result = result.reshape(*final_shape, N)
             if expected_groups is not None:
-                print(groups, expected_groups)
                 results[reduction] = reindex_(
                     result, groups, expected_groups, fill_value=fill_values[reduction]
                 )
@@ -275,14 +275,15 @@ def groupby_agg(
     )
 
     group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
-    output_chunks = reduced.chunks[:-1] + (group_chunks,)
+    output_chunks = reduced.chunks[: -len(axis)] + (group_chunks,)
 
     # extract results from the dict
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
     layer = {}
     for reduction in func:
         for ochunk in itertools.product(*ochunks):
-            layer[(reduction, *ochunk)] = (getitem, (reduced.name, *ochunk), reduction)
+            inchunk = ochunk[:-1] + (0,) * len(axis)
+            layer[(reduction, *ochunk)] = (getitem, (reduced.name, *inchunk), reduction)
 
     # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
     first_block = len(ochunks) * (0,)  # TODO: this may not be right
