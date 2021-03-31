@@ -98,6 +98,7 @@ def test_groupby_agg_dask(array, group_chunks, add_nan):
 
 def test_chunk_reduce_axis_subset():
 
+    # TODO: add NaNs
     to_group = labels2d
     array = np.ones_like(to_group)
     result = chunk_reduce(array, to_group, ("count",), axis=1)
@@ -113,6 +114,17 @@ def test_chunk_reduce_axis_subset():
     result = chunk_reduce(array, to_group, ("count",), axis=2)
     subarr = np.array([[2, 3], [2, 3]])
     expected = np.tile(subarr, (3, 1, 1))
+    assert_equal(result["count"], expected)
+
+    result = chunk_reduce(array, to_group, ("count",), axis=(1, 2))
+    expected = np.array([[4, 6], [4, 6], [4, 6]])
+    assert_equal(result["count"], expected)
+
+    result = chunk_reduce(array, to_group, ("count",), axis=(2, 1))
+    assert_equal(result["count"], expected)
+
+    result = chunk_reduce(array, to_group[0, ...], ("count",), axis=(1, 2))
+    expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result["count"], expected)
 
 

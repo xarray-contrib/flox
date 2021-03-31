@@ -92,6 +92,20 @@ def chunk_reduce(
             # None indicates reduction along all axes
             axis = None
 
+    def _collapse_and_reshape(arr: np.ndarray, axis: Iterable[int]):
+        axis = tuple(axis)
+        order = tuple(ax for ax in np.arange(arr.ndim) if ax not in axis) + axis
+        arr = arr.transpose(order)
+        newshape = arr.shape[: -len(axis)] + (np.prod(arr.shape[-len(axis) :]),)
+        return arr.reshape(newshape)
+
+    # collapse and move reduction dimensions to the end
+    if isinstance(axis, Iterable) and len(axis) < array.ndim:
+        to_group = _collapse_and_reshape(to_group, -array.ndim + np.array(axis) + to_group.ndim)
+        array = _collapse_and_reshape(array, axis)
+        axis = array.ndim
+        print(array.shape, to_group.shape)
+
     if to_group.ndim == 1:
         # This asserton doesn't work with dask reducing across all dimensions
         # when to_group.ndim == array.ndim
