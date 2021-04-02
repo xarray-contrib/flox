@@ -8,6 +8,7 @@ import numpy as np
 import numpy_groupies as npg
 import pandas as pd
 from dask.highlevelgraph import HighLevelGraph
+from icecream import ic
 
 # how to aggregate results after first round of reduction
 # e.g. we "sum" the "count" to aggregate counts across blocks
@@ -16,6 +17,16 @@ _agg_reduction = {"count": "sum"}
 # These are used to reindex to expected_groups.
 # They should make sense when aggregated together with results from other blocks
 fill_values = {"count": 0, "sum": 0}
+
+
+def _collapse_and_reshape(arr: np.ndarray, axis: Iterable[int]):
+    axis = tuple(axis)
+    order = tuple(ax for ax in np.arange(arr.ndim) if ax not in axis) + axis
+    # ic(order)
+    arr = arr.transpose(order)
+    newshape = arr.shape[: -len(axis)] + (np.prod(arr.shape[-len(axis) :]),)
+    # ic(arr.shape, axis, newshape)
+    return arr.reshape(newshape)
 
 
 def reindex_(array: np.ndarray, from_, to, fill_value=0, axis=-1):
@@ -74,8 +85,8 @@ def chunk_reduce(
     func: str or Iterable[str]
         Name of reduction, passed to numpy_groupies. Supports multiple reductions.
     axis: (optional) int or Iterable[int]
-        If None, reduce along all dimensions of to_group.
-        Else reduce along specified axes
+        If None, reduce along all dimensions of array.
+        Else reduce along specified axes.
 
     Returns
     -------
@@ -85,37 +96,34 @@ def chunk_reduce(
     if isinstance(func, str):
         func = (func,)
 
+    # ic(array, to_group, axis)
+    n = len(axis) if isinstance(axis, Iterable) else to_group.ndim
+    final_array_shape = array.shape[:-n] + (1,) * (n - 1)
+    final_groups_shape = (1,) * (n - 1)
+    # ic(array.shape, to_group.shape, axis, final_array_shape, final_groups_shape)
+
     if isinstance(axis, Iterable):
         if len(axis) == 1:
             axis = next(iter(axis))
         elif np.all(np.sort(axis) == np.arange(array.ndim)):
-            # None indicates reduction along all axes
+            # None indicates reduction along all axes of to_group
             axis = None
 
-    def _collapse_and_reshape(arr: np.ndarray, axis: Iterable[int]):
-        axis = tuple(axis)
-        order = tuple(ax for ax in np.arange(arr.ndim) if ax not in axis) + axis
-        arr = arr.transpose(order)
-        newshape = arr.shape[: -len(axis)] + (np.prod(arr.shape[-len(axis) :]),)
-        return arr.reshape(newshape)
-
+    # when axis is a tuple
     # collapse and move reduction dimensions to the end
+    # TODO: move this down to chunk_reduce
     if isinstance(axis, Iterable) and len(axis) < array.ndim:
         to_group = _collapse_and_reshape(to_group, -array.ndim + np.array(axis) + to_group.ndim)
         array = _collapse_and_reshape(array, axis)
-        axis = array.ndim
-        print(array.shape, to_group.shape)
+        axis = -1
+        # ic(array.shape, to_group.shape, axis)
 
     if to_group.ndim == 1:
-        # This asserton doesn't work with dask reducing across all dimensions
+        # TODO: This assertion doesn't work with dask reducing across all dimensions
         # when to_group.ndim == array.ndim
         # the intermediates are 1D but axis=range(array.ndim)
         # assert axis in (0, -1, array.ndim - 1, None)
-        axis = None
-
-    if np.isscalar(axis) and axis != -1 and axis != to_group.ndim:
-        to_group = np.swapaxes(to_group, axis, -1)
-        array = np.swapaxes(array, axis, -1)
+        axis = -1
 
     # if indices=[2,2,2], npg assumes groups are (0, 1, 2);
     # and will return a result that is bigger than necessary
@@ -125,23 +133,20 @@ def chunk_reduce(
     group_idx, groups = pd.factorize(to_group.ravel())
     size = None
 
-    if axis is not None and np.isscalar(axis):
-        # print(f"offsetting because axis={axis}")
+    offset_group = False
+    if np.isscalar(axis) and to_group.ndim > 1:
+        ic(f"offsetting because axis={axis}")
+        offset_group = True
+        ic(array, to_group)
         # Not reducing along all dimensions of to_group
         # offset the group ids
         group_idx, N, size = offset_labels(group_idx.reshape(to_group.shape))
         group_idx = group_idx.ravel()
 
-    # TODO: deal with NaNs in to_group
-    # assert (axis == np.sort(axis)).all()
-
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - to_group.ndim] + (np.prod(array.shape[-to_group.ndim :]),)
     array = array.reshape(newshape)
-    if axis is None:
-        final_shape = array.shape[:-1]
-    else:
-        final_shape = to_group.shape[:-1]
+    # ic(array.shape, group_idx.shape, axis)
 
     # pd.factorize uses -1 to indicate NaNs
     assert group_idx.ndim == 1
@@ -151,21 +156,23 @@ def chunk_reduce(
         print("empty!")
 
     if expected_groups is not None:
-        results = {"groups": expected_groups}
-        ngroups = len(expected_groups)
+        results = {"groups": np.array(expected_groups)}
     else:
         if empty:
-            results = {"groups": np.array([])}
-            ngroups = 0
+            results = {"groups": np.array([np.nan])}
         else:
             sortidx = np.argsort(groups)
             results = {"groups": groups[sortidx]}
 
+    final_array_shape += results["groups"].shape
+    final_groups_shape += results["groups"].shape
+
+    ic(expected_groups, results["groups"])
+
     for reduction in func:
         if empty:
-            results[reduction] = np.full(
-                shape=final_shape + (ngroups,), fill_value=fill_values[reduction]
-            )
+            result = np.full(shape=final_array_shape, fill_value=fill_values[reduction])
+            ic("empty", result.shape)
         else:
             result = npg.aggregate_numpy.aggregate(
                 group_idx[..., mask],
@@ -174,42 +181,66 @@ def chunk_reduce(
                 func=reduction,
                 size=size,
             )
-            if axis is not None and np.isscalar(axis):
-                result = result.reshape(*final_shape, N)
+            # ic(result.shape, final_array_shape)
+            if offset_group:
+                result = result.reshape(*final_array_shape[:-1], N)
             if expected_groups is not None:
-                results[reduction] = reindex_(
+                result = reindex_(
                     result, groups, expected_groups, fill_value=fill_values[reduction]
                 )
             else:
-                results[reduction] = result[..., sortidx]
+                result = result[..., sortidx]
+            result = result.reshape(final_array_shape)
+        results[reduction] = result
+    results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
+    # ic(result, results["groups"])
+    # ic(result.shape, final_array_shape, results["groups"].shape)
+
+    return results
+
+
+def _squeeze_results(results, func, axis):
+    # at the end we squeeze out extra dims
+    assert isinstance(axis, Iterable)
+    groups = results["groups"]
+    results["groups"] = np.squeeze(
+        groups, axis=tuple(ax for ax in range(groups.ndim - 1) if groups.shape[ax] == 1)
+    )
+    squeeze_ax = tuple(ax for ax in sorted(axis)[:-1] if results[func[0]].shape[ax] == 1)
+    for reduction in func:
+        result = results[reduction]
+        ic(axis, result.shape, np.squeeze(result).shape)
+        results[reduction] = np.squeeze(result, axis=squeeze_ax) if squeeze_ax else result
 
     return results
 
 
 def _npg_aggregate(x_chunk, func, expected_groups, axis, keepdims):
-    """ Aggregation step of tree reduction. """
-    from dask.array.core import _concatenate2
+    """ Final aggregation step of tree reduction"""
+
+    results = _npg_combine(x_chunk, func, expected_groups, axis, keepdims)
+
+    ic("agg")
+
+    ic("should squeeze here")
+
+    return _squeeze_results(results, func, axis)
+
+
+def _npg_combine(x_chunk, func, expected_groups, axis, keepdims):
+    """ Combine intermediates step of tree reduction. """
+    from dask.array.core import _concatenate2, concatenate3
     from dask.utils import deepmap
 
-    # print(x_chunk)
-    if isinstance(x_chunk, dict):
+    if not isinstance(x_chunk, list):
         x_chunk = [x_chunk]
-
-    # dump empty chunks since we can't concatenate them
-    # happens when to_group is all NaN in a block
-    # x_chunk = [chunk for chunk in x_chunk if chunk["groups"]]
-
-    # empty = not bool(x_chunk)
-    # if empty:
-    #    results = {k: np.array([]) for k in func}
-    #    results["groups"] = np.array([])
-    #    return results
 
     def _conc2(key):
         """ copied from dask.array.reductions.mean_combine"""
         # some magic
         mapped = deepmap(lambda x: x[key], x_chunk)
-        return _concatenate2(mapped, axes=(-1,))
+        # ic(mapped)
+        return _concatenate2(mapped, axes=(-1, -2))
 
     groups = _conc2("groups")
     # print(groups)
@@ -218,7 +249,6 @@ def _npg_aggregate(x_chunk, func, expected_groups, axis, keepdims):
     for reduction in func:
         _reduction = _agg_reduction.get(reduction, reduction)
         x = _conc2(reduction)
-        # print("x", x)
         _results = chunk_reduce(
             x, groups, func=(_reduction,), axis=axis, expected_groups=expected_groups
         )
@@ -238,13 +268,17 @@ def groupby_agg(
     inds = tuple(range(array.ndim))
 
     # set axis for _tree_reduce
-    if isinstance(axis, Iterable):
-        reduced_ndim = len(axis)
-    elif axis is None:
-        reduced_ndim = to_group.ndim
-    else:
-        reduced_ndim = 1
-    axis = tuple(array.ndim - np.arange(reduced_ndim) - 1)
+    if axis is None:
+        axis = tuple(array.ndim - range(to_group.ndim) - 1)
+    if not isinstance(axis, Iterable):
+        if axis is None:
+            reduced_ndim = to_group.ndim
+        else:
+            reduced_ndim = 1
+        axis = tuple(array.ndim - np.arange(reduced_ndim) - 1)
+
+    # I think _tree_reduce expects this
+    assert all(ax >= 0 for ax in axis)
 
     # apply reduction on chunk
     applied = dask.array.blockwise(
@@ -267,12 +301,14 @@ def groupby_agg(
     reduced = dask.array.reductions._tree_reduce(
         applied,
         aggregate=partial(_npg_aggregate, func=func, expected_groups=expected_groups),
+        combine=partial(_npg_combine, func=func, expected_groups=expected_groups),
         name="groupby-tree-reduce",
         dtype=array.dtype,
         axis=axis,
         keepdims=True,
         concatenate=False,
     )
+    # print(reduced.__dask_graph__().keys())
 
     group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
     output_chunks = reduced.chunks[: -len(axis)] + (group_chunks,)
@@ -287,7 +323,7 @@ def groupby_agg(
 
     # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
     first_block = len(ochunks) * (0,)  # TODO: this may not be right
-    layer[("groups", 0)] = (getitem, (reduced.name, *first_block), "groups")
+    layer[("groups", *first_block)] = (getitem, (reduced.name, *first_block), "groups")
     print(layer)
 
     result = {}
@@ -296,17 +332,18 @@ def groupby_agg(
             HighLevelGraph.from_collections("groups", layer, dependencies=[reduced]),
             "groups",
             chunks=(group_chunks,),
-            dtype=object,  # TODO: change appropriately
+            dtype=to_group.dtype,  # TODO: change appropriately
         )
     else:
         result["groups"] = np.sort(expected_groups)  # TODO: check
 
+    dtype = {"count": int}
     for reduction in func:
         result[reduction] = dask.array.Array(
             HighLevelGraph.from_collections(reduction, layer, dependencies=[reduced]),
             reduction,
             chunks=output_chunks,
-            meta=array._meta,  # TODO: change appropriately
+            dtype=dtype.get(reduction, array.dtype),  # TODO: change appropriately
         )
     return result
 
@@ -333,7 +370,8 @@ def groupby_reduce(
     expected_groups: (optional) Iterable
         Expected unique labels.
     axis: (optional) None or int or Iterable[int]
-        Axes over which to reduce.
+        If None, reduce across all dimensions of to_group
+        Else, reduce across corresponding axes of array
 
     Returns
     -------
@@ -343,15 +381,33 @@ def groupby_reduce(
 
     assert array.shape[-to_group.ndim :] == to_group.shape
 
+    if axis is None:
+        if array.ndim == to_group.ndim:
+            axis = np.arange(array.ndim)
+        else:
+            axis = array.ndim + np.arange(-to_group.ndim, 0)
+            print(axis)
+
+    if np.isscalar(axis) and axis != -1 and axis != array.ndim - 1:
+        ic("swapping axes")
+        to_group = np.swapaxes(to_group, axis, -1)
+        array = np.swapaxes(array, axis, -1)
+        axis = array.ndim - 1
+
+    if np.isscalar(axis):
+        axis = (axis,)
+
     rewrite_func = {"mean": (("sum", "count"))}
 
-    if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
-        return chunk_reduce(array, to_group, func=func, axis=axis, expected_groups=expected_groups)  # type: ignore
-
     if isinstance(func, str):
-        func = [func]
+        func = (func,)
 
-    if np.isscalar(axis) and to_group.ndim > 1 and expected_groups is None:
+    if expected_groups is None and isinstance(to_group, np.ndarray):
+        expected_groups = np.unique(to_group)
+        expected_groups = expected_groups[~np.isnan(expected_groups)]
+
+    # TODO: make sure expected_groups is unique
+    if len(axis) == 1 and to_group.ndim > 1 and expected_groups is None:
         # When we reduce along all axes, it guarantees that we will see all
         # groups in the final combine stage, so everything works.
         # This is not necessarily true when reducing along a subset of axes
@@ -362,10 +418,19 @@ def groupby_reduce(
         raise NotImplementedError(
             "Please provide ``expected_groups`` when not reducing along all axes."
         )
-    if np.isscalar(axis) and axis != -1 and axis != to_group.ndim:
-        to_group = np.swapaxes(to_group, axis, -1)
-        array = np.swapaxes(array, axis, -1)
-        axis = -1
+
+    if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
+        results = chunk_reduce(array, to_group, func=func, axis=axis, expected_groups=expected_groups)  # type: ignore
+        return _squeeze_results(results, func, axis)
+
+    # import IPython; IPython.core.debugger.set_trace()
+    # when axis is a tuple
+    # collapse and move reduction dimensions to the end
+    if expected_groups is None and isinstance(axis, Iterable) and len(axis) <= array.ndim:
+        raise NotImplementedError
+        to_group = _collapse_and_reshape(to_group, -array.ndim + np.array(axis) + to_group.ndim)
+        array = _collapse_and_reshape(array, axis)
+        axis = array.ndim - 1
 
     reductions = tuple(
         itertools.chain(*[rewrite_func.get(reduction, [reduction]) for reduction in func])
