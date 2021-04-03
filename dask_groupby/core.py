@@ -19,11 +19,15 @@ _agg_reduction = {"count": "sum"}
 fill_values = {"count": 0, "sum": 0}
 
 
-def _collapse_and_reshape(arr: np.ndarray, axis: Iterable[int]):
+def _move_reduce_dims_to_end(arr, axis):
     axis = tuple(axis)
     order = tuple(ax for ax in np.arange(arr.ndim) if ax not in axis) + axis
     # ic(order)
     arr = arr.transpose(order)
+    return arr
+
+
+def _collapse_axis(arr: np.ndarray, axis: Iterable[int]):
     newshape = arr.shape[: -len(axis)] + (np.prod(arr.shape[-len(axis) :]),)
     # ic(arr.shape, axis, newshape)
     return arr.reshape(newshape)
@@ -112,9 +116,10 @@ def chunk_reduce(
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
     # TODO: move this down to chunk_reduce
-    if isinstance(axis, Iterable) and len(axis) < array.ndim:
-        to_group = _collapse_and_reshape(to_group, -array.ndim + np.array(axis) + to_group.ndim)
-        array = _collapse_and_reshape(array, axis)
+    if isinstance(axis, Iterable) and len(axis) < to_group.ndim:
+        ic("collapsing and reshaping")
+        to_group = _collapse_axis(to_group, -array.ndim + np.array(axis) + to_group.ndim)
+        array = _collapse_axis(array, axis)
         axis = -1
         # ic(array.shape, to_group.shape, axis)
 
@@ -135,7 +140,7 @@ def chunk_reduce(
 
     offset_group = False
     if np.isscalar(axis) and to_group.ndim > 1:
-        ic(f"offsetting because axis={axis}")
+        ic("offsetting because", axis, to_group.ndim)
         offset_group = True
         ic(array, to_group)
         # Not reducing along all dimensions of to_group
@@ -419,6 +424,11 @@ def groupby_reduce(
             "Please provide ``expected_groups`` when not reducing along all axes."
         )
 
+    if isinstance(axis, Iterable) and len(axis) < to_group.ndim:
+        to_group = _move_reduce_dims_to_end(to_group, -array.ndim + np.array(axis) + to_group.ndim)
+        array = _move_reduce_dims_to_end(array, axis)
+        axis = array.ndim + np.arange(-len(axis), 0)
+
     if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
         results = chunk_reduce(array, to_group, func=func, axis=axis, expected_groups=expected_groups)  # type: ignore
         return _squeeze_results(results, func, axis)
@@ -428,8 +438,8 @@ def groupby_reduce(
     # collapse and move reduction dimensions to the end
     if expected_groups is None and isinstance(axis, Iterable) and len(axis) <= array.ndim:
         raise NotImplementedError
-        to_group = _collapse_and_reshape(to_group, -array.ndim + np.array(axis) + to_group.ndim)
-        array = _collapse_and_reshape(array, axis)
+        to_group = _collapse_axis(to_group, -array.ndim + np.array(axis) + to_group.ndim)
+        array = _collapse_axis(array, axis)
         axis = array.ndim - 1
 
     reductions = tuple(
