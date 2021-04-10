@@ -1,7 +1,7 @@
 import itertools
 from functools import partial
 from operator import getitem
-from typing import Iterable, Mapping, Union
+from typing import Any, Iterable, Mapping, Union
 
 import dask.array
 import numpy as np
@@ -10,13 +10,44 @@ import pandas as pd
 from dask.highlevelgraph import HighLevelGraph
 from icecream import ic
 
-# how to aggregate results after first round of reduction
-# e.g. we "sum" the "count" to aggregate counts across blocks
-_agg_reduction = {"count": "sum"}
 
-# These are used to reindex to expected_groups.
-# They should make sense when aggregated together with results from other blocks
-fill_values = {"count": 0, "sum": 0}
+def _atleast_1d(inp):
+    if isinstance(inp, str):
+        inp = (inp,)
+    return inp
+
+
+class Aggregation:
+    def __init__(
+        self, name, chunk, combine, aggregate=None, finalize=None, fill_value=None, dtype=None
+    ):
+        self.name = name
+        # initialize blockwise reduction
+        self.chunk = _atleast_1d(chunk)
+        # how to aggregate results after first round of reduction
+        self.combine = _atleast_1d(combine)
+        # final aggregation
+        self.aggregate = aggregate if aggregate else combine
+        # finalize results (see mean)
+        self.finalize = finalize if finalize else lambda x: x[self.chunk[0]]
+        # fill_value is used to reindex to expected_groups.
+        # They should make sense when aggregated together with results from other blocks
+        self.fill_value = fill_value
+        self.dtype = dtype
+
+
+count = Aggregation("count", chunk="count", combine="sum", fill_value=0, dtype=int)
+sum = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
+mean = Aggregation(
+    "mean",
+    chunk=("sum", "count"),
+    combine=("sum", "sum"),
+    finalize=lambda x: x["sum"] / x["count"],
+    fill_value=0,
+)
+
+# intermediate steps TODO: remove
+rewrite_func = {"mean": (mean,), "count": (count,), "sum": (sum,)}
 
 
 def _move_reduce_dims_to_end(arr, axis):
@@ -65,9 +96,10 @@ def offset_labels(a: np.ndarray):
 def chunk_reduce(
     array: np.ndarray,
     to_group: np.ndarray,
-    func: Union[str, Iterable[str]],
+    func: Mapping[str, str],
     expected_groups: Iterable = None,
     axis: Union[int, Iterable[int]] = None,
+    fill_value: Mapping[str, Any] = None,
 ):
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -97,6 +129,8 @@ def chunk_reduce(
     dict
     """
 
+    if not fill_value:
+        raise ValueError(f"fill_value is {fill_value}")
     if isinstance(func, str):
         func = (func,)
 
@@ -174,32 +208,38 @@ def chunk_reduce(
 
     ic(expected_groups, results["groups"])
 
-    for reduction in func:
-        if empty:
-            result = np.full(shape=final_array_shape, fill_value=fill_values[reduction])
-            ic("empty", result.shape)
-        else:
-            result = npg.aggregate_numpy.aggregate(
-                group_idx[..., mask],
-                array[..., mask],
-                axis=-1,
-                func=reduction,
-                size=size,
-            )
-            # ic(result.shape, final_array_shape)
-            if offset_group:
-                result = result.reshape(*final_array_shape[:-1], N)
-            if expected_groups is not None:
-                result = reindex_(
-                    result, groups, expected_groups, fill_value=fill_values[reduction]
-                )
+    for name in func:
+        reductions = func[name]
+        if isinstance(reductions, str):
+            reductions = (reductions,)
+        results[name] = {}
+        for reduction in reductions:
+            assert isinstance(reduction, str)
+            if empty:
+                result = np.full(shape=final_array_shape, fill_value=fill_value[reduction])
+                ic("empty", result.shape)
             else:
-                result = result[..., sortidx]
-            result = result.reshape(final_array_shape)
-        results[reduction] = result
-    results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
-    # ic(result, results["groups"])
-    # ic(result.shape, final_array_shape, results["groups"].shape)
+                result = npg.aggregate_numpy.aggregate(
+                    group_idx[..., mask],
+                    array[..., mask],
+                    axis=-1,
+                    func=reduction,
+                    size=size,
+                )
+                # ic(result.shape, final_array_shape)
+                if offset_group:
+                    result = result.reshape(*final_array_shape[:-1], N)
+                if expected_groups is not None:
+                    result = reindex_(
+                        result, groups, expected_groups, fill_value=fill_value[reduction]
+                    )
+                else:
+                    result = result[..., sortidx]
+                result = result.reshape(final_array_shape)
+            results[name][reduction] = result
+        results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
+        # ic(results, results["groups"])
+        # ic(result.shape, final_array_shape, results["groups"].shape)
 
     return results
 
@@ -211,11 +251,12 @@ def _squeeze_results(results, func, axis):
     results["groups"] = np.squeeze(
         groups, axis=tuple(ax for ax in range(groups.ndim - 1) if groups.shape[ax] == 1)
     )
-    squeeze_ax = tuple(ax for ax in sorted(axis)[:-1] if results[func[0]].shape[ax] == 1)
     for reduction in func:
-        result = results[reduction]
-        ic(axis, result.shape, np.squeeze(result).shape)
-        results[reduction] = np.squeeze(result, axis=squeeze_ax) if squeeze_ax else result
+        result = results[reduction.name]
+        for k, v in result.items():
+            squeeze_ax = tuple(ax for ax in sorted(axis)[:-1] if v.shape[ax] == 1)
+            ic(axis, v.shape, np.squeeze(v, axis=squeeze_ax).shape)
+            results[reduction.name][k] = np.squeeze(v, axis=squeeze_ax) if squeeze_ax else v
 
     return results
 
@@ -224,11 +265,6 @@ def _npg_aggregate(x_chunk, func, expected_groups, axis, keepdims):
     """ Final aggregation step of tree reduction"""
 
     results = _npg_combine(x_chunk, func, expected_groups, axis, keepdims)
-
-    ic("agg")
-
-    ic("should squeeze here")
-
     return _squeeze_results(results, func, axis)
 
 
@@ -240,25 +276,33 @@ def _npg_combine(x_chunk, func, expected_groups, axis, keepdims):
     if not isinstance(x_chunk, list):
         x_chunk = [x_chunk]
 
-    def _conc2(key):
+    def _conc2(key1, key2=None):
         """ copied from dask.array.reductions.mean_combine"""
         # some magic
-        mapped = deepmap(lambda x: x[key], x_chunk)
+        if key2:
+            mapped = deepmap(lambda x: x[key1][key2], x_chunk)
+        else:
+            mapped = deepmap(lambda x: x[key1], x_chunk)
         # ic(mapped)
         return _concatenate2(mapped, axes=(-1, -2))
 
     groups = _conc2("groups")
     # print(groups)
-
     results = {}
     for reduction in func:
-        _reduction = _agg_reduction.get(reduction, reduction)
-        x = _conc2(reduction)
-        _results = chunk_reduce(
-            x, groups, func=(_reduction,), axis=axis, expected_groups=expected_groups
-        )
-        results.update({reduction: _results[_reduction]})
-
+        results[reduction.name] = {}
+        for chunk, combine in zip(reduction.chunk, reduction.combine):
+            x = _conc2(key1=reduction.name, key2=chunk)
+            _results = chunk_reduce(
+                x,
+                groups,
+                func={reduction.name: combine},
+                axis=axis,
+                expected_groups=expected_groups,
+                # set the fill_value for the original reduction
+                fill_value={combine: reduction.fill_value},
+            )
+            results[reduction.name][chunk] = _results[reduction.name][combine]
     results["groups"] = _results["groups"]
     return results
 
@@ -266,7 +310,7 @@ def _npg_combine(x_chunk, func, expected_groups, axis, keepdims):
 def groupby_agg(
     array: dask.array.Array,
     to_group: dask.array.Array,
-    func: Union[str, Iterable[str]],
+    func: Iterable[Aggregation],
     expected_groups: Iterable = None,
     axis=None,
 ):
@@ -279,7 +323,13 @@ def groupby_agg(
 
     # apply reduction on chunk
     applied = dask.array.blockwise(
-        partial(chunk_reduce, func=func, axis=axis, expected_groups=expected_groups),
+        partial(
+            chunk_reduce,
+            func={f.name: f.chunk for f in func},
+            axis=axis,
+            expected_groups=expected_groups,
+            fill_value={f.name: f.fill_value for f in func},
+        ),
         inds,
         array,
         inds,
@@ -305,18 +355,29 @@ def groupby_agg(
         keepdims=True,
         concatenate=False,
     )
-    # print(reduced.__dask_graph__().keys())
+    # reduced.compute()
+    print(reduced.__dask_graph__().keys())
+    #    return reduced
 
     group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
     output_chunks = reduced.chunks[: -len(axis)] + (group_chunks,)
+
+    def _getitem(d, key1, key2):
+        return d[key1][key2]
 
     # extract results from the dict
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
     layer = {}
     for reduction in func:
-        for ochunk in itertools.product(*ochunks):
-            inchunk = ochunk[:-1] + (0,) * len(axis)
-            layer[(reduction, *ochunk)] = (getitem, (reduced.name, *inchunk), reduction)
+        for chunk in reduction.chunk:
+            for ochunk in itertools.product(*ochunks):
+                inchunk = ochunk[:-1] + (0,) * len(axis)
+                layer[(f"{reduction.name}_{chunk}", *ochunk)] = (
+                    _getitem,
+                    (reduced.name, *inchunk),
+                    reduction.name,
+                    chunk,
+                )
 
     # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
     first_block = len(ochunks) * (0,)  # TODO: this may not be right
@@ -329,19 +390,22 @@ def groupby_agg(
             HighLevelGraph.from_collections("groups", layer, dependencies=[reduced]),
             "groups",
             chunks=(group_chunks,),
-            dtype=to_group.dtype,  # TODO: change appropriately
+            dtype=to_group.dtype,
         )
     else:
         result["groups"] = np.sort(expected_groups)  # TODO: check
 
-    dtype = {"count": int}
     for reduction in func:
-        result[reduction] = dask.array.Array(
-            HighLevelGraph.from_collections(reduction, layer, dependencies=[reduced]),
-            reduction,
-            chunks=output_chunks,
-            dtype=dtype.get(reduction, array.dtype),  # TODO: change appropriately
-        )
+        result[reduction.name] = {}
+        for chunk in reduction.chunk:
+            result[reduction.name][chunk] = dask.array.Array(
+                HighLevelGraph.from_collections(
+                    f"{reduction.name}_{chunk}", layer, dependencies=[reduced]
+                ),
+                f"{reduction.name}_{chunk}",
+                chunks=output_chunks,
+                dtype=reduction.dtype if reduction.dtype else array.dtype,
+            )
     return result
 
 
@@ -369,6 +433,7 @@ def groupby_reduce(
     axis: (optional) None or int or Iterable[int]
         If None, reduce across all dimensions of to_group
         Else, reduce across corresponding axes of array
+        Negative integers are normalized using array.ndim
 
     Returns
     -------
@@ -382,16 +447,13 @@ def groupby_reduce(
         axis = array.ndim + np.arange(-to_group.ndim, 0)
     else:
         axis = np.core.numeric.normalize_axis_tuple(axis, array.ndim)
-
-    # intermediate steps
-    rewrite_func = {"mean": (("sum", "count"))}
-
     if isinstance(func, str):
         func = (func,)
 
     if expected_groups is None and isinstance(to_group, np.ndarray):
         expected_groups = np.unique(to_group)
-        expected_groups = expected_groups[~np.isnan(expected_groups)]
+        if "U" not in expected_groups.dtype:
+            expected_groups = expected_groups[~np.isnan(expected_groups)]
 
     # TODO: make sure expected_groups is unique
     if len(axis) == 1 and to_group.ndim > 1 and expected_groups is None:
@@ -406,6 +468,15 @@ def groupby_reduce(
             "Please provide ``expected_groups`` when not reducing along all axes."
         )
 
+    # import IPython; IPython.core.debugger.set_trace()
+    # when axis is a tuple
+    # collapse and move reduction dimensions to the end
+    if expected_groups is None and len(axis) < to_group.ndim:
+        raise NotImplementedError
+        to_group = _collapse_axis(to_group, -array.ndim + np.array(axis) + to_group.ndim)
+        array = _collapse_axis(array, axis)
+        axis = array.ndim - 1
+
     if isinstance(axis, Iterable) and len(axis) < to_group.ndim:
         to_group = _move_reduce_dims_to_end(to_group, -array.ndim + np.array(axis) + to_group.ndim)
         array = _move_reduce_dims_to_end(array, axis)
@@ -415,15 +486,6 @@ def groupby_reduce(
         results = chunk_reduce(array, to_group, func=func, axis=axis, expected_groups=expected_groups)  # type: ignore
         return _squeeze_results(results, func, axis)
 
-    # import IPython; IPython.core.debugger.set_trace()
-    # when axis is a tuple
-    # collapse and move reduction dimensions to the end
-    if expected_groups is None and isinstance(axis, Iterable) and len(axis) <= array.ndim:
-        raise NotImplementedError
-        to_group = _collapse_axis(to_group, -array.ndim + np.array(axis) + to_group.ndim)
-        array = _collapse_axis(array, axis)
-        axis = array.ndim - 1
-
     reductions = tuple(
         itertools.chain(*[rewrite_func.get(reduction, [reduction]) for reduction in func])
     )
@@ -432,11 +494,9 @@ def groupby_reduce(
 
     # finalize step
     result = {"groups": intermediate["groups"]}
-    for reduction in func:
-        if reduction == "mean":
-            result["mean"] = intermediate["sum"] / intermediate["count"]
-        else:
-            result[reduction] = intermediate[reduction]
+    print(reductions)
+    for reduction in reductions:
+        result[reduction.name] = reduction.finalize(intermediate[reduction.name])
 
     # TODO: deal with NaNs and fill_values here if there are labels in
     # expected_groups that are missing
