@@ -270,20 +270,12 @@ def groupby_agg(
     expected_groups: Iterable = None,
     axis=None,
 ):
-    inds = tuple(range(array.ndim))
-
-    # set axis for _tree_reduce
-    if axis is None:
-        axis = tuple(array.ndim - range(to_group.ndim) - 1)
-    if not isinstance(axis, Iterable):
-        if axis is None:
-            reduced_ndim = to_group.ndim
-        else:
-            reduced_ndim = 1
-        axis = tuple(array.ndim - np.arange(reduced_ndim) - 1)
 
     # I think _tree_reduce expects this
+    assert isinstance(axis, Iterable)
     assert all(ax >= 0 for ax in axis)
+
+    inds = tuple(range(array.ndim))
 
     # apply reduction on chunk
     applied = dask.array.blockwise(
@@ -387,21 +379,11 @@ def groupby_reduce(
     assert array.shape[-to_group.ndim :] == to_group.shape
 
     if axis is None:
-        if array.ndim == to_group.ndim:
-            axis = np.arange(array.ndim)
-        else:
-            axis = array.ndim + np.arange(-to_group.ndim, 0)
-            print(axis)
+        axis = array.ndim + np.arange(-to_group.ndim, 0)
+    else:
+        axis = np.core.numeric.normalize_axis_tuple(axis, array.ndim)
 
-    if np.isscalar(axis) and axis != -1 and axis != array.ndim - 1:
-        ic("swapping axes")
-        to_group = np.swapaxes(to_group, axis, -1)
-        array = np.swapaxes(array, axis, -1)
-        axis = array.ndim - 1
-
-    if np.isscalar(axis):
-        axis = (axis,)
-
+    # intermediate steps
     rewrite_func = {"mean": (("sum", "count"))}
 
     if isinstance(func, str):
@@ -448,6 +430,7 @@ def groupby_reduce(
 
     intermediate = groupby_agg(array, to_group, reductions, expected_groups, axis=axis)
 
+    # finalize step
     result = {"groups": intermediate["groups"]}
     for reduction in func:
         if reduction == "mean":
