@@ -416,7 +416,7 @@ def groupby_reduce(
 
     if expected_groups is None and isinstance(to_group, np.ndarray):
         expected_groups = np.unique(to_group)
-        if "U" not in expected_groups.dtype:
+        if "U" not in expected_groups.dtype.kind:
             expected_groups = expected_groups[~np.isnan(expected_groups)]
 
     # TODO: make sure expected_groups is unique
@@ -446,22 +446,29 @@ def groupby_reduce(
         array = _move_reduce_dims_to_end(array, axis)
         axis = array.ndim + np.arange(-len(axis), 0)
 
-    if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
-        results = chunk_reduce(array, to_group, func=func, axis=axis, expected_groups=expected_groups)  # type: ignore
-        return _squeeze_results(results, func, axis)
-
     reductions = tuple(
         itertools.chain(*[[getattr(aggregations, reduction, reduction)] for reduction in func])
     )
+
+    if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
+        results = chunk_reduce(
+            array,
+            to_group,
+            func={r.name: (r.name,) for r in reductions},
+            axis=axis,
+            expected_groups=expected_groups,
+            fill_value={r.name: r.fill_value for r in reductions},
+        )  # type: ignore
+        squeezed = _squeeze_results(results, reductions, axis)
+        result = {k: v[k] for k, v in squeezed.items() if k != "groups"}
+        result["groups"] = squeezed["groups"]
+        return result
 
     intermediate = groupby_agg(array, to_group, reductions, expected_groups, axis=axis)
 
     # finalize step
     result = {"groups": intermediate["groups"]}
-    print(reductions)
     for reduction in reductions:
         result[reduction.name] = reduction.finalize(intermediate[reduction.name])
 
-    # TODO: deal with NaNs and fill_values here if there are labels in
-    # expected_groups that are missing
     return result
