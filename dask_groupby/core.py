@@ -330,26 +330,13 @@ def groupby_agg(
         return d[key1][key2]
 
     # extract results from the dict
-    ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
-    layer = {}
-    for reduction in func:
-        for chunk in reduction.chunk:
-            for ochunk in itertools.product(*ochunks):
-                inchunk = ochunk[:-1] + (0,) * len(axis)
-                layer[(f"{reduction.name}_{chunk}", *ochunk)] = (
-                    _getitem,
-                    (reduced.name, *inchunk),
-                    reduction.name,
-                    chunk,
-                )
-
-    # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
-    first_block = len(ochunks) * (0,)  # TODO: this may not be right
-    layer[("groups", *first_block)] = (getitem, (reduced.name, *first_block), "groups")
-    print(layer)
-
     result = {}
+    layer = {}
+    ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
     if expected_groups is None:
+        # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
+        first_block = len(ochunks) * (0,)  # TODO: this may not be right
+        layer[("groups", *first_block)] = (getitem, (reduced.name, *first_block), "groups")
         result["groups"] = dask.array.Array(
             HighLevelGraph.from_collections("groups", layer, dependencies=[reduced]),
             "groups",
@@ -362,11 +349,19 @@ def groupby_agg(
     for reduction in func:
         result[reduction.name] = {}
         for chunk in reduction.chunk:
+            layer = {}
+            name = f"{reduction.name}_{chunk}"
+            for ochunk in itertools.product(*ochunks):
+                inchunk = ochunk[:-1] + (0,) * len(axis)
+                layer[(name, *ochunk)] = (
+                    _getitem,
+                    (reduced.name, *inchunk),
+                    reduction.name,
+                    chunk,
+                )
             result[reduction.name][chunk] = dask.array.Array(
-                HighLevelGraph.from_collections(
-                    f"{reduction.name}_{chunk}", layer, dependencies=[reduced]
-                ),
-                f"{reduction.name}_{chunk}",
+                HighLevelGraph.from_collections(name, layer, dependencies=[reduced]),
+                name,
                 chunks=output_chunks,
                 dtype=reduction.dtype if reduction.dtype else array.dtype,
             )
