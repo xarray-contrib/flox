@@ -21,11 +21,21 @@ class Aggregation:
         # final aggregation
         self.aggregate = aggregate if aggregate else combine
         # finalize results (see mean)
-        self.finalize = finalize if finalize else lambda x: x["intermediates"][0]
+        self.finalize = finalize if finalize else lambda x: x
         # fill_value is used to reindex to expected_groups.
         # They should make sense when aggregated together with results from other blocks
         self.fill_value = fill_value
         self.dtype = dtype
+
+    def __repr__(self):
+        return "\n".join(
+            (
+                f"{self.name}, fill: {self.fill_value}, dtype: {self.dtype}",
+                f"chunk: {self.chunk}",
+                f"combine: {self.combine}",
+                f"aggregate: {self.aggregate}" f"finalize: {self.finalize}",
+            )
+        )
 
 
 def sum_of_squares(array, axis=-1):
