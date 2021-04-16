@@ -93,10 +93,11 @@ def chunk_reduce(
     dict
     """
 
-    if not fill_value:
-        raise ValueError(f"fill_value is {fill_value}")
     if isinstance(func, str):
-        func = (func,)
+        func = {func: (func,)}
+
+    if fill_value is None:
+        fill_value = {f: None for f in func}
 
     # ic(array, to_group, axis)
     n = len(axis) if isinstance(axis, Iterable) else to_group.ndim
@@ -113,7 +114,6 @@ def chunk_reduce(
 
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
-    # TODO: move this down to chunk_reduce
     if isinstance(axis, Iterable) and len(axis) < to_group.ndim:
         ic("collapsing and reshaping")
         to_group = _collapse_axis(to_group, -array.ndim + np.array(axis) + to_group.ndim)
@@ -172,8 +172,7 @@ def chunk_reduce(
 
     ic(expected_groups, results["groups"])
 
-    for name in func:
-        reductions = func[name]
+    for name, reductions in func.items():
         if isinstance(reductions, str):
             reductions = (reductions,)
         results[name] = {}
@@ -292,7 +291,7 @@ def groupby_agg(
             func={f.name: f.chunk for f in func},
             axis=axis,
             expected_groups=expected_groups,
-            fill_value={f.name: f.fill_value for f in func},
+            fill_value={r: f.fill_value for f in func for r in f.chunk},
         ),
         inds,
         array,
@@ -320,7 +319,7 @@ def groupby_agg(
         concatenate=False,
     )
     # reduced.compute()
-    print(reduced.__dask_graph__().keys())
+    # print(reduced.__dask_graph__().keys())
     #    return reduced
 
     group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)

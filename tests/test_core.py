@@ -32,26 +32,48 @@ def assert_equal(a, b):
 @pytest.mark.parametrize("dask", [False, True])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
 @pytest.mark.parametrize(
-    "array, to_group, expected",
+    "func, array, to_group, expected",
     [
-        (np.ones((12,)), labels, [3, 4, 5]),  # form 1
-        (np.ones((12,)), nan_labels, [1, 4, 2]),  # form 1
-        (np.ones((2, 12)), labels, [[3, 4, 5], [3, 4, 5]]),  # form 3
-        (np.ones((2, 12)), nan_labels, [[1, 4, 2], [1, 4, 2]]),  # form 3
-        (np.ones((2, 12)), np.array([labels, labels]), [6, 8, 10]),  # form 1 after reshape
-        (np.ones((2, 12)), np.array([nan_labels, nan_labels]), [2, 8, 4]),  # form 1 after reshape
+        ("sum", np.ones((12,)), labels, [3, 4, 5]),  # form 1
+        ("sum", np.ones((12,)), nan_labels, [1, 4, 2]),  # form 1
+        ("sum", np.ones((2, 12)), labels, [[3, 4, 5], [3, 4, 5]]),  # form 3
+        ("sum", np.ones((2, 12)), nan_labels, [[1, 4, 2], [1, 4, 2]]),  # form 3
+        ("sum", np.ones((2, 12)), np.array([labels, labels]), [6, 8, 10]),  # form 1 after reshape
+        (
+            "sum",
+            np.ones((2, 12)),
+            np.array([nan_labels, nan_labels]),
+            [2, 8, 4],
+        ),  # form 1 after reshape
+        # (np.ones((12,)), np.array([labels, labels])),  # form 4
+        ("nanmean", np.ones((12,)), labels, [1, 1, 1]),  # form 1
+        ("nanmean", np.ones((12,)), nan_labels, [1, 1, 1]),  # form 1
+        ("nanmean", np.ones((2, 12)), labels, [[1, 1, 1], [1, 1, 1]]),  # form 3
+        ("nanmean", np.ones((2, 12)), nan_labels, [[1, 1, 1], [1, 1, 1]]),  # form 3
+        (
+            "nanmean",
+            np.ones((2, 12)),
+            np.array([labels, labels]),
+            [1, 1, 1],
+        ),  # form 1 after reshape
+        (
+            "nanmean",
+            np.ones((2, 12)),
+            np.array([nan_labels, nan_labels]),
+            [1, 1, 1],
+        ),  # form 1 after reshape
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_groupby_reduce(array, to_group, expected, expected_groups, dask):
+def test_groupby_reduce(array, to_group, expected, func, expected_groups, dask):
     if dask:
         if expected_groups is None:
             pytest.skip()
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
         to_group = da.from_array(to_group, chunks=(3,) if to_group.ndim == 1 else (1, 3))
 
-    result = groupby_reduce(array, to_group, func=("sum",), expected_groups=expected_groups)
-    assert_equal(expected, result["sum"])
+    result = groupby_reduce(array, to_group, func=func, expected_groups=expected_groups)
+    assert_equal(expected, result[func])
 
 
 def test_numpy_reduce_nd_md():
@@ -99,7 +121,7 @@ def test_groupby_agg_dask(array, group_chunks, add_nan):
     kwargs = dict(func="sum", expected_groups=[0, 1, 2])
 
     to_group = from_array(labels, group_chunks)
-    expected = chunk_reduce(array.compute(), to_group.compute(), **kwargs)["sum"]
+    expected = groupby_reduce(array.compute(), to_group.compute(), **kwargs)["sum"]
     with raise_if_dask_computes():
         actual = groupby_reduce(array, to_group, **kwargs)["sum"]
     assert_equal(expected, actual)
