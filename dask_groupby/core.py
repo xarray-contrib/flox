@@ -10,44 +10,8 @@ import pandas as pd
 from dask.highlevelgraph import HighLevelGraph
 from icecream import ic
 
-
-def _atleast_1d(inp):
-    if isinstance(inp, str):
-        inp = (inp,)
-    return inp
-
-
-class Aggregation:
-    def __init__(
-        self, name, chunk, combine, aggregate=None, finalize=None, fill_value=None, dtype=None
-    ):
-        self.name = name
-        # initialize blockwise reduction
-        self.chunk = _atleast_1d(chunk)
-        # how to aggregate results after first round of reduction
-        self.combine = _atleast_1d(combine)
-        # final aggregation
-        self.aggregate = aggregate if aggregate else combine
-        # finalize results (see mean)
-        self.finalize = finalize if finalize else lambda x: x[self.chunk[0]]
-        # fill_value is used to reindex to expected_groups.
-        # They should make sense when aggregated together with results from other blocks
-        self.fill_value = fill_value
-        self.dtype = dtype
-
-
-count = Aggregation("count", chunk="count", combine="sum", fill_value=0, dtype=int)
-sum = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
-mean = Aggregation(
-    "mean",
-    chunk=("sum", "count"),
-    combine=("sum", "sum"),
-    finalize=lambda x: x["sum"] / x["count"],
-    fill_value=0,
-)
-
-# intermediate steps TODO: remove
-rewrite_func = {"mean": (mean,), "count": (count,), "sum": (sum,)}
+from . import aggregations
+from .aggregations import Aggregation
 
 
 def _move_reduce_dims_to_end(arr, axis):
@@ -487,7 +451,7 @@ def groupby_reduce(
         return _squeeze_results(results, func, axis)
 
     reductions = tuple(
-        itertools.chain(*[rewrite_func.get(reduction, [reduction]) for reduction in func])
+        itertools.chain(*[[getattr(aggregations, reduction, reduction)] for reduction in func])
     )
 
     intermediate = groupby_agg(array, to_group, reductions, expected_groups, axis=axis)
