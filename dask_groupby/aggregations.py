@@ -14,6 +14,8 @@ class Aggregation:
         self, name, chunk, combine, aggregate=None, finalize=None, fill_value=None, dtype=None
     ):
         self.name = name
+        # preprocess before blockwise
+        self.preprocess = None
         # initialize blockwise reduction
         self.chunk = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
@@ -125,3 +127,10 @@ max = Aggregation("max", chunk="max", combine="max", fill_value=-np.inf, finaliz
 nanmax = Aggregation(
     "nanmax", chunk="nanmax", combine="max", fill_value=-np.inf, finalize=_max_finalize
 )
+
+# TODO: make these work
+# first = Aggregation("first", chunk="first", combine="first", fill_value=np.nan)
+# last = Aggregation("last", chunk="last", combine="last", fill_value=np.nan)
+# all
+# any
+# median - should be doable since dask implements t-digest percentile for 1D?
