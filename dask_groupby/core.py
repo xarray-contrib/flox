@@ -220,14 +220,14 @@ def _squeeze_results(results, func, axis):
     return newresults
 
 
-def _npg_aggregate(x_chunk, func, expected_groups, axis, keepdims):
+def _npg_aggregate(x_chunk, func, expected_groups, axis, keepdims, group_ndim):
     """ Final aggregation step of tree reduction"""
 
-    results = _npg_combine(x_chunk, func, expected_groups, axis, keepdims)
+    results = _npg_combine(x_chunk, func, expected_groups, axis, keepdims, group_ndim)
     return _squeeze_results(results, func, axis)
 
 
-def _npg_combine(x_chunk, agg, expected_groups, axis, keepdims):
+def _npg_combine(x_chunk, agg, expected_groups, axis, keepdims, group_ndim):
     """ Combine intermediates step of tree reduction. """
     from dask.array.core import _concatenate2, concatenate3
     from dask.utils import deepmap
@@ -235,20 +235,20 @@ def _npg_combine(x_chunk, agg, expected_groups, axis, keepdims):
     if not isinstance(x_chunk, list):
         x_chunk = [x_chunk]
 
-    def _conc2(key1, key2=None):
+    def _conc2(key1, key2=None, axis=None):
         """ copied from dask.array.reductions.mean_combine"""
         # some magic
         if key2 is not None:
             mapped = deepmap(lambda x: x[key1][key2], x_chunk)
         else:
             mapped = deepmap(lambda x: x[key1], x_chunk)
-        return _concatenate2(mapped, axes=(-1, -2))  # TODO:
+        return _concatenate2(mapped, axes=axis)
 
-    groups = _conc2("groups")
+    groups = _conc2("groups", axis=sorted(group_ndim - ax - 1 for ax in axis))
     # print(groups)
     results = {"groups": None, "intermediates": []}
     for idx, combine in enumerate(agg.combine):
-        x = _conc2(key1="intermediates", key2=idx)
+        x = _conc2(key1="intermediates", key2=idx, axis=axis)
         # ic(combine, x)
         # import IPython; IPython.core.debugger.set_trace()
         _results = chunk_reduce(
@@ -281,6 +281,10 @@ def groupby_agg(
     func = func[0]
     inds = tuple(range(array.ndim))
 
+    # preprocess the array
+    if isinstance(func, Aggregation) and func.preprocess:
+        array = func.preprocess(array)
+
     # apply reduction on chunk
     applied = dask.array.blockwise(
         partial(
@@ -307,8 +311,12 @@ def groupby_agg(
     # shape of intermediate results after the blockwise call
     reduced = dask.array.reductions._tree_reduce(
         applied,
-        aggregate=partial(_npg_aggregate, func=func, expected_groups=expected_groups),
-        combine=partial(_npg_combine, agg=func, expected_groups=expected_groups),
+        aggregate=partial(
+            _npg_aggregate, func=func, expected_groups=expected_groups, group_ndim=to_group.ndim
+        ),
+        combine=partial(
+            _npg_combine, agg=func, expected_groups=expected_groups, group_ndim=to_group.ndim
+        ),
         name="groupby-tree-reduce",
         dtype=array.dtype,
         axis=axis,
