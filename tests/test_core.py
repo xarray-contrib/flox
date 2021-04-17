@@ -262,10 +262,32 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape):
     assert_equal(result["count"], np.zeros(expected_shape))
 
     # now when subsets are NaN
-    labels = np.array([0, 0, 1, 1, 1], dtype=float)
-    labels2d = np.array([labels[:5], np.flip(labels[:5])])
-    labels2d[:] = np.nan
-    to_group = np.broadcast_to(labels2d, (3, *labels2d.shape))
+    # labels = np.array([0, 0, 1, 1, 1], dtype=float)
+    # labels2d = np.array([labels[:5], np.flip(labels[:5])])
+    # labels2d[0, :5] = np.nan
+    # labels2d[1, 5:] = np.nan
+    # to_group = np.broadcast_to(labels2d, (3, *labels2d.shape))
+
+
+def test_groupby_all_nan_blocks():
+    labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
+    nan_labels = labels.astype(float)  # copy
+    nan_labels[:5] = np.nan
+
+    array, to_group, expected = (
+        np.ones((2, 12)),
+        np.array([nan_labels, nan_labels[::-1]]),
+        [2, 8, 4],
+    )
+
+    actual = groupby_reduce(
+        da.from_array(array, chunks=(1, 3)),
+        da.from_array(to_group, chunks=(1, 3)),
+        func="sum",
+        expected_groups=None,
+    )["sum"]
+
+    assert_equal(actual, expected)
 
 
 def test_reindex():

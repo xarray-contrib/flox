@@ -24,6 +24,7 @@ def _move_reduce_dims_to_end(arr, axis):
 
 
 def _collapse_axis(arr: np.ndarray, axis: Iterable[int]):
+    # TODO: Is a blockwise reshaping possible?
     newshape = arr.shape[: -len(axis)] + (np.prod(arr.shape[-len(axis) :]),)
     # ic(arr.shape, axis, newshape)
     return arr.reshape(newshape)
@@ -433,15 +434,6 @@ def groupby_reduce(
             "Please provide ``expected_groups`` when not reducing along all axes."
         )
 
-    # import IPython; IPython.core.debugger.set_trace()
-    # when axis is a tuple
-    # collapse and move reduction dimensions to the end
-    if expected_groups is None and len(axis) < to_group.ndim:
-        raise NotImplementedError
-        to_group = _collapse_axis(to_group, -array.ndim + np.array(axis) + to_group.ndim)
-        array = _collapse_axis(array, axis)
-        axis = array.ndim - 1
-
     if isinstance(axis, Iterable) and len(axis) < to_group.ndim:
         to_group = _move_reduce_dims_to_end(to_group, -array.ndim + np.array(axis) + to_group.ndim)
         array = _move_reduce_dims_to_end(array, axis)
@@ -465,6 +457,12 @@ def groupby_reduce(
         # result["groups"] = squeezed["groups"]
         squeezed[func[0]] = squeezed.pop("intermediates")[0]
         return squeezed
+
+    # Needed since we need not have equal number of groups per block
+    if expected_groups is None and len(axis) > 1:
+        to_group = _collapse_axis(to_group, -array.ndim + np.array(axis) + to_group.ndim)
+        array = _collapse_axis(array, axis)
+        axis = (array.ndim - 1,)
 
     intermediate = groupby_agg(array, to_group, reductions, expected_groups, axis=axis)
 
