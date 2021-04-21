@@ -244,7 +244,11 @@ def _npg_combine(x_chunk, agg, expected_groups, axis, keepdims, group_ndim):
             mapped = deepmap(lambda x: x[key1], x_chunk)
         return _concatenate2(mapped, axes=axis)
 
-    groups = _conc2("groups", axis=sorted(group_ndim - ax - 1 for ax in axis))
+    if group_ndim == 1:
+        group_conc_axis = (0,)
+    else:
+        group_conc_axis = sorted(group_ndim - ax - 1 for ax in axis)
+    groups = _conc2("groups", axis=group_conc_axis)
     # print(groups)
     results = {"groups": None, "intermediates": []}
     for idx, combine in enumerate(agg.combine):
