@@ -24,7 +24,6 @@ def _move_reduce_dims_to_end(arr, axis):
 
 
 def _collapse_axis(arr: np.ndarray, axis: Iterable[int]):
-    # TODO: Is a blockwise reshaping possible?
     newshape = arr.shape[: -len(axis)] + (np.prod(arr.shape[-len(axis) :]),)
     # ic(arr.shape, axis, newshape)
     return arr.reshape(newshape)
@@ -205,7 +204,7 @@ def chunk_reduce(
     return results
 
 
-def _squeeze_results(results, func, axis):
+def _squeeze_results(results, axis):
     # at the end we squeeze out extra dims
     assert isinstance(axis, Iterable)
     groups = results["groups"]
@@ -225,7 +224,7 @@ def _npg_aggregate(x_chunk, func, expected_groups, axis, keepdims, group_ndim):
     """ Final aggregation step of tree reduction"""
 
     results = _npg_combine(x_chunk, func, expected_groups, axis, keepdims, group_ndim)
-    return _squeeze_results(results, func, axis)
+    return _squeeze_results(results, axis)
 
 
 def _npg_combine(x_chunk, agg, expected_groups, axis, keepdims, group_ndim):
@@ -278,8 +277,10 @@ def groupby_agg(
     assert isinstance(axis, Iterable)
     assert all(ax >= 0 for ax in axis)
 
+    # TODO: cleanup
     assert len(func) == 1
     func = func[0]
+
     inds = tuple(range(array.ndim))
 
     # preprocess the array
@@ -452,7 +453,7 @@ def groupby_reduce(
             expected_groups=expected_groups,
             fill_value={r.name: r.fill_value for r in reductions},
         )  # type: ignore
-        squeezed = _squeeze_results(results, reductions, axis)
+        squeezed = _squeeze_results(results, axis)
         # result = {k: v[k] for k, v in squeezed.items() if k != "groups"}
         # result["groups"] = squeezed["groups"]
         squeezed[func[0]] = squeezed.pop("intermediates")[0]
