@@ -20,6 +20,8 @@ def _get_chunk_reduction(reduction_type):
         return chunk_reduce
     elif reduction_type == "argreduce":
         return chunk_argreduce
+    else:
+        raise ValueError(f"Unknown reduction type: {reduction_type}")
 
 
 def _move_reduce_dims_to_end(arr, axis):
@@ -76,7 +78,6 @@ def chunk_argreduce(
     array, idx = array_plus_idx
     fill_value = {k: v[idx] for idx, (k, v) in enumerate(fill_value.items())}
 
-    # TODO: prevent reindexing for now, need different fill_value for "max", "argmax"
     results = chunk_reduce(array, to_group, func, expected_groups, axis, fill_value)
 
     # glorious
@@ -216,7 +217,6 @@ def chunk_reduce(
                 func=reduction,
                 size=size,
             )
-            # ic(result.shape, final_array_shape)
             if offset_group:
                 result = result.reshape(*final_array_shape[:-1], N)
             if expected_groups is not None:
@@ -226,7 +226,6 @@ def chunk_reduce(
             result = result.reshape(final_array_shape)
         results["intermediates"].append(result)
     results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
-    # results["intermediates"] = tuple(results["intermediates"])
     # ic(results, results["groups"])
     # ic(result.shape, final_array_shape, results["groups"].shape)
 
@@ -374,9 +373,6 @@ def groupby_agg(
         keepdims=True,
         concatenate=False,
     )
-    # reduced.compute()
-    # print(reduced.__dask_graph__().keys())
-    #    return reduced
 
     group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
     output_chunks = reduced.chunks[: -len(axis)] + (group_chunks,)
@@ -503,8 +499,6 @@ def groupby_reduce(
             fill_value={r.name: r.fill_value for r in reductions},
         )  # type: ignore
         squeezed = _squeeze_results(results, axis)
-        # result = {k: v[k] for k, v in squeezed.items() if k != "groups"}
-        # result["groups"] = squeezed["groups"]
         squeezed[func[0]] = squeezed.pop("intermediates")[0]
         return squeezed
 
