@@ -15,6 +15,13 @@ from . import aggregations
 from .aggregations import Aggregation
 
 
+def _get_chunk_reduction(reduction_type):
+    if reduction_type == "reduce":
+        return chunk_reduce
+    elif reduction_type == "argreduce":
+        return chunk_argreduce
+
+
 def _move_reduce_dims_to_end(arr, axis):
     axis = tuple(axis)
     order = tuple(ax for ax in np.arange(arr.ndim) if ax not in axis) + axis
@@ -56,6 +63,28 @@ def offset_labels(a: np.ndarray):
     # print("N =", N, "offset = ", offset)
     size = np.prod(a.shape[:-1]) * N
     return offset, N, size
+
+
+def chunk_argreduce(
+    array_plus_idx: Tuple[np.ndarray, np.ndarray],
+    to_group: np.ndarray,
+    func: Tuple[str, Callable],
+    expected_groups: Iterable = None,
+    axis: Union[int, Iterable[int]] = None,
+    fill_value: Mapping[str, Any] = None,
+):
+    array, idx = array_plus_idx
+    fill_value = {k: v[idx] for idx, (k, v) in enumerate(fill_value.items())}
+
+    # TODO: prevent reindexing for now, need different fill_value for "max", "argmax"
+    results = chunk_reduce(array, to_group, func, expected_groups, axis, fill_value)
+
+    # glorious
+    newidx = np.broadcast_to(idx, array.shape)[
+        np.unravel_index(results["intermediates"][1], array.shape)
+    ]
+    results["intermediates"][1] = newidx
+    return results
 
 
 def chunk_reduce(
@@ -222,7 +251,6 @@ def _squeeze_results(results, axis):
 
 def _npg_aggregate(x_chunk, func, expected_groups, axis, keepdims, group_ndim):
     """ Final aggregation step of tree reduction"""
-
     results = _npg_combine(x_chunk, func, expected_groups, axis, keepdims, group_ndim)
     return _squeeze_results(results, axis)
 
@@ -250,22 +278,39 @@ def _npg_combine(x_chunk, agg, expected_groups, axis, keepdims, group_ndim):
         group_conc_axis = sorted(group_ndim - ax - 1 for ax in axis)
     groups = _conc2("groups", axis=group_conc_axis)
     # print(groups)
-    results = {"groups": None, "intermediates": []}
-    for idx, combine in enumerate(agg.combine):
-        x = _conc2(key1="intermediates", key2=idx, axis=axis)
-        # ic(combine, x)
-        # import IPython; IPython.core.debugger.set_trace()
-        _results = chunk_reduce(
+
+    if agg.reduction_type == "argreduce":
+        # We need to send the intermediate array values & indexes at the same time
+        x = tuple(
+            _conc2(key1="intermediates", key2=idx, axis=axis) for idx in range(len(agg.combine))
+        )
+        results = chunk_argreduce(
             x,
             groups,
-            func=combine,
+            func=agg.combine,
             axis=axis,
             expected_groups=expected_groups,
             # set the fill_value for the original reduction
-            fill_value={combine: agg.fill_value},
+            fill_value={r: agg.fill_value for r in agg.chunk},  # TODO: fix
         )
-        results["intermediates"].append(*_results["intermediates"])
-    results["groups"] = _results["groups"]
+
+    elif agg.reduction_type == "reduce":
+        # Here we reduce the intermediates individually
+        results = {"groups": None, "intermediates": []}
+        for idx, combine in enumerate(agg.combine):
+            x = _conc2(key1="intermediates", key2=idx, axis=axis)
+            # ic(combine, x)
+            _results = chunk_reduce(
+                x,
+                groups,
+                func=combine,
+                axis=axis,
+                expected_groups=expected_groups,
+                # set the fill_value for the original reduction
+                fill_value={combine: agg.fill_value},
+            )
+            results["intermediates"].append(*_results["intermediates"])
+            results["groups"] = _results["groups"]
     return results
 
 
@@ -288,13 +333,13 @@ def groupby_agg(
     inds = tuple(range(array.ndim))
 
     # preprocess the array
-    if isinstance(func, Aggregation) and func.preprocess:
-        array = func.preprocess(array)
+    if func.preprocess:
+        array = func.preprocess(array, axis=axis)
 
     # apply reduction on chunk
     applied = dask.array.blockwise(
         partial(
-            chunk_reduce,
+            _get_chunk_reduction(func.reduction_type),
             func=func.chunk,
             axis=axis,
             expected_groups=expected_groups,

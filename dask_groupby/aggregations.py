@@ -11,11 +11,22 @@ def _atleast_1d(inp):
 
 class Aggregation:
     def __init__(
-        self, name, chunk, combine, aggregate=None, finalize=None, fill_value=None, dtype=None
+        self,
+        name,
+        chunk,
+        combine,
+        preprocess=None,
+        aggregate=None,
+        finalize=None,
+        fill_value=None,
+        dtype=None,
+        reduction_type="reduce",
     ):
         self.name = name
         # preprocess before blockwise
-        self.preprocess = None
+        self.preprocess = preprocess
+        # Use "chunk_reduce" or "chunk_argreduce"
+        self.reduction_type = reduction_type
         # initialize blockwise reduction
         self.chunk = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
@@ -126,6 +137,53 @@ nanmin = Aggregation(
 max = Aggregation("max", chunk="max", combine="max", fill_value=-np.inf, finalize=_max_finalize)
 nanmax = Aggregation(
     "nanmax", chunk="nanmax", combine="max", fill_value=-np.inf, finalize=_max_finalize
+)
+
+
+def argreduce_preprocess(array, axis):
+    """Returns a tuple of array, index along axis.
+
+    Copied from dask.array.chunk.argtopk_preprocess
+    """
+    import dask.array
+    import numpy as np
+
+    # TODO: arg reductions along multiple axes seems weird.
+    assert len(axis) == 1
+    axis = axis[0]
+
+    idx = dask.array.arange(array.shape[axis], chunks=array.chunks[axis], dtype=np.intp)
+    # broadcast (TODO: is this needed?)
+    idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(array.ndim))]
+
+    def _zip_index(array_, idx_):
+        return (array_, idx_)
+
+    return dask.array.map_blocks(_zip_index, array, idx, dtype=array.dtype, meta=array._meta)
+
+
+def argreduce_finalize(*args):
+    return args[1]
+
+
+argmax = Aggregation(
+    "argmax",
+    preprocess=argreduce_preprocess,
+    chunk=("max", "argmax"),  # order is important
+    combine=("max", "argmax"),
+    reduction_type="argreduce",
+    fill_value=(-np.inf, 0),
+    finalize=argreduce_finalize,
+)
+
+argmin = Aggregation(
+    "argmin",
+    preprocess=argreduce_preprocess,
+    chunk=("min", "argmin"),  # order is important
+    combine=("min", "argmin"),
+    reduction_type="argreduce",
+    fill_value=(np.inf, 0),
+    finalize=argreduce_finalize,
 )
 
 # TODO: make these work
