@@ -89,14 +89,14 @@ def test_numpy_reduce_nd_md():
     to_group = np.array([labels] * 2)
 
     expected = aggregate(to_group.ravel(), array.reshape(4, 24), func="sum", axis=-1)
-    result = groupby_reduce(array, to_group, func=("sum",))
+    result = groupby_reduce(array, to_group, func="sum")
     actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=-1)
     assert_equal(expected, actual)
 
     array = np.ones((4, 2, 12))
     to_group = np.broadcast_to(np.array([labels] * 2), array.shape)
     expected = aggregate(to_group.ravel(), array.ravel(), func="sum", axis=-1)
-    result = groupby_reduce(array, to_group, func=("sum",))
+    result = groupby_reduce(array, to_group, func="sum")
     actual = reindex_(result["sum"], result["groups"], np.unique(to_group), axis=-1)
     assert_equal(expected, actual)
 
@@ -127,7 +127,7 @@ def test_groupby_agg_dask(array, group_chunks, add_nan):
     assert_equal(expected, actual)
 
     with raise_if_dask_computes():
-        actual = groupby_reduce(array, to_group, func=("sum",), expected_groups=[0, 2, 1])["sum"]
+        actual = groupby_reduce(array, to_group, func="sum", expected_groups=[0, 2, 1])["sum"]
     assert_equal(expected, actual[..., [0, 2, 1]])
 
 
@@ -136,29 +136,29 @@ def test_numpy_reduce_axis_subset():
     # TODO: add NaNs
     to_group = labels2d
     array = np.ones_like(to_group)
-    result = groupby_reduce(array, to_group, ("count",), axis=1)
+    result = groupby_reduce(array, to_group, "count", axis=1)
     assert_equal(result["count"], [[2, 3], [2, 3]])
 
     to_group = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(to_group)
-    result = groupby_reduce(array, to_group, ("count",), axis=1)
+    result = groupby_reduce(array, to_group, "count", axis=1)
     subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result["count"], expected)
 
-    result = groupby_reduce(array, to_group, ("count",), axis=2)
+    result = groupby_reduce(array, to_group, "count", axis=2)
     subarr = np.array([[2, 3], [2, 3]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result["count"], expected)
 
-    result = groupby_reduce(array, to_group, ("count",), axis=(1, 2))
+    result = groupby_reduce(array, to_group, "count", axis=(1, 2))
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result["count"], expected)
 
-    result = groupby_reduce(array, to_group, ("count",), axis=(2, 1))
+    result = groupby_reduce(array, to_group, "count", axis=(2, 1))
     assert_equal(result["count"], expected)
 
-    result = groupby_reduce(array, to_group[0, ...], ("count",), axis=(1, 2))
+    result = groupby_reduce(array, to_group[0, ...], "count", axis=(1, 2))
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result["count"], expected)
 
@@ -171,7 +171,7 @@ def test_dask_reduce_axis_subset():
         result = groupby_reduce(
             da.from_array(array, chunks=(2, 3)),
             da.from_array(to_group, chunks=(2, 2)),
-            ("count",),
+            "count",
             axis=1,
             expected_groups=[0, 2],
         )
@@ -185,7 +185,7 @@ def test_dask_reduce_axis_subset():
         result = groupby_reduce(
             da.from_array(array, chunks=(1, 2, 3)),
             da.from_array(to_group, chunks=(2, 2, 2)),
-            ("count",),
+            "count",
             axis=1,
             expected_groups=[0, 2],
         )
@@ -197,7 +197,7 @@ def test_dask_reduce_axis_subset():
         result = groupby_reduce(
             da.from_array(array, chunks=(1, 2, 3)),
             da.from_array(to_group, chunks=(2, 2, 2)),
-            ("count",),
+            "count",
             axis=2,
             expected_groups=[0, 2],
         )
@@ -207,7 +207,7 @@ def test_dask_reduce_axis_subset():
         groupby_reduce(
             da.from_array(array, chunks=(1, 2, 3)),
             da.from_array(to_group, chunks=(2, 2, 2)),
-            ("count",),
+            "count",
             axis=2,
         )
 
