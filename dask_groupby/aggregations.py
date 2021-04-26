@@ -186,9 +186,28 @@ argmin = Aggregation(
     finalize=argreduce_finalize,
 )
 
-# TODO: make these work
-# first = Aggregation("first", chunk="first", combine="first", fill_value=np.nan)
-# last = Aggregation("last", chunk="last", combine="last", fill_value=np.nan)
+nanargmax = Aggregation(
+    "nanargmax",
+    preprocess=argreduce_preprocess,
+    chunk=("nanmax", "nanargmax"),  # order is important
+    combine=("max", "argmax"),
+    reduction_type="argreduce",
+    fill_value=(-np.inf, 0),
+    finalize=argreduce_finalize,
+)
+
+nanargmin = Aggregation(
+    "nanargmin",
+    preprocess=argreduce_preprocess,
+    chunk=("nanmin", "nanargmin"),  # order is important
+    combine=("min", "argmin"),
+    reduction_type="argreduce",
+    fill_value=(np.inf, 0),
+    finalize=argreduce_finalize,
+)
+
+first = Aggregation("first", chunk="first", combine="first", fill_value=np.nan)
+last = Aggregation("last", chunk="last", combine="last", fill_value=np.nan)
 # all
 # any
 # median - should be doable since dask implements t-digest percentile for 1D?
