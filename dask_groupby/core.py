@@ -11,7 +11,9 @@ from dask.highlevelgraph import HighLevelGraph
 from icecream import ic
 
 from . import aggregations
-from .aggregations import Aggregation
+from .aggregations import Aggregation, _get_fill_value
+from xarray.core import dtypes
+
 
 ResultsDict = Dict[Union[str, Callable], Any]
 
@@ -48,11 +50,12 @@ def reindex_(array: np.ndarray, from_, to, fill_value=0, axis: int = -1) -> np.n
     indexer = [slice(None, None)] * array.ndim
     indexer[axis] = idx  # type: ignore
     reindexed = array[tuple(indexer)]
-    if axis == 0:
-        loc = (idx == -1, ...)
-    else:
-        loc = (..., idx == -1)
-    reindexed[loc] = fill_value
+    if any(idx == -1):
+        if axis == 0:
+            loc = (idx == -1, ...)
+        else:
+            loc = (..., idx == -1)
+        reindexed[loc] = fill_value
     return reindexed
 
 
@@ -89,7 +92,6 @@ def chunk_argreduce(
     dask.array.reductions.argtopk
     """
     array, idx = array_plus_idx
-    fill_value = {k: v[idx] for idx, (k, v) in enumerate(fill_value.items())}
 
     results = chunk_reduce(array, to_group, func, expected_groups, axis, fill_value)
 
@@ -299,8 +301,7 @@ def _npg_combine(
             func=agg.combine,
             axis=axis,
             expected_groups=expected_groups,
-            # set the fill_value for the original reduction
-            fill_value={r: agg.fill_value for r in agg.chunk},  # TODO: fix
+            fill_value=agg.fill_value,
         )
 
     elif agg.reduction_type == "reduce":
@@ -315,8 +316,7 @@ def _npg_combine(
                 func=combine,
                 axis=axis,
                 expected_groups=expected_groups,
-                # set the fill_value for the original reduction
-                fill_value={combine: agg.fill_value},
+                fill_value=agg.fill_value,
             )
             results["intermediates"].append(*_results["intermediates"])
             results["groups"] = _results["groups"]
@@ -350,7 +350,7 @@ def groupby_agg(
             func=agg.chunk,  # type: ignore
             axis=axis,
             expected_groups=expected_groups,
-            fill_value={r: agg.fill_value for r in agg.chunk},
+            fill_value=agg.fill_value,
         ),
         inds,
         array,
@@ -434,6 +434,7 @@ def groupby_reduce(
     func: Union[str, Aggregation],
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis=None,
+    fill_value=None,
 ) -> Dict[str, Union[dask.array.Array, np.ndarray]]:
     """
     GroupBy reductions using tree reductions for dask.array
@@ -498,6 +499,10 @@ def groupby_reduce(
     else:
         reduction = func
 
+    # Replace sentinel fill values according to dtype
+    reduction.fill_value = {
+        k: _get_fill_value(array.dtype, v) for k, v in reduction.fill_value.items()
+    }
     if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
         results = chunk_reduce(
             array,
@@ -505,7 +510,7 @@ def groupby_reduce(
             func=reduction.name,
             axis=axis,
             expected_groups=expected_groups,
-            fill_value={reduction.name: reduction.fill_value},
+            fill_value=reduction.fill_value,
         )  # type: ignore
         squeezed = _squeeze_results(results, axis)
         squeezed[func] = squeezed.pop("intermediates")[0]  # type: ignore

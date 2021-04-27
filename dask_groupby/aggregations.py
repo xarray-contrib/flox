@@ -1,10 +1,21 @@
 from functools import partial
+from itertools import zip_longest
 
 import numpy as np
+from xarray.core import dtypes, utils
+
+
+def _get_fill_value(dtype, fill_value):
+    """ Returns dtype appropriate infinity. Returns +Inf equivalent for None."""
+    if fill_value is dtypes.INF or fill_value is None:
+        return dtypes.get_pos_infinity(dtype, max_for_int=True)
+    if fill_value is dtypes.NINF:
+        return dtypes.get_neg_infinity(dtype, min_for_int=True)
+    return fill_value
 
 
 def _atleast_1d(inp):
-    if isinstance(inp, str):
+    if utils.is_scalar(inp):
         inp = (inp,)
     return inp
 
@@ -37,13 +48,16 @@ class Aggregation:
         self.finalize = finalize if finalize else lambda x: x
         # fill_value is used to reindex to expected_groups.
         # They should make sense when aggregated together with results from other blocks
-        self.fill_value = fill_value
+        fill_value = _atleast_1d(fill_value)
+        self.fill_value = dict(zip_longest(self.chunk, fill_value))
+        self.fill_value.update(dict(zip_longest(self.combine, fill_value)))
+        self.fill_value.update(dict(zip_longest(self.combine, fill_value)))
         self.dtype = dtype
 
     def __repr__(self):
         return "\n".join(
             (
-                f"{self.name}, fill: {self.fill_value}, dtype: {self.dtype}",
+                f"{self.name}, fill: {np.unique(self.fill_value.values())}, dtype: {self.dtype}",
                 f"chunk: {self.chunk}",
                 f"combine: {self.combine}",
                 f"aggregate: {self.aggregate}" f"finalize: {self.finalize}",
@@ -123,20 +137,33 @@ nanstd = Aggregation(
 
 # TODO: How does this work if data has fillvalue?
 def _minmax_finalize(data, fv):
+
+    fv = _get_fill_value(data.dtype, fv)
+    data[data == fv] = np.nan
+
+    # TODO: workaround npg bug
+    # aggregate(np.array([0, 1, 2, 0, 1, 2]), np.array([dtypes.NINF, 0, 0, dtypes.NINF, 0, 0]), func="max",)
+    # is array([-1.79769313e+308,  0.00000000e+000,  0.00000000e+000])
+    # instead of array[-inf, 0.0, 0.0]
+    #
+    if np.isneginf(fv):
+        fv = np.finfo(data.dtype).min
+    elif np.isposinf(fv):
+        fv = np.finfo(data.dtype).max
     data[data == fv] = np.nan
     return data
 
 
-_min_finalize = partial(_minmax_finalize, fv=np.inf)
-_max_finalize = partial(_minmax_finalize, fv=-np.inf)
+_min_finalize = None  # partial(_minmax_finalize, fv=dtypes.INF)
+_max_finalize = None  # partial(_minmax_finalize, fv=dtypes.NINF)
 
-min = Aggregation("min", chunk="min", combine="min", fill_value=np.inf, finalize=_min_finalize)
+min = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF, finalize=_min_finalize)
 nanmin = Aggregation(
-    "nanmin", chunk="nanmin", combine="min", fill_value=np.inf, finalize=_min_finalize
+    "nanmin", chunk="nanmin", combine="min", fill_value=dtypes.INF, finalize=_min_finalize
 )
-max = Aggregation("max", chunk="max", combine="max", fill_value=-np.inf, finalize=_max_finalize)
+max = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF, finalize=_max_finalize)
 nanmax = Aggregation(
-    "nanmax", chunk="nanmax", combine="max", fill_value=-np.inf, finalize=_max_finalize
+    "nanmax", chunk="nanmax", combine="max", fill_value=dtypes.NINF, finalize=_max_finalize
 )
 
 
@@ -172,7 +199,7 @@ argmax = Aggregation(
     chunk=("max", "argmax"),  # order is important
     combine=("max", "argmax"),
     reduction_type="argreduce",
-    fill_value=(-np.inf, 0),
+    fill_value=(dtypes.NINF, 0),
     finalize=argreduce_finalize,
 )
 
@@ -182,7 +209,7 @@ argmin = Aggregation(
     chunk=("min", "argmin"),  # order is important
     combine=("min", "argmin"),
     reduction_type="argreduce",
-    fill_value=(np.inf, 0),
+    fill_value=(dtypes.INF, 0),
     finalize=argreduce_finalize,
 )
 
@@ -192,7 +219,7 @@ nanargmax = Aggregation(
     chunk=("nanmax", "nanargmax"),  # order is important
     combine=("max", "argmax"),
     reduction_type="argreduce",
-    fill_value=(-np.inf, 0),
+    fill_value=(dtypes.NINF, 0),
     finalize=argreduce_finalize,
 )
 
@@ -202,7 +229,7 @@ nanargmin = Aggregation(
     chunk=("nanmin", "nanargmin"),  # order is important
     combine=("min", "argmin"),
     reduction_type="argreduce",
-    fill_value=(np.inf, 0),
+    fill_value=(dtypes.INF, 0),
     finalize=argreduce_finalize,
 )
 
