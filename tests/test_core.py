@@ -34,6 +34,7 @@ def assert_equal(a, b):
         np.testing.assert_equal(a, b)
 
 
+# TODO: Add max,argmax here
 @pytest.mark.parametrize("dask", [False, True])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
 @pytest.mark.parametrize(
@@ -107,41 +108,49 @@ def test_numpy_reduce_nd_md():
 
 
 @pytest.mark.parametrize(
-    "func",
+    "func, fill_value",
     (
-        "sum",
-        "count",
-        "prod",
-        "mean",
-        "std",
-        "var",
-        "max",
-        "min",
-        "argmax",
-        "argmin",
-        "first",
-        "last",
+        # "sum",
+        # "count",
+        # "prod",
+        # "mean",
+        # "std",
+        # "var",
+        # "max",
+        # "min",
+        ("argmax", 123),
+        ("argmin", 123),
+        # "first",
+        # "last",
     ),
 )
 @pytest.mark.parametrize("add_nan", [False, True])
+@pytest.mark.parametrize("dtype", (float,))
 @pytest.mark.parametrize(
     "array, group_chunks",
     [
         (da.ones((12,), (3,)), 3),  # form 1
-        (da.ones((12,), (3,)), (4,)),  # form 1
+        (da.ones((12,), (3,)), (4,)),  # form 1, chunks not aligned
         (da.ones((12,), ((3, 5, 4),)), (2,)),  # form 1
         (da.ones((10, 12), (3, 3)), -1),  # form 3
         (da.ones((10, 12), (3, 3)), 3),  # form 3
     ],
 )
-def test_groupby_agg_dask(func, array, group_chunks, add_nan):
+def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype, fill_value):
     """ Tests groupby_reduce with dask arrays against groupby_reduce with numpy arrays"""
-    labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0], dtype=float)
+
+    array = array.astype(dtype)
+
+    if func in ["first", "last"]:
+        pytest.skip()
+
+    labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
     if add_nan:
+        labels = labels.astype(float)
         labels[:3] = np.nan  # entire block is NaN when group_chunks=3
         labels[-2:] = np.nan
 
-    kwargs = dict(func=func, expected_groups=[0, 1, 2])
+    kwargs = dict(func=func, expected_groups=[0, 1, 2], fill_value=fill_value)
 
     to_group = from_array(labels, group_chunks)
     expected = groupby_reduce(array.compute(), to_group.compute(), **kwargs)[func]
@@ -227,7 +236,7 @@ def test_dask_reduce_axis_subset():
 
     with pytest.raises(NotImplementedError):
         groupby_reduce(
-            da.from_array(array, chunks=(1, 2, 3)),
+            da.from_array(array, chunks=(1, 3, 2)),
             da.from_array(to_group, chunks=(2, 2, 2)),
             "count",
             axis=2,

@@ -241,7 +241,7 @@ def chunk_reduce(
     return results
 
 
-def _squeeze_results(results, axis: Sequence) -> ResultsDict:
+def _squeeze_results(results: ResultsDict, axis: Sequence) -> ResultsDict:
     # at the end we squeeze out extra dims
     groups = results["groups"]
     newresults: ResultsDict = {"groups": [], "intermediates": []}
@@ -467,6 +467,8 @@ def groupby_reduce(
         If None, reduce across all dimensions of to_group
         Else, reduce across corresponding axes of array
         Negative integers are normalized using array.ndim
+    fill_value: Any
+        Value when a label in `expected_groups` is not present
 
     Returns
     -------
@@ -525,17 +527,27 @@ def groupby_reduce(
             expected_groups=expected_groups,
             fill_value=reduction.fill_value,
         )  # type: ignore
-        squeezed = _squeeze_results(results, axis)
-        squeezed[func] = squeezed.pop("intermediates")[0]  # type: ignore
-        return squeezed  # type: ignore
+        intermediate = _squeeze_results(results, axis)
+        result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": intermediate["groups"]}
+        result[reduction.name] = intermediate["intermediates"][0]
 
-    # Needed since we need not have equal number of groups per block
-    if expected_groups is None and len(axis) > 1:
-        to_group = _collapse_axis(to_group, len(axis))
-        array = _collapse_axis(array, len(axis))
-        axis = (array.ndim - 1,)
+        if reduction.name in ["argmin", "argmax"]:
+            # TODO: Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
+            # will return wrong indices
+            result[reduction.name] = np.unravel_index(result[reduction.name], array.shape)[-1]
 
-    intermediate = groupby_agg(array, to_group, reduction, expected_groups, axis=axis)
+        return result
+    else:
+        if func in ["first", "last"]:
+            raise NotImplementedError("first, last not implemented for dask arrays")
+
+        # Needed since we need not have equal number of groups per block
+        if expected_groups is None and len(axis) > 1:
+            to_group = _collapse_axis(to_group, len(axis))
+            array = _collapse_axis(array, len(axis))
+            axis = (array.ndim - 1,)
+
+        intermediate = groupby_agg(array, to_group, reduction, expected_groups, axis=axis)
 
     # finalize step
     result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": intermediate["groups"]}
