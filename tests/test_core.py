@@ -319,3 +319,19 @@ def test_reindex():
     fill_value = 0
     result = reindex_(array, groups, expected_groups, fill_value, axis=-1)
     assert_equal(result, np.array([1, 2, 0]))
+
+
+@pytest.mark.xfail
+def test_bad_npg_behaviour():
+    labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0], dtype=int)
+    # fmt: off
+    array = np.array([[1] * 12, [1] * 12])
+    # fmt: on
+    assert_equal(aggregate(labels, array, axis=-1, func="argmax"), np.array([[0, 5, 2], [0, 5, 2]]))
+
+    assert (
+        aggregate(
+            np.array([0, 1, 2, 0, 1, 2]), np.array([-np.inf, 0, 0, -np.inf, 0, 0]), func="max"
+        )[0]
+        == -np.inf
+    )
