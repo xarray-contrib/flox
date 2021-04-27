@@ -190,7 +190,13 @@ def argreduce_preprocess(array, axis):
 
 
 def argreduce_finalize(*args):
-    return args[1]
+    # TODO: clean this up :/
+    if len(args) > 1:
+        # dask inputs
+        return args[1]
+    else:
+        # numpy inputs
+        return args[0]
 
 
 argmax = Aggregation(
