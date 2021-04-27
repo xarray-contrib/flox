@@ -9,6 +9,8 @@ import numpy_groupies as npg
 import pandas as pd
 from dask.highlevelgraph import HighLevelGraph
 
+import xarray as xr
+
 from . import aggregations
 from .aggregations import Aggregation, _get_fill_value
 
@@ -565,3 +567,31 @@ def groupby_reduce(
         result[reduction.name] = _maybe_sub_inf(result[reduction.name])
 
     return result
+
+
+def xarray_reduce(
+    groupby: xr.core.groupby.GroupBy,
+    func: Union[str, Aggregation],
+):
+    def wrapper(*args, **kwargs):
+        result = groupby_reduce(*args, **kwargs)
+        # TODO: how do we return groups here
+        return tuple(result.values())[1]
+
+    expected_groups = list(groupby.groups.keys())
+    outdim = groupby._unique_coord.name
+    groupdim = groupby._group_dim
+
+    actual = xr.apply_ufunc(
+        wrapper,
+        groupby._obj,
+        groupby._group,
+        input_core_dims=[[groupdim], [groupdim]],
+        dask="allowed",
+        output_core_dims=[[outdim]],  # TODO: return groups
+        dask_gufunc_kwargs=dict(output_sizes={outdim: len(expected_groups)}),
+        kwargs={"func": func, "axis": -1},
+    ).transpose(outdim, ...)
+    actual[outdim] = groupby._unique_coord
+
+    return actual
