@@ -193,6 +193,13 @@ def chunk_reduce(
     assert group_idx.ndim == 1
     mask = np.logical_not(group_idx == -1)
     empty = np.all(~mask) or np.prod(to_group.shape) == 0
+    # numpy_groupies cannot deal with group_idx = -1
+    # so we'll add use (ngroups+1) as the sentinel
+    # note we cannot simply remove the NaN locations;
+    # that would mess up argmax, argmin
+    # we could set na_sentinel in pd.factorize, but we don't know
+    # what to set it to yet.
+    group_idx[group_idx == -1] = group_idx.max() + 1
 
     results: ResultsDict = {"groups": [], "intermediates": []}
     if expected_groups is not None:
@@ -213,12 +220,15 @@ def chunk_reduce(
             # ic("empty", result.shape)
         else:
             result = npg.aggregate_numpy.aggregate(
-                group_idx[..., mask],
-                array[..., mask],
+                group_idx,
+                array,
                 axis=-1,
                 func=reduction,
                 size=size,
             )
+            if np.any(~mask):
+                # remove NaN group label which should be last
+                result = result[..., :-1]
             if offset_group:
                 result = result.reshape(*final_array_shape[:-1], N)
             if expected_groups is not None:
