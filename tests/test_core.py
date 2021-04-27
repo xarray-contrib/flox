@@ -4,7 +4,7 @@ import pytest
 from dask.array import from_array
 from numpy_groupies.aggregate_numpy import aggregate
 
-from dask_groupby.core import chunk_reduce, groupby_reduce, reindex_
+from dask_groupby.core import groupby_reduce, reindex_
 
 from . import raise_if_dask_computes
 
@@ -23,10 +23,15 @@ def assert_equal(a, b):
         b = np.array(b)
     if isinstance(a, da.Array) or isinstance(b, da.Array):
         # does some validation of the dask graph
-        func = da.utils.assert_eq
+        try:
+            da.utils.assert_eq(a, b)
+        except AssertionError:
+            # dask doesn't consider nans in the same place to be equal
+            # from xarray.core.duck_array_ops.array_equiv
+            flag_array = (a == b) | (np.isnan(a) & np.isnan(b))
+            assert bool(flag_array.all())
     else:
-        func = np.testing.assert_equal
-    func(a, b)
+        np.testing.assert_equal(a, b)
 
 
 @pytest.mark.parametrize("dask", [False, True])

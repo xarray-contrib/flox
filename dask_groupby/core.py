@@ -12,8 +12,6 @@ from icecream import ic
 
 from . import aggregations
 from .aggregations import Aggregation, _get_fill_value
-from xarray.core import dtypes
-
 
 ResultsDict = Dict[Union[str, Callable], Any]
 

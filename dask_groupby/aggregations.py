@@ -49,9 +49,10 @@ class Aggregation:
         # fill_value is used to reindex to expected_groups.
         # They should make sense when aggregated together with results from other blocks
         fill_value = _atleast_1d(fill_value)
-        self.fill_value = dict(zip_longest(self.chunk, fill_value))
-        self.fill_value.update(dict(zip_longest(self.combine, fill_value)))
-        self.fill_value.update(dict(zip_longest(self.combine, fill_value)))
+        self.fill_value = dict(zip_longest(self.chunk, fill_value, fillvalue=fill_value[0]))
+        self.fill_value.update(dict(zip_longest(self.combine, fill_value, fillvalue=fill_value[0])))
+        self.fill_value.update(dict(zip_longest(self.combine, fill_value, fillvalue=fill_value[0])))
+        self.fill_value.update({self.name: fill_value[0]})
         self.dtype = dtype
 
     def __repr__(self):
