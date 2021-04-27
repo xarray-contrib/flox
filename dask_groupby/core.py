@@ -8,12 +8,19 @@ import numpy as np
 import numpy_groupies as npg
 import pandas as pd
 from dask.highlevelgraph import HighLevelGraph
-from icecream import ic
 
 from . import aggregations
 from .aggregations import Aggregation, _get_fill_value
 
 ResultsDict = Dict[Union[str, Callable], Any]
+
+
+def _maybe_sub_inf(array):
+    if np.issubdtype(array.dtype, np.floating):
+        finfo = np.finfo(array.dtype)
+        array[array == finfo.max] = np.inf
+        array[array == finfo.min] = -np.inf
+    return array
 
 
 def _get_chunk_reduction(reduction_type: str) -> Callable:
@@ -552,5 +559,9 @@ def groupby_reduce(
     # finalize step
     result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": intermediate["groups"]}
     result[reduction.name] = reduction.finalize(*intermediate["intermediates"])
+
+    if reduction.name in ["max", "min"]:
+        # Work aroung npg bug where we get finfo.max, finfo.min instead of np.inf, -np.inf
+        result[reduction.name] = _maybe_sub_inf(result[reduction.name])
 
     return result
