@@ -339,6 +339,8 @@ def groupby_agg(
 
     # preprocess the array
     if agg.preprocess:
+        # This is necessary for argreductions. We need to rechunk before zipping up with the index
+        _, (array, to_group) = dask.array.unify_chunks(array, inds, to_group, inds[-to_group.ndim:])
         array = agg.preprocess(array, axis=axis)
 
     # apply reduction on chunk
@@ -358,6 +360,7 @@ def groupby_agg(
         concatenate=False,
         dtype=array.dtype,
         meta=array._meta,
+        align_arrays=False,
         name="groupby-chunk-reduce",
     )
 
