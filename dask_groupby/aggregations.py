@@ -181,14 +181,20 @@ def argreduce_preprocess(array, axis):
     assert len(axis) == 1
     axis = axis[0]
 
-    idx = dask.array.arange(array.shape[axis], chunks=array.chunks[axis], dtype=np.intp)
+    if isinstance(array, dask.array.Array):
+        idx = dask.array.arange(array.shape[axis], chunks=array.chunks[axis], dtype=np.intp)
+    else:
+        idx = np.arange(array.shape[axis], dtype=np.intp)
     # broadcast (TODO: is this needed?)
     idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(array.ndim))]
 
     def _zip_index(array_, idx_):
         return (array_, idx_)
 
-    return dask.array.map_blocks(_zip_index, array, idx, dtype=array.dtype, meta=array._meta)
+    if isinstance(array, dask.array.Array):
+        return dask.array.map_blocks(_zip_index, array, idx, dtype=array.dtype, meta=array._meta)
+    else:
+        return _zip_index(array, idx)
 
 
 def argreduce_finalize(*args):
