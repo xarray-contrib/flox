@@ -1,3 +1,4 @@
+import copy
 import itertools
 import operator
 from functools import partial
@@ -517,13 +518,15 @@ def groupby_reduce(
 
     if not isinstance(func, Aggregation):
         try:
-            reduction = getattr(aggregations, func)
+            reduction = copy.deepcopy(getattr(aggregations, func))
         except AttributeError:
             raise NotImplementedError(f"Reduction {func!r} not implemented yet")
     else:
         reduction = func
 
     # Replace sentinel fill values according to dtype
+    if reduction.dtype is None:
+        reduction.dtype = array.dtype
     reduction.fill_value = {
         k: _get_fill_value(array.dtype, v) for k, v in reduction.fill_value.items()
     }
