@@ -191,7 +191,14 @@ def argreduce_preprocess(array, axis):
     def _zip_index(array_, idx_):
         return (array_, idx_)
 
-    return dask.array.map_blocks(_zip_index, array, idx, dtype=array.dtype, meta=array._meta)
+    return dask.array.map_blocks(
+        _zip_index,
+        array,
+        idx,
+        dtype=array.dtype,
+        meta=array._meta,
+        name="groupby-argreduce-preprocess",
+    )
 
 
 def argreduce_finalize(*args):
