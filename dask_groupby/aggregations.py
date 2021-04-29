@@ -56,7 +56,8 @@ class Aggregation:
         )
         if self.name not in self.fill_value:
             self.fill_value.update({self.name: fill_value[0]})
-        self.dtype = np.dtype(dtype)
+        # np.dtype(None) = np.dtype("float64")!
+        self.dtype = dtype
 
     def __repr__(self):
         return "\n".join(

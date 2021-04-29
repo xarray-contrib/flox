@@ -82,6 +82,14 @@ def test_groupby_reduce(array, to_group, expected, func, expected_groups, dask):
     assert_equal(expected, result[func])
 
 
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int32, np.int64])
+def test_groupby_reduce_preserves_dtype(dtype):
+    array = np.ones((2, 12), dtype=dtype)
+    to_group = np.array([labels] * 2)
+    result = groupby_reduce(from_array(array, chunks=(-1, 4)), to_group, func="sum")["sum"]
+    assert result.dtype == array.dtype
+
+
 def test_numpy_reduce_nd_md():
     array = np.ones((2, 12))
     to_group = np.array([labels] * 2)
