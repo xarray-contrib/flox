@@ -456,19 +456,7 @@ def groupby_agg(
         concatenate=False,
     )
 
-    # if split_out > 1:
-    #     inds = tuple(range(reduced.ndim))
-    #     reduced = dask.array.blockwise(
-    #         lambda x: x[0],
-    #         inds[:-2] + (inds[-1],),
-    #         reduced,
-    #         inds,
-    #         name="squeeze",
-    #         dtype=array.dtype,
-    #     )
-
     output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + (group_chunks,)
-    print(output_chunks)
 
     def _getitem(d, key1, key2):
         return d[key1][key2]
