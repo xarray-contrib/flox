@@ -9,6 +9,7 @@ import numpy as np
 import numpy_groupies as npg
 import pandas as pd
 import xarray as xr
+from dask.array.core import normalize_chunks
 from dask.highlevelgraph import HighLevelGraph
 
 from . import aggregations
@@ -265,6 +266,13 @@ def _squeeze_results(results: IntermediateDict, axis: Sequence) -> IntermediateD
     return newresults
 
 
+def _split_groups(array, j, slicer):
+    """ Slices out chunks when split_out > 1"""
+    results = {"groups": array["groups"][..., slicer]}
+    results["intermediates"] = [v[..., slicer] for v in array["intermediates"]]
+    return results
+
+
 def _npg_aggregate(
     x_chunk,
     agg: Aggregation,
@@ -356,6 +364,7 @@ def groupby_agg(
     agg: Aggregation,
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Sequence = None,
+    split_out: int = 1,
 ) -> FinalResultsDict:
 
     # I think _tree_reduce expects this
@@ -398,18 +407,48 @@ def groupby_agg(
         name=f"{name}-chunk",
     )
 
+    if split_out > 1:
+        if expected_groups is None:
+            raise NotImplementedError
+        chunk_tuples = tuple(itertools.product(*tuple(range(n) for n in applied.numblocks)))
+        ngroups = len(expected_groups)
+        group_chunks = normalize_chunks(np.ceil(ngroups / split_out), (ngroups,))[0]
+        idx = tuple(np.cumsum((0,) + group_chunks))
+
+        # split each block into `split_out` chunks
+        dsk = {}
+        for i in chunk_tuples:
+            for j in range(split_out):
+                dsk[("split", *i, j)] = (
+                    _split_groups,
+                    (applied.name, *i),
+                    j,
+                    slice(idx[j], idx[j + 1]),
+                )
+
+        # now construct an array that can be passed to _tree_reduce
+        intergraph = HighLevelGraph.from_collections("split", dsk, dependencies=(applied,))
+        intermediate = dask.array.Array(
+            intergraph, name="split", chunks=applied.chunks + ((1,) * split_out,), meta=array._meta
+        )
+        # We don't want the reindexing step in this case.
+        expected_ = None
+
+    else:
+        intermediate = applied
+        group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
+        expected_ = expected_groups
+
     # reduced is really a dict mapping reduction name to array
     # and "groups" to an array of group labels
     # Note: it does not make sense to interpret axis relative to
     # shape of intermediate results after the blockwise call
     reduced = dask.array.reductions._tree_reduce(
-        applied,
+        intermediate,
         aggregate=partial(
-            _npg_aggregate, agg=agg, expected_groups=expected_groups, group_ndim=to_group.ndim
+            _npg_aggregate, agg=agg, expected_groups=expected_, group_ndim=to_group.ndim
         ),
-        combine=partial(
-            _npg_combine, agg=agg, expected_groups=expected_groups, group_ndim=to_group.ndim
-        ),
+        combine=partial(_npg_combine, agg=agg, expected_groups=expected_, group_ndim=to_group.ndim),
         name=name,
         dtype=array.dtype,
         axis=axis,
@@ -417,8 +456,19 @@ def groupby_agg(
         concatenate=False,
     )
 
-    group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
-    output_chunks = reduced.chunks[: -len(axis)] + (group_chunks,)
+    # if split_out > 1:
+    #     inds = tuple(range(reduced.ndim))
+    #     reduced = dask.array.blockwise(
+    #         lambda x: x[0],
+    #         inds[:-2] + (inds[-1],),
+    #         reduced,
+    #         inds,
+    #         name="squeeze",
+    #         dtype=array.dtype,
+    #     )
+
+    output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + (group_chunks,)
+    print(output_chunks)
 
     def _getitem(d, key1, key2):
         return d[key1][key2]
@@ -442,7 +492,7 @@ def groupby_agg(
 
     layer: Dict[Tuple, Tuple] = {}  # type: ignore
     for ochunk in itertools.product(*ochunks):
-        inchunk = ochunk[:-1] + (0,) * len(axis)
+        inchunk = ochunk[:-1] + (0,) * (len(axis)) + (ochunk[-1],) * int(split_out > 1)
         layer[(name, *ochunk)] = (
             operator.getitem,
             (reduced.name, *inchunk),
@@ -465,6 +515,7 @@ def groupby_reduce(
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis=None,
     fill_value=None,
+    split_out=1,
 ) -> FinalResultsDict:
     """
     GroupBy reductions using tree reductions for dask.array
@@ -486,6 +537,8 @@ def groupby_reduce(
         Negative integers are normalized using array.ndim
     fill_value: Any
         Value when a label in `expected_groups` is not present
+    split_out: int, optional
+        Number of chunks along group axis in output (last axis)
 
     Returns
     -------
@@ -525,6 +578,8 @@ def groupby_reduce(
 
     if not isinstance(func, Aggregation):
         try:
+            # TODO: need better interface
+            # we set dtype, fillvalue on reduction later. so deepcopy now
             reduction = copy.deepcopy(getattr(aggregations, func))
         except AttributeError:
             raise NotImplementedError(f"Reduction {func!r} not implemented yet")
@@ -565,7 +620,9 @@ def groupby_reduce(
             axis = (array.ndim - 1,)
 
         # TODO: deal with mixed array kinds (numpy + dask; dask + numpy)
-        result = groupby_agg(array, to_group, reduction, expected_groups, axis=axis)
+        result = groupby_agg(
+            array, to_group, reduction, expected_groups, axis=axis, split_out=split_out
+        )
 
     return result
 
@@ -573,6 +630,7 @@ def groupby_reduce(
 def xarray_reduce(
     groupby: xr.core.groupby.GroupBy,
     func: Union[str, Aggregation],
+    split_out=1,
 ):
     def wrapper(*args, **kwargs):
         result = groupby_reduce(*args, **kwargs)
@@ -591,8 +649,8 @@ def xarray_reduce(
         dask="allowed",
         output_core_dims=[[outdim]],  # TODO: return groups
         dask_gufunc_kwargs=dict(output_sizes={outdim: len(expected_groups)}),
-        kwargs={"func": func, "axis": -1},
-    ).transpose(outdim, ...)
+        kwargs={"func": func, "axis": -1, "split_out": split_out},
+    )
     actual[outdim] = groupby._unique_coord
 
     return actual

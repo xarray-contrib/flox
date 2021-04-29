@@ -35,7 +35,7 @@ def assert_equal(a, b):
 
 
 # TODO: Add max,argmax here
-@pytest.mark.parametrize("dask", [False, True])
+@pytest.mark.parametrize("dask, split_out", [(False, 1), (True, 1), (True, 2), (True, 3)])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
 @pytest.mark.parametrize(
     "func, array, to_group, expected",
@@ -71,14 +71,16 @@ def assert_equal(a, b):
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_groupby_reduce(array, to_group, expected, func, expected_groups, dask):
+def test_groupby_reduce(array, to_group, expected, func, expected_groups, dask, split_out):
     if dask:
         if expected_groups is None:
             pytest.skip()
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
         to_group = da.from_array(to_group, chunks=(3,) if to_group.ndim == 1 else (1, 3))
 
-    result = groupby_reduce(array, to_group, func=func, expected_groups=expected_groups)
+    result = groupby_reduce(
+        array, to_group, func=func, expected_groups=expected_groups, split_out=split_out
+    )
     assert_equal(expected, result[func])
 
 
