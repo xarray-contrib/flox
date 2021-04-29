@@ -363,6 +363,7 @@ def groupby_agg(
     assert all(ax >= 0 for ax in axis)
 
     inds = tuple(range(array.ndim))
+    name = f"groupby_{agg.name}"
 
     # preprocess the array
     if agg.preprocess:
@@ -394,7 +395,7 @@ def groupby_agg(
         dtype=array.dtype,
         meta=array._meta,
         align_arrays=align_arrays,
-        name="groupby-chunk-reduce",
+        name=f"{name}-chunk",
     )
 
     # reduced is really a dict mapping reduction name to array
@@ -409,7 +410,7 @@ def groupby_agg(
         combine=partial(
             _npg_combine, agg=agg, expected_groups=expected_groups, group_ndim=to_group.ndim
         ),
-        name="groupby-tree-reduce",
+        name=name,
         dtype=array.dtype,
         axis=axis,
         keepdims=True,
@@ -440,7 +441,6 @@ def groupby_agg(
         result["groups"] = np.sort(expected_groups)  # TODO: check
 
     layer: Dict[Tuple, Tuple] = {}  # type: ignore
-    name = f"groupby_{agg.name}"
     for ochunk in itertools.product(*ochunks):
         inchunk = ochunk[:-1] + (0,) * len(axis)
         layer[(name, *ochunk)] = (
