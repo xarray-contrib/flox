@@ -654,3 +654,35 @@ def xarray_reduce(
     actual[outdim] = groupby._unique_coord
 
     return actual
+
+
+def xarray_groupby_reduce(
+    groupby: xr.core.groupby.GroupBy,
+    func: Union[str, Aggregation],
+    split_out=1,
+):
+    def wrapper(*args, **kwargs):
+        result = groupby_reduce(*args, **kwargs)
+        # TODO: how do we return groups here
+        return tuple(result.values())
+
+    expected_groups = list(groupby.groups.keys())
+    outdim = groupby._unique_coord.name
+    groupdim = groupby._group_dim
+    indims = groupby._obj.dims
+    result_dims = tuple(dim for dim in indims if dim != groupdim) + (outdim,)
+    # input_dims = groupby._obj.dims
+
+    groups, actual = xr.apply_ufunc(
+        wrapper,
+        groupby._obj,
+        groupby._group,
+        input_core_dims=[indims, [groupdim]],
+        dask="allowed",
+        output_core_dims=[[outdim], result_dims],  # TODO: return groups
+        dask_gufunc_kwargs=dict(output_sizes={outdim: len(expected_groups)}),
+        kwargs={"func": func, "axis": -1, "split_out": split_out},
+    )
+    actual[outdim] = groups
+
+    return actual
