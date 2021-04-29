@@ -8,14 +8,14 @@ import dask.array
 import numpy as np
 import numpy_groupies as npg
 import pandas as pd
-from dask.highlevelgraph import HighLevelGraph
-
 import xarray as xr
+from dask.highlevelgraph import HighLevelGraph
 
 from . import aggregations
 from .aggregations import Aggregation, _get_fill_value
 
-ResultsDict = Dict[Union[str, Callable], Any]
+IntermediateDict = Dict[Union[str, Callable], Any]
+FinalResultsDict = Dict[str, Union[dask.array.Array, np.ndarray]]
 
 
 def _maybe_sub_inf(array):
@@ -92,7 +92,7 @@ def chunk_argreduce(
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Union[int, Sequence[int]],
     fill_value: Mapping[Union[str, Callable], Any],
-) -> ResultsDict:
+) -> IntermediateDict:
     """
     Per-chunk arg reduction.
 
@@ -118,7 +118,7 @@ def chunk_reduce(
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis: Union[int, Sequence[int]] = None,
     fill_value: Mapping[Union[str, Callable], Any] = None,
-) -> ResultsDict:
+) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
     mD ``to_group``.
@@ -211,7 +211,7 @@ def chunk_reduce(
     # what to set it to yet.
     group_idx[group_idx == -1] = group_idx.max() + 1
 
-    results: ResultsDict = {"groups": [], "intermediates": []}
+    results: IntermediateDict = {"groups": [], "intermediates": []}
     if expected_groups is not None:
         results["groups"] = np.array(expected_groups)
     else:
@@ -251,10 +251,10 @@ def chunk_reduce(
     return results
 
 
-def _squeeze_results(results: ResultsDict, axis: Sequence) -> ResultsDict:
+def _squeeze_results(results: IntermediateDict, axis: Sequence) -> IntermediateDict:
     # at the end we squeeze out extra dims
     groups = results["groups"]
-    newresults: ResultsDict = {"groups": [], "intermediates": []}
+    newresults: IntermediateDict = {"groups": [], "intermediates": []}
     newresults["groups"] = np.squeeze(
         groups, axis=tuple(ax for ax in range(groups.ndim - 1) if groups.shape[ax] == 1)
     )
@@ -272,10 +272,20 @@ def _npg_aggregate(
     axis: Sequence,
     keepdims,
     group_ndim: int,
-) -> ResultsDict:
+) -> FinalResultsDict:
     """ Final aggregation step of tree reduction"""
     results = _npg_combine(x_chunk, agg, expected_groups, axis, keepdims, group_ndim)
-    return _squeeze_results(results, axis)
+    squeezed = _squeeze_results(results, axis)
+
+    # finalize step
+    result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": squeezed["groups"]}
+    result[agg.name] = agg.finalize(*squeezed["intermediates"])
+
+    if agg.name in ["max", "min"]:
+        # Work aroung npg bug where we get finfo.max, finfo.min
+        # instead of np.inf, -np.inf
+        result[agg.name] = _maybe_sub_inf(result[agg.name])
+    return result
 
 
 def _npg_combine(
@@ -285,7 +295,7 @@ def _npg_combine(
     axis: Sequence,
     keepdims,
     group_ndim: int,
-) -> ResultsDict:
+) -> IntermediateDict:
     """ Combine intermediates step of tree reduction. """
     from dask.array.core import _concatenate2
     from dask.utils import deepmap
@@ -346,7 +356,7 @@ def groupby_agg(
     agg: Aggregation,
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Sequence = None,
-) -> ResultsDict:
+) -> FinalResultsDict:
 
     # I think _tree_reduce expects this
     assert isinstance(axis, Sequence)
@@ -413,7 +423,7 @@ def groupby_agg(
         return d[key1][key2]
 
     # extract results from the dict
-    result: Dict = {"groups": None, "intermediates": []}
+    result: Dict = {}
     layer: Dict[Tuple, Tuple] = {}
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
     if expected_groups is None:
@@ -429,25 +439,22 @@ def groupby_agg(
     else:
         result["groups"] = np.sort(expected_groups)  # TODO: check
 
-    for idx, chunk in enumerate(agg.chunk):
-        layer: Dict[Tuple, Tuple] = {}  # type: ignore
-        name = f"{agg.name}_{chunk}"
-        for ochunk in itertools.product(*ochunks):
-            inchunk = ochunk[:-1] + (0,) * len(axis)
-            layer[(name, *ochunk)] = (
-                _getitem,
-                (reduced.name, *inchunk),
-                "intermediates",
-                idx,
-            )
-        result["intermediates"].append(
-            dask.array.Array(
-                HighLevelGraph.from_collections(name, layer, dependencies=[reduced]),
-                name,
-                chunks=output_chunks,
-                dtype=agg.dtype if agg.dtype else array.dtype,
-            )
+    layer: Dict[Tuple, Tuple] = {}  # type: ignore
+    name = f"groupby_{agg.name}"
+    for ochunk in itertools.product(*ochunks):
+        inchunk = ochunk[:-1] + (0,) * len(axis)
+        layer[(name, *ochunk)] = (
+            operator.getitem,
+            (reduced.name, *inchunk),
+            agg.name,
         )
+    result[agg.name] = dask.array.Array(
+        HighLevelGraph.from_collections(name, layer, dependencies=[reduced]),
+        name,
+        chunks=output_chunks,
+        dtype=agg.dtype if agg.dtype else array.dtype,
+    )
+
     return result
 
 
@@ -458,7 +465,7 @@ def groupby_reduce(
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis=None,
     fill_value=None,
-) -> Dict[str, Union[dask.array.Array, np.ndarray]]:
+) -> FinalResultsDict:
     """
     GroupBy reductions using tree reductions for dask.array
 
@@ -540,15 +547,13 @@ def groupby_reduce(
             fill_value=reduction.fill_value,
         )  # type: ignore
         intermediate = _squeeze_results(results, axis)
-        result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": intermediate["groups"]}
+        result: FinalResultsDict = {"groups": intermediate["groups"]}
         result[reduction.name] = intermediate["intermediates"][0]
 
         if reduction.name in ["argmin", "argmax"]:
             # TODO: Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
             # will return wrong indices
             result[reduction.name] = np.unravel_index(result[reduction.name], array.shape)[-1]
-
-        return result
     else:
         if func in ["first", "last"]:
             raise NotImplementedError("first, last not implemented for dask arrays")
@@ -559,15 +564,8 @@ def groupby_reduce(
             array = _collapse_axis(array, len(axis))
             axis = (array.ndim - 1,)
 
-        intermediate = groupby_agg(array, to_group, reduction, expected_groups, axis=axis)
-
-    # finalize step
-    result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": intermediate["groups"]}
-    result[reduction.name] = reduction.finalize(*intermediate["intermediates"])
-
-    if reduction.name in ["max", "min"]:
-        # Work aroung npg bug where we get finfo.max, finfo.min instead of np.inf, -np.inf
-        result[reduction.name] = _maybe_sub_inf(result[reduction.name])
+        # TODO: deal with mixed array kinds (numpy + dask; dask + numpy)
+        result = groupby_agg(array, to_group, reduction, expected_groups, axis=axis)
 
     return result
 
