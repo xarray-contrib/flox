@@ -7,9 +7,9 @@ from xarray.core import dtypes, utils
 
 def _get_fill_value(dtype, fill_value):
     """ Returns dtype appropriate infinity. Returns +Inf equivalent for None."""
-    if fill_value is dtypes.INF or fill_value is None:
+    if fill_value == dtypes.INF or fill_value is None:
         return dtypes.get_pos_infinity(dtype, max_for_int=True)
-    if fill_value is dtypes.NINF:
+    if fill_value == dtypes.NINF:
         return dtypes.get_neg_infinity(dtype, min_for_int=True)
     return fill_value
 
