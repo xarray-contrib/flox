@@ -1,4 +1,4 @@
-from functools import partial
+# from functools import partial
 from itertools import zip_longest
 
 import numpy as np
