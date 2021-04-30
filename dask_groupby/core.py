@@ -75,14 +75,14 @@ def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
     dimensions have been flattened in the last dimension
     Copied from https://stackoverflow.com/questions/46256279/bin-elements-per-row-vectorized-2d-bincount-for-numpy
     """
-    ngroups = labels.max() + 1
-    offset = (
+    ngroups: int = labels.max() + 1  # type: ignore
+    offset: np.ndarray = (
         labels + np.arange(np.prod(labels.shape[:-1])).reshape((*labels.shape[:-1], -1)) * ngroups
     )
     # -1 indicates NaNs. preserve these otherwise we aggregate in the wrong groups!
     offset[labels == -1] = -1
     # print("N =", N, "offset = ", offset)
-    size = np.prod(labels.shape[:-1]) * ngroups
+    size: int = np.prod(labels.shape[:-1]) * ngroups  # type: ignore
     return offset, ngroups, size
 
 
@@ -409,6 +409,8 @@ def groupby_agg(
 
     if split_out > 1:
         if expected_groups is None:
+            # This could be implemented using the "hash_split" strategy
+            # from dask.dataframe
             raise NotImplementedError
         chunk_tuples = tuple(itertools.product(*tuple(range(n) for n in applied.numblocks)))
         ngroups = len(expected_groups)
@@ -651,7 +653,6 @@ def xarray_groupby_reduce(
 ):
     def wrapper(*args, **kwargs):
         result = groupby_reduce(*args, **kwargs)
-        # TODO: how do we return groups here
         return tuple(result.values())
 
     expected_groups = list(groupby.groups.keys())
@@ -667,7 +668,7 @@ def xarray_groupby_reduce(
         groupby._group,
         input_core_dims=[indims, [groupdim]],
         dask="allowed",
-        output_core_dims=[[outdim], result_dims],  # TODO: return groups
+        output_core_dims=[[outdim], result_dims],
         dask_gufunc_kwargs=dict(output_sizes={outdim: len(expected_groups)}),
         kwargs={"func": func, "axis": -1, "split_out": split_out},
     )
