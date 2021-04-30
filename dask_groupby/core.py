@@ -13,7 +13,7 @@ from dask.array.core import normalize_chunks
 from dask.highlevelgraph import HighLevelGraph
 
 from . import aggregations
-from .aggregations import Aggregation, _get_fill_value
+from .aggregations import Aggregation, _atleast_1d, _get_fill_value
 
 IntermediateDict = Dict[Union[str, Callable], Any]
 FinalResultsDict = Dict[str, Union[dask.array.Array, np.ndarray]]
@@ -614,30 +614,39 @@ def groupby_reduce(
 
 
 def xarray_reduce(
-    groupby: xr.core.groupby.GroupBy,
+    obj: Union[xr.Dataset, xr.DataArray],
+    to_group: xr.DataArray,
     func: Union[str, Aggregation],
+    expected_groups: Dict[str, Sequence],
+    dim=None,
     split_out=1,
 ):
     def wrapper(*args, **kwargs):
         result = groupby_reduce(*args, **kwargs)
-        # TODO: how do we return groups here
-        return tuple(result.values())[1]
+        return tuple(result.values())
 
-    expected_groups = list(groupby.groups.keys())
-    outdim = groupby._unique_coord.name
-    groupdim = groupby._group_dim
+    if dim is None:
+        dim = to_group.dims
+    dim = _atleast_1d(dim)
+    axis = (to_group.get_axis_num(d) for d in dim)
+
+    assert len(expected_groups) == 1
+    group_name, groups = expected_groups.items()
+    outdim = group_name
+    indims = tuple(obj.dims)
+    result_dims = tuple(d for d in indims if d != dim) + (outdim,)
 
     actual = xr.apply_ufunc(
         wrapper,
-        groupby._obj,
-        groupby._group,
-        input_core_dims=[[groupdim], [groupdim]],
+        obj,
+        to_group,
+        input_core_dims=[indims, [dim]],
         dask="allowed",
-        output_core_dims=[[outdim]],  # TODO: return groups
+        output_core_dims=[[outdim], result_dims],
         dask_gufunc_kwargs=dict(output_sizes={outdim: len(expected_groups)}),
-        kwargs={"func": func, "axis": -1, "split_out": split_out},
+        kwargs={"func": func, "axis": axis, "split_out": split_out},
     )
-    actual[outdim] = groupby._unique_coord
+    actual[outdim] = groups
 
     return actual
 
