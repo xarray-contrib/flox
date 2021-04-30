@@ -86,6 +86,28 @@ def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
     return offset, ngroups, size
 
 
+def factorize_(to_group, axis):
+    group_idx, groups = pd.factorize(to_group.ravel())
+    # numpy_groupies cannot deal with group_idx = -1
+    # so we'll add use (ngroups+1) as the sentinel
+    # note we cannot simply remove the NaN locations;
+    # that would mess up argmax, argmin
+    # we could set na_sentinel in pd.factorize, but we don't know
+    # what to set it to yet.
+    group_idx[group_idx == -1] = group_idx.max() + 1
+
+    size = None
+    ngroups = len(groups)
+    offset_group = False
+    if np.isscalar(axis) and to_group.ndim > 1:
+        # Not reducing along all dimensions of to_group
+        offset_group = True
+        group_idx, ngroups, size = offset_labels(group_idx.reshape(to_group.shape))
+        group_idx = group_idx.ravel()
+
+    return group_idx, groups, ngroups, size, offset_group
+
+
 def chunk_argreduce(
     array_plus_idx: Tuple[np.ndarray, ...],
     to_group: np.ndarray,
@@ -187,15 +209,7 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups = pd.factorize(to_group.ravel())
-    size = None
-
-    offset_group = False
-    if np.isscalar(axis) and to_group.ndim > 1:
-        # Not reducing along all dimensions of to_group
-        offset_group = True
-        group_idx, N, size = offset_labels(group_idx.reshape(to_group.shape))
-        group_idx = group_idx.ravel()
+    group_idx, groups, N, size, offset_group = factorize_(to_group, axis)
 
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - to_group.ndim] + (np.prod(array.shape[-to_group.ndim :]),)
@@ -204,13 +218,6 @@ def chunk_reduce(
     assert group_idx.ndim == 1
     mask = np.logical_not(group_idx == -1)
     empty = np.all(~mask) or np.prod(to_group.shape) == 0
-    # numpy_groupies cannot deal with group_idx = -1
-    # so we'll add use (ngroups+1) as the sentinel
-    # note we cannot simply remove the NaN locations;
-    # that would mess up argmax, argmin
-    # we could set na_sentinel in pd.factorize, but we don't know
-    # what to set it to yet.
-    group_idx[group_idx == -1] = group_idx.max() + 1
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
     if expected_groups is not None:
