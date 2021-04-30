@@ -374,17 +374,13 @@ def groupby_agg(
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
 
+    # This is necessary for argreductions.
+    # We need to rechunk before zipping up with the index
+    # let's always do it anyway
+    _, (array, to_group) = dask.array.unify_chunks(array, inds, to_group, inds[-to_group.ndim :])
     # preprocess the array
     if agg.preprocess:
-        # This is necessary for argreductions.
-        # We need to rechunk before zipping up with the index
-        _, (array, to_group) = dask.array.unify_chunks(
-            array, inds, to_group, inds[-to_group.ndim :]
-        )
-        align_arrays = False
         array = agg.preprocess(array, axis=axis)
-    else:
-        align_arrays = True
 
     # apply reduction on chunk
     applied = dask.array.blockwise(
@@ -403,7 +399,7 @@ def groupby_agg(
         concatenate=False,
         dtype=array.dtype,
         meta=array._meta,
-        align_arrays=align_arrays,
+        align_arrays=False,
         name=f"{name}-chunk",
     )
 
