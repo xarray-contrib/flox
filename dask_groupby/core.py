@@ -54,6 +54,13 @@ def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
 def reindex_(array: np.ndarray, from_, to, fill_value=0, axis: int = -1) -> np.ndarray:
 
     assert axis in (0, -1)
+
+    if array.shape[axis] == 0:
+        # all groups were NaN
+        reindexed = np.full(array.shape[:-1] + (len(to),), fill_value, dtype=array.dtype)
+        return reindexed
+
+    from_ = np.atleast_1d(from_)
     idx = np.array(
         [np.argwhere(np.array(from_) == label)[0, 0] if label in from_ else -1 for label in to]
     )
@@ -151,13 +158,18 @@ def chunk_argreduce(
     """
     array, idx = array_plus_idx
 
-    results = chunk_reduce(array, to_group, func, expected_groups, axis, fill_value)
-
+    results = chunk_reduce(array, to_group, func, None, axis, fill_value)
     # glorious
     newidx = np.broadcast_to(idx, array.shape)[
         np.unravel_index(results["intermediates"][1], array.shape)
     ]
     results["intermediates"][1] = newidx
+
+    if expected_groups is not None:
+        results["intermediates"][1] = reindex_(
+            results["intermediates"][1], results["groups"].squeeze(), expected_groups, fill_value=0
+        )
+
     return results
 
 
@@ -340,10 +352,24 @@ def _npg_combine(
 ) -> IntermediateDict:
     """ Combine intermediates step of tree reduction. """
     from dask.array.core import _concatenate2
+    from dask.base import flatten
     from dask.utils import deepmap
 
     if not isinstance(x_chunk, list):
         x_chunk = [x_chunk]
+
+    unique_groups = np.unique(
+        tuple(flatten(deepmap(lambda x: np.atleast_1d(x["groups"].squeeze()).tolist(), x_chunk)))
+    )
+
+    def reindex_intermediates(x):
+        new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
+        newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
+        newx["intermediates"] = tuple(
+            reindex_(v, from_=x["groups"].squeeze(), to=unique_groups, fill_value=f)
+            for v, f in zip(x["intermediates"], agg.fill_value.values())
+        )
+        return newx
 
     def _conc2(key1, key2=None, axis=None) -> np.ndarray:
         """ copied from dask.array.reductions.mean_combine"""
@@ -353,6 +379,8 @@ def _npg_combine(
         else:
             mapped = deepmap(lambda x: x[key1], x_chunk)
         return _concatenate2(mapped, axes=axis)
+
+    x_chunk = deepmap(reindex_intermediates, x_chunk)
 
     group_conc_axis: Iterable[int]
     if group_ndim == 1:
@@ -378,17 +406,25 @@ def _npg_combine(
         results = {"groups": None, "intermediates": []}
         for idx, combine in enumerate(agg.combine):
             array = _conc2(key1="intermediates", key2=idx, axis=axis)
-            # ic(combine, x)
-            _results = chunk_reduce(
-                array,
-                groups,
-                func=combine,
-                axis=axis,
-                expected_groups=expected_groups,
-                fill_value=agg.fill_value,
-            )
-            results["intermediates"].append(*_results["intermediates"])
-            results["groups"] = _results["groups"]
+            if array.shape[-1] == 0:
+                # all empty when combined
+                results["intermediates"].append(
+                    np.empty(shape=(1,) * (len(axis) - 1) + (0,), dtype=array.dtype)
+                )
+                results["groups"] = np.empty(
+                    shape=(1,) * (len(group_conc_axis) - 1) + (0,), dtype=groups.dtype
+                )
+            else:
+                _results = chunk_reduce(
+                    array,
+                    groups,
+                    func=combine,
+                    axis=axis,
+                    expected_groups=expected_groups,
+                    fill_value=agg.fill_value,
+                )
+                results["intermediates"].append(*_results["intermediates"])
+                results["groups"] = _results["groups"]
     return results
 
 
@@ -413,6 +449,7 @@ def groupby_agg(
     # We need to rechunk before zipping up with the index
     # let's always do it anyway
     _, (array, to_group) = dask.array.unify_chunks(array, inds, to_group, inds[-to_group.ndim :])
+
     # preprocess the array
     if agg.preprocess:
         array = agg.preprocess(array, axis=axis)
@@ -423,7 +460,9 @@ def groupby_agg(
             _get_chunk_reduction(agg.reduction_type),
             func=agg.chunk,  # type: ignore
             axis=axis,
-            expected_groups=expected_groups,
+            # with the current implementation we want reindexing at the blockwise step
+            # only reindex to groups present at combine stage
+            expected_groups=expected_groups if split_out > 1 else None,
             fill_value=agg.fill_value,
         ),
         inds,
@@ -468,13 +507,14 @@ def groupby_agg(
             chunks=applied.chunks + ((1,) * split_out,),
             meta=array._meta,
         )
-        # We don't want the reindexing step in this case.
-        expected_ = None
+        # We don't want the reindexing step when aggregating during tree-reduce.
+        expected_agg = None
 
     else:
         intermediate = applied
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
-        expected_ = expected_groups
+        # We want the reindexing step when aggregating during tree-reduce.
+        expected_agg = expected_groups
 
     # reduced is really a dict mapping reduction name to array
     # and "groups" to an array of group labels
@@ -483,9 +523,9 @@ def groupby_agg(
     reduced = dask.array.reductions._tree_reduce(
         intermediate,
         aggregate=partial(
-            _npg_aggregate, agg=agg, expected_groups=expected_, group_ndim=to_group.ndim
+            _npg_aggregate, agg=agg, expected_groups=expected_agg, group_ndim=to_group.ndim
         ),
-        combine=partial(_npg_combine, agg=agg, expected_groups=expected_, group_ndim=to_group.ndim),
+        combine=partial(_npg_combine, expected_groups=None, agg=agg, group_ndim=to_group.ndim),
         name=f"{name}-reduce",
         dtype=array.dtype,
         axis=axis,
