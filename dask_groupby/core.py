@@ -4,6 +4,7 @@ import operator
 from functools import partial
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence, Tuple, Union
 
+import dask
 import dask.array
 import numpy as np
 import numpy_groupies as npg
@@ -380,6 +381,7 @@ def groupby_agg(
 
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
+    token = dask.base.tokenize(array, to_group, agg, expected_groups, axis, split_out)
 
     # This is necessary for argreductions.
     # We need to rechunk before zipping up with the index
@@ -407,7 +409,7 @@ def groupby_agg(
         dtype=array.dtype,
         meta=array._meta,
         align_arrays=False,
-        name=f"{name}-chunk",
+        token=f"{name}-chunk-{token}",
     )
 
     if split_out > 1:
@@ -422,9 +424,10 @@ def groupby_agg(
 
         # split each block into `split_out` chunks
         dsk = {}
+        split_name = f"{name}-split-{token}"
         for i in chunk_tuples:
             for j in range(split_out):
-                dsk[("split", *i, j)] = (
+                dsk[(split_name, *i, j)] = (
                     _split_groups,
                     (applied.name, *i),
                     j,
@@ -432,9 +435,12 @@ def groupby_agg(
                 )
 
         # now construct an array that can be passed to _tree_reduce
-        intergraph = HighLevelGraph.from_collections("split", dsk, dependencies=(applied,))
+        intergraph = HighLevelGraph.from_collections(split_name, dsk, dependencies=(applied,))
         intermediate = dask.array.Array(
-            intergraph, name="split", chunks=applied.chunks + ((1,) * split_out,), meta=array._meta
+            intergraph,
+            name=split_name,
+            chunks=applied.chunks + ((1,) * split_out,),
+            meta=array._meta,
         )
         # We don't want the reindexing step in this case.
         expected_ = None
@@ -454,7 +460,7 @@ def groupby_agg(
             _npg_aggregate, agg=agg, expected_groups=expected_, group_ndim=to_group.ndim
         ),
         combine=partial(_npg_combine, agg=agg, expected_groups=expected_, group_ndim=to_group.ndim),
-        name=name,
+        name=f"{name}-reduce",
         dtype=array.dtype,
         axis=axis,
         keepdims=True,
@@ -471,12 +477,17 @@ def groupby_agg(
     layer: Dict[Tuple, Tuple] = {}
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
     if expected_groups is None:
+        groups_name = f"groups-{name}-{token}"
         # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
         first_block = len(ochunks) * (0,)  # TODO: this may not be right
-        layer[("groups", *first_block)] = (operator.getitem, (reduced.name, *first_block), "groups")
-        result["groups"] = dask.array.Array(
-            HighLevelGraph.from_collections("groups", layer, dependencies=[reduced]),
+        layer[(groups_name, *first_block)] = (
+            operator.getitem,
+            (reduced.name, *first_block),
             "groups",
+        )
+        result["groups"] = dask.array.Array(
+            HighLevelGraph.from_collections(groups_name, layer, dependencies=[reduced]),
+            groups_name,
             chunks=(group_chunks,),
             dtype=to_group.dtype,
         )
@@ -484,16 +495,17 @@ def groupby_agg(
         result["groups"] = np.sort(expected_groups)  # TODO: check
 
     layer: Dict[Tuple, Tuple] = {}  # type: ignore
+    agg_name = f"{name}-{token}"
     for ochunk in itertools.product(*ochunks):
         inchunk = ochunk[:-1] + (0,) * (len(axis)) + (ochunk[-1],) * int(split_out > 1)
-        layer[(name, *ochunk)] = (
+        layer[(agg_name, *ochunk)] = (
             operator.getitem,
             (reduced.name, *inchunk),
             agg.name,
         )
     result[agg.name] = dask.array.Array(
-        HighLevelGraph.from_collections(name, layer, dependencies=[reduced]),
-        name,
+        HighLevelGraph.from_collections(agg_name, layer, dependencies=[reduced]),
+        agg_name,
         chunks=output_chunks,
         dtype=agg.dtype if agg.dtype else array.dtype,
     )
