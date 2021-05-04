@@ -1,10 +1,11 @@
 import dask.array as da
 import numpy as np
 import pytest
+import xarray as xr
 from dask.array import from_array
 from numpy_groupies.aggregate_numpy import aggregate
 
-from dask_groupby.core import groupby_reduce, reindex_
+from dask_groupby.core import groupby_reduce, reindex_, xarray_reduce
 
 from . import raise_if_dask_computes
 
@@ -354,3 +355,35 @@ def test_bad_npg_behaviour():
         )[0]
         == -np.inf
     )
+
+
+def test_xarray_reduce_multiple_groupers():
+    arr = np.ones((4, 12))
+
+    labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
+    labels = np.array(labels)
+    labels2 = np.array([1, 2, 2, 1])
+
+    da = xr.DataArray(
+        arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels": ("y", labels)}
+    ).expand_dims(z=4)
+
+    expected = xr.DataArray(
+        [[4, 4], [10, 10], [8, 8], [2, 2]],
+        dims=("labels", "labels2"),
+        coords={"labels": ["a", "c", "b", "f"], "labels2": [1, 2]},
+    ).expand_dims(z=4)
+
+    actual = xarray_reduce(da, da.labels, da.labels2, func="count")
+    xr.testing.assert_identical(expected, actual)
+
+    actual = xarray_reduce(da, "labels", "labels2", func="count")
+    xr.testing.assert_identical(expected, actual)
+
+    with raise_if_dask_computes():
+        actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), da.labels, da.labels2, func="count")
+    xr.testing.assert_identical(expected, actual)
+
+    # with raise_if_dask_computes():
+    #     actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
+    # xr.testing.assert_identical(expected, actual)
