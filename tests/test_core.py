@@ -1,3 +1,4 @@
+import dask
 import dask.array as da
 import numpy as np
 import pytest
@@ -13,6 +14,8 @@ labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
 nan_labels = labels.astype(float)  # copy
 nan_labels[:5] = np.nan
 labels2d = np.array([labels[:5], np.flip(labels[:5])])
+
+dask.config.set(scheduler="sync")
 
 
 def assert_equal(a, b):
@@ -36,7 +39,7 @@ def assert_equal(a, b):
 
 
 # TODO: Add max,argmax here
-@pytest.mark.parametrize("dask, split_out", [(False, 1), (True, 1), (True, 2), (True, 3)])
+@pytest.mark.parametrize("chunk, split_out", [(False, 1), (True, 1), (True, 2), (True, 3)])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
 @pytest.mark.parametrize(
     "func, array, to_group, expected",
@@ -72,8 +75,8 @@ def assert_equal(a, b):
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_groupby_reduce(array, to_group, expected, func, expected_groups, dask, split_out):
-    if dask:
+def test_groupby_reduce(array, to_group, expected, func, expected_groups, chunk, split_out):
+    if chunk:
         if expected_groups is None:
             pytest.skip()
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
