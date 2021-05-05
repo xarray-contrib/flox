@@ -51,7 +51,7 @@ def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
     return arr.reshape(newshape)
 
 
-def reindex_(array: np.ndarray, from_, to, fill_value=0, axis: int = -1) -> np.ndarray:
+def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> np.ndarray:
 
     assert axis in (0, -1)
 
@@ -68,6 +68,8 @@ def reindex_(array: np.ndarray, from_, to, fill_value=0, axis: int = -1) -> np.n
     indexer[axis] = idx  # type: ignore
     reindexed = array[tuple(indexer)]
     if any(idx == -1):
+        if fill_value is None:
+            raise ValueError("Filling is required. fill_value cannot be None.")
         if axis == 0:
             loc = (idx == -1, ...)
         else:
@@ -282,6 +284,8 @@ def chunk_reduce(
                 axis=-1,
                 func=reduction,
                 size=size,
+                # important when reducing with "offset" groups
+                fill_value=fill_value[reduction],
             )
             if np.any(~mask):
                 # remove NaN group label which should be last
@@ -326,15 +330,29 @@ def _npg_aggregate(
     axis: Sequence,
     keepdims,
     group_ndim: int,
+    fill_value: Any = None,
 ) -> FinalResultsDict:
     """ Final aggregation step of tree reduction"""
-    results = _npg_combine(x_chunk, agg, expected_groups, axis, keepdims, group_ndim)
+    results = _npg_combine(x_chunk, agg, None, axis, keepdims, group_ndim)
     squeezed = _squeeze_results(results, axis)
+    if fill_value is not None:
+        counts = squeezed["intermediates"][-1]
+        squeezed["intermediates"] = squeezed["intermediates"][:-1]
 
     # finalize step
     result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": squeezed["groups"]}
     result[agg.name] = agg.finalize(*squeezed["intermediates"])
 
+    if fill_value is not None:
+        result[agg.name] = np.where(counts > 0, result[agg.name], fill_value)
+
+    # Final reindexing has to be here to be lazy
+    if expected_groups is not None:
+        result[agg.name] = reindex_(
+            result[agg.name], result["groups"], expected_groups, fill_value=fill_value
+        )
+
+    # TODO: this may not be needed any more
     if agg.name in ["max", "min"]:
         # Work aroung npg bug where we get finfo.max, finfo.min
         # instead of np.inf, -np.inf
@@ -391,14 +409,29 @@ def _npg_combine(
 
     if agg.reduction_type == "argreduce":
         # We need to send the intermediate array values & indexes at the same time
-        array_plus_idx = tuple(_conc2(key1="intermediates", key2=idx, axis=axis) for idx in (0, 1))
+        # intermediates are (value e.g. max, index e.g. argmax, counts)
+        array_idx = tuple(_conc2(key1="intermediates", key2=idx, axis=axis) for idx in (0, 1))
+        counts = _conc2(key1="intermediates", key2=2, axis=axis)
+
         results = chunk_argreduce(
-            array_plus_idx,
+            array_idx,
             groups,
-            func=agg.combine,
+            func=agg.combine[:-1],  # count gets treated specially next
             axis=axis,
-            expected_groups=expected_groups,
+            expected_groups=None,
             fill_value=agg.fill_value,
+        )
+
+        # sum the counts
+        results["intermediates"].append(
+            chunk_reduce(
+                counts,
+                groups,
+                func="sum",
+                axis=axis,
+                expected_groups=None,
+                fill_value={"sum": 0},
+            )["intermediates"][0]
         )
 
     elif agg.reduction_type == "reduce":
@@ -420,7 +453,7 @@ def _npg_combine(
                     groups,
                     func=combine,
                     axis=axis,
-                    expected_groups=expected_groups,
+                    expected_groups=None,
                     fill_value=agg.fill_value,
                 )
                 results["intermediates"].append(*_results["intermediates"])
@@ -435,6 +468,7 @@ def groupby_agg(
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Sequence = None,
     split_out: int = 1,
+    fill_value: int = None,
 ) -> FinalResultsDict:
 
     # I think _tree_reduce expects this
@@ -507,13 +541,11 @@ def groupby_agg(
             chunks=applied.chunks + ((1,) * split_out,),
             meta=array._meta,
         )
-        # We don't want the reindexing step when aggregating during tree-reduce.
         expected_agg = None
 
     else:
         intermediate = applied
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
-        # We want the reindexing step when aggregating during tree-reduce.
         expected_agg = expected_groups
 
     # reduced is really a dict mapping reduction name to array
@@ -523,7 +555,11 @@ def groupby_agg(
     reduced = dask.array.reductions._tree_reduce(
         intermediate,
         aggregate=partial(
-            _npg_aggregate, agg=agg, expected_groups=expected_agg, group_ndim=to_group.ndim
+            _npg_aggregate,
+            agg=agg,
+            expected_groups=expected_agg,
+            group_ndim=to_group.ndim,
+            fill_value=fill_value,
         ),
         combine=partial(_npg_combine, expected_groups=None, agg=agg, group_ndim=to_group.ndim),
         name=f"{name}-reduce",
@@ -663,15 +699,18 @@ def groupby_reduce(
     reduction.fill_value = {
         k: _get_fill_value(array.dtype, v) for k, v in reduction.fill_value.items()
     }
+
     if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
+        fv = reduction.fill_value[func] if fill_value is None else fill_value
         results = chunk_reduce(
             array,
             to_group,
             func=reduction.name,
             axis=axis,
-            expected_groups=expected_groups,
-            fill_value=reduction.fill_value,
+            expected_groups=None,
+            fill_value={reduction.name: fv},
         )  # type: ignore
+
         intermediate = _squeeze_results(results, axis)
         result: FinalResultsDict = {"groups": intermediate["groups"]}
         result[reduction.name] = intermediate["intermediates"][0]
@@ -680,9 +719,21 @@ def groupby_reduce(
             # TODO: Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
             # will return wrong indices
             result[reduction.name] = np.unravel_index(result[reduction.name], array.shape)[-1]
+
+        # TODO: duplicated in _npg_aggregate
+        if expected_groups is not None:
+            result[reduction.name] = reindex_(
+                result[reduction.name], result["groups"], expected_groups, fill_value=fill_value
+            )
     else:
         if func in ["first", "last"]:
             raise NotImplementedError("first, last not implemented for dask arrays")
+
+        if fill_value is not None:
+            reduction.chunk += ("count",)
+            reduction.combine += ("sum",)
+            reduction.fill_value["count"] = 0
+            reduction.fill_value["sum"] = 0
 
         # Needed since we need not have equal number of groups per block
         if expected_groups is None and len(axis) > 1:
@@ -692,7 +743,13 @@ def groupby_reduce(
 
         # TODO: deal with mixed array kinds (numpy + dask; dask + numpy)
         result = groupby_agg(
-            array, to_group, reduction, expected_groups, axis=axis, split_out=split_out
+            array,
+            to_group,
+            reduction,
+            expected_groups,
+            axis=axis,
+            split_out=split_out,
+            fill_value=fill_value,
         )
 
     return result

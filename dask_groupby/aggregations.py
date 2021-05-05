@@ -43,19 +43,19 @@ class Aggregation:
         # how to aggregate results after first round of reduction
         self.combine = _atleast_1d(combine)
         # final aggregation
-        self.aggregate = aggregate if aggregate else combine
+        self.aggregate = aggregate if aggregate else self.combine[0]
         # finalize results (see mean)
         self.finalize = finalize if finalize else lambda x: x
-        # fill_value is used to reindex to expected_groups.
+
+        # fill_value is used to reindex to group labels
         # They should make sense when aggregated together with results from other blocks
         fill_value = _atleast_1d(fill_value)
         self.fill_value = dict(zip_longest(self.chunk, fill_value, fillvalue=fill_value[0]))
         self.fill_value.update(dict(zip_longest(self.combine, fill_value, fillvalue=fill_value[0])))
-        self.fill_value.update(
-            dict(zip_longest(self.aggregate, fill_value, fillvalue=fill_value[0]))
-        )
+        self.fill_value.update(dict(zip((self.aggregate,), fill_value)))
         if self.name not in self.fill_value:
             self.fill_value.update({self.name: fill_value[0]})
+
         # np.dtype(None) = np.dtype("float64")!
         self.dtype = dtype
 
