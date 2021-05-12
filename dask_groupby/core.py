@@ -601,7 +601,7 @@ def groupby_agg(
             dtype=to_group.dtype,
         )
     else:
-        result["groups"] = np.sort(expected_groups)  # TODO: check
+        result["groups"] = expected_groups
 
     layer: Dict[Tuple, Tuple] = {}  # type: ignore
     agg_name = f"{name}-{token}"
