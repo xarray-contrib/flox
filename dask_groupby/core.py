@@ -308,7 +308,14 @@ def _split_groups(array, j, slicer):
     return results
 
 
-def _finalize_results(results, agg, axis, expected_groups, fill_value, mask_counts=True):
+def _finalize_results(
+    results: IntermediateDict,
+    agg: Aggregation,
+    axis: Sequence[int],
+    expected_groups: Union[Sequence, np.ndarray, None],
+    fill_value: Any,
+    mask_counts=True,
+):
     """Finalize results by
     1. Squeezing out dummy dimensions
     2. Calling agg.finalize with intermediate results
@@ -348,7 +355,7 @@ def _finalize_results(results, agg, axis, expected_groups, fill_value, mask_coun
 def _npg_aggregate(
     x_chunk,
     agg: Aggregation,
-    expected_groups: Union[Sequence, np.ndarray],
+    expected_groups: Union[Sequence, np.ndarray, None],
     axis: Sequence,
     keepdims,
     group_ndim: int,
@@ -466,7 +473,7 @@ def groupby_agg(
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Sequence = None,
     split_out: int = 1,
-    fill_value: int = None,
+    fill_value: Any = None,
 ) -> FinalResultsDict:
 
     # I think _tree_reduce expects this
@@ -762,7 +769,7 @@ def xarray_reduce(
     fill_value=None,
 ):
 
-    by = tuple(obj[g] if isinstance(g, str) else g for g in by)
+    by: Tuple[xr.DataArray] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
     grouper_dims = set(itertools.chain(*tuple(g.dims for g in by)))
     obj, *by = xr.broadcast(obj, *by, exclude=set(obj.dims) - grouper_dims)
     obj = obj.transpose(..., *by[0].dims)
