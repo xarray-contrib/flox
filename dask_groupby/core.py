@@ -355,14 +355,13 @@ def _npg_aggregate(
     fill_value: Any = None,
 ) -> FinalResultsDict:
     """ Final aggregation step of tree reduction"""
-    results = _npg_combine(x_chunk, agg, None, axis, keepdims, group_ndim)
+    results = _npg_combine(x_chunk, agg, axis, keepdims, group_ndim)
     return _finalize_results(results, agg, axis, expected_groups, fill_value)
 
 
 def _npg_combine(
     x_chunk,
     agg: Aggregation,
-    expected_groups: Union[Sequence, np.ndarray],
     axis: Sequence,
     keepdims,
     group_ndim: int,
@@ -560,7 +559,7 @@ def groupby_agg(
             group_ndim=to_group.ndim,
             fill_value=fill_value,
         ),
-        combine=partial(_npg_combine, expected_groups=None, agg=agg, group_ndim=to_group.ndim),
+        combine=partial(_npg_combine, agg=agg, group_ndim=to_group.ndim),
         name=f"{name}-reduce",
         dtype=array.dtype,
         axis=axis,
