@@ -323,19 +323,24 @@ def _split_groups(array, j, slicer):
     return results
 
 
-def _npg_aggregate(
-    x_chunk,
-    agg: Aggregation,
-    expected_groups: Union[Sequence, np.ndarray],
-    axis: Sequence,
-    keepdims,
-    group_ndim: int,
-    fill_value: Any = None,
-) -> FinalResultsDict:
-    """ Final aggregation step of tree reduction"""
-    results = _npg_combine(x_chunk, agg, None, axis, keepdims, group_ndim)
+def _finalize_results(results, agg, axis, expected_groups, fill_value, mask_counts=True):
+    """Finalize results by
+    1. Squeezing out dummy dimensions
+    2. Calling agg.finalize with intermediate results
+    3. Mask using counts and fill with user-provided fill_value.
+    4. reindex to expected_groups
+
+    Parameters
+    ----------
+
+    mask_counts: bool
+        Whether to mask out results using counts which is expected to be the last element in
+        results["intermediates"]. Should be False when dask arrays are not involved.
+
+    """
     squeezed = _squeeze_results(results, axis)
-    if fill_value is not None:
+
+    if fill_value is not None and mask_counts:
         counts = squeezed["intermediates"][-1]
         squeezed["intermediates"] = squeezed["intermediates"][:-1]
 
@@ -343,7 +348,7 @@ def _npg_aggregate(
     result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": squeezed["groups"]}
     result[agg.name] = agg.finalize(*squeezed["intermediates"])
 
-    if fill_value is not None:
+    if fill_value is not None and mask_counts:
         result[agg.name] = np.where(counts > 0, result[agg.name], fill_value)
 
     # Final reindexing has to be here to be lazy
@@ -357,7 +362,23 @@ def _npg_aggregate(
         # Work aroung npg bug where we get finfo.max, finfo.min
         # instead of np.inf, -np.inf
         result[agg.name] = _maybe_sub_inf(result[agg.name])
+
     return result
+
+
+def _npg_aggregate(
+    x_chunk,
+    agg: Aggregation,
+    expected_groups: Union[Sequence, np.ndarray],
+    axis: Sequence,
+    keepdims,
+    group_ndim: int,
+    fill_value: Any = None,
+) -> FinalResultsDict:
+    """ Final aggregation step of tree reduction"""
+    results = _npg_combine(x_chunk, agg, None, axis, keepdims, group_ndim)
+
+    return _finalize_results(results, agg, axis, expected_groups, fill_value)
 
 
 def _npg_combine(
@@ -711,20 +732,18 @@ def groupby_reduce(
             fill_value={reduction.name: fv},
         )  # type: ignore
 
-        intermediate = _squeeze_results(results, axis)
-        result: FinalResultsDict = {"groups": intermediate["groups"]}
-        result[reduction.name] = intermediate["intermediates"][0]
-
         if reduction.name in ["argmin", "argmax"]:
             # TODO: Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
             # will return wrong indices
-            result[reduction.name] = np.unravel_index(result[reduction.name], array.shape)[-1]
+            results["intermediates"][0] = np.unravel_index(
+                results["intermediates"][0], array.shape
+            )[-1]
 
-        # TODO: duplicated in _npg_aggregate
-        if expected_groups is not None:
-            result[reduction.name] = reindex_(
-                result[reduction.name], result["groups"], expected_groups, fill_value=fill_value
-            )
+        reduction.finalize = lambda x: x
+        result = _finalize_results(
+            results, reduction, axis, expected_groups, fill_value=fill_value, mask_counts=False
+        )
+
     else:
         if func in ["first", "last"]:
             raise NotImplementedError("first, last not implemented for dask arrays")
