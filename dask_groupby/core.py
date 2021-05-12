@@ -763,9 +763,8 @@ def xarray_reduce(
     bins=None,
     dim=None,
     split_out=1,
+    fill_value=None,
 ):
-    if isinstance(by, xr.DataArray):
-        by = (by,)
 
     by = tuple(obj[g] if isinstance(g, str) else g for g in by)
     grouper_dims = set(itertools.chain(*tuple(g.dims for g in by)))
@@ -812,7 +811,7 @@ def xarray_reduce(
         dask="allowed",
         output_core_dims=[result_dims],
         dask_gufunc_kwargs=dict(output_sizes=group_sizes),
-        kwargs={"func": func, "axis": axis, "split_out": split_out},
+        kwargs={"func": func, "axis": axis, "split_out": split_out, "fill_value": fill_value},
     )
 
     for name, expect in zip(group_names, expected_groups):
