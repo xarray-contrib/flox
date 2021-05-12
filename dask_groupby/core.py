@@ -83,7 +83,6 @@ def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
     )
     # -1 indicates NaNs. preserve these otherwise we aggregate in the wrong groups!
     offset[labels == -1] = -1
-    # print("N =", N, "offset = ", offset)
     size: int = np.prod(labels.shape[:-1]) * ngroups  # type: ignore
     return offset, ngroups, size
 
@@ -212,11 +211,9 @@ def chunk_reduce(
     if fill_value is None:
         fill_value = {f: None for f in func}
 
-    # ic(array, to_group, axis)
     nax = len(axis) if isinstance(axis, Sequence) else to_group.ndim
     final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
     final_groups_shape = (1,) * (nax - 1)
-    # ic(array.shape, to_group.shape, axis, final_array_shape, final_groups_shape)
 
     if isinstance(axis, Sequence) and len(axis) == 1:
         axis = next(iter(axis))
@@ -224,11 +221,9 @@ def chunk_reduce(
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
     if isinstance(axis, Sequence) and len(axis) < to_group.ndim:
-        # ic("collapsing and reshaping")
         to_group = _collapse_axis(to_group, len(axis))
         array = _collapse_axis(array, len(axis))
         axis = -1
-        # ic(array.shape, to_group.shape, axis)
 
     if to_group.ndim == 1:
         # TODO: This assertion doesn't work with dask reducing across all dimensions
@@ -242,7 +237,7 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, N, size, offset_group = factorize_(to_group, axis)
+    group_idx, groups, ngroups, size, offset_group = factorize_(to_group, axis)
 
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - to_group.ndim] + (np.prod(array.shape[-to_group.ndim :]),)
@@ -268,7 +263,6 @@ def chunk_reduce(
     for reduction in func:
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fill_value[reduction])
-            # ic("empty", result.shape)
         else:
             result = npg.aggregate_numpy.aggregate(
                 group_idx,
@@ -283,7 +277,7 @@ def chunk_reduce(
                 # remove NaN group label which should be last
                 result = result[..., :-1]
             if offset_group:
-                result = result.reshape(*final_array_shape[:-1], N)
+                result = result.reshape(*final_array_shape[:-1], ngroups)
             if expected_groups is not None:
                 result = reindex_(result, groups, expected_groups, fill_value=fill_value[reduction])
             else:
@@ -303,7 +297,6 @@ def _squeeze_results(results: IntermediateDict, axis: Sequence) -> IntermediateD
     )
     for v in results["intermediates"]:
         squeeze_ax = tuple(ax for ax in sorted(axis)[:-1] if v.shape[ax] == 1)
-        # ic(axis, squeeze_ax, v.shape, np.squeeze(v, axis=squeeze_ax).shape)
         newresults["intermediates"].append(np.squeeze(v, axis=squeeze_ax) if squeeze_ax else v)
     return newresults
 
@@ -363,7 +356,6 @@ def _npg_aggregate(
 ) -> FinalResultsDict:
     """ Final aggregation step of tree reduction"""
     results = _npg_combine(x_chunk, agg, None, axis, keepdims, group_ndim)
-
     return _finalize_results(results, agg, axis, expected_groups, fill_value)
 
 
@@ -588,7 +580,7 @@ def groupby_agg(
     if expected_groups is None:
         groups_name = f"groups-{name}-{token}"
         # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
-        first_block = len(ochunks) * (0,)  # TODO: this may not be right
+        first_block = len(ochunks) * (0,)
         layer[(groups_name, *first_block)] = (
             operator.getitem,
             (reduced.name, *first_block),
@@ -719,7 +711,7 @@ def groupby_reduce(
         )  # type: ignore
 
         if reduction.name in ["argmin", "argmax"]:
-            # TODO: Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
+            # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
             # will return wrong indices
             results["intermediates"][0] = np.unravel_index(
                 results["intermediates"][0], array.shape
@@ -741,12 +733,12 @@ def groupby_reduce(
             reduction.fill_value["sum"] = 0
 
         # Needed since we need not have equal number of groups per block
-        if expected_groups is None and len(axis) > 1:
-            to_group = _collapse_axis(to_group, len(axis))
-            array = _collapse_axis(array, len(axis))
-            axis = (array.ndim - 1,)
+        # if expected_groups is None and len(axis) > 1:
+        #     to_group = _collapse_axis(to_group, len(axis))
+        #     array = _collapse_axis(array, len(axis))
+        #     axis = (array.ndim - 1,)
 
-        # TODO: deal with mixed array kinds (numpy + dask; dask + numpy)
+        # TODO: test with mixed array kinds (numpy + dask; dask + numpy)
         result = groupby_agg(
             array,
             to_group,
@@ -781,7 +773,6 @@ def xarray_reduce(
     else:
         dim = _atleast_1d(dim)
 
-    # TODO: add dataset support
     assert isinstance(obj, xr.DataArray)
     axis = tuple(obj.get_axis_num(d) for d in dim)
 
