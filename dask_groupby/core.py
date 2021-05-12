@@ -20,14 +20,6 @@ IntermediateDict = Dict[Union[str, Callable], Any]
 FinalResultsDict = Dict[str, Union[dask.array.Array, np.ndarray]]
 
 
-def _maybe_sub_inf(array):
-    if np.issubdtype(array.dtype, np.floating):
-        finfo = np.finfo(array.dtype)
-        array[array == finfo.max] = np.inf
-        array[array == finfo.min] = -np.inf
-    return array
-
-
 def _get_chunk_reduction(reduction_type: str) -> Callable:
     if reduction_type == "reduce":
         return chunk_reduce
@@ -356,12 +348,6 @@ def _finalize_results(results, agg, axis, expected_groups, fill_value, mask_coun
         result[agg.name] = reindex_(
             result[agg.name], result["groups"], expected_groups, fill_value=fill_value
         )
-
-    # TODO: this may not be needed any more
-    if agg.name in ["max", "min"]:
-        # Work aroung npg bug where we get finfo.max, finfo.min
-        # instead of np.inf, -np.inf
-        result[agg.name] = _maybe_sub_inf(result[agg.name])
 
     return result
 
