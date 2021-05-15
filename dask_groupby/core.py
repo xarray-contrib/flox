@@ -72,10 +72,11 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
 
 def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
     """
-    Offset group labels by dimension. This is used for "group_over" functionality, where
-    we reduce over a subset of the dimensions of by. It assumes that the reductions
+    Offset group labels by dimension. This is used when we
+    reduce over a subset of the dimensions of by. It assumes that the reductions
     dimensions have been flattened in the last dimension
-    Copied from https://stackoverflow.com/questions/46256279/bin-elements-per-row-vectorized-2d-bincount-for-numpy
+    Copied from xhistogram &
+    https://stackoverflow.com/questions/46256279/bin-elements-per-row-vectorized-2d-bincount-for-numpy
     """
     ngroups: int = labels.max() + 1  # type: ignore
     offset: np.ndarray = (
@@ -396,7 +397,6 @@ def _npg_combine(
 
     def _conc2(key1, key2=None, axis=None) -> np.ndarray:
         """ copied from dask.array.reductions.mean_combine"""
-        # some magic
         if key2 is not None:
             mapped = deepmap(lambda x: x[key1][key2], x_chunk)
         else:
