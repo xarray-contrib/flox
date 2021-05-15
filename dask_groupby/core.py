@@ -73,7 +73,7 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
 def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
     """
     Offset group labels by dimension. This is used for "group_over" functionality, where
-    we reduce over a subset of the dimensions of to_group. It assumes that the reductions
+    we reduce over a subset of the dimensions of by. It assumes that the reductions
     dimensions have been flattened in the last dimension
     Copied from https://stackoverflow.com/questions/46256279/bin-elements-per-row-vectorized-2d-bincount-for-numpy
     """
@@ -87,8 +87,8 @@ def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
     return offset, ngroups, size
 
 
-def factorize_multiple(to_group: Tuple, expected_groups: Tuple = None, bins: Tuple = None):
-    ngroups = len(to_group)
+def factorize_multiple(by: Tuple, expected_groups: Tuple = None, bins: Tuple = None):
+    ngroups = len(by)
     if bins is None:
         bins = (False,) * ngroups
     if expected_groups is None:
@@ -96,7 +96,7 @@ def factorize_multiple(to_group: Tuple, expected_groups: Tuple = None, bins: Tup
 
     factorized = []
     found_groups = []
-    for groupvar, expect, tobin in zip(to_group, expected_groups, bins):
+    for groupvar, expect, tobin in zip(by, expected_groups, bins):
         if tobin:
             if expect is None:
                 raise ValueError
@@ -109,12 +109,12 @@ def factorize_multiple(to_group: Tuple, expected_groups: Tuple = None, bins: Tup
         factorized.append(result)
 
     grp_shape = tuple(len(grp) for grp in found_groups)
-    group_idx = np.ravel_multi_index(factorized, grp_shape).reshape(to_group[0].shape)
+    group_idx = np.ravel_multi_index(factorized, grp_shape).reshape(by[0].shape)
     return group_idx, found_groups, grp_shape
 
 
-def factorize_(to_group, axis):
-    group_idx, groups = pd.factorize(to_group.ravel())
+def factorize_(by, axis):
+    group_idx, groups = pd.factorize(by.ravel())
     # numpy_groupies cannot deal with group_idx = -1
     # so we'll add use (ngroups+1) as the sentinel
     # note we cannot simply remove the NaN locations;
@@ -126,10 +126,10 @@ def factorize_(to_group, axis):
     size = None
     ngroups = len(groups)
     offset_group = False
-    if np.isscalar(axis) and to_group.ndim > 1:
-        # Not reducing along all dimensions of to_group
+    if np.isscalar(axis) and by.ndim > 1:
+        # Not reducing along all dimensions of by
         offset_group = True
-        group_idx, ngroups, size = offset_labels(group_idx.reshape(to_group.shape))
+        group_idx, ngroups, size = offset_labels(group_idx.reshape(by.shape))
         group_idx = group_idx.ravel()
 
     return group_idx, groups, ngroups, size, offset_group
@@ -137,7 +137,7 @@ def factorize_(to_group, axis):
 
 def chunk_argreduce(
     array_plus_idx: Tuple[np.ndarray, ...],
-    to_group: np.ndarray,
+    by: np.ndarray,
     func: Sequence[str],
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Union[int, Sequence[int]],
@@ -151,7 +151,7 @@ def chunk_argreduce(
     """
     array, idx = array_plus_idx
 
-    results = chunk_reduce(array, to_group, func, None, axis, fill_value)
+    results = chunk_reduce(array, by, func, None, axis, fill_value)
     # glorious
     newidx = np.broadcast_to(idx, array.shape)[
         np.unravel_index(results["intermediates"][1], array.shape)
@@ -168,7 +168,7 @@ def chunk_argreduce(
 
 def chunk_reduce(
     array: np.ndarray,
-    to_group: np.ndarray,
+    by: np.ndarray,
     func: Union[str, Callable, Sequence[str], Sequence[Callable]],
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis: Union[int, Sequence[int]] = None,
@@ -176,11 +176,11 @@ def chunk_reduce(
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
-    mD ``to_group``.
+    mD ``by``.
 
     Core groupby reduction using numpy_groupies. Uses ``pandas.factorize`` to factorize
-    ``to_group``. Offsets the groups if not reducing along all dimensions of ``to_group``.
-    Always ravels ``to_group`` to 1D, flattens appropriate dimensions of array.
+    ``by``. Offsets the groups if not reducing along all dimensions of ``by``.
+    Always ravels ``by`` to 1D, flattens appropriate dimensions of array.
 
     When dask arrays are passed to groupby_reduce, this function is called on every
     block.
@@ -189,7 +189,7 @@ def chunk_reduce(
     ----------
     array: numpy.ndarray
         Array of values to reduced
-    to_group: numpy.ndarray
+    by: numpy.ndarray
         Array to group by.
     func: str or Callable or Sequence[str] or Sequence[Callable]
         Name of reduction or function, passed to numpy_groupies.
@@ -211,7 +211,7 @@ def chunk_reduce(
     if fill_value is None:
         fill_value = {f: None for f in func}
 
-    nax = len(axis) if isinstance(axis, Sequence) else to_group.ndim
+    nax = len(axis) if isinstance(axis, Sequence) else by.ndim
     final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
     final_groups_shape = (1,) * (nax - 1)
 
@@ -220,14 +220,14 @@ def chunk_reduce(
 
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
-    if isinstance(axis, Sequence) and len(axis) < to_group.ndim:
-        to_group = _collapse_axis(to_group, len(axis))
+    if isinstance(axis, Sequence) and len(axis) < by.ndim:
+        by = _collapse_axis(by, len(axis))
         array = _collapse_axis(array, len(axis))
         axis = -1
 
-    if to_group.ndim == 1:
+    if by.ndim == 1:
         # TODO: This assertion doesn't work with dask reducing across all dimensions
-        # when to_group.ndim == array.ndim
+        # when by.ndim == array.ndim
         # the intermediates are 1D but axis=range(array.ndim)
         # assert axis in (0, -1, array.ndim - 1, None)
         axis = -1
@@ -237,15 +237,15 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, ngroups, size, offset_group = factorize_(to_group, axis)
+    group_idx, groups, ngroups, size, offset_group = factorize_(by, axis)
 
     # always reshape to 1D along group dimensions
-    newshape = array.shape[: array.ndim - to_group.ndim] + (np.prod(array.shape[-to_group.ndim :]),)
+    newshape = array.shape[: array.ndim - by.ndim] + (np.prod(array.shape[-by.ndim :]),)
     array = array.reshape(newshape)
 
     assert group_idx.ndim == 1
     mask = np.logical_not(group_idx == -1)
-    empty = np.all(~mask) or np.prod(to_group.shape) == 0
+    empty = np.all(~mask) or np.prod(by.shape) == 0
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
     if expected_groups is not None:
@@ -468,7 +468,7 @@ def _npg_combine(
 
 def groupby_agg(
     array: dask.array.Array,
-    to_group: dask.array.Array,
+    by: dask.array.Array,
     agg: Aggregation,
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Sequence = None,
@@ -482,12 +482,12 @@ def groupby_agg(
 
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
-    token = dask.base.tokenize(array, to_group, agg, expected_groups, axis, split_out)
+    token = dask.base.tokenize(array, by, agg, expected_groups, axis, split_out)
 
     # This is necessary for argreductions.
     # We need to rechunk before zipping up with the index
     # let's always do it anyway
-    _, (array, to_group) = dask.array.unify_chunks(array, inds, to_group, inds[-to_group.ndim :])
+    _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
     # preprocess the array
     if agg.preprocess:
@@ -507,8 +507,8 @@ def groupby_agg(
         inds,
         array,
         inds,
-        to_group,
-        inds[-to_group.ndim :],
+        by,
+        inds[-by.ndim :],
         concatenate=False,
         dtype=array.dtype,
         meta=array._meta,
@@ -563,10 +563,10 @@ def groupby_agg(
             _npg_aggregate,
             agg=agg,
             expected_groups=expected_agg,
-            group_ndim=to_group.ndim,
+            group_ndim=by.ndim,
             fill_value=fill_value,
         ),
-        combine=partial(_npg_combine, agg=agg, group_ndim=to_group.ndim),
+        combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim),
         name=f"{name}-reduce",
         dtype=array.dtype,
         axis=axis,
@@ -596,7 +596,7 @@ def groupby_agg(
             HighLevelGraph.from_collections(groups_name, layer, dependencies=[reduced]),
             groups_name,
             chunks=(group_chunks,),
-            dtype=to_group.dtype,
+            dtype=by.dtype,
         )
     else:
         result["groups"] = expected_groups
@@ -622,7 +622,7 @@ def groupby_agg(
 
 def groupby_reduce(
     array: Union[np.ndarray, dask.array.Array],
-    to_group: Union[np.ndarray, dask.array.Array],
+    by: Union[np.ndarray, dask.array.Array],
     func: Union[str, Aggregation],
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis=None,
@@ -636,15 +636,15 @@ def groupby_reduce(
     ----------
     array: numpy.ndarray, dask.array.Array
         Array to be reduced, nD
-    to_group: numpy.ndarray, dask.array.Array
+    by: numpy.ndarray, dask.array.Array
         Array of labels to group over. Must be aligned with `array` so that
-            ``array.shape[-to_group.ndim :] == to_group.shape``
+            ``array.shape[-by.ndim :] == by.shape``
     func: str or Aggregation
         Single function name or an Aggregation instance
     expected_groups: (optional) Sequence
         Expected unique labels.
     axis: (optional) None or int or Sequence[int]
-        If None, reduce across all dimensions of to_group
+        If None, reduce across all dimensions of by
         Else, reduce across corresponding axes of array
         Negative integers are normalized using array.ndim
     fill_value: Any
@@ -658,33 +658,33 @@ def groupby_reduce(
         Keys include ``"groups"`` and ``func``.
     """
 
-    assert array.shape[-to_group.ndim :] == to_group.shape
+    assert array.shape[-by.ndim :] == by.shape
 
     if axis is None:
-        axis = tuple(array.ndim + np.arange(-to_group.ndim, 0))
+        axis = tuple(array.ndim + np.arange(-by.ndim, 0))
     else:
         axis = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
 
-    if expected_groups is None and isinstance(to_group, np.ndarray):
-        expected_groups = np.unique(to_group)
+    if expected_groups is None and isinstance(by, np.ndarray):
+        expected_groups = np.unique(by)
         if np.issubdtype(expected_groups.dtype, np.floating):  # type: ignore
             expected_groups = expected_groups[~np.isnan(expected_groups)]
 
     # TODO: make sure expected_groups is unique
-    if len(axis) == 1 and to_group.ndim > 1 and expected_groups is None:
+    if len(axis) == 1 and by.ndim > 1 and expected_groups is None:
         # When we reduce along all axes, it guarantees that we will see all
         # groups in the final combine stage, so everything works.
         # This is not necessarily true when reducing along a subset of axes
-        # (of to_group)
-        # TODO: depends on chunking of to_group?
+        # (of by)
+        # TODO: depends on chunking of by?
         # we could relax this if there is only one chunk along all
-        # to_group dim != axis?
+        # by dim != axis?
         raise NotImplementedError(
             "Please provide ``expected_groups`` when not reducing along all axes."
         )
 
-    if isinstance(axis, Sequence) and len(axis) < to_group.ndim:
-        to_group = _move_reduce_dims_to_end(to_group, -array.ndim + np.array(axis) + to_group.ndim)
+    if isinstance(axis, Sequence) and len(axis) < by.ndim:
+        by = _move_reduce_dims_to_end(by, -array.ndim + np.array(axis) + by.ndim)
         array = _move_reduce_dims_to_end(array, axis)
         axis = tuple(array.ndim + np.arange(-len(axis), 0))
 
@@ -705,11 +705,11 @@ def groupby_reduce(
         k: _get_fill_value(array.dtype, v) for k, v in reduction.fill_value.items()
     }
 
-    if not isinstance(array, dask.array.Array) and not isinstance(to_group, dask.array.Array):
+    if not isinstance(array, dask.array.Array) and not isinstance(by, dask.array.Array):
         fv = reduction.fill_value[func] if fill_value is None else fill_value
         results = chunk_reduce(
             array,
-            to_group,
+            by,
             func=reduction.name,
             axis=axis,
             expected_groups=None,
@@ -740,14 +740,14 @@ def groupby_reduce(
 
         # Needed since we need not have equal number of groups per block
         # if expected_groups is None and len(axis) > 1:
-        #     to_group = _collapse_axis(to_group, len(axis))
+        #     by = _collapse_axis(by, len(axis))
         #     array = _collapse_axis(array, len(axis))
         #     axis = (array.ndim - 1,)
 
         # TODO: test with mixed array kinds (numpy + dask; dask + numpy)
         result = groupby_agg(
             array,
-            to_group,
+            by,
             reduction,
             expected_groups,
             axis=axis,
