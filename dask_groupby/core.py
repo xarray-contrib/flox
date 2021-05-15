@@ -88,7 +88,7 @@ def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
     return offset, ngroups, size
 
 
-def factorize_multiple(by: Tuple, expected_groups: Tuple = None, bins: Tuple = None):
+def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = None):
     ngroups = len(by)
     if bins is None:
         bins = (False,) * ngroups
@@ -101,39 +101,36 @@ def factorize_multiple(by: Tuple, expected_groups: Tuple = None, bins: Tuple = N
         if tobin:
             if expect is None:
                 raise ValueError
-            result = np.digitize(groupvar, expect)
+            idx = np.digitize(groupvar, expect)
             found_groups.append(expect)
         else:
-            result, groups = pd.factorize(groupvar.ravel())
+            idx, groups = pd.factorize(groupvar.ravel())
+            # numpy_groupies cannot deal with group_idx = -1
+            # so we'll add use (ngroups+1) as the sentinel
+            # note we cannot simply remove the NaN locations;
+            # that would mess up argmax, argmin
+            # we could set na_sentinel in pd.factorize, but we don't know
+            # what to set it to yet.
+            idx[idx == -1] = idx.max() + 1
             if expect is None:
                 found_groups.append(groups)
-        factorized.append(result)
+        factorized.append(idx)
 
     grp_shape = tuple(len(grp) for grp in found_groups)
-    group_idx = np.ravel_multi_index(factorized, grp_shape).reshape(by[0].shape)
-    return group_idx, found_groups, grp_shape
-
-
-def factorize_(by, axis):
-    group_idx, groups = pd.factorize(by.ravel())
-    # numpy_groupies cannot deal with group_idx = -1
-    # so we'll add use (ngroups+1) as the sentinel
-    # note we cannot simply remove the NaN locations;
-    # that would mess up argmax, argmin
-    # we could set na_sentinel in pd.factorize, but we don't know
-    # what to set it to yet.
-    group_idx[group_idx == -1] = group_idx.max() + 1
-
-    size = None
-    ngroups = len(groups)
-    offset_group = False
-    if np.isscalar(axis) and by.ndim > 1:
+    ngroups = np.prod(grp_shape)
+    if len(by) > 1:
+        group_idx = np.ravel_multi_index(factorized, grp_shape).reshape(by[0].shape)
+    else:
+        group_idx = factorized[0]
+    if np.isscalar(axis) and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
         offset_group = True
-        group_idx, ngroups, size = offset_labels(group_idx.reshape(by.shape))
+        group_idx, ngroups, size = offset_labels(group_idx.reshape(by[0].shape))
         group_idx = group_idx.ravel()
-
-    return group_idx, groups, ngroups, size, offset_group
+    else:
+        size = None
+        offset_group = False
+    return group_idx, found_groups, grp_shape, ngroups, size, offset_group
 
 
 def chunk_argreduce(
@@ -238,7 +235,8 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, ngroups, size, offset_group = factorize_(by, axis)
+    group_idx, groups, _, ngroups, size, offset_group = factorize_((by,), axis)
+    groups = groups[0]
 
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by.ndim] + (np.prod(array.shape[-by.ndim :]),)
@@ -783,7 +781,7 @@ def xarray_reduce(
     axis = tuple(obj.get_axis_num(d) for d in dim)
 
     if len(by) > 1:
-        group_idx, expected_groups, group_shape = factorize_multiple(
+        group_idx, expected_groups, group_shape, _, _, _ = factorize_(
             tuple(g.data for g in by), expected_groups, bins
         )
         to_group = xr.DataArray(group_idx, dims=dim)
