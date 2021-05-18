@@ -472,7 +472,7 @@ def groupby_agg(
     axis: Sequence = None,
     split_out: int = 1,
     fill_value: Any = None,
-) -> FinalResultsDict:
+) -> Tuple[dask.array.Array, Union[np.ndarray, dask.array.Array]]:
 
     # I think _tree_reduce expects this
     assert isinstance(axis, Sequence)
@@ -628,7 +628,7 @@ def groupby_reduce(
     axis=None,
     fill_value=None,
     split_out=1,
-) -> FinalResultsDict:
+) -> Tuple[dask.array.Array, Union[np.ndarray, dask.array.Array]]:
     """
     GroupBy reductions using tree reductions for dask.array
 
