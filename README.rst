@@ -26,22 +26,24 @@
 dask_groupby
 ============
 
-Development
-------------
+(See a `presentation <https://docs.google.com/presentation/d/1muj5Yzjw-zY8c6agjyNBd2JspfANadGSDvdd6nae4jg/edit?usp=sharing>`_ about this package).
 
-For a development install, do the following in the repository directory:
 
-.. code-block:: bash
+This repo explores strategies for a distributed GroupBy with dask arrays. It was motivated by
 
-    conda env update -f ci/environment.yml
-    conda activate sandbox-devel
-    python -m pip install -e .
+1. Dask Dataframe GroupBy `blogpost <https://blog.dask.org/2019/10/08/df-groupby>`_
+2. numpy_groupies in Xarray `issue <https://github.com/pydata/xarray/issues/4473>`_
 
-Also, please install `pre-commit` hooks from the root directory of the created project by running::
+The core GroupBy operation is outsourced to `numpy_groupies <https://github.com/ml31415/numpy-groupies>`_.
+The GroupBy reduction is first applied blockwise, and then those intermediate
+results are combined using dask's ``_tree_reduce`` till all group results are in one
+block. At that point the result is "finalized" and returned to the user.
 
-      pre-commit install
+The implementation with ``_tree_reduce`` complicates things.
 
-These code style pre-commit hooks (black, isort, flake8, ...) will run every time you are about to commit code.
+An alternative simpler implementation would be to use the "tensordot"
+`trick <https://github.com/dask/dask/blob/ac1bd05cfd40207d68f6eb8603178d7ac0ded922/dask/array/routines.py#L295-L310>`_.
+But this requires knowledge of "expected group labels" at compute-time.
 
 .. If you want the following badges to be visible, please remove this line, and unindent the lines below
     Re-create notebooks with Pangeo Binder
