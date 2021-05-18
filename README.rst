@@ -29,6 +29,16 @@ dask_groupby
 (See a `presentation <https://docs.google.com/presentation/d/1muj5Yzjw-zY8c6agjyNBd2JspfANadGSDvdd6nae4jg/edit?usp=sharing>`_ about this package).
 
 
+API
+---
+
+1. ``groupby_reduce``
+2. ``xarray_reduce``
+3. ``xarray_groupby_reduce``
+
+Implementation
+--------------
+
 This repo explores strategies for a distributed GroupBy with dask arrays. It was motivated by
 
 1. Dask Dataframe GroupBy `blogpost <https://blog.dask.org/2019/10/08/df-groupby>`_
@@ -41,9 +51,6 @@ again. The combining of intermediate results uses dask's ``_tree_reduce`` till
 all group results are in one block. At that point the result is "finalized" and
 returned to the user. Here is an example of writing a custom Aggregation
 (again inspired by dask.dataframe)
-
-
-.. python::
 
     mean = Aggregation(
         # name used for dask tasks
