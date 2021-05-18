@@ -832,25 +832,30 @@ def xarray_groupby_reduce(
     """ Apply on an existing Xarray groupby object for convenience."""
 
     def wrapper(*args, **kwargs):
-        result = groupby_reduce(*args, **kwargs)
-        return tuple(result.values())
+        result, _ = groupby_reduce(*args, **kwargs)
+        return result
 
-    expected_groups = list(groupby.groups.keys())
+    groups = list(groupby.groups.keys())
     outdim = groupby._unique_coord.name
     groupdim = groupby._group_dim
     indims = groupby._obj.dims
     result_dims = tuple(dim for dim in indims if dim != groupdim) + (outdim,)
     # input_dims = groupby._obj.dims
 
-    groups, actual = xr.apply_ufunc(
+    actual = xr.apply_ufunc(
         wrapper,
         groupby._obj,
         groupby._group,
         input_core_dims=[indims, [groupdim]],
         dask="allowed",
-        output_core_dims=[[outdim], result_dims],
-        dask_gufunc_kwargs=dict(output_sizes={outdim: len(expected_groups)}),
-        kwargs={"func": func, "axis": -1, "split_out": split_out},
+        output_core_dims=[result_dims],
+        dask_gufunc_kwargs=dict(output_sizes={outdim: len(groups)}),
+        kwargs={
+            "func": func,
+            "axis": -1,
+            "split_out": split_out,
+            "expected_groups": groups,
+        },
     )
     actual[outdim] = groups
 

@@ -6,7 +6,7 @@ import xarray as xr
 from dask.array import from_array
 from numpy_groupies.aggregate_numpy import aggregate
 
-from dask_groupby.core import groupby_reduce, reindex_, xarray_reduce
+from dask_groupby.core import groupby_reduce, reindex_, xarray_groupby_reduce, xarray_reduce
 
 from . import raise_if_dask_computes
 
@@ -34,6 +34,8 @@ def assert_equal(a, b):
             # from xarray.core.duck_array_ops.array_equiv
             flag_array = (a == b) | (np.isnan(a) & np.isnan(b))
             assert bool(flag_array.all())
+    elif isinstance(a, xr.DataArray) | isinstance(b, xr.DataArray):
+        xr.testing.assert_identical(a, b)
     else:
         np.testing.assert_equal(a, b)
 
@@ -366,6 +368,29 @@ def test_bad_npg_behaviour():
         )[0]
         == -np.inf
     )
+
+
+def test_xarray_groupby_reduce():
+    arr = np.ones((4, 12))
+
+    labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
+    labels = np.array(labels)
+    labels2 = np.array([1, 2, 2, 1])
+
+    da = xr.DataArray(
+        arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels": ("y", labels)}
+    ).expand_dims(z=4)
+
+    grouped = da.groupby("labels")
+    expected = grouped.mean()
+    actual = xarray_groupby_reduce(grouped, "mean")
+    assert_equal(expected, actual)
+
+    # TODO: fails because of stacking
+    # grouped = da.groupby("labels2")
+    # expected = grouped.mean()
+    # actual = xarray_groupby_reduce(grouped, "mean")
+    # assert_equal(expected, actual)
 
 
 def test_xarray_reduce_multiple_groupers():
