@@ -82,7 +82,7 @@ def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
         by = da.from_array(by, chunks=(3,) if by.ndim == 1 else (1, 3))
 
-    result = groupby_reduce(
+    result, _ = groupby_reduce(
         array,
         by,
         func=func,
@@ -90,14 +90,14 @@ def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split
         fill_value=123,
         split_out=split_out,
     )
-    assert_equal(expected, result[func])
+    assert_equal(expected, result)
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int32, np.int64])
 def test_groupby_reduce_preserves_dtype(dtype):
     array = np.ones((2, 12), dtype=dtype)
     by = np.array([labels] * 2)
-    result = groupby_reduce(from_array(array, chunks=(-1, 4)), by, func="sum")["sum"]
+    result, _ = groupby_reduce(from_array(array, chunks=(-1, 4)), by, func="sum")
     assert result.dtype == array.dtype
 
 
@@ -106,23 +106,23 @@ def test_numpy_reduce_nd_md():
     by = np.array([labels] * 2)
 
     expected = aggregate(by.ravel(), array.ravel(), func="sum")
-    result = groupby_reduce(array, by, func="sum", fill_value=123)
-    actual = reindex_(result["sum"], result["groups"], np.unique(by), axis=0, fill_value=0)
+    result, groups = groupby_reduce(array, by, func="sum", fill_value=123)
+    actual = reindex_(result, groups, np.unique(by), axis=0, fill_value=0)
     np.testing.assert_equal(expected, actual)
 
     array = np.ones((4, 2, 12))
     by = np.array([labels] * 2)
 
     expected = aggregate(by.ravel(), array.reshape(4, 24), func="sum", axis=-1, fill_value=0)
-    result = groupby_reduce(array, by, func="sum")
-    actual = reindex_(result["sum"], result["groups"], np.unique(by), axis=-1, fill_value=0)
+    result, groups = groupby_reduce(array, by, func="sum")
+    actual = reindex_(result, groups, np.unique(by), axis=-1, fill_value=0)
     assert_equal(expected, actual)
 
     array = np.ones((4, 2, 12))
     by = np.broadcast_to(np.array([labels] * 2), array.shape)
     expected = aggregate(by.ravel(), array.ravel(), func="sum", axis=-1)
-    result = groupby_reduce(array, by, func="sum")
-    actual = reindex_(result["sum"], result["groups"], np.unique(by), axis=-1, fill_value=0)
+    result, groups = groupby_reduce(array, by, func="sum")
+    actual = reindex_(result, groups, np.unique(by), axis=-1, fill_value=0)
     assert_equal(expected, actual)
 
 
@@ -172,47 +172,47 @@ def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype):
     kwargs = dict(func=func, expected_groups=[0, 1, 2], fill_value=123)
 
     by = from_array(labels, group_chunks)
-    expected = groupby_reduce(array.compute(), by.compute(), **kwargs)[func]
+    expected, _ = groupby_reduce(array.compute(), by.compute(), **kwargs)
     with raise_if_dask_computes():
-        actual = groupby_reduce(array, by, **kwargs)[func]
+        actual, _ = groupby_reduce(array, by, **kwargs)
     assert_equal(expected, actual)
 
     kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
-        actual = groupby_reduce(array, by, **kwargs)
-    assert_equal(actual["groups"], [0, 2, 1])
-    assert_equal(expected, actual[func][..., [0, 2, 1]])
+        actual, groups = groupby_reduce(array, by, **kwargs)
+    assert_equal(groups, [0, 2, 1])
+    assert_equal(expected, actual[..., [0, 2, 1]])
 
 
 def test_numpy_reduce_axis_subset():
     # TODO: add NaNs
     by = labels2d
     array = np.ones_like(by)
-    result = groupby_reduce(array, by, "count", axis=1)
-    assert_equal(result["count"], [[2, 3], [2, 3]])
+    result, _ = groupby_reduce(array, by, "count", axis=1)
+    assert_equal(result, [[2, 3], [2, 3]])
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
-    result = groupby_reduce(array, by, "count", axis=1)
+    result, _ = groupby_reduce(array, by, "count", axis=1)
     subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]])
     expected = np.tile(subarr, (3, 1, 1))
-    assert_equal(result["count"], expected)
+    assert_equal(result, expected)
 
-    result = groupby_reduce(array, by, "count", axis=2)
+    result, _ = groupby_reduce(array, by, "count", axis=2)
     subarr = np.array([[2, 3], [2, 3]])
     expected = np.tile(subarr, (3, 1, 1))
-    assert_equal(result["count"], expected)
+    assert_equal(result, expected)
 
-    result = groupby_reduce(array, by, "count", axis=(1, 2))
+    result, _ = groupby_reduce(array, by, "count", axis=(1, 2))
     expected = np.array([[4, 6], [4, 6], [4, 6]])
-    assert_equal(result["count"], expected)
+    assert_equal(result, expected)
 
-    result = groupby_reduce(array, by, "count", axis=(2, 1))
-    assert_equal(result["count"], expected)
+    result, _ = groupby_reduce(array, by, "count", axis=(2, 1))
+    assert_equal(result, expected)
 
-    result = groupby_reduce(array, by[0, ...], "count", axis=(1, 2))
+    result, _ = groupby_reduce(array, by[0, ...], "count", axis=(1, 2))
     expected = np.array([[4, 6], [4, 6], [4, 6]])
-    assert_equal(result["count"], expected)
+    assert_equal(result, expected)
 
 
 def test_dask_reduce_axis_subset():
@@ -220,21 +220,21 @@ def test_dask_reduce_axis_subset():
     by = labels2d
     array = np.ones_like(by)
     with raise_if_dask_computes():
-        result = groupby_reduce(
+        result, _ = groupby_reduce(
             da.from_array(array, chunks=(2, 3)),
             da.from_array(by, chunks=(2, 2)),
             "count",
             axis=1,
             expected_groups=[0, 2],
         )
-    assert_equal(result["count"], [[2, 3], [2, 3]])
+    assert_equal(result, [[2, 3], [2, 3]])
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
     subarr = np.array([[1, 1], [1, 1], [123, 2], [1, 1], [1, 1]])
     expected = np.tile(subarr, (3, 1, 1))
     with raise_if_dask_computes():
-        result = groupby_reduce(
+        result, _ = groupby_reduce(
             da.from_array(array, chunks=(1, 2, 3)),
             da.from_array(by, chunks=(2, 2, 2)),
             "count",
@@ -242,19 +242,19 @@ def test_dask_reduce_axis_subset():
             expected_groups=[0, 2],
             fill_value=123,
         )
-    assert_equal(result["count"], expected)
+    assert_equal(result, expected)
 
     subarr = np.array([[2, 3], [2, 3]])
     expected = np.tile(subarr, (3, 1, 1))
     with raise_if_dask_computes():
-        result = groupby_reduce(
+        result, _ = groupby_reduce(
             da.from_array(array, chunks=(1, 2, 3)),
             da.from_array(by, chunks=(2, 2, 2)),
             "count",
             axis=2,
             expected_groups=[0, 2],
         )
-    assert_equal(result["count"], expected)
+    assert_equal(result, expected)
 
     with pytest.raises(NotImplementedError):
         groupby_reduce(
@@ -274,12 +274,12 @@ def test_groupby_reduce_axis_subset_against_numpy(axis):
     array = np.ones_like(by)
     kwargs = dict(func="count", axis=axis, expected_groups=[0, 2], fill_value=123)
     with raise_if_dask_computes():
-        actual = groupby_reduce(
+        actual, _ = groupby_reduce(
             da.from_array(array, chunks=(-1, 2, 3)),
             da.from_array(by, chunks=(-1, 2, 2)),
             **kwargs,
-        )["count"]
-    expected = groupby_reduce(array, by, **kwargs)["count"]
+        )
+    expected, _ = groupby_reduce(array, by, **kwargs)
     assert_equal(actual, expected)
 
 
@@ -305,7 +305,7 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape):
 
     # along an axis; requires expected_group
     # TODO: this should check for fill_value
-    result = groupby_reduce(
+    result, _ = groupby_reduce(
         _maybe_chunk(array),
         _maybe_chunk(by),
         "count",
@@ -313,7 +313,7 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape):
         axis=axis,
         fill_value=0,
     )
-    assert_equal(result["count"], np.zeros(expected_shape))
+    assert_equal(result, np.zeros(expected_shape))
 
     # now when subsets are NaN
     # labels = np.array([0, 0, 1, 1, 1], dtype=float)
@@ -334,13 +334,12 @@ def test_groupby_all_nan_blocks():
         [2, 8, 4],
     )
 
-    actual = groupby_reduce(
+    actual, _ = groupby_reduce(
         da.from_array(array, chunks=(1, 3)),
         da.from_array(by, chunks=(1, 3)),
         func="sum",
         expected_groups=None,
-    )["sum"]
-
+    )
     assert_equal(actual, expected)
 
 

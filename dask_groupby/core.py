@@ -590,14 +590,16 @@ def groupby_agg(
             (reduced.name, *first_block),
             "groups",
         )
-        result["groups"] = dask.array.Array(
-            HighLevelGraph.from_collections(groups_name, layer, dependencies=[reduced]),
-            groups_name,
-            chunks=(group_chunks,),
-            dtype=by.dtype,
+        groups = (
+            dask.array.Array(
+                HighLevelGraph.from_collections(groups_name, layer, dependencies=[reduced]),
+                groups_name,
+                chunks=(group_chunks,),
+                dtype=by.dtype,
+            ),
         )
     else:
-        result["groups"] = expected_groups
+        groups = (expected_groups,)
 
     layer: Dict[Tuple, Tuple] = {}  # type: ignore
     agg_name = f"{name}-{token}"
@@ -608,14 +610,14 @@ def groupby_agg(
             (reduced.name, *inchunk),
             agg.name,
         )
-    result[agg.name] = dask.array.Array(
+    result = dask.array.Array(
         HighLevelGraph.from_collections(agg_name, layer, dependencies=[reduced]),
         agg_name,
         chunks=output_chunks,
         dtype=agg.dtype if agg.dtype else array.dtype,
     )
 
-    return result
+    return result, *groups
 
 
 def groupby_reduce(
@@ -725,6 +727,8 @@ def groupby_reduce(
         result = _finalize_results(
             results, reduction, axis, expected_groups, fill_value=fill_value, mask_counts=False
         )
+        groups = (result["groups"],)
+        result = result[reduction.name]
 
     else:
         if func in ["first", "last"]:
@@ -743,7 +747,7 @@ def groupby_reduce(
         #     axis = (array.ndim - 1,)
 
         # TODO: test with mixed array kinds (numpy + dask; dask + numpy)
-        result = groupby_agg(
+        result, *groups = groupby_agg(
             array,
             by,
             reduction,
@@ -753,7 +757,7 @@ def groupby_reduce(
             fill_value=fill_value,
         )
 
-    return result
+    return result, *groups
 
 
 def xarray_reduce(
@@ -797,7 +801,7 @@ def xarray_reduce(
     result_dims = otherdims + group_names
 
     def wrapper(*args, **kwargs):
-        result = groupby_reduce(*args, **kwargs)[func]
+        result, _ = groupby_reduce(*args, **kwargs)
         if len(by) > 1:
             result = result.reshape(result.shape[:-1] + group_shape)
         return result
