@@ -1,8 +1,4 @@
-[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/dcherian/dask_groupby/CI?logo=github&style=for-the-badge)](https://github.com/dcherian/dask_groupby/actions)
-
-[![GitHub Workflow Code Style Status](https://img.shields.io/github/workflow/status/dcherian/dask_groupby/code-style?label=Code%20Style&style=for-the-badge)](https://github.com/dcherian/dask_groupby/actions)
-
-[![image](https://img.shields.io/codecov/c/github/dcherian/dask_groupby.svg?style=for-the-badge)](https://codecov.io/gh/dcherian/dask_groupby)
+[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/dcherian/dask_groupby/CI?logo=github&style=for-the-badge)](https://github.com/dcherian/dask_groupby/actions)[![GitHub Workflow Code Style Status](https://img.shields.io/github/workflow/status/dcherian/dask_groupby/code-style?label=Code%20Style&style=for-the-badge)](https://github.com/dcherian/dask_groupby/actions)[![image](https://img.shields.io/codecov/c/github/dcherian/dask_groupby.svg?style=for-the-badge)](https://codecov.io/gh/dcherian/dask_groupby)
 
 # dask_groupby
 
