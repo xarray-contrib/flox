@@ -12,9 +12,13 @@ about this package).
 
 ## API
 
-1.  `groupby_reduce`
-2.  `xarray_reduce`
-3.  `xarray_groupby_reduce`
+There are three functions
+1.  `groupby_reduce(dask_array, by_dask_array, "mean")`
+    "pure" dask array interface
+2.  `xarray_groupby_reduce(groupby_object, "mean")`
+    xarray groupby interface that accepts a GroupBy object for convenience
+3.  `xarray_reduce(xarray_object, by_dataarray, "mean")`
+    "pure" xarray interface
 
 ## Implementation
 
@@ -50,8 +54,8 @@ custom Aggregation (again inspired by dask.dataframe)
     )
 ```
 
-The implementation with `_tree_reduce` complicates things. An
-alternative simpler implementation would be to use the \"tensordot\"
+Using `_tree_reduce` complicates the implementation. An
+alternative simpler implementation would be to use the "tensordot"
 [trick](https://github.com/dask/dask/blob/ac1bd05cfd40207d68f6eb8603178d7ac0ded922/dask/array/routines.py#L295-L310).
 But this requires knowledge of "expected group labels" at
 compute-time.
