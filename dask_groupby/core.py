@@ -617,7 +617,7 @@ def groupby_agg(
         dtype=agg.dtype if agg.dtype else array.dtype,
     )
 
-    return result, *groups
+    return (result, *groups)
 
 
 def groupby_reduce(
@@ -757,7 +757,7 @@ def groupby_reduce(
             fill_value=fill_value,
         )
 
-    return result, *groups
+    return (result, *groups)
 
 
 def xarray_reduce(
