@@ -420,6 +420,6 @@ def test_xarray_reduce_multiple_groupers():
         actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), da.labels, da.labels2, func="count")
     xr.testing.assert_identical(expected, actual)
 
-    # with raise_if_dask_computes():
-    #     actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
+    with pytest.raises(ValueError):
+        actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
     # xr.testing.assert_identical(expected, actual)

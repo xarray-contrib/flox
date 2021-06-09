@@ -772,6 +772,10 @@ def xarray_reduce(
 ):
 
     by: Tuple[xr.DataArray] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
+
+    if len(by) > 1 and any(dask.is_dask_collection(by_) for by_ in by):
+        raise ValueError("Grouping by multiple variables will call compute dask variables.")
+
     grouper_dims = set(itertools.chain(*tuple(g.dims for g in by)))
     obj, *by = xr.broadcast(obj, *by, exclude=set(obj.dims) - grouper_dims)
     obj = obj.transpose(..., *by[0].dims)
