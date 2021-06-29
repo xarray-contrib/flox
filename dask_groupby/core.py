@@ -842,17 +842,14 @@ def xarray_groupby_reduce(
     groups = list(groupby.groups.keys())
     outdim = groupby._unique_coord.name
     groupdim = groupby._group_dim
-    indims = groupby._obj.dims
-    result_dims = tuple(dim for dim in indims if dim != groupdim) + (outdim,)
-    # input_dims = groupby._obj.dims
 
     actual = xr.apply_ufunc(
         wrapper,
         groupby._obj,
         groupby._group,
-        input_core_dims=[indims, [groupdim]],
+        input_core_dims=[[groupdim], [groupdim]],
         dask="allowed",
-        output_core_dims=[result_dims],
+        output_core_dims=[[outdim]],
         dask_gufunc_kwargs=dict(output_sizes={outdim: len(groups)}),
         kwargs={
             "func": func,

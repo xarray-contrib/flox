@@ -386,6 +386,9 @@ def test_xarray_groupby_reduce():
     actual = xarray_groupby_reduce(grouped, "mean")
     assert_equal(expected, actual)
 
+    actual = xarray_groupby_reduce(da.transpose("y", ...).groupby("labels"), "mean")
+    assert_equal(expected, actual)
+
     # TODO: fails because of stacking
     # grouped = da.groupby("labels2")
     # expected = grouped.mean()
