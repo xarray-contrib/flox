@@ -2,10 +2,11 @@ import itertools
 from typing import Dict, Iterable, Sequence, Tuple, Union
 
 import dask
+import numpy as np
 import xarray as xr
 
 from .aggregations import Aggregation, _atleast_1d
-from .core import factorize_, groupby_reduce
+from .core import factorize_, groupby_reduce, reindex_
 
 
 def xarray_reduce(
@@ -40,11 +41,9 @@ def xarray_reduce(
         group_idx, expected_groups, group_shape, _, _, _ = factorize_(
             tuple(g.data for g in by), expected_groups, bins
         )
-        to_group = xr.DataArray(group_idx, dims=dim)
+        to_group = xr.DataArray(group_idx, dims=dim, coords={d: by[0][d] for d in dim})
     else:
         to_group = by[0]
-
-    print(to_group)
 
     group_names = tuple(g.name for g in by)
     group_sizes = dict(zip(group_names, group_shape))
@@ -53,12 +52,20 @@ def xarray_reduce(
     result_dims = otherdims + group_names
 
     def wrapper(*args, **kwargs):
-        result, _ = groupby_reduce(*args, **kwargs)
+        result, groups = groupby_reduce(*args, **kwargs)
         if len(by) > 1:
-            result = result.reshape(result.shape[:-1] + group_shape)
+            # all groups need not be present. reindex here
+            # TODO: add test
+            reindexed = reindex_(
+                result,
+                from_=groups,
+                to=np.arange(np.prod(group_shape)),
+                fill_value=fill_value,
+                axis=-1,
+            )
+            result = reindexed.reshape(result.shape[:-1] + group_shape)
         return result
 
-    print(obj.dims, to_group.dims)
     actual = xr.apply_ufunc(
         wrapper,
         obj,
