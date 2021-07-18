@@ -66,3 +66,11 @@ def test_xarray_reduce_multiple_groupers():
     with pytest.raises(ValueError):
         actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
     # xr.testing.assert_identical(expected, actual)
+
+
+def test_xarray_reduce_single_grouper():
+
+    ds = xr.tutorial.open_dataset("rasm", chunks={"time": 4})
+    actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
+    expected = ds.Tair.groupby("time.month").mean().transpose("x", "y", "month")
+    xr.testing.assert_allclose(actual, expected.transpose(*actual.dims))

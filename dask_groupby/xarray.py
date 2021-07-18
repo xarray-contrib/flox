@@ -37,15 +37,23 @@ def xarray_reduce(
     assert isinstance(obj, xr.DataArray)
     axis = tuple(obj.get_axis_num(d) for d in dim)
 
+    group_names = tuple(g.name for g in by)
+
     if len(by) > 1:
         group_idx, expected_groups, group_shape, _, _, _ = factorize_(
             tuple(g.data for g in by), expected_groups, bins
         )
         to_group = xr.DataArray(group_idx, dims=dim, coords={d: by[0][d] for d in dim})
     else:
+        if expected_groups is None and isinstance(by[0].data, np.ndarray):
+            expected_groups = (np.unique(by[0].data),)
+        if expected_groups is None:
+            raise NotImplementedError(
+                "Please provided expected_groups if not grouping by a numpy-backed DataArray"
+            )
+        group_shape = (len(expected_groups[0]),)
         to_group = by[0]
 
-    group_names = tuple(g.name for g in by)
     group_sizes = dict(zip(group_names, group_shape))
     indims = tuple(obj.dims)
     otherdims = tuple(d for d in indims if d not in dim)
