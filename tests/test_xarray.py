@@ -76,8 +76,9 @@ def test_xarray_reduce_single_grouper():
     xr.testing.assert_allclose(actual, expected.transpose(*actual.dims))
 
 
-def test_xarray_resample():
-    ds = xr.tutorial.open_dataset("air_temperature", chunks={"time": 27}).air
+@pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
+def test_xarray_resample(chunklen):
+    ds = xr.tutorial.open_dataset("air_temperature", chunks={"time": chunklen}).air
     resampler = ds.resample(time="M")
     actual = resample_reduce(resampler, "mean")
     expected = resampler.mean()

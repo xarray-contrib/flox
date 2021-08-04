@@ -3,6 +3,7 @@ from typing import Dict, Iterable, Sequence, Tuple, Union
 
 import dask
 import numpy as np
+import numpy_groupies as npg
 import xarray as xr
 
 from .aggregations import Aggregation, _atleast_1d
@@ -135,7 +136,7 @@ def xarray_groupby_reduce(
     return actual
 
 
-def rechunk_to_group_boundaries(array, dim, resampler):
+def rechunk_to_group_boundaries(array, dim, labels):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     parallel group reductions.
@@ -144,37 +145,22 @@ def rechunk_to_group_boundaries(array, dim, resampler):
     Such patterns occur when using ``.resample``.
     """
     axis = array.get_axis_num(dim)
-
-    lastidx = [slicer.stop for slicer in resampler._group_indices]
-    if lastidx[-1] is None:
-        lastidx[-1] = array.sizes[dim]
-
     chunks = array.chunks[axis]
 
     # TODO: below is a more general algorithm
     # what are the groups at chunk boundaries
-    # labels_at_chunk_bounds = np.unique(labels[np.cumsum(chunks) - 1])
-    # print(labels_at_chunk_bounds)
+    labels_at_chunk_bounds = np.unique(labels[np.cumsum(chunks) - 1])
 
     # what's the last index of all groups
-    # last_indexes = npg.aggregate_numpy.aggregate(
-    #    labels, np.arange(len(labels)), func="last"
-    # )
+    last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
     # what's the last index of groups at the chunk boundaries.
-    # lastidx = last_indexes[labels_at_chunk_bounds]
-    # print(lastidx)
+    lastidx = last_indexes[labels_at_chunk_bounds]
 
     # modify chunk boundaries
-    newchunks = np.insert(np.diff(lastidx), 0, lastidx[0])
+    newchunks = np.insert(np.diff(lastidx), 0, lastidx[0] + 1)
     assert sum(newchunks) == sum(chunks)
 
-    # print(f"rechunking to {newchunks}")
-    # debugging
-    # bnds = np.insert(np.cumsum(newchunks), 0, 0)
-    # groups_per_chunk = tuple(
-    #   len(np.unique(array[dim].dt.floor("D").data[i0:i1])) for i0, i1 in zip(bnds[:-1], bnds[1:])
-    # )
-    # print(groups_per_chunk)
+    print(f"rechunking to {newchunks}")
     return array.chunk({dim: tuple(newchunks)})
 
 
@@ -188,6 +174,7 @@ def resample_reduce(
     array = resampler._obj
     dim = resampler._group_dim
 
+    # this creates a label DataArray since resample doesn't do that somehow
     tostack = []
     for idx, slicer in enumerate(resampler._group_indices):
         if slicer.stop is None:
@@ -195,11 +182,10 @@ def resample_reduce(
         else:
             stop = slicer.stop
         tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
-
     by = xr.DataArray(np.hstack(tostack), dims=(dim,), name="__resample_dim__")
 
     if resampler._obj.chunks is not None:
-        array = rechunk_to_group_boundaries(array, dim, resampler)
+        array = rechunk_to_group_boundaries(array, dim, by)
     else:
         raise NotImplementedError
 

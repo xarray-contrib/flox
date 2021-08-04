@@ -496,7 +496,7 @@ def split_blocks(applied, split_out, expected_groups, split_name):
 
 def groupby_agg(
     array: dask.array.Array,
-    by: dask.array.Array,
+    by: Union[dask.array.Array, np.ndarray],
     agg: Aggregation,
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Sequence = None,
@@ -516,6 +516,9 @@ def groupby_agg(
     # This is necessary for argreductions.
     # We need to rechunk before zipping up with the index
     # let's always do it anyway
+    # but first save by if blockwise is True.
+    if blockwise:
+        by_maybe_numpy = by
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
     # preprocess the array
@@ -585,7 +588,13 @@ def groupby_agg(
     else:
         # Blockwise apply the aggregation step so that one input chunk → one output chunk
         # TODO: We could combine this with the chunk reduction and do everything in one task.
-        if expected_groups is None or split_out > 1:
+        #       This would also optimize the single block along reduced-axis case.
+        if (
+            expected_groups is None
+            or split_out > 1
+            or len(axis) > 1
+            or not isinstance(by_maybe_numpy, np.ndarray)
+        ):
             raise NotImplementedError
 
         reduced = dask.array.blockwise(
@@ -607,7 +616,15 @@ def groupby_agg(
             align_arrays=False,
             name=f"{name}-blockwise-agg",
         )
-        output_chunks = reduced.chunks[: -(len(axis))] + ((1,) * len(expected_groups),)
+        chunks = array.chunks[axis[0]]
+
+        # find number of groups in each chunk, this is needed for output chunks
+        # along the reduced axis
+        bnds = np.insert(np.cumsum(chunks), 0, 0)
+        groups_per_chunk = tuple(
+            len(np.unique(by_maybe_numpy[i0:i1])) for i0, i1 in zip(bnds[:-1], bnds[1:])
+        )
+        output_chunks = reduced.chunks[: -(len(axis))] + (groups_per_chunk,)
 
     def _getitem(d, key1, key2):
         return d[key1][key2]
