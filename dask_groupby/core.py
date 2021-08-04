@@ -371,7 +371,7 @@ def _npg_combine(
     x_chunk,
     agg: Aggregation,
     axis: Sequence,
-    keepdims,
+    keepdims: bool,
     group_ndim: int,
 ) -> IntermediateDict:
     """ Combine intermediates step of tree reduction. """
@@ -502,6 +502,7 @@ def groupby_agg(
     axis: Sequence = None,
     split_out: int = 1,
     fill_value: Any = None,
+    blockwise: bool = False,
 ) -> Tuple[dask.array.Array, Union[np.ndarray, dask.array.Array]]:
 
     # I think _tree_reduce expects this
@@ -559,28 +560,54 @@ def groupby_agg(
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
         expected_agg = expected_groups
 
-    # reduced is really a dict mapping reduction name to array
-    # and "groups" to an array of group labels
-    # Note: it does not make sense to interpret axis relative to
-    # shape of intermediate results after the blockwise call
-    reduced = dask.array.reductions._tree_reduce(
-        intermediate,
-        aggregate=partial(
-            _npg_aggregate,
-            agg=agg,
-            expected_groups=expected_agg,
-            group_ndim=by.ndim,
-            fill_value=fill_value,
-        ),
-        combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim),
-        name=f"{name}-reduce",
-        dtype=array.dtype,
-        axis=axis,
-        keepdims=True,
-        concatenate=False,
-    )
+    if not blockwise:
+        # reduced is really a dict mapping reduction name to array
+        # and "groups" to an array of group labels
+        # Note: it does not make sense to interpret axis relative to
+        # shape of intermediate results after the blockwise call
+        reduced = dask.array.reductions._tree_reduce(
+            intermediate,
+            aggregate=partial(
+                _npg_aggregate,
+                agg=agg,
+                expected_groups=expected_agg,
+                group_ndim=by.ndim,
+                fill_value=fill_value,
+            ),
+            combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim),
+            name=f"{name}-reduce",
+            dtype=array.dtype,
+            axis=axis,
+            keepdims=True,
+            concatenate=False,
+        )
+        output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + (group_chunks,)
+    else:
+        # Blockwise apply the aggregation step so that one input chunk → one output chunk
+        # TODO: We could combine this with the chunk reduction and do everything in one task.
+        if expected_groups is None or split_out > 1:
+            raise NotImplementedError
 
-    output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + (group_chunks,)
+        reduced = dask.array.blockwise(
+            partial(
+                _npg_aggregate,
+                agg=agg,
+                expected_groups=None,
+                group_ndim=by.ndim,
+                fill_value=fill_value,
+                axis=axis,
+                keepdims=True,
+            ),
+            inds,
+            intermediate,
+            inds,
+            concatenate=False,
+            dtype=array.dtype,
+            meta=array._meta,
+            align_arrays=False,
+            name=f"{name}-blockwise-agg",
+        )
+        output_chunks = reduced.chunks[: -(len(axis))] + ((1,) * len(expected_groups),)
 
     def _getitem(d, key1, key2):
         return d[key1][key2]
@@ -612,7 +639,10 @@ def groupby_agg(
     layer: Dict[Tuple, Tuple] = {}  # type: ignore
     agg_name = f"{name}-{token}"
     for ochunk in itertools.product(*ochunks):
-        inchunk = ochunk[:-1] + (0,) * (len(axis)) + (ochunk[-1],) * int(split_out > 1)
+        if blockwise:
+            inchunk = ochunk
+        else:
+            inchunk = ochunk[:-1] + (0,) * (len(axis)) + (ochunk[-1],) * int(split_out > 1)
         layer[(agg_name, *ochunk)] = (
             operator.getitem,
             (reduced.name, *inchunk),
@@ -635,7 +665,8 @@ def groupby_reduce(
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis=None,
     fill_value=None,
-    split_out=1,
+    split_out: int = 1,
+    blockwise: bool = False,
 ) -> Tuple[dask.array.Array, Union[np.ndarray, dask.array.Array]]:
     """
     GroupBy reductions using tree reductions for dask.array
@@ -659,6 +690,9 @@ def groupby_reduce(
         Value when a label in `expected_groups` is not present
     split_out: int, optional
         Number of chunks along group axis in output (last axis)
+    blockwise: bool, optional
+        Only reduce using blockwise and avoid aggregating blocks together.
+        Useful when 1 block = 1 group.
 
     Returns
     -------
@@ -763,6 +797,7 @@ def groupby_reduce(
             axis=axis,
             split_out=split_out,
             fill_value=fill_value,
+            blockwise=blockwise,
         )
 
     return (result, *groups)
