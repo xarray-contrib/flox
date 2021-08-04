@@ -136,7 +136,7 @@ def test_numpy_reduce_nd_md():
     ],
 )
 def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype):
-    """ Tests groupby_reduce with dask arrays against groupby_reduce with numpy arrays"""
+    """Tests groupby_reduce with dask arrays against groupby_reduce with numpy arrays"""
 
     array = array.astype(dtype)
 

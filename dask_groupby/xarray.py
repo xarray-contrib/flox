@@ -104,7 +104,7 @@ def xarray_groupby_reduce(
     split_out=1,
     blockwise=False,
 ):
-    """ Apply on an existing Xarray groupby object for convenience."""
+    """Apply on an existing Xarray groupby object for convenience."""
 
     def wrapper(*args, **kwargs):
         result, _ = groupby_reduce(*args, **kwargs)

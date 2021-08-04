@@ -29,7 +29,7 @@ def _get_chunk_reduction(reduction_type: str) -> Callable:
 
 
 def _move_reduce_dims_to_end(arr: np.ndarray, axis: Sequence) -> np.ndarray:
-    """ Transpose `arr` by moving `axis` to the end."""
+    """Transpose `arr` by moving `axis` to the end."""
     axis = tuple(axis)
     order = tuple(ax for ax in np.arange(arr.ndim) if ax not in axis) + axis
     arr = arr.transpose(order)
@@ -37,7 +37,7 @@ def _move_reduce_dims_to_end(arr: np.ndarray, axis: Sequence) -> np.ndarray:
 
 
 def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
-    """ Reshape so that the last `naxis` axes are collapsed to one axis."""
+    """Reshape so that the last `naxis` axes are collapsed to one axis."""
     newshape = arr.shape[:-naxis] + (np.prod(arr.shape[-naxis:]),)
     return arr.reshape(newshape)
 
@@ -300,7 +300,7 @@ def _squeeze_results(results: IntermediateDict, axis: Sequence) -> IntermediateD
 
 
 def _split_groups(array, j, slicer):
-    """ Slices out chunks when split_out > 1"""
+    """Slices out chunks when split_out > 1"""
     results = {"groups": array["groups"][..., slicer]}
     results["intermediates"] = [v[..., slicer] for v in array["intermediates"]]
     return results
@@ -362,7 +362,7 @@ def _npg_aggregate(
     group_ndim: int,
     fill_value: Any = None,
 ) -> FinalResultsDict:
-    """ Final aggregation step of tree reduction"""
+    """Final aggregation step of tree reduction"""
     results = _npg_combine(x_chunk, agg, axis, keepdims, group_ndim)
     return _finalize_results(results, agg, axis, expected_groups, fill_value)
 
@@ -374,7 +374,7 @@ def _npg_combine(
     keepdims: bool,
     group_ndim: int,
 ) -> IntermediateDict:
-    """ Combine intermediates step of tree reduction. """
+    """Combine intermediates step of tree reduction."""
     from dask.array.core import _concatenate2
     from dask.base import flatten
     from dask.utils import deepmap
@@ -396,7 +396,7 @@ def _npg_combine(
         return newx
 
     def _conc2(key1, key2=None, axis=None) -> np.ndarray:
-        """ copied from dask.array.reductions.mean_combine"""
+        """copied from dask.array.reductions.mean_combine"""
         if key2 is not None:
             mapped = deepmap(lambda x: x[key1][key2], x_chunk)
         else:
