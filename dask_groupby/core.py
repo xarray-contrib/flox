@@ -463,6 +463,34 @@ def _npg_combine(
     return results
 
 
+def split_blocks(applied, split_out, expected_groups, split_name):
+    chunk_tuples = tuple(itertools.product(*tuple(range(n) for n in applied.numblocks)))
+    ngroups = len(expected_groups)
+    group_chunks = normalize_chunks(np.ceil(ngroups / split_out), (ngroups,))[0]
+    idx = tuple(np.cumsum((0,) + group_chunks))
+
+    # split each block into `split_out` chunks
+    dsk = {}
+    for i in chunk_tuples:
+        for j in range(split_out):
+            dsk[(split_name, *i, j)] = (
+                _split_groups,
+                (applied.name, *i),
+                j,
+                slice(idx[j], idx[j + 1]),
+            )
+
+    # now construct an array that can be passed to _tree_reduce
+    intergraph = HighLevelGraph.from_collections(split_name, dsk, dependencies=(applied,))
+    intermediate = dask.array.Array(
+        intergraph,
+        name=split_name,
+        chunks=applied.chunks + ((1,) * split_out,),
+        meta=applied._meta,
+    )
+    return intermediate, group_chunks
+
+
 def groupby_agg(
     array: dask.array.Array,
     by: dask.array.Array,
@@ -518,33 +546,11 @@ def groupby_agg(
             # This could be implemented using the "hash_split" strategy
             # from dask.dataframe
             raise NotImplementedError
-        chunk_tuples = tuple(itertools.product(*tuple(range(n) for n in applied.numblocks)))
-        ngroups = len(expected_groups)
-        group_chunks = normalize_chunks(np.ceil(ngroups / split_out), (ngroups,))[0]
-        idx = tuple(np.cumsum((0,) + group_chunks))
 
-        # split each block into `split_out` chunks
-        dsk = {}
-        split_name = f"{name}-split-{token}"
-        for i in chunk_tuples:
-            for j in range(split_out):
-                dsk[(split_name, *i, j)] = (
-                    _split_groups,
-                    (applied.name, *i),
-                    j,
-                    slice(idx[j], idx[j + 1]),
-                )
-
-        # now construct an array that can be passed to _tree_reduce
-        intergraph = HighLevelGraph.from_collections(split_name, dsk, dependencies=(applied,))
-        intermediate = dask.array.Array(
-            intergraph,
-            name=split_name,
-            chunks=applied.chunks + ((1,) * split_out,),
-            meta=array._meta,
+        intermediate, group_chunks = split_blocks(
+            applied, split_out, expected_groups, split_name=f"{name}-split-{token}"
         )
         expected_agg = None
-
     else:
         intermediate = applied
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
