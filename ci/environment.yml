@@ -13,5 +13,6 @@ dependencies:
   - nbsphinx
   - pre-commit
   - numpy_groupies
+  - pooch
   - pip:
     - icecream
