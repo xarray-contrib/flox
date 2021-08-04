@@ -147,12 +147,12 @@ def rechunk_to_group_boundaries(array, dim, labels):
     axis = array.get_axis_num(dim)
     chunks = array.chunks[axis]
 
-    # TODO: below is a more general algorithm
     # what are the groups at chunk boundaries
     labels_at_chunk_bounds = np.unique(labels[np.cumsum(chunks) - 1])
 
     # what's the last index of all groups
     last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
+
     # what's the last index of groups at the chunk boundaries.
     lastidx = last_indexes[labels_at_chunk_bounds]
 
@@ -186,8 +186,6 @@ def resample_reduce(
 
     if resampler._obj.chunks is not None:
         array = rechunk_to_group_boundaries(array, dim, by)
-    else:
-        raise NotImplementedError
 
     result = xarray_reduce(
         array, by, func=func, blockwise=True, expected_groups=(resampler._unique_coord.data,)
