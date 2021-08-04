@@ -43,7 +43,7 @@ def xarray_reduce(
         group_idx, expected_groups, group_shape, _, _, _ = factorize_(
             tuple(g.data for g in by), expected_groups, bins
         )
-        to_group = xr.DataArray(group_idx, dims=dim, coords={d: by[0][d] for d in dim})
+        to_group = xr.DataArray(group_idx, dims=dim, coords={d: by[0][d] for d in by[0].indexes})
     else:
         if expected_groups is None and isinstance(by[0].data, np.ndarray):
             expected_groups = (np.unique(by[0].data),)
