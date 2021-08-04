@@ -336,7 +336,10 @@ def _finalize_results(
 
     # finalize step
     result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": squeezed["groups"]}
-    result[agg.name] = agg.finalize(*squeezed["intermediates"])
+    if agg.finalize is None:
+        result[agg.name] = squeezed["intermediates"][0]
+    else:
+        result[agg.name] = agg.finalize(*squeezed["intermediates"])
 
     if fill_value is not None and mask_counts:
         result[agg.name] = np.where(counts > 0, result[agg.name], fill_value)
@@ -728,7 +731,7 @@ def groupby_reduce(
                 results["intermediates"][0], array.shape
             )[-1]
 
-        reduction.finalize = lambda x: x
+        reduction.finalize = None
         result = _finalize_results(
             results, reduction, axis, expected_groups, fill_value=fill_value, mask_counts=False
         )
