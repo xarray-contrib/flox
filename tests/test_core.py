@@ -309,9 +309,9 @@ def test_groupby_all_nan_blocks():
     nan_labels[:5] = np.nan
 
     array, by, expected = (
-        np.ones((2, 12)),
+        np.ones((2, 12), dtype=np.int64),
         np.array([nan_labels, nan_labels[::-1]]),
-        [2, 8, 4],
+        np.array([2, 8, 4], dtype=np.int64),
     )
 
     actual, _ = groupby_reduce(
