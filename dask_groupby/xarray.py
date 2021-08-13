@@ -143,14 +143,16 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     chunkidx = np.cumsum(chunks) - 1
     # what are the groups at chunk boundaries
     labels_at_chunk_bounds = np.unique(labels[chunkidx])
-
-    # what's the first, last index of all groups
-    first_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="first")
+    # what's the last index of all groups
     last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
-
     # what's the last index of groups at the chunk boundaries.
-    firstidx = first_indexes[labels_at_chunk_bounds]
     lastidx = last_indexes[labels_at_chunk_bounds]
+
+    if len(chunkidx) == len(lastidx) and (chunkidx == lastidx).all():
+        return chunks
+
+    first_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="first")
+    firstidx = first_indexes[labels_at_chunk_bounds]
 
     newchunkidx = [0]
     for c, f, l in zip(chunkidx, firstidx, lastidx):
@@ -180,7 +182,11 @@ def rechunk_to_group_boundaries(array, dim, labels):
     """
     axis = array.get_axis_num(dim)
     chunks = array.chunks[axis]
-    return array.chunk({dim: _get_optimal_chunks_for_groups(chunks, labels.data)})
+    newchunks = _get_optimal_chunks_for_groups(chunks, labels.data)
+    if newchunks == chunks:
+        return array
+    else:
+        return array.chunk({dim: newchunks})
 
 
 def resample_reduce(
