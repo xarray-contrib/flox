@@ -1,5 +1,5 @@
 import itertools
-from typing import Dict, Iterable, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Dict, Iterable, Sequence, Tuple, Union
 
 import dask
 import numpy as np
@@ -9,10 +9,13 @@ import xarray as xr
 from .aggregations import Aggregation, _atleast_1d
 from .core import factorize_, groupby_reduce, reindex_
 
+if TYPE_CHECKING:
+    from xarray import DataArray, Dataset
+
 
 def xarray_reduce(
-    obj: Union[xr.Dataset, xr.DataArray],
-    *by: Union[xr.DataArray, Iterable[str], Iterable[xr.DataArray]],
+    obj: Union["Dataset", "DataArray"],
+    *by: Union["DataArray", Iterable[str], Iterable["DataArray"]],
     func: Union[str, Aggregation],
     expected_groups: Dict[str, Sequence] = None,
     bins=None,
@@ -22,7 +25,7 @@ def xarray_reduce(
     blockwise=False,
 ):
 
-    by: Tuple[xr.DataArray] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
+    by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
     if len(by) > 1 and any(dask.is_dask_collection(by_) for by_ in by):
         raise ValueError("Grouping by multiple variables will call compute dask variables.")
@@ -36,7 +39,7 @@ def xarray_reduce(
     else:
         dim = _atleast_1d(dim)
 
-    assert isinstance(obj, xr.DataArray)
+    assert isinstance(obj, "DataArray")
     axis = tuple(obj.get_axis_num(d) for d in dim)
 
     group_names = tuple(g.name for g in by)
