@@ -10,7 +10,7 @@ from .aggregations import Aggregation, _atleast_1d
 from .core import factorize_, groupby_reduce, reindex_
 
 if TYPE_CHECKING:
-    from xarray import DataArray, Dataset
+    from xarray import DataArray, Dataset, GroupBy
 
 
 def xarray_reduce(
@@ -39,7 +39,7 @@ def xarray_reduce(
     else:
         dim = _atleast_1d(dim)
 
-    assert isinstance(obj, DataArray)
+    assert isinstance(obj, xr.DataArray)
     axis = tuple(obj.get_axis_num(d) for d in dim)
 
     group_names = tuple(g.name for g in by)
@@ -103,7 +103,7 @@ def xarray_reduce(
 
 
 def xarray_groupby_reduce(
-    groupby: xr.core.groupby.GroupBy,
+    groupby: "GroupBy",
     func: Union[str, Aggregation],
     split_out=1,
     blockwise=False,
