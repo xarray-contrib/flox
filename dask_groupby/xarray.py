@@ -39,7 +39,7 @@ def xarray_reduce(
     else:
         dim = _atleast_1d(dim)
 
-    assert isinstance(obj, "DataArray")
+    assert isinstance(obj, DataArray)
     axis = tuple(obj.get_axis_num(d) for d in dim)
 
     group_names = tuple(g.name for g in by)
