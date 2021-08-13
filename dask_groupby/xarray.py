@@ -136,6 +136,37 @@ def xarray_groupby_reduce(
     return actual
 
 
+def _get_optimal_chunks_for_groups(chunks, labels):
+    chunkidx = np.cumsum(chunks) - 1
+    # what are the groups at chunk boundaries
+    labels_at_chunk_bounds = np.unique(labels[chunkidx])
+
+    # what's the first, last index of all groups
+    first_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="first")
+    last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
+
+    # what's the last index of groups at the chunk boundaries.
+    firstidx = first_indexes[labels_at_chunk_bounds]
+    lastidx = last_indexes[labels_at_chunk_bounds]
+
+    newchunkidx = [0]
+    for c, f, l in zip(chunkidx, firstidx, lastidx):
+        Δf = abs(c - f)
+        Δl = abs(c - l)
+        if c == 0 or newchunkidx[-1] > l:
+            continue
+        if Δf < Δl and f > newchunkidx[-1]:
+            newchunkidx.append(f)
+        else:
+            newchunkidx.append(l + 1)
+    if newchunkidx[-1] != chunkidx[-1] + 1:
+        newchunkidx.append(chunkidx[-1] + 1)
+    newchunks = np.diff(newchunkidx)
+
+    assert sum(newchunks) == sum(chunks)
+    return tuple(newchunks)
+
+
 def rechunk_to_group_boundaries(array, dim, labels):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
@@ -146,22 +177,7 @@ def rechunk_to_group_boundaries(array, dim, labels):
     """
     axis = array.get_axis_num(dim)
     chunks = array.chunks[axis]
-
-    # what are the groups at chunk boundaries
-    labels_at_chunk_bounds = np.unique(labels[np.cumsum(chunks) - 1])
-
-    # what's the last index of all groups
-    last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
-
-    # what's the last index of groups at the chunk boundaries.
-    lastidx = last_indexes[labels_at_chunk_bounds]
-
-    # modify chunk boundaries
-    newchunks = np.insert(np.diff(lastidx), 0, lastidx[0] + 1)
-    assert sum(newchunks) == sum(chunks)
-
-    print(f"rechunking to {newchunks}")
-    return array.chunk({dim: tuple(newchunks)})
+    return array.chunk({dim: _get_optimal_chunks_for_groups(chunks, labels.data)})
 
 
 def resample_reduce(

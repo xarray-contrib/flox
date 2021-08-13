@@ -3,7 +3,12 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from dask_groupby.xarray import resample_reduce, xarray_groupby_reduce, xarray_reduce
+from dask_groupby.xarray import (
+    _get_optimal_chunks_for_groups,
+    resample_reduce,
+    xarray_groupby_reduce,
+    xarray_reduce,
+)
 
 from . import assert_equal, raise_if_dask_computes
 
@@ -86,3 +91,21 @@ def test_xarray_resample(chunklen, isdask):
     actual = resample_reduce(resampler, "mean")
     expected = resampler.mean()
     xr.testing.assert_allclose(actual, expected.transpose(*actual.dims))
+
+
+@pytest.mark.parametrize(
+    "inchunks, expected",
+    [
+        [(1,) * 10, (3, 2, 2, 3)],
+        [(2,) * 5, (3, 2, 2, 3)],
+        [(4, 4, 2), (3, 4, 3)],
+        [(5, 5), (5, 5)],
+        [(6, 4), (5, 5)],
+        [(7, 3), (7, 3)],
+        [(8, 2), (7, 3)],
+        [(9, 1), (10,)],
+    ],
+)
+def test_optimal_rechunking(inchunks, expected):
+    labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
+    assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
