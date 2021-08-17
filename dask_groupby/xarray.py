@@ -23,6 +23,7 @@ def xarray_reduce(
     split_out=1,
     fill_value=None,
     blockwise=False,
+    keep_attrs: bool = True,
 ):
 
     by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
@@ -87,6 +88,7 @@ def xarray_reduce(
         dask="allowed",
         output_core_dims=[result_dims],
         dask_gufunc_kwargs=dict(output_sizes=group_sizes),
+        keep_attrs=keep_attrs,
         kwargs={
             "func": func,
             "axis": axis,
@@ -107,6 +109,7 @@ def xarray_groupby_reduce(
     func: Union[str, Aggregation],
     split_out=1,
     blockwise=False,
+    keep_attrs: bool = True,
 ):
     """Apply on an existing Xarray groupby object for convenience."""
 
@@ -126,6 +129,7 @@ def xarray_groupby_reduce(
         dask="allowed",
         output_core_dims=[[outdim]],
         dask_gufunc_kwargs=dict(output_sizes={outdim: len(groups)}),
+        keep_attrs=keep_attrs,
         kwargs={
             "func": func,
             "axis": -1,
@@ -192,6 +196,7 @@ def rechunk_to_group_boundaries(array, dim, labels):
 def resample_reduce(
     resampler: "Resample",
     func,
+    keep_attrs: bool = True,
 ):
 
     assert isinstance(resampler._obj, xr.DataArray)
@@ -213,6 +218,11 @@ def resample_reduce(
         array = rechunk_to_group_boundaries(array, dim, by)
 
     result = xarray_reduce(
-        array, by, func=func, blockwise=True, expected_groups=(resampler._unique_coord.data,)
+        array,
+        by,
+        func=func,
+        blockwise=True,
+        expected_groups=(resampler._unique_coord.data,),
+        keep_attrs=keep_attrs,
     ).rename({"__resample_dim__": dim})
     return result
