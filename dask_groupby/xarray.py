@@ -33,15 +33,13 @@ def xarray_reduce(
 
     grouper_dims = set(itertools.chain(*tuple(g.dims for g in by)))
     obj, *by = xr.broadcast(obj, *by, exclude=set(obj.dims) - grouper_dims)
-    obj = obj.transpose(..., *by[0].dims)
 
     if dim is None:
         dim = by[0].dims
     else:
         dim = _atleast_1d(dim)
 
-    assert isinstance(obj, xr.DataArray)
-    axis = tuple(obj.get_axis_num(d) for d in dim)
+    axis = tuple(range(-len(dim), 0))
 
     group_names = tuple(g.name for g in by)
 
@@ -61,8 +59,8 @@ def xarray_reduce(
         to_group = by[0]
 
     group_sizes = dict(zip(group_names, group_shape))
-    indims = tuple(obj.dims)
-    otherdims = tuple(d for d in indims if d not in dim)
+    otherdims = tuple(d for d in obj.dims if d not in dim)
+    indims = otherdims + dim
     result_dims = otherdims + group_names
 
     def wrapper(*args, **kwargs):

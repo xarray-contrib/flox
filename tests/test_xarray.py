@@ -81,6 +81,17 @@ def test_xarray_reduce_single_grouper():
     xr.testing.assert_allclose(actual, expected.transpose(*actual.dims))
 
 
+def test_xarray_reduce_dataset():
+
+    ds = xr.tutorial.open_dataset("rasm", chunks={"time": 4})
+    expected_da = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
+    expected = ds.assign(Tair=expected_da).drop_vars("time")
+    actual = xarray_reduce(ds, ds.time.dt.month, func="mean")
+    xr.testing.assert_identical(
+        actual.transpose("y", "x", "month"), expected.transpose("y", "x", "month")
+    )
+
+
 @pytest.mark.parametrize("isdask", [True, False])
 @pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
 def test_xarray_resample(chunklen, isdask):
