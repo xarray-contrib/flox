@@ -77,7 +77,7 @@ def test_xarray_reduce_single_grouper():
 
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 4})
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
-    expected = ds.Tair.groupby("time.month").mean().transpose("x", "y", "month")
+    expected = ds.Tair.groupby("time.month").mean()
     xr.testing.assert_allclose(actual, expected.transpose(*actual.dims))
 
 

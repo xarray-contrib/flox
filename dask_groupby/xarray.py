@@ -59,9 +59,6 @@ def xarray_reduce(
         to_group = by[0]
 
     group_sizes = dict(zip(group_names, group_shape))
-    otherdims = tuple(d for d in obj.dims if d not in dim)
-    indims = otherdims + dim
-    result_dims = otherdims + group_names
 
     def wrapper(*args, **kwargs):
         result, groups = groupby_reduce(*args, **kwargs)
@@ -82,9 +79,9 @@ def xarray_reduce(
         wrapper,
         obj,
         to_group,
-        input_core_dims=[indims, dim],
+        input_core_dims=[dim, dim],
         dask="allowed",
-        output_core_dims=[result_dims],
+        output_core_dims=[group_names],
         dask_gufunc_kwargs=dict(output_sizes=group_sizes),
         keep_attrs=keep_attrs,
         kwargs={
