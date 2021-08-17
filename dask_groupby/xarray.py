@@ -10,7 +10,7 @@ from .aggregations import Aggregation, _atleast_1d
 from .core import factorize_, groupby_reduce, reindex_
 
 if TYPE_CHECKING:
-    from xarray import DataArray, Dataset, GroupBy
+    from xarray import DataArray, Dataset, GroupBy, Resample
 
 
 def xarray_reduce(
@@ -190,7 +190,7 @@ def rechunk_to_group_boundaries(array, dim, labels):
 
 
 def resample_reduce(
-    resampler: xr.core.resample.Resample,
+    resampler: "Resample",
     func,
 ):
 
