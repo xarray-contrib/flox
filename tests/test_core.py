@@ -19,6 +19,14 @@ dask.config.set(scheduler="sync")
 # TODO: Add max,argmax here
 
 
+def test_alignment_error():
+    da = np.ones((12,))
+    labels = np.ones((5,))
+
+    with pytest.raises(ValueError):
+        groupby_reduce(da, labels, func="mean")
+
+
 @pytest.mark.parametrize("chunk, split_out", [(False, 1), (True, 1), (True, 2), (True, 3)])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
 @pytest.mark.parametrize(

@@ -717,7 +717,11 @@ def groupby_reduce(
         Keys include ``"groups"`` and ``func``.
     """
 
-    assert array.shape[-by.ndim :] == by.shape
+    if array.shape[-by.ndim :] != by.shape:
+        raise ValueError(
+            "array and by must be aligned i.e. array.shape[-by.ndim :] == by.shape. "
+            f"Received array of shape {array.shape} and by of shape {by.shape}"
+        )
 
     if axis is None:
         axis = tuple(array.ndim + np.arange(-by.ndim, 0))
