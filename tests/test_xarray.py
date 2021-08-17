@@ -93,11 +93,16 @@ def test_xarray_reduce_dataset():
 
 
 @pytest.mark.parametrize("isdask", [True, False])
+@pytest.mark.parametrize("dataarray", [True, False])
 @pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
-def test_xarray_resample(chunklen, isdask):
-    ds = xr.tutorial.open_dataset("air_temperature", chunks={"time": chunklen}).air
+def test_xarray_resample(chunklen, isdask, dataarray):
+    ds = xr.tutorial.open_dataset("air_temperature", chunks={"time": chunklen})
     if not isdask:
         ds = ds.compute()
+
+    if dataarray:
+        ds = ds.air
+
     resampler = ds.resample(time="M")
     actual = resample_reduce(resampler, "mean")
     expected = resampler.mean()

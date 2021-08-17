@@ -194,9 +194,7 @@ def resample_reduce(
     keep_attrs: bool = True,
 ):
 
-    assert isinstance(resampler._obj, xr.DataArray)
-
-    array = resampler._obj
+    obj = resampler._obj
     dim = resampler._group_dim
 
     # this creates a label DataArray since resample doesn't do that somehow
@@ -209,11 +207,16 @@ def resample_reduce(
         tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
     by = xr.DataArray(np.hstack(tostack), dims=(dim,), name="__resample_dim__")
 
-    if resampler._obj.chunks is not None:
-        array = rechunk_to_group_boundaries(array, dim, by)
+    if isinstance(obj, xr.Dataset):
+        for var in obj:
+            if obj[var].chunks is not None:
+                obj[var] = rechunk_to_group_boundaries(obj[var], dim, by)
+    else:
+        if obj.chunks is not None:
+            obj = rechunk_to_group_boundaries(obj, dim, by)
 
     result = xarray_reduce(
-        array,
+        obj,
         by,
         func=func,
         blockwise=True,
