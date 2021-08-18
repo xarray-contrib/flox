@@ -46,6 +46,12 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
 
     assert axis in (0, -1)
 
+    from_ = np.atleast_1d(from_)
+    to = np.atleast_1d(to)
+    # short-circuit for trivial case
+    if len(from_) == len(to) and np.all(from_ == to):
+        return array
+
     if array.shape[axis] == 0:
         # all groups were NaN
         reindexed = np.full(array.shape[:-1] + (len(to),), fill_value, dtype=array.dtype)
