@@ -61,6 +61,9 @@ def test_xarray_reduce_multiple_groupers():
     actual = xarray_reduce(da, da.labels, da.labels2, func="count")
     xr.testing.assert_identical(expected, actual)
 
+    actual = xarray_reduce(da, "labels", da.labels2, func="count")
+    xr.testing.assert_identical(expected, actual)
+
     actual = xarray_reduce(da, "labels", "labels2", func="count", fill_value=0)
     xr.testing.assert_identical(expected, actual)
 
