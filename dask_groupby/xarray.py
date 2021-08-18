@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Dict, Iterable, Sequence, Tuple, Union
 import dask
 import numpy as np
 import numpy_groupies as npg
+import pandas as pd
 import xarray as xr
 
 from .aggregations import Aggregation, _atleast_1d
@@ -61,8 +62,8 @@ def xarray_reduce(
     if dim is Ellipsis:
         dim = obj.dims
 
-    # we broadcast all variables against each other along all dimensions in `by` variables
-    # we avoid excluding `dim` because it need not be a dimension in any of the `by` variables!
+    # broadcast all variables against each other along all dimensions in `by` variables
+    # don't exclude `dim` because it need not be a dimension in any of the `by` variables!
     exclude_dims = set(ds.dims) - grouper_dims
     if dim is not None:
         exclude_dims -= set(dim)
@@ -73,13 +74,16 @@ def xarray_reduce(
     else:
         dim = _atleast_1d(dim)
 
+    if any(d not in grouper_dims and d not in obj.dims for d in dim):
+        raise ValueError(f"Cannot reduce over dimensions {dim}")
+
     axis = tuple(range(-len(dim), 0))
 
     group_names = tuple(g.name for g in by)
     # ds = ds.drop_vars(tuple(g for g in group_names))
 
     if len(by) > 1:
-        group_idx, expected_groups, group_shape, _, _, _ = factorize_(
+        group_idx, expected_groups, group_shape, _, _, _, _ = factorize_(
             tuple(g.data for g in by), expected_groups, bins
         )
         to_group = xr.DataArray(group_idx, dims=dim, coords={d: by[0][d] for d in by[0].indexes})
@@ -146,6 +150,11 @@ def xarray_reduce(
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         actual[name] = expect
+
+    # if grouping by multi-indexed variable, then restore it
+    for name, index in ds.indexes.items():
+        if name in actual.indexes and isinstance(index, pd.MultiIndex):
+            actual[name] = index
 
     if missing_dim:
         actual = actual.update(missing_dim)

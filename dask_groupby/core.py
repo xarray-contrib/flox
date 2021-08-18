@@ -58,6 +58,11 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
         return reindexed
 
     from_ = np.atleast_1d(from_)
+    if from_.dtype.kind == "O" and isinstance(from_[0], tuple):
+        raise NotImplementedError(
+            "Currently does not support reindexing with object arrays of tuples. "
+            "These occur when grouping by multi-indexed variables in xarray."
+        )
     idx = np.array(
         [np.argwhere(np.array(from_) == label)[0, 0] if label in from_ else -1 for label in to]
     )
@@ -129,7 +134,18 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = Non
         group_idx = np.ravel_multi_index(factorized, grp_shape).reshape(by[0].shape)
     else:
         group_idx = factorized[0]
-    if np.isscalar(axis) and groupvar.ndim > 1:
+
+    # is the grouper variable broadcasted along the reduction dimension
+    # if so, we do not want to offset
+    # i.e. group_idx.T is [[0, 1, 2, 3, 4],
+    #                      [0, 1, 2, 3, 4]]
+    # we want to preserve that and not get (transposed)
+    #                     [[0, 5, 9, 13, 17],
+    #                      [0, 5, 9, 13, 17]]
+    is_broadcasted = by[0].ndim > 1 and np.all(
+        np.diff(group_idx.reshape(by[0].shape), axis=-1) == 0
+    )
+    if np.isscalar(axis) and groupvar.ndim > 1 and not is_broadcasted:
         # Not reducing along all dimensions of by
         offset_group = True
         group_idx, ngroups, size = offset_labels(group_idx.reshape(by[0].shape))
@@ -137,7 +153,7 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = Non
     else:
         size = None
         offset_group = False
-    return group_idx, found_groups, grp_shape, ngroups, size, offset_group
+    return group_idx, found_groups, grp_shape, ngroups, size, offset_group, is_broadcasted
 
 
 def chunk_argreduce(
@@ -242,7 +258,7 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, _, ngroups, size, offset_group = factorize_((by,), axis)
+    group_idx, groups, _, ngroups, size, offset_group, is_broadcasted = factorize_((by,), axis)
     groups = groups[0]
 
     # always reshape to 1D along group dimensions
@@ -263,8 +279,14 @@ def chunk_reduce(
             sortidx = np.argsort(groups)
             results["groups"] = groups[sortidx]
 
-    final_array_shape += results["groups"].shape
-    final_groups_shape += results["groups"].shape
+    print(results["groups"], is_broadcasted)
+    if not is_broadcasted:
+        # weird case where grouper has dimension `a`, is broadcasted along `b`
+        # and then we reduce along `b`. This breaks the assumption that we are
+        # always reducing along the grouper dimension `a` and that it is the last
+        # dimension
+        final_array_shape += results["groups"].shape
+        final_groups_shape += results["groups"].shape
 
     for reduction in func:
         if empty:
@@ -290,7 +312,10 @@ def chunk_reduce(
                 result = result[..., sortidx]
             result = result.reshape(final_array_shape)
         results["intermediates"].append(result)
-    results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
+    if final_groups_shape:
+        # This happens when to_group is broadcasted, and we reduce along the broadcast
+        # dimension
+        results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
     return results
 
 

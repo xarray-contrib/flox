@@ -135,9 +135,26 @@ def test_optimal_rechunking(inchunks, expected):
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
 
 
+# everything below this is copied from xarray's test_groupby.py
+# TODO: chunk these
+# TODO: dim=None, dim=Ellipsis, groupby unindexed dim
+
+
 def test_groupby_duplicate_coordinate_labels():
     # fix for http://stackoverflow.com/questions/38065129
     array = xr.DataArray([1, 2, 3], [("x", [1, 1, 2])])
     expected = xr.DataArray([3, 3], [("x", [1, 2])])
     actual = xarray_reduce(array, array.x, func="sum")
     assert_equal(expected, actual)
+
+
+def test_multi_index_groupby_sum():
+    # regression test for xarray GH873
+    ds = xr.Dataset(
+        {"foo": (("x", "y", "z"), np.ones((3, 4, 2)))},
+        {"x": ["a", "b", "c"], "y": [1, 2, 3, 4]},
+    )
+    expected = ds.sum("z")
+    stacked = ds.stack(space=["x", "y"])
+    actual = xarray_reduce(stacked, "space", dim="z", func="sum")
+    assert_equal(expected, actual.unstack("space"))
