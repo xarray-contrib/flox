@@ -83,8 +83,11 @@ def xarray_reduce(
     # ds = ds.drop_vars(tuple(g for g in group_names))
 
     if len(by) > 1:
-        group_idx, expected_groups, group_shape, _, _, _, _ = factorize_(
-            tuple(g.data for g in by), expected_groups, bins
+        group_idx, expected_groups, group_shape, _, _, _ = factorize_(
+            tuple(g.data for g in by),
+            axis,
+            expected_groups,
+            bins,
         )
         to_group = xr.DataArray(group_idx, dims=dim, coords={d: by[0][d] for d in by[0].indexes})
     else:

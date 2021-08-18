@@ -1,6 +1,7 @@
 import copy
 import itertools
 import operator
+from collections import namedtuple
 from functools import partial
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence, Tuple, Union
 
@@ -117,13 +118,6 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = Non
             found_groups.append(expect)
         else:
             idx, groups = pd.factorize(groupvar.ravel())
-            # numpy_groupies cannot deal with group_idx = -1
-            # so we'll add use (ngroups+1) as the sentinel
-            # note we cannot simply remove the NaN locations;
-            # that would mess up argmax, argmin
-            # we could set na_sentinel in pd.factorize, but we don't know
-            # what to set it to yet.
-            idx[idx == -1] = idx.max() + 1
             if expect is None:
                 found_groups.append(groups)
         factorized.append(idx)
@@ -153,7 +147,17 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = Non
     else:
         size = None
         offset_group = False
-    return group_idx, found_groups, grp_shape, ngroups, size, offset_group, is_broadcasted
+
+    # numpy_groupies cannot deal with group_idx = -1
+    # so we'll add use (ngroups+1) as the sentinel
+    # note we cannot simply remove the NaN locations;
+    # that would mess up argmax, argmin
+    nan_sentinel = size + 1 if offset_group else ngroups + 1
+    group_idx[group_idx == -1] = nan_sentinel
+
+    FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel is_broadcasted")
+    props = FactorProps(offset_group, nan_sentinel, is_broadcasted)
+    return group_idx, found_groups, grp_shape, ngroups, size, props
 
 
 def chunk_argreduce(
@@ -258,7 +262,7 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, _, ngroups, size, offset_group, is_broadcasted = factorize_((by,), axis)
+    group_idx, groups, _, ngroups, size, props = factorize_((by,), axis)
     groups = groups[0]
 
     # always reshape to 1D along group dimensions
@@ -266,7 +270,7 @@ def chunk_reduce(
     array = array.reshape(newshape)
 
     assert group_idx.ndim == 1
-    mask = np.logical_not(group_idx == -1)
+    mask = np.logical_not(group_idx == props.nan_sentinel)
     empty = np.all(~mask) or np.prod(by.shape) == 0
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
@@ -279,8 +283,7 @@ def chunk_reduce(
             sortidx = np.argsort(groups)
             results["groups"] = groups[sortidx]
 
-    print(results["groups"], is_broadcasted)
-    if not is_broadcasted:
+    if not props.is_broadcasted:
         # weird case where grouper has dimension `a`, is broadcasted along `b`
         # and then we reduce along `b`. This breaks the assumption that we are
         # always reducing along the grouper dimension `a` and that it is the last
@@ -304,7 +307,7 @@ def chunk_reduce(
             if np.any(~mask):
                 # remove NaN group label which should be last
                 result = result[..., :-1]
-            if offset_group:
+            if props.offset_group:
                 result = result.reshape(*final_array_shape[:-1], ngroups)
             if expected_groups is not None:
                 result = reindex_(result, groups, expected_groups, fill_value=fill_value[reduction])
