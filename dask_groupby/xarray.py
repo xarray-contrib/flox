@@ -32,7 +32,21 @@ def xarray_reduce(
         raise ValueError("Grouping by multiple variables will call compute dask variables.")
 
     grouper_dims = set(itertools.chain(*tuple(g.dims for g in by)))
-    obj, *by = xr.broadcast(obj, *by, exclude=set(obj.dims) - grouper_dims)
+
+    if isinstance(obj, xr.DataArray):
+        ds = obj._to_temp_dataset()
+    else:
+        ds = obj
+
+    if dim is Ellipsis:
+        dim = obj.dims
+
+    # we broadcast all variables against each other along all dimensions in `by` variables
+    # we avoid excluding `dim` because it need not be a dimension in any of the `by` variables!
+    exclude_dims = set(ds.dims) - grouper_dims
+    if dim is not None:
+        exclude_dims -= set(dim)
+    ds, *by = xr.broadcast(ds, *by, exclude=exclude_dims)
 
     if dim is None:
         dim = by[0].dims
@@ -42,6 +56,7 @@ def xarray_reduce(
     axis = tuple(range(-len(dim), 0))
 
     group_names = tuple(g.name for g in by)
+    # ds = ds.drop_vars(tuple(g for g in group_names))
 
     if len(by) > 1:
         group_idx, expected_groups, group_shape, _, _, _ = factorize_(
@@ -75,9 +90,18 @@ def xarray_reduce(
             result = reindexed.reshape(result.shape[:-1] + group_shape)
         return result
 
+    # These data variables do not have the core dimension,
+    # take them out to prevent errors.
+    # apply_ufunc can handle non-dim coordinate variables without core dimensions
+    missing_dim = {}
+    for k, v in ds.data_vars.items():
+        is_missing_dim = not (all(d in v.dims for d in dim))
+        if is_missing_dim:
+            missing_dim[k] = v
+
     actual = xr.apply_ufunc(
         wrapper,
-        obj,
+        ds.drop_vars(tuple(missing_dim)),
         to_group,
         input_core_dims=[dim, dim],
         # for xarray's test_groupby_duplicate_coordinate_labels
@@ -96,9 +120,17 @@ def xarray_reduce(
     )
 
     for name, expect in zip(group_names, expected_groups):
+        if isinstance(actual, xr.Dataset) and name in actual:
+            actual = actual.drop_vars(name)
         actual[name] = expect
 
-    return actual
+    if missing_dim:
+        actual = actual.update(missing_dim)
+
+    if isinstance(obj, xr.DataArray):
+        return obj._from_temp_dataset(actual)
+    else:
+        return actual
 
 
 def xarray_groupby_reduce(
