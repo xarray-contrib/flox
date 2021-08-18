@@ -13,6 +13,20 @@ if TYPE_CHECKING:
     from xarray import DataArray, Dataset, GroupBy, Resample
 
 
+def _get_input_core_dims(group_names, dim, ds, to_group):
+    input_core_dims = [[], []]
+    for g in group_names:
+        if g in dim:
+            continue
+        if g in ds.dims:
+            input_core_dims[0].extend([g])
+        if g in to_group.dims:
+            input_core_dims[1].extend([g])
+    input_core_dims[0].extend(dim)
+    input_core_dims[1].extend(dim)
+    return input_core_dims
+
+
 def xarray_reduce(
     obj: Union["Dataset", "DataArray"],
     *by: Union["DataArray", Iterable[str], Iterable["DataArray"]],
@@ -112,7 +126,7 @@ def xarray_reduce(
         wrapper,
         ds.drop_vars(tuple(missing_dim) + bad_dtypes),
         to_group,
-        input_core_dims=[dim, dim],
+        input_core_dims=_get_input_core_dims(group_names, dim, ds, to_group),
         # for xarray's test_groupby_duplicate_coordinate_labels
         exclude_dims=set(dim),
         output_core_dims=[group_names],
