@@ -26,6 +26,12 @@ def xarray_reduce(
     keep_attrs: bool = True,
 ):
 
+    # TODO: handle this _DummyGroup stuff when dispatching from xarray
+    from xarray.core.groupby import _DummyGroup
+
+    unindexed_dims = tuple(b.name for b in by if isinstance(b, _DummyGroup))
+    by = tuple(b.name if isinstance(b, _DummyGroup) else b for b in by)
+
     by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
     if len(by) > 1 and any(dask.is_dask_collection(by_) for by_ in by):
@@ -126,6 +132,9 @@ def xarray_reduce(
 
     if missing_dim:
         actual = actual.update(missing_dim)
+
+    if unindexed_dims:
+        actual = actual.drop_vars(unindexed_dims)
 
     if isinstance(obj, xr.DataArray):
         return obj._from_temp_dataset(actual)
