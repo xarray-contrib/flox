@@ -148,6 +148,7 @@ def test_groupby_duplicate_coordinate_labels():
     assert_equal(expected, actual)
 
 
+@pytest.mark.xfail
 def test_multi_index_groupby_sum():
     # regression test for xarray GH873
     ds = xr.Dataset(
