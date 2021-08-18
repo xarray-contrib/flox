@@ -129,15 +129,26 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = Non
     else:
         group_idx = factorized[0]
 
+    reshaped_idx = group_idx.reshape(by[0].shape)
+
+    if np.isscalar(axis):
+        grouper_axis = (axis,)
+    elif all(ax < 0 for ax in axis):
+        grouper_axis = axis
+    else:
+        grouper_axis = sorted(by[0].ndim - ax - 1 for ax in axis)
     # is the grouper variable broadcasted along the reduction dimension
     # if so, we do not want to offset
     # i.e. group_idx.T is [[0, 1, 2, 3, 4],
     #                      [0, 1, 2, 3, 4]]
     # we want to preserve that and not get (transposed)
-    #                     [[0, 5, 9, 13, 17],
-    #                      [0, 5, 9, 13, 17]]
-    is_broadcasted = by[0].ndim > 1 and np.all(
-        np.diff(group_idx.reshape(by[0].shape), axis=-1) == 0
+    #                     [[0, 4, 8, 12, 16],
+    #                      [0, 4, 8, 12, 16]]
+    is_broadcasted = (
+        by[0].ndim > 1
+        and (groupvar.dtype.kind != "O" and not np.isnan(groupvar).all())
+        and all(np.all(np.diff(reshaped_idx, axis=ax) == 0) for ax in grouper_axis)
+        and not (reshaped_idx == reshaped_idx.ravel()[0]).all()
     )
     if np.isscalar(axis) and groupvar.ndim > 1 and not is_broadcasted:
         # Not reducing along all dimensions of by
