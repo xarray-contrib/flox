@@ -150,6 +150,8 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = Non
         and all(np.all(np.diff(reshaped_idx, axis=ax) == 0) for ax in grouper_axis)
         and not (reshaped_idx == reshaped_idx.ravel()[0]).all()
     )
+    is_broadcasted = False
+
     if np.isscalar(axis) and groupvar.ndim > 1 and not is_broadcasted:
         # Not reducing along all dimensions of by
         offset_group = True
