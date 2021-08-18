@@ -88,11 +88,13 @@ def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
 
 
 def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = None):
-    ngroups = len(by)
+    if not isinstance(by, tuple):
+        raise ValueError(f"Expected `by` to be a tuple. Received {type(by)} instead")
+
     if bins is None:
-        bins = (False,) * ngroups
+        bins = (False,) * len(by)
     if expected_groups is None:
-        expected_groups = (None,) * ngroups
+        expected_groups = (None,) * len(by)
 
     factorized = []
     found_groups = []
