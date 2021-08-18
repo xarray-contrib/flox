@@ -105,9 +105,12 @@ def xarray_reduce(
         if is_missing_dim:
             missing_dim[k] = v
 
+    # TODO: do this for specific reductions only
+    bad_dtypes = tuple(k for k in ds.variables if ds[k].dtype.kind in ("S", "U"))
+
     actual = xr.apply_ufunc(
         wrapper,
-        ds.drop_vars(tuple(missing_dim)),
+        ds.drop_vars(tuple(missing_dim) + bad_dtypes),
         to_group,
         input_core_dims=[dim, dim],
         # for xarray's test_groupby_duplicate_coordinate_labels
