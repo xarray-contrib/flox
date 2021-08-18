@@ -128,3 +128,11 @@ def test_xarray_resample(chunklen, isdask, dataarray):
 def test_optimal_rechunking(inchunks, expected):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
+
+
+def test_groupby_duplicate_coordinate_labels():
+    # fix for http://stackoverflow.com/questions/38065129
+    array = xr.DataArray([1, 2, 3], [("x", [1, 1, 2])])
+    expected = xr.DataArray([3, 3], [("x", [1, 2])])
+    actual = xarray_reduce(array, array.x, func="sum")
+    assert_equal(expected, actual)

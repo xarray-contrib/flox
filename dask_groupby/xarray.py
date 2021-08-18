@@ -80,8 +80,10 @@ def xarray_reduce(
         obj,
         to_group,
         input_core_dims=[dim, dim],
-        dask="allowed",
+        # for xarray's test_groupby_duplicate_coordinate_labels
+        exclude_dims=set(dim),
         output_core_dims=[group_names],
+        dask="allowed",
         dask_gufunc_kwargs=dict(output_sizes=group_sizes),
         keep_attrs=keep_attrs,
         kwargs={
@@ -121,8 +123,10 @@ def xarray_groupby_reduce(
         groupby._obj,
         groupby._group,
         input_core_dims=[[groupdim], [groupdim]],
-        dask="allowed",
+        # for xarray's test_groupby_duplicate_coordinate_labels
+        exclude_dims=set(groupdim),
         output_core_dims=[[outdim]],
+        dask="allowed",
         dask_gufunc_kwargs=dict(output_sizes={outdim: len(groups)}),
         keep_attrs=keep_attrs,
         kwargs={
