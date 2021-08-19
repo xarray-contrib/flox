@@ -255,8 +255,10 @@ nanargmin = Aggregation(
     finalize=argreduce_finalize,
 )
 
-first = Aggregation("first", chunk="first", combine="first", fill_value=np.nan)
-last = Aggregation("last", chunk="last", combine="last", fill_value=np.nan)
+first = Aggregation("first", chunk="first", combine="first", fill_value=0)
+last = Aggregation("last", chunk="last", combine="last", fill_value=0)
+nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=np.nan)
+nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=np.nan)
 # all
 # any
 # median - should be doable since dask implements t-digest percentile for 1D?
