@@ -75,7 +75,7 @@ def xarray_reduce(
         dim = _atleast_1d(dim)
 
     if any(d not in grouper_dims and d not in obj.dims for d in dim):
-        raise ValueError(f"Cannot reduce over dimensions {dim}")
+        raise ValueError(f"cannot reduce over dimensions {dim}")
 
     if any(d not in grouper_dims for d in dim):
         raise NotImplementedError(f"Cannot reduce over dimension not present in `by`: {dim}")
