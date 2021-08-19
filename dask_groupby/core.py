@@ -129,30 +129,7 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = Non
     else:
         group_idx = factorized[0]
 
-    reshaped_idx = group_idx.reshape(by[0].shape)
-
-    if np.isscalar(axis):
-        grouper_axis = (axis,)
-    elif all(ax < 0 for ax in axis):
-        grouper_axis = axis
-    else:
-        grouper_axis = sorted(by[0].ndim - ax - 1 for ax in axis)
-    # is the grouper variable broadcasted along the reduction dimension
-    # if so, we do not want to offset
-    # i.e. group_idx.T is [[0, 1, 2, 3, 4],
-    #                      [0, 1, 2, 3, 4]]
-    # we want to preserve that and not get (transposed)
-    #                     [[0, 4, 8, 12, 16],
-    #                      [0, 4, 8, 12, 16]]
-    is_broadcasted = (
-        by[0].ndim > 1
-        and (groupvar.dtype.kind != "O" and not np.isnan(groupvar).all())
-        and all(np.all(np.diff(reshaped_idx, axis=ax) == 0) for ax in grouper_axis)
-        and not (reshaped_idx == reshaped_idx.ravel()[0]).all()
-    )
-    is_broadcasted = False
-
-    if np.isscalar(axis) and groupvar.ndim > 1 and not is_broadcasted:
+    if np.isscalar(axis) and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
         offset_group = True
         group_idx, ngroups, size = offset_labels(group_idx.reshape(by[0].shape))
@@ -168,8 +145,8 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = Non
     nan_sentinel = size + 1 if offset_group else ngroups + 1
     group_idx[group_idx == -1] = nan_sentinel
 
-    FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel is_broadcasted")
-    props = FactorProps(offset_group, nan_sentinel, is_broadcasted)
+    FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel")
+    props = FactorProps(offset_group, nan_sentinel)
     return group_idx, found_groups, grp_shape, ngroups, size, props
 
 
@@ -296,13 +273,8 @@ def chunk_reduce(
             sortidx = np.argsort(groups)
             results["groups"] = groups[sortidx]
 
-    if not props.is_broadcasted:
-        # weird case where grouper has dimension `a`, is broadcasted along `b`
-        # and then we reduce along `b`. This breaks the assumption that we are
-        # always reducing along the grouper dimension `a` and that it is the last
-        # dimension
-        final_array_shape += results["groups"].shape
-        final_groups_shape += results["groups"].shape
+    final_array_shape += results["groups"].shape
+    final_groups_shape += results["groups"].shape
 
     for reduction in func:
         if empty:
