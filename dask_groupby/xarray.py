@@ -1,4 +1,5 @@
 import itertools
+import warnings
 from typing import TYPE_CHECKING, Dict, Iterable, Sequence, Tuple, Union
 
 import dask
@@ -77,8 +78,12 @@ def xarray_reduce(
     if any(d not in grouper_dims and d not in obj.dims for d in dim):
         raise ValueError(f"cannot reduce over dimensions {dim}")
 
-    if any(d not in grouper_dims for d in dim):
-        raise NotImplementedError(f"Cannot reduce over dimension not present in `by`: {dim}")
+    dims_not_in_groupers = tuple(d for d in dim if d not in grouper_dims)
+    if dims_not_in_groupers:
+        warnings.warn(
+            f"Might not be able reduce over dimensions not present in `by`: {dims_not_in_groupers}",
+            UserWarning,
+        )
 
     axis = tuple(range(-len(dim), 0))
 
