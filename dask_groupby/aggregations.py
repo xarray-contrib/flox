@@ -78,21 +78,25 @@ def nansum_of_squares(array, axis=-1):
     return np.nansum(array ** 2, axis)
 
 
-count = Aggregation("count", chunk="count", combine="sum", fill_value=0, dtype=int)
+def _count(array, axis=-1):
+    return np.sum(~np.isnan(array), axis)
+
+
+count = Aggregation("count", chunk=_count, combine="sum", fill_value=0, dtype=int)
 sum = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
 nansum = Aggregation("nansum", chunk="nansum", combine="sum", fill_value=0)
 prod = Aggregation("prod", chunk="prod", combine="prod", fill_value=1)
 nanprod = Aggregation("nanprod", chunk="nanprod", combine="prod", fill_value=1)
 mean = Aggregation(
     "mean",
-    chunk=("sum", "count"),
+    chunk=("sum", _count),
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
     fill_value=0,
 )
 nanmean = Aggregation(
     "nanmean",
-    chunk=("nansum", "count"),
+    chunk=("nansum", _count),
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
     fill_value=0,
@@ -112,28 +116,28 @@ def _std_finalize(sumsq, sum_, count, ddof=0):
 
 var = Aggregation(
     "var",
-    chunk=(sum_of_squares, "sum", "count"),
+    chunk=(sum_of_squares, "sum", _count),
     combine=("sum", "sum", "sum"),
     finalize=_var_finalize,
     fill_value=0,
 )
 nanvar = Aggregation(
     "nanvar",
-    chunk=(nansum_of_squares, "count"),
+    chunk=(nansum_of_squares, _count),
     combine=("sum", "sum"),
     finalize=_var_finalize,
     fill_value=0,
 )
 std = Aggregation(
     "std",
-    chunk=(sum_of_squares, "sum", "count"),
+    chunk=(sum_of_squares, "sum", _count),
     combine=("sum", "sum", "sum"),
     finalize=_std_finalize,
     fill_value=0,
 )
 nanstd = Aggregation(
     "nanstd",
-    chunk=(nansum_of_squares, "count"),
+    chunk=(nansum_of_squares, _count),
     combine=("sum", "sum"),
     finalize=_std_finalize,
     fill_value=0,

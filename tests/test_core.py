@@ -81,6 +81,13 @@ def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split
     assert_equal(expected, result)
 
 
+def test_groupby_reduce_count():
+    array = np.array([0, 0, np.nan, np.nan, np.nan, 1, 1])
+    labels = np.array(["a", "b", "b", "b", "c", "c", "c"])
+    result, _ = groupby_reduce(array, labels, func="count")
+    assert_equal(result, [1, 1, 2])
+
+
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int32, np.int64])
 def test_groupby_reduce_preserves_dtype(dtype):
     array = np.ones((2, 12), dtype=dtype)

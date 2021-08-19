@@ -14,7 +14,7 @@ from dask.array.core import normalize_chunks
 from dask.highlevelgraph import HighLevelGraph
 
 from . import aggregations
-from .aggregations import Aggregation, _get_fill_value
+from .aggregations import Aggregation, _count, _get_fill_value
 
 IntermediateDict = Dict[Union[str, Callable], Any]
 FinalResultsDict = Dict[str, Union[dask.array.Array, np.ndarray]]
@@ -819,13 +819,16 @@ def groupby_reduce(
 
     if not isinstance(array, dask.array.Array) and not isinstance(by, dask.array.Array):
         fv = reduction.fill_value[func] if fill_value is None else fill_value
+        # npg's count counts the number of groups
+        # we want to count the number of non-NaN array elements in each group
+        func = reduction.name if reduction.name != "count" else _count
         results = chunk_reduce(
             array,
             by,
-            func=reduction.name,
+            func=func,
             axis=axis,
             expected_groups=None,
-            fill_value={reduction.name: fv},
+            fill_value={func: fv},
         )  # type: ignore
 
         if reduction.name in ["argmin", "argmax"]:
@@ -847,9 +850,9 @@ def groupby_reduce(
             raise NotImplementedError("first, last not implemented for dask arrays")
 
         if fill_value is not None:
-            reduction.chunk += ("count",)
+            reduction.chunk += (_count,)
             reduction.combine += ("sum",)
-            reduction.fill_value["count"] = 0
+            reduction.fill_value[_count] = 0
             reduction.fill_value["sum"] = 0
 
         # Needed since we need not have equal number of groups per block
