@@ -113,7 +113,7 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = Non
     for groupvar, expect, tobin in zip(by, expected_groups, bins):
         if tobin:
             if expect is None:
-                raise ValueError
+                raise ValueError(f"Please pass bins for {groupvar.name} in expected_groups.")
             idx = np.digitize(groupvar, expect)
             found_groups.append(expect)
         else:
