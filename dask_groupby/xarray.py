@@ -278,7 +278,7 @@ def resample_reduce(
     tostack = []
     for idx, slicer in enumerate(resampler._group_indices):
         if slicer.stop is None:
-            stop = resampler._obj.sizes[resampler._group_dim]
+            stop = resampler._obj.sizes[dim]
         else:
             stop = slicer.stop
         tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
