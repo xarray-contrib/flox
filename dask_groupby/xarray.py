@@ -1,6 +1,6 @@
 import itertools
 import warnings
-from typing import TYPE_CHECKING, Dict, Iterable, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Dict, Hashable, Iterable, Sequence, Tuple, Union
 
 import dask
 import numpy as np
@@ -34,11 +34,11 @@ def xarray_reduce(
     *by: Union["DataArray", Iterable[str], Iterable["DataArray"]],
     func: Union[str, Aggregation],
     expected_groups: Dict[str, Sequence] = None,
-    bins=None,
-    dim=None,
-    split_out=1,
+    bins: Iterable[bool] = None,
+    dim: Hashable = None,
+    split_out: int = 1,
     fill_value=None,
-    blockwise=False,
+    blockwise: bool = False,
     keep_attrs: bool = True,
 ):
 
@@ -182,8 +182,8 @@ def xarray_reduce(
 def xarray_groupby_reduce(
     groupby: "GroupBy",
     func: Union[str, Aggregation],
-    split_out=1,
-    blockwise=False,
+    split_out: int = 1,
+    blockwise: bool = False,
     keep_attrs: bool = True,
 ):
     """Apply on an existing Xarray groupby object for convenience."""
@@ -272,7 +272,7 @@ def rechunk_to_group_boundaries(array, dim, labels):
 
 def resample_reduce(
     resampler: "Resample",
-    func,
+    func: Union[str, Aggregation],
     keep_attrs: bool = True,
 ):
 
