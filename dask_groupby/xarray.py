@@ -40,6 +40,40 @@ def xarray_reduce(
     blockwise: bool = False,
     keep_attrs: bool = True,
 ):
+    """GroupBy reduce operations on xarray objects using numpy-groupies
+
+    Parameters
+    ----------
+    obj : Union["Dataset", "DataArray"]
+        Xarray object to reduce
+    *by : Union["DataArray", Iterable[str], Iterable["DataArray"]]
+        Variables with which to group by `obj`
+    func : Union[str, Aggregation]
+        Reduction method
+    expected_groups : Dict[str, Sequence]
+        expected group labels corresponding to each `by` variable
+    bins : If True, corresponding entry in `expected_groups` are bin edges. If False, the entry in `expected_groups` is treated as a simple label.
+    dim : Hashable
+        dimension name along which to reduce. If None, reduces across all
+        dimensions of `by`
+    split_out : int
+        Number of output chunks along grouped dimension in output.
+    fill_value :
+        Value used for missing groups in the output i.e. when one of the labels
+        in `expected_groups` is not actually present in `by`
+    blockwise : bool
+        If True, only apply the reduction blockwise. If False (default), we
+        apply blockwise and then compute a tree reduction of those results.
+
+    Raises
+    ------
+    NotImplementedError
+    ValueError
+
+    Examples
+    --------
+    FIXME: Add docs.
+    """
 
     # TODO: handle this _DummyGroup stuff when dispatching from xarray
     from xarray.core.groupby import _DummyGroup
