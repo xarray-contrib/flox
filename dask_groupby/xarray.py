@@ -33,7 +33,7 @@ def xarray_reduce(
     *by: Union["DataArray", Iterable[str], Iterable["DataArray"]],
     func: Union[str, Aggregation],
     expected_groups: Dict[str, Sequence] = None,
-    bins: Iterable[bool] = None,
+    isbin: Iterable[bool] = None,
     dim: Hashable = None,
     split_out: int = 1,
     fill_value=None,
@@ -52,7 +52,7 @@ def xarray_reduce(
         Reduction method
     expected_groups : Dict[str, Sequence]
         expected group labels corresponding to each `by` variable
-    bins : If True, corresponding entry in `expected_groups` are bin edges. If False, the entry in `expected_groups` is treated as a simple label.
+    isbin : If True, corresponding entry in `expected_groups` are bin edges. If False, the entry in `expected_groups` is treated as a simple label.
     dim : Hashable
         dimension name along which to reduce. If None, reduces across all
         dimensions of `by`
@@ -128,7 +128,7 @@ def xarray_reduce(
             tuple(g.data for g in by),
             axis,
             expected_groups,
-            bins,
+            isbin,
         )
         to_group = xr.DataArray(group_idx, dims=dim, coords={d: by[0][d] for d in by[0].indexes})
     else:
@@ -187,6 +187,7 @@ def xarray_reduce(
             "split_out": split_out,
             "fill_value": fill_value,
             "blockwise": blockwise,
+            "isbin": isbin,
         },
     )
 

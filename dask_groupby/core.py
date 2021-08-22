@@ -100,21 +100,21 @@ def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
     return offset, ngroups, size
 
 
-def factorize_(by: Tuple, axis, expected_groups: Tuple = None, bins: Tuple = None):
+def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = None):
     if not isinstance(by, tuple):
         raise ValueError(f"Expected `by` to be a tuple. Received {type(by)} instead")
 
-    if bins is None:
-        bins = (False,) * len(by)
+    if isbin is None:
+        isbin = (False,) * len(by)
     if expected_groups is None:
         expected_groups = (None,) * len(by)
 
     factorized = []
     found_groups = []
-    for groupvar, expect, tobin in zip(by, expected_groups, bins):
+    for groupvar, expect, tobin in zip(by, expected_groups, isbin):
         if tobin:
             if expect is None:
-                raise ValueError(f"Please pass bins for {groupvar.name} in expected_groups.")
+                raise ValueError("Please pass isbin in expected_groups.")
             idx = np.digitize(groupvar, expect)
             found_groups.append(expect)
         else:
@@ -158,6 +158,7 @@ def chunk_argreduce(
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Union[int, Sequence[int]],
     fill_value: Mapping[Union[str, Callable], Any],
+    isbin: bool = False,
 ) -> IntermediateDict:
     """
     Per-chunk arg reduction.
@@ -167,7 +168,9 @@ def chunk_argreduce(
     """
     array, idx = array_plus_idx
 
-    results = chunk_reduce(array, by, func, None, axis, fill_value)
+    results = chunk_reduce(
+        array, by, func, expected_groups=None, axis=axis, fill_value=fill_value, isbin=isbin
+    )
     # glorious
     newidx = np.broadcast_to(idx, array.shape)[
         np.unravel_index(results["intermediates"][1], array.shape)
@@ -189,6 +192,7 @@ def chunk_reduce(
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis: Union[int, Sequence[int]] = None,
     fill_value: Mapping[Union[str, Callable], Any] = None,
+    isbin: bool = False,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -253,7 +257,9 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, _, ngroups, size, props = factorize_((by,), axis)
+    group_idx, groups, _, ngroups, size, props = factorize_(
+        (by,), axis, expected_groups=(expected_groups,), isbin=(isbin,)
+    )
     groups = groups[0]
 
     # always reshape to 1D along group dimensions
@@ -536,6 +542,7 @@ def groupby_agg(
     split_out: int = 1,
     fill_value: Any = None,
     blockwise: bool = False,
+    isbin: bool = False,
 ) -> Tuple[dask.array.Array, Union[np.ndarray, dask.array.Array]]:
 
     # I think _tree_reduce expects this
@@ -568,6 +575,7 @@ def groupby_agg(
             # only reindex to groups present at combine stage
             expected_groups=expected_groups if split_out > 1 else None,
             fill_value=agg.fill_value,
+            isbin=isbin,
         ),
         inds,
         array,
@@ -717,6 +725,7 @@ def groupby_reduce(
     fill_value=None,
     split_out: int = 1,
     blockwise: bool = False,
+    isbin: bool = False,
 ) -> Tuple[dask.array.Array, Union[np.ndarray, dask.array.Array]]:
     """
     GroupBy reductions using tree reductions for dask.array
@@ -815,7 +824,8 @@ def groupby_reduce(
             by,
             func=func,
             axis=axis,
-            expected_groups=None,
+            expected_groups=expected_groups if isbin else None,
+            isbin=isbin,
             fill_value={func: fv},
         )  # type: ignore
 
@@ -859,6 +869,7 @@ def groupby_reduce(
             split_out=split_out,
             fill_value=fill_value,
             blockwise=blockwise,
+            isbin=isbin,
         )
 
     return (result, *groups)
