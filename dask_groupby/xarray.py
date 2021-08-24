@@ -1,5 +1,5 @@
 import itertools
-from typing import TYPE_CHECKING, Dict, Hashable, Iterable, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Hashable, Iterable, Sequence, Tuple, Union
 
 import dask
 import numpy as np
@@ -32,8 +32,8 @@ def xarray_reduce(
     obj: Union["Dataset", "DataArray"],
     *by: Union["DataArray", Iterable[str], Iterable["DataArray"]],
     func: Union[str, Aggregation],
-    expected_groups: Dict[str, Sequence] = None,
-    isbin: Iterable[bool] = None,
+    expected_groups=None,
+    isbin: Union[bool, Sequence[bool]] = False,
     dim: Hashable = None,
     split_out: int = 1,
     fill_value=None,
@@ -81,10 +81,17 @@ def xarray_reduce(
     unindexed_dims = tuple(b.name for b in by if isinstance(b, _DummyGroup))
     by = tuple(b.name if isinstance(b, _DummyGroup) else b for b in by)
 
+    for b in by:
+        if isinstance(b, xr.DataArray) and b.name is None:
+            raise ValueError("Cannot group by unnamed DataArrays.")
+
     by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
     if len(by) > 1 and any(dask.is_dask_collection(by_) for by_ in by):
         raise ValueError("Grouping by multiple variables will call compute dask variables.")
+
+    if isinstance(isbin, bool):
+        isbin = (isbin,) * len(by)
 
     grouper_dims = set(itertools.chain(*tuple(g.dims for g in by)))
 
@@ -138,7 +145,12 @@ def xarray_reduce(
             raise NotImplementedError(
                 "Please provided expected_groups if not grouping by a numpy-backed DataArray"
             )
-        group_shape = (len(expected_groups[0]),)
+        if isinstance(expected_groups, np.ndarray):
+            expected_groups = (expected_groups,)
+        if isbin[0]:
+            group_shape = (len(expected_groups) - 1,)
+        else:
+            group_shape = (len(expected_groups),)
         to_group = by[0]
 
     group_sizes = dict(zip(group_names, group_shape))
@@ -187,11 +199,18 @@ def xarray_reduce(
             "split_out": split_out,
             "fill_value": fill_value,
             "blockwise": blockwise,
-            "isbin": isbin,
+            # The following mess exists becuase for multiple `by`s I factorize eagerly
+            # here before passing it on; this means I have to handle the
+            # "binning by single by variable" case explicitly where the factorization
+            # happens later allowing `by` to  be a dask variable.
+            "expected_groups": expected_groups[0] if len(by) == 1 and isbin[0] else None,
+            "isbin": isbin[0] if len(by) == 1 else False,
         },
     )
 
-    for name, expect in zip(group_names, expected_groups):
+    for name, expect, isbin_ in zip(group_names, expected_groups, isbin):
+        if isbin_:
+            expect = [pd.Interval(left, right) for left, right in zip(expect[:-1], expect[1:])]
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         actual[name] = expect
