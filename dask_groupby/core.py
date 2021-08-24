@@ -113,9 +113,12 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
     found_groups = []
     for groupvar, expect, tobin in zip(by, expected_groups, isbin):
         if tobin:
+            # when binning we change expected groups to integers marking the interval
+            # this makes the reindexing logic simpler.
             if expect is None:
-                raise ValueError("Please pass isbin in expected_groups.")
-            idx = np.digitize(groupvar, expect)
+                raise ValueError("Please pass bin_edges in expected_groups.")
+            idx = np.digitize(groupvar, expect) - 1
+            expect = np.arange(idx.max() + 1)
             found_groups.append(expect)
         else:
             idx, groups = pd.factorize(groupvar.ravel())
@@ -351,6 +354,7 @@ def _finalize_results(
     axis: Sequence[int],
     expected_groups: Union[Sequence, np.ndarray, None],
     fill_value: Any,
+    isbin: bool,
     mask_counts=True,
 ):
     """Finalize results by
@@ -399,11 +403,12 @@ def _npg_aggregate(
     axis: Sequence,
     keepdims,
     group_ndim: int,
+    isbin: bool,
     fill_value: Any = None,
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
     results = _npg_combine(x_chunk, agg, axis, keepdims, group_ndim)
-    return _finalize_results(results, agg, axis, expected_groups, fill_value)
+    return _finalize_results(results, agg, axis, expected_groups, fill_value, isbin=isbin)
 
 
 def _npg_combine(
@@ -573,7 +578,7 @@ def groupby_agg(
             axis=axis,
             # with the current implementation we want reindexing at the blockwise step
             # only reindex to groups present at combine stage
-            expected_groups=expected_groups if split_out > 1 else None,
+            expected_groups=expected_groups if split_out > 1 or isbin else None,
             fill_value=agg.fill_value,
             isbin=isbin,
         ),
@@ -601,6 +606,9 @@ def groupby_agg(
         expected_agg = None
     else:
         intermediate = applied
+        # from this point on, we just work with bin indexes when binning
+        if isbin:
+            expected_groups = np.arange(len(expected_groups) - 1)
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
         expected_agg = expected_groups
 
@@ -617,6 +625,7 @@ def groupby_agg(
                 expected_groups=expected_agg,
                 group_ndim=by.ndim,
                 fill_value=fill_value,
+                isbin=isbin,
             ),
             combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim),
             name=f"{name}-reduce",
@@ -644,6 +653,7 @@ def groupby_agg(
                 agg=agg,
                 expected_groups=None,
                 group_ndim=by.ndim,
+                isbin=isbin,
                 fill_value=fill_value,
                 axis=axis,
                 keepdims=True,
@@ -838,7 +848,13 @@ def groupby_reduce(
 
         reduction.finalize = None
         result = _finalize_results(
-            results, reduction, axis, expected_groups, fill_value=fill_value, mask_counts=False
+            results,
+            reduction,
+            axis,
+            expected_groups,
+            fill_value=fill_value,
+            mask_counts=False,
+            isbin=isbin,
         )
         groups = (result["groups"],)
         result = result[reduction.name]

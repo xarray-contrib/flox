@@ -361,3 +361,27 @@ def test_bad_npg_behaviour():
         )[0]
         == -np.inf
     )
+
+
+@pytest.mark.parametrize("chunks", ((), (2,)))
+def test_groupby_bins(chunks):
+    array = [1, 1, 1, 1, 1]
+    labels = [1, 1.5, 1.9, 2, 3]
+
+    if chunks:
+        array = dask.array.from_array(array, chunks=chunks)
+        labels = dask.array.from_array(labels, chunks=chunks)
+
+    with raise_if_dask_computes():
+        actual, groups = groupby_reduce(
+            array,
+            labels,
+            func="count",
+            expected_groups=np.array([1, 2, 4, 5]),
+            isbin=True,
+            fill_value=0,
+        )
+    expected = np.array([3, 2, 0])
+    assert_equal(groups, np.array([0, 1, 2]))
+    print(actual.chunks)
+    assert_equal(actual, expected)
