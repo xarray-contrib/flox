@@ -122,8 +122,7 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
             found_groups.append(expect)
         else:
             idx, groups = pd.factorize(groupvar.ravel())
-            if expect is None:
-                found_groups.append(groups)
+            found_groups.append(np.array(groups))
         factorized.append(idx)
 
     grp_shape = tuple(len(grp) for grp in found_groups)
@@ -161,6 +160,7 @@ def chunk_argreduce(
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Union[int, Sequence[int]],
     fill_value: Mapping[Union[str, Callable], Any],
+    reindex: bool = False,
     isbin: bool = False,
 ) -> IntermediateDict:
     """
@@ -180,7 +180,7 @@ def chunk_argreduce(
     ]
     results["intermediates"][1] = newidx
 
-    if expected_groups is not None:
+    if reindex and expected_groups is not None:
         results["intermediates"][1] = reindex_(
             results["intermediates"][1], results["groups"].squeeze(), expected_groups, fill_value=0
         )
@@ -195,6 +195,7 @@ def chunk_reduce(
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis: Union[int, Sequence[int]] = None,
     fill_value: Mapping[Union[str, Callable], Any] = None,
+    reindex: bool = False,
     isbin: bool = False,
 ) -> IntermediateDict:
     """
@@ -274,7 +275,7 @@ def chunk_reduce(
     empty = np.all(~mask) or np.prod(by.shape) == 0
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
-    if expected_groups is not None:
+    if reindex and expected_groups is not None:
         results["groups"] = np.array(expected_groups)
     else:
         if empty:
@@ -315,7 +316,8 @@ def chunk_reduce(
                 result = result[..., :-1]
             if props.offset_group:
                 result = result.reshape(*final_array_shape[:-1], ngroups)
-            if expected_groups is not None:
+            if reindex and expected_groups is not None:
+                # this is only needed for split_out > 1
                 result = reindex_(result, groups, expected_groups, fill_value=fill_value[reduction])
             else:
                 result = result[..., sortidx]
@@ -581,6 +583,7 @@ def groupby_agg(
             expected_groups=expected_groups if split_out > 1 or isbin else None,
             fill_value=agg.fill_value,
             isbin=isbin,
+            reindex=split_out > 1,
         ),
         inds,
         array,
