@@ -383,5 +383,4 @@ def test_groupby_bins(chunks):
         )
     expected = np.array([3, 2, 0])
     assert_equal(groups, np.array([0, 1, 2]))
-    print(actual.chunks)
     assert_equal(actual, expected)

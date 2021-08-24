@@ -356,7 +356,6 @@ def _finalize_results(
     axis: Sequence[int],
     expected_groups: Union[Sequence, np.ndarray, None],
     fill_value: Any,
-    isbin: bool,
     mask_counts=True,
 ):
     """Finalize results by
@@ -380,7 +379,7 @@ def _finalize_results(
         squeezed["intermediates"] = squeezed["intermediates"][:-1]
 
     # finalize step
-    result: Dict[str, Union[dask.array.Array, np.ndarray]] = {"groups": squeezed["groups"]}
+    result: Dict[str, Union[dask.array.Array, np.ndarray]] = {}
     if agg.finalize is None:
         result[agg.name] = squeezed["intermediates"][0]
     else:
@@ -392,8 +391,11 @@ def _finalize_results(
     # Final reindexing has to be here to be lazy
     if expected_groups is not None:
         result[agg.name] = reindex_(
-            result[agg.name], result["groups"], expected_groups, fill_value=fill_value
+            result[agg.name], squeezed["groups"], expected_groups, fill_value=fill_value
         )
+
+    # all groups need not have been present, so we don't use `squeezed["groups"]` here
+    result["groups"] = expected_groups
 
     return result
 
@@ -405,12 +407,11 @@ def _npg_aggregate(
     axis: Sequence,
     keepdims,
     group_ndim: int,
-    isbin: bool,
     fill_value: Any = None,
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
     results = _npg_combine(x_chunk, agg, axis, keepdims, group_ndim)
-    return _finalize_results(results, agg, axis, expected_groups, fill_value, isbin=isbin)
+    return _finalize_results(results, agg, axis, expected_groups, fill_value)
 
 
 def _npg_combine(
@@ -628,7 +629,6 @@ def groupby_agg(
                 expected_groups=expected_agg,
                 group_ndim=by.ndim,
                 fill_value=fill_value,
-                isbin=isbin,
             ),
             combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim),
             name=f"{name}-reduce",
@@ -656,7 +656,6 @@ def groupby_agg(
                 agg=agg,
                 expected_groups=None,
                 group_ndim=by.ndim,
-                isbin=isbin,
                 fill_value=fill_value,
                 axis=axis,
                 keepdims=True,
@@ -849,6 +848,8 @@ def groupby_reduce(
                 results["intermediates"][0], array.shape
             )[-1]
 
+        if isbin:
+            expected_groups = np.arange(len(expected_groups) - 1)
         reduction.finalize = None
         result = _finalize_results(
             results,
@@ -857,7 +858,6 @@ def groupby_reduce(
             expected_groups,
             fill_value=fill_value,
             mask_counts=False,
-            isbin=isbin,
         )
         groups = (result["groups"],)
         result = result[reduction.name]
