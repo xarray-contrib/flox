@@ -15,6 +15,7 @@ from dask.highlevelgraph import HighLevelGraph
 
 from . import aggregations
 from .aggregations import Aggregation, _count, _get_fill_value
+from .xrutils import is_duck_array
 
 IntermediateDict = Dict[Union[str, Callable], Any]
 FinalResultsDict = Dict[str, Union[dask.array.Array, np.ndarray]]
@@ -738,6 +739,10 @@ def groupby_reduce(
         Keys include ``"groups"`` and ``func``.
     """
 
+    if not is_duck_array(by):
+        by = np.asarray(by)
+    if not is_duck_array(array):
+        array = np.asarray(array)
     if array.shape[-by.ndim :] != by.shape:
         raise ValueError(
             "array and by must be aligned i.e. array.shape[-by.ndim :] == by.shape. "
