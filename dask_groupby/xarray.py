@@ -286,7 +286,7 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def rechunk_to_group_boundaries(array, dim, labels):
+def rechunk_to_group_boundaries(obj: Union["DataArray", "Dataset"], dim: str, labels: "DataArray"):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     parallel group reductions.
@@ -294,13 +294,28 @@ def rechunk_to_group_boundaries(array, dim, labels):
     This only works when the groups are sequential (e.g. labels = [0,0,0,1,1,1,1,2,2]).
     Such patterns occur when using ``.resample``.
     """
-    axis = array.get_axis_num(dim)
-    chunks = array.chunks[axis]
-    newchunks = _get_optimal_chunks_for_groups(chunks, labels.data)
-    if newchunks == chunks:
-        return array
+
+    obj = obj.copy(deep=True)
+
+    def _rechunk(array):
+        axis = array.get_axis_num(dim)
+        chunks = array.chunks[axis]
+        # TODO: lru_cache this?
+        newchunks = _get_optimal_chunks_for_groups(chunks, labels.data)
+        if newchunks == chunks:
+            return array
+        else:
+            return array.chunk({dim: newchunks})
+
+    if isinstance(obj, xr.Dataset):
+        for var in obj:
+            if obj[var].chunks is not None:
+                obj[var] = _rechunk(obj[var])
     else:
-        return array.chunk({dim: newchunks})
+        if obj.chunks is not None:
+            obj = _rechunk(obj)
+
+    return obj
 
 
 def resample_reduce(
@@ -322,13 +337,7 @@ def resample_reduce(
         tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
     by = xr.DataArray(np.hstack(tostack), dims=(dim,), name="__resample_dim__")
 
-    if isinstance(obj, xr.Dataset):
-        for var in obj:
-            if obj[var].chunks is not None:
-                obj[var] = rechunk_to_group_boundaries(obj[var], dim, by)
-    else:
-        if obj.chunks is not None:
-            obj = rechunk_to_group_boundaries(obj, dim, by)
+    obj = rechunk_to_group_boundaries(obj, dim, by)
 
     result = xarray_reduce(
         obj,
