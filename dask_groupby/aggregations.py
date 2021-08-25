@@ -59,6 +59,20 @@ class Aggregation:
         # np.dtype(None) = np.dtype("float64")!
         self.dtype = dtype
 
+    def __dask_tokenize__(self):
+        return (
+            Aggregation,
+            self.name,
+            self.preprocess,
+            self.reduction_type,
+            self.chunk,
+            self.combine,
+            self.aggregate,
+            self.finalize,
+            self.fill_value,
+            self.dtype,
+        )
+
     def __repr__(self):
         return "\n".join(
             (
