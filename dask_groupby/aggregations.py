@@ -84,16 +84,34 @@ class Aggregation:
         )
 
 
-def sum_of_squares(array, axis=-1):
-    return np.sum(array ** 2, axis)
+def sum_of_squares(group_idx, array, func="sum", size=None, fill_value=None):
+    import numpy_groupies as npg
+
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        array ** 2,
+        axis=-1,
+        func=func,
+        size=size,
+        fill_value=fill_value,
+    )
 
 
-def nansum_of_squares(array, axis=-1):
-    return np.nansum(array ** 2, axis)
+def nansum_of_squares(group_idx, array, size=None, fill_value=None):
+    return sum_of_squares(array, group_idx, func="nansum", size=size, fill_value=fill_value)
 
 
-def _count(array, axis=-1):
-    return np.sum(~np.isnan(array), axis)
+def _count(group_idx, array, size=None, fill_value=None):
+    import numpy_groupies as npg
+
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        (~np.isnan(array)).astype(int),
+        axis=-1,
+        func="sum",
+        size=size,
+        fill_value=fill_value,
+    )
 
 
 count = Aggregation("count", chunk=_count, combine="sum", fill_value=0, dtype=int)

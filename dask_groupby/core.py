@@ -281,15 +281,26 @@ def chunk_reduce(
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fill_value[reduction])
         else:
-            result = npg.aggregate_numpy.aggregate(
-                group_idx,
-                array,
-                axis=-1,
-                func=reduction,
-                size=size,
-                # important when reducing with "offset" groups
-                fill_value=fill_value[reduction],
-            )
+            if callable(reduction):
+                # passing a custom reduction for npg to apply per-group is really slow!
+                # So this `reduction` has to do the groupby-aggregation
+                result = reduction(
+                    group_idx,
+                    array,
+                    size=size,
+                    # important when reducing with "offset" groups
+                    fill_value=fill_value[reduction],
+                )
+            else:
+                result = npg.aggregate_numpy.aggregate(
+                    group_idx,
+                    array,
+                    axis=-1,
+                    func=reduction,
+                    size=size,
+                    # important when reducing with "offset" groups
+                    fill_value=fill_value[reduction],
+                )
             if np.any(~mask):
                 # remove NaN group label which should be last
                 result = result[..., :-1]
