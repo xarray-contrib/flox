@@ -807,8 +807,12 @@ def groupby_reduce(
 
     if not isinstance(array, dask.array.Array) and not isinstance(by, dask.array.Array):
         fv = reduction.fill_value[func] if fill_value is None else fill_value
-        # npg's count counts the number of groups
+        # for pure numpy grouping, we just use npg directly and avoid "finalizing"
+        # (agg.finalize = None). We still need to do the reindexing step in finalize
+        # so that everything matches the dask version.
+        # Also, npg's count counts the number of groups
         # we want to count the number of non-NaN array elements in each group
+        # So we use our custom _count instead of "count"
         func = reduction.name if reduction.name != "count" else _count
         results = chunk_reduce(
             array,
