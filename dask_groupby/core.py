@@ -172,11 +172,14 @@ def chunk_argreduce(
     # TODO: This looks like an npg bug for nanargmax, nanargmin returning
     #       float indices
     results["intermediates"][1] = results["intermediates"][1].astype(int)
-    # glorious
-    newidx = np.broadcast_to(idx, array.shape)[
-        np.unravel_index(results["intermediates"][1], array.shape)
-    ]
-    results["intermediates"][1] = newidx
+
+    if not np.isnan(results["groups"]).all():
+        # will not work for empty groups...
+        # glorious
+        newidx = np.broadcast_to(idx, array.shape)[
+            np.unravel_index(results["intermediates"][1], array.shape)
+        ]
+        results["intermediates"][1] = newidx
 
     if expected_groups is not None:
         results["intermediates"][1] = reindex_(
@@ -228,15 +231,15 @@ def chunk_reduce(
 
     func: Union[Sequence[str], Sequence[Callable]]
 
-    if fill_value is None:
-        fill_value = {f: None for f in func}
-
     nax = len(axis) if isinstance(axis, Sequence) else by.ndim
     final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
     final_groups_shape = (1,) * (nax - 1)
 
     if isinstance(axis, Sequence) and len(axis) == 1:
         axis = next(iter(axis))
+
+    if not isinstance(fill_value, Sequence):
+        fill_value = (fill_value,)
 
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
@@ -281,9 +284,9 @@ def chunk_reduce(
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
 
-    for reduction in func:
+    for reduction, fv in zip(func, fill_value):
         if empty:
-            result = np.full(shape=final_array_shape, fill_value=fill_value[reduction])
+            result = np.full(shape=final_array_shape, fill_value=fv)
         else:
             if callable(reduction):
                 # passing a custom reduction for npg to apply per-group is really slow!
@@ -293,7 +296,7 @@ def chunk_reduce(
                     array,
                     size=size,
                     # important when reducing with "offset" groups
-                    fill_value=fill_value[reduction],
+                    fill_value=fv,
                 )
             else:
                 result = npg.aggregate_numpy.aggregate(
@@ -303,7 +306,7 @@ def chunk_reduce(
                     func=reduction,
                     size=size,
                     # important when reducing with "offset" groups
-                    fill_value=fill_value[reduction],
+                    fill_value=fv,
                 )
             if np.any(~mask):
                 # remove NaN group label which should be last
@@ -311,7 +314,7 @@ def chunk_reduce(
             if props.offset_group:
                 result = result.reshape(*final_array_shape[:-1], ngroups)
             if expected_groups is not None:
-                result = reindex_(result, groups, expected_groups, fill_value=fill_value[reduction])
+                result = reindex_(result, groups, expected_groups, fill_value=fv)
             else:
                 result = result[..., sortidx]
             result = result.reshape(final_array_shape)
@@ -428,7 +431,7 @@ def _npg_combine(
         newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
         newx["intermediates"] = tuple(
             reindex_(v, from_=x["groups"].squeeze(), to=unique_groups, fill_value=f)
-            for v, f in zip(x["intermediates"], agg.fill_value.values())
+            for v, f in zip(x["intermediates"], agg.fill_value["intermediate"])
         )
         return newx
 
@@ -450,36 +453,43 @@ def _npg_combine(
     groups = _conc2("groups", axis=group_conc_axis)
 
     if agg.reduction_type == "argreduce":
+
+        # If _count was added for masking later, we need to account for that
+        if agg.chunk[-1] == _count:
+            slicer = slice(None, -1)
+        else:
+            slicer = slice(None, None)
+
         # We need to send the intermediate array values & indexes at the same time
         # intermediates are (value e.g. max, index e.g. argmax, counts)
         array_idx = tuple(_conc2(key1="intermediates", key2=idx, axis=axis) for idx in (0, 1))
-        counts = _conc2(key1="intermediates", key2=2, axis=axis)
-
         results = chunk_argreduce(
             array_idx,
             groups,
-            func=agg.combine[:-1],  # count gets treated specially next
+            func=agg.combine[slicer],  # count gets treated specially next
             axis=axis,
             expected_groups=None,
-            fill_value=agg.fill_value,
+            fill_value=agg.fill_value["intermediate"][slicer],
         )
 
-        # sum the counts
-        results["intermediates"].append(
-            chunk_reduce(
-                counts,
-                groups,
-                func="sum",
-                axis=axis,
-                expected_groups=None,
-                fill_value={"sum": 0},
-            )["intermediates"][0]
-        )
+        if agg.chunk[-1] == _count:
+            counts = _conc2(key1="intermediates", key2=2, axis=axis)
+            # sum the counts
+            results["intermediates"].append(
+                chunk_reduce(
+                    counts,
+                    groups,
+                    func="sum",
+                    axis=axis,
+                    expected_groups=None,
+                    fill_value=(0,),
+                )["intermediates"][0]
+            )
 
     elif agg.reduction_type == "reduce":
         # Here we reduce the intermediates individually
         results = {"groups": None, "intermediates": []}
-        for idx, combine in enumerate(agg.combine):
+        for idx, (combine, fv) in enumerate(zip(agg.combine, agg.fill_value["intermediate"])):
             array = _conc2(key1="intermediates", key2=idx, axis=axis)
             if array.shape[-1] == 0:
                 # all empty when combined
@@ -496,7 +506,7 @@ def _npg_combine(
                     func=combine,
                     axis=axis,
                     expected_groups=None,
-                    fill_value=agg.fill_value,
+                    fill_value=fv,
                 )
                 results["intermediates"].append(*_results["intermediates"])
                 results["groups"] = _results["groups"]
@@ -571,7 +581,7 @@ def groupby_agg(
             # with the current implementation we want reindexing at the blockwise step
             # only reindex to groups present at combine stage
             expected_groups=expected_groups if split_out > 1 else None,
-            fill_value=agg.fill_value,
+            fill_value=agg.fill_value["intermediate"],
         ),
         inds,
         array,
@@ -802,12 +812,13 @@ def groupby_reduce(
     else:
         reduction = func
 
-    # Replace sentinel fill values according to dtype
     if reduction.dtype is None:
         reduction.dtype = array.dtype
-    reduction.fill_value = {
-        k: _get_fill_value(array.dtype, v) for k, v in reduction.fill_value.items()
-    }
+    # Replace sentinel fill values according to dtype
+    reduction.fill_value["intermediate"] = tuple(
+        _get_fill_value(reduction.dtype, fv) for fv in reduction.fill_value["intermediate"]
+    )
+    reduction.fill_value[func] = _get_fill_value(reduction.dtype, reduction.fill_value[func])
 
     if not isinstance(array, dask.array.Array) and not isinstance(by, dask.array.Array):
         fv = reduction.fill_value[func] if fill_value is None else fill_value
@@ -819,12 +830,7 @@ def groupby_reduce(
         # So we use our custom _count instead of "count"
         func = reduction.name if reduction.name != "count" else _count
         results = chunk_reduce(
-            array,
-            by,
-            func=func,
-            axis=axis,
-            expected_groups=None,
-            fill_value={func: fv},
+            array, by, func=func, axis=axis, expected_groups=None, fill_value=fv
         )  # type: ignore
 
         if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
@@ -847,11 +853,14 @@ def groupby_reduce(
         if func in ["first", "last"]:
             raise NotImplementedError("first, last not implemented for dask arrays")
 
+        if fill_value is None:
+            fill_value = reduction.fill_value[func]
+
+        # we need to explicitly track counts so that we can mask at the end
         if fill_value is not None:
             reduction.chunk += (_count,)
             reduction.combine += ("sum",)
-            reduction.fill_value[_count] = 0
-            reduction.fill_value["sum"] = 0
+            reduction.fill_value["intermediate"] += (0,)
 
         # Needed since we need not have equal number of groups per block
         # if expected_groups is None and len(axis) > 1:
