@@ -79,7 +79,8 @@ class Aggregation:
                 f"{self.name}, fill: {np.unique(self.fill_value.values())}, dtype: {self.dtype}",
                 f"chunk: {self.chunk}",
                 f"combine: {self.combine}",
-                f"aggregate: {self.aggregate}" f"finalize: {self.finalize}",
+                f"aggregate: {self.aggregate}",
+                f"finalize: {self.finalize}",
             )
         )
 
@@ -98,7 +99,7 @@ def sum_of_squares(group_idx, array, func="sum", size=None, fill_value=None):
 
 
 def nansum_of_squares(group_idx, array, size=None, fill_value=None):
-    return sum_of_squares(array, group_idx, func="nansum", size=size, fill_value=fill_value)
+    return sum_of_squares(group_idx, array, func="nansum", size=size, fill_value=fill_value)
 
 
 def _count(group_idx, array, size=None, fill_value=None):
@@ -115,6 +116,8 @@ def _count(group_idx, array, size=None, fill_value=None):
 
 
 count = Aggregation("count", chunk=_count, combine="sum", fill_value=0, dtype=int)
+
+# note that the fill values are  the result of np.func([np.nan, np.nan])
 sum = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
 nansum = Aggregation("nansum", chunk="nansum", combine="sum", fill_value=0)
 prod = Aggregation("prod", chunk="prod", combine="prod", fill_value=1)
@@ -124,14 +127,14 @@ mean = Aggregation(
     chunk=("sum", _count),
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
-    fill_value=0,
+    fill_value=(dtypes.NA, 0),
 )
 nanmean = Aggregation(
     "nanmean",
     chunk=("nansum", _count),
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
-    fill_value=0,
+    fill_value=(dtypes.NA, 0),
 )
 
 
@@ -155,8 +158,8 @@ var = Aggregation(
 )
 nanvar = Aggregation(
     "nanvar",
-    chunk=(nansum_of_squares, _count),
-    combine=("sum", "sum"),
+    chunk=(nansum_of_squares, "nansum", _count),
+    combine=("sum", "sum", "sum"),
     finalize=_var_finalize,
     fill_value=0,
 )
@@ -169,43 +172,17 @@ std = Aggregation(
 )
 nanstd = Aggregation(
     "nanstd",
-    chunk=(nansum_of_squares, _count),
-    combine=("sum", "sum"),
+    chunk=(nansum_of_squares, "nansum", _count),
+    combine=("sum", "sum", "sum"),
     finalize=_std_finalize,
     fill_value=0,
 )
 
 
-# TODO: How does this work if data has fillvalue?
-def _minmax_finalize(data, fv):
-
-    fv = _get_fill_value(data.dtype, fv)
-    data[data == fv] = np.nan
-
-    # TODO: workaround npg bug
-    # aggregate(np.array([0, 1, 2, 0, 1, 2]), np.array([dtypes.NINF, 0, 0, dtypes.NINF, 0, 0]), func="max",)
-    # is array([-1.79769313e+308,  0.00000000e+000,  0.00000000e+000])
-    # instead of array[-inf, 0.0, 0.0]
-    #
-    if np.isneginf(fv):
-        fv = np.finfo(data.dtype).min
-    elif np.isposinf(fv):
-        fv = np.finfo(data.dtype).max
-    data[data == fv] = np.nan
-    return data
-
-
-_min_finalize = None  # partial(_minmax_finalize, fv=dtypes.INF)
-_max_finalize = None  # partial(_minmax_finalize, fv=dtypes.NINF)
-
-min = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF, finalize=_min_finalize)
-nanmin = Aggregation(
-    "nanmin", chunk="nanmin", combine="min", fill_value=dtypes.INF, finalize=_min_finalize
-)
-max = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF, finalize=_max_finalize)
-nanmax = Aggregation(
-    "nanmax", chunk="nanmax", combine="max", fill_value=dtypes.NINF, finalize=_max_finalize
-)
+min = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF, finalize=None)
+nanmin = Aggregation("nanmin", chunk="nanmin", combine="min", fill_value=dtypes.INF, finalize=None)
+max = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF, finalize=None)
+nanmax = Aggregation("nanmax", chunk="nanmax", combine="max", fill_value=dtypes.NINF, finalize=None)
 
 
 def argreduce_preprocess(array, axis):
@@ -237,16 +214,6 @@ def argreduce_preprocess(array, axis):
     )
 
 
-def argreduce_finalize(*args):
-    # TODO: clean this up :/
-    if len(args) > 1:
-        # dask inputs
-        return args[1]
-    else:
-        # numpy inputs
-        return args[0]
-
-
 argmax = Aggregation(
     "argmax",
     preprocess=argreduce_preprocess,
@@ -254,7 +221,8 @@ argmax = Aggregation(
     combine=("max", "argmax"),
     reduction_type="argreduce",
     fill_value=(dtypes.NINF, 0),
-    finalize=argreduce_finalize,
+    finalize=lambda *x: x[1],
+    dtype=np.int,
 )
 
 argmin = Aggregation(
@@ -264,7 +232,8 @@ argmin = Aggregation(
     combine=("min", "argmin"),
     reduction_type="argreduce",
     fill_value=(dtypes.INF, 0),
-    finalize=argreduce_finalize,
+    finalize=lambda *x: x[1],
+    dtype=np.int,
 )
 
 nanargmax = Aggregation(
@@ -274,7 +243,8 @@ nanargmax = Aggregation(
     combine=("max", "argmax"),
     reduction_type="argreduce",
     fill_value=(dtypes.NINF, 0),
-    finalize=argreduce_finalize,
+    finalize=lambda *x: x[1],
+    dtype=np.int,
 )
 
 nanargmin = Aggregation(
@@ -284,7 +254,8 @@ nanargmin = Aggregation(
     combine=("min", "argmin"),
     reduction_type="argreduce",
     fill_value=(dtypes.INF, 0),
-    finalize=argreduce_finalize,
+    finalize=lambda *x: x[1],
+    dtype=np.int,
 )
 
 first = Aggregation("first", chunk="first", combine="first", fill_value=0)

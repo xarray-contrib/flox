@@ -81,6 +81,50 @@ def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split
     assert_equal(expected, result)
 
 
+@pytest.mark.parametrize("size", ((12,), (12, 5)))
+@pytest.mark.parametrize(
+    "func",
+    (
+        "sum",
+        "nansum",
+        "prod",
+        "nanprod",
+        "mean",
+        "nanmean",
+        "var",
+        "nanvar",
+        "std",
+        "nanstd",
+        "max",
+        "nanmax",
+        "min",
+        "nanmin",
+        "argmax",
+        "nanargmax",
+        "argmin",
+        "nanargmin",
+    ),
+)
+def test_groupby_reduce_all(size, func):
+
+    array = np.random.randn(*size)
+    by = np.ones(size[-1])
+
+    if "nan" in func and "nanarg" not in func:
+        array[[1, 4, 5], ...] = np.nan
+    elif "nanarg" in func and len(size) > 1:
+        array[[1, 4, 5], 1] = np.nan
+
+    expected = getattr(np, func)(array, axis=-1)
+    expected = np.expand_dims(expected, -1)
+
+    actual, _ = groupby_reduce(array, by, func=func)
+    assert_equal(actual, expected)
+
+    actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func)
+    assert_equal(actual, expected)
+
+
 def test_groupby_reduce_count():
     array = np.array([0, 0, np.nan, np.nan, np.nan, 1, 1])
     labels = np.array(["a", "b", "b", "b", "c", "c", "c"])

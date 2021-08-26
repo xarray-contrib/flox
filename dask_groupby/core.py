@@ -168,6 +168,10 @@ def chunk_argreduce(
     array, idx = array_plus_idx
 
     results = chunk_reduce(array, by, func, None, axis, fill_value)
+
+    # TODO: This looks like an npg bug for nanargmax, nanargmin returning
+    #       float indices
+    results["intermediates"][1] = results["intermediates"][1].astype(int)
     # glorious
     newidx = np.broadcast_to(idx, array.shape)[
         np.unravel_index(results["intermediates"][1], array.shape)
@@ -345,7 +349,7 @@ def _finalize_results(
     axis: Sequence[int],
     expected_groups: Union[Sequence, np.ndarray, None],
     fill_value: Any,
-    mask_counts=True,
+    mask_counts: bool = True,
 ):
     """Finalize results by
     1. Squeezing out dummy dimensions
@@ -823,12 +827,14 @@ def groupby_reduce(
             fill_value={func: fv},
         )  # type: ignore
 
-        if reduction.name in ["argmin", "argmax"]:
-            # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
-            # will return wrong indices
-            results["intermediates"][0] = np.unravel_index(
-                results["intermediates"][0], array.shape
-            )[-1]
+        if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
+            results["intermediates"][0] = results["intermediates"][0].astype(int)
+            if array.ndim > 1:
+                # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
+                # will return wrong indices
+                results["intermediates"][0] = np.unravel_index(
+                    results["intermediates"][0], array.shape
+                )[-1]
 
         reduction.finalize = None
         result = _finalize_results(

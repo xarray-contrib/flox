@@ -47,4 +47,4 @@ def assert_equal(a, b):
     elif isinstance(a, xr.DataArray) | isinstance(b, xr.DataArray):
         xr.testing.assert_identical(a, b)
     else:
-        np.testing.assert_equal(a, b)
+        np.testing.assert_allclose(a, b)
