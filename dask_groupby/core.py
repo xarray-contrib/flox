@@ -847,6 +847,7 @@ def groupby_reduce(
     )
     reduction.fill_value[func] = _get_fill_value(reduction.dtype, reduction.fill_value[func])
 
+    # TODO: handle reduction being something custom not present in numpy_groupies
     if not isinstance(array, dask.array.Array) and not isinstance(by, dask.array.Array):
         fv = reduction.fill_value[func] if fill_value is None else fill_value
         # for pure numpy grouping, we just use npg directly and avoid "finalizing"
