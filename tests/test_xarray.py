@@ -1,5 +1,6 @@
 import dask
 import numpy as np
+import pandas as pd
 import pytest
 import xarray as xr
 
@@ -64,7 +65,7 @@ def test_xarray_reduce_multiple_groupers():
     actual = xarray_reduce(da, "labels", da.labels2, func="count")
     xr.testing.assert_identical(expected, actual)
 
-    actual = xarray_reduce(da, "labels", "labels2", func="count", fill_value=0)
+    actual = xarray_reduce(da, "labels", "labels2", func="count")
     xr.testing.assert_identical(expected, actual)
 
     with raise_if_dask_computes():
@@ -158,3 +159,30 @@ def test_multi_index_groupby_sum():
     stacked = ds.stack(space=["x", "y"])
     actual = xarray_reduce(stacked, "space", dim="z", func="sum")
     assert_equal(expected, actual.unstack("space"))
+
+
+@pytest.mark.parametrize("chunks", (None, 2))
+def test_xarray_groupby_bins(chunks):
+    array = xr.DataArray([1, 1, 1, 1, 1], dims="x")
+    labels = xr.DataArray([1, 1.5, 1.9, 2, 3], dims="x", name="labels")
+
+    if chunks:
+        array = array.chunk({"x": chunks})
+        labels = labels.chunk({"x": chunks})
+
+    with raise_if_dask_computes():
+        actual = xarray_reduce(
+            array,
+            labels,
+            dim="x",
+            func="count",
+            expected_groups=np.array([1, 2, 4, 5]),
+            isbin=True,
+            fill_value=0,
+        )
+    expected = xr.DataArray(
+        np.array([3, 2, 0]),
+        dims="labels",
+        coords={"labels": [pd.Interval(1, 2), pd.Interval(2, 4), pd.Interval(4, 5)]},
+    )
+    xr.testing.assert_equal(actual, expected)
