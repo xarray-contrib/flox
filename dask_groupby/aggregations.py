@@ -66,7 +66,9 @@ class Aggregation:
         self.fill_value["intermediate"] = fill_value
 
         # np.dtype(None) = np.dtype("float64")!
-        if not isinstance(dtype, np.dtype):
+        if dtype is None:
+            self.dtype = None
+        elif not isinstance(dtype, np.dtype):
             self.dtype = np.dtype(dtype)
         else:
             self.dtype = dtype

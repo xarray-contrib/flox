@@ -494,7 +494,7 @@ def _npg_combine(
             if array.shape[-1] == 0:
                 # all empty when combined
                 results["intermediates"].append(
-                    np.empty(shape=(1,) * (len(axis) - 1) + (0,), dtype=array.dtype)
+                    np.empty(shape=(1,) * (len(axis) - 1) + (0,), dtype=agg.dtype)
                 )
                 results["groups"] = np.empty(
                     shape=(1,) * (len(group_conc_axis) - 1) + (0,), dtype=groups.dtype
@@ -716,7 +716,7 @@ def groupby_agg(
         HighLevelGraph.from_collections(agg_name, layer, dependencies=[reduced]),
         agg_name,
         chunks=output_chunks,
-        dtype=agg.dtype if agg.dtype else array.dtype,
+        dtype=agg.dtype,
     )
 
     return (result, *groups)

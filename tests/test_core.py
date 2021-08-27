@@ -132,11 +132,12 @@ def test_groupby_reduce_count():
     assert_equal(result, [1, 1, 2])
 
 
+@pytest.mark.parametrize("func", ("sum", "prod"))
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int32, np.int64])
-def test_groupby_reduce_preserves_dtype(dtype):
+def test_groupby_reduce_preserves_dtype(dtype, func):
     array = np.ones((2, 12), dtype=dtype)
     by = np.array([labels] * 2)
-    result, _ = groupby_reduce(from_array(array, chunks=(-1, 4)), by, func="sum")
+    result, _ = groupby_reduce(from_array(array, chunks=(-1, 4)), by, func=func)
     assert result.dtype == array.dtype
 
 
