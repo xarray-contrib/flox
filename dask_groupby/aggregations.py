@@ -121,11 +121,12 @@ def _count(group_idx, array, size=None, fill_value=None):
 
     return npg.aggregate_numpy.aggregate(
         group_idx,
-        (~np.isnan(array)).astype(int),
+        ~np.isnan(array),
         axis=-1,
         func="sum",
         size=size,
         fill_value=fill_value,
+        dtype=np.intp,
     )
 
 
