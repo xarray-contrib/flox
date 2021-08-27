@@ -158,6 +158,7 @@ def chunk_argreduce(
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Union[int, Sequence[int]],
     fill_value: Mapping[Union[str, Callable], Any],
+    dtype=None,
 ) -> IntermediateDict:
     """
     Per-chunk arg reduction.
@@ -167,11 +168,7 @@ def chunk_argreduce(
     """
     array, idx = array_plus_idx
 
-    results = chunk_reduce(array, by, func, None, axis, fill_value)
-
-    # TODO: This looks like an npg bug for nanargmax, nanargmin returning
-    #       float indices
-    results["intermediates"][1] = results["intermediates"][1].astype(int)
+    results = chunk_reduce(array, by, func, None, axis, fill_value, dtype=dtype)
 
     if not np.isnan(results["groups"]).all():
         # will not work for empty groups...
@@ -196,6 +193,7 @@ def chunk_reduce(
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis: Union[int, Sequence[int]] = None,
     fill_value: Mapping[Union[str, Callable], Any] = None,
+    dtype=None,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -307,6 +305,7 @@ def chunk_reduce(
                     size=size,
                     # important when reducing with "offset" groups
                     fill_value=fv,
+                    dtype=dtype,
                 )
             if np.any(~mask):
                 # remove NaN group label which should be last
@@ -470,6 +469,7 @@ def _npg_combine(
             axis=axis,
             expected_groups=None,
             fill_value=agg.fill_value["intermediate"][slicer],
+            dtype=agg.dtype,
         )
 
         if agg.chunk[-1] == _count:
@@ -483,6 +483,7 @@ def _npg_combine(
                     axis=axis,
                     expected_groups=None,
                     fill_value=(0,),
+                    dtype=np.intp,
                 )["intermediates"][0]
             )
 
@@ -830,17 +831,24 @@ def groupby_reduce(
         # So we use our custom _count instead of "count"
         func = reduction.name if reduction.name != "count" else _count
         results = chunk_reduce(
-            array, by, func=func, axis=axis, expected_groups=None, fill_value=fv
+            array,
+            by,
+            func=func,
+            axis=axis,
+            expected_groups=None,
+            fill_value=fv,
+            dtype=reduction.dtype,
         )  # type: ignore
 
         if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
-            results["intermediates"][0] = results["intermediates"][0].astype(int)
-            if array.ndim > 1:
+            print(results["intermediates"][0])
+            if array.ndim > 1 and by.ndim == 1:
                 # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
                 # will return wrong indices
                 results["intermediates"][0] = np.unravel_index(
                     results["intermediates"][0], array.shape
                 )[-1]
+                print(results["intermediates"][0])
 
         reduction.finalize = None
         result = _finalize_results(

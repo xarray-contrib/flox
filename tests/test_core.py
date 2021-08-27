@@ -25,6 +25,7 @@ def test_alignment_error():
         groupby_reduce(da, labels, func="mean")
 
 
+@pytest.mark.parametrize("dtype", (float, int))
 @pytest.mark.parametrize("chunk, split_out", [(False, 1), (True, 1), (True, 2), (True, 3)])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
 @pytest.mark.parametrize(
@@ -35,38 +36,37 @@ def test_alignment_error():
         ("sum", np.ones((2, 12)), labels, [[3, 4, 5], [3, 4, 5]]),  # form 3
         ("sum", np.ones((2, 12)), nan_labels, [[1, 4, 2], [1, 4, 2]]),  # form 3
         ("sum", np.ones((2, 12)), np.array([labels, labels]), [6, 8, 10]),  # form 1 after reshape
-        (
-            "sum",
-            np.ones((2, 12)),
-            np.array([nan_labels, nan_labels]),
-            [2, 8, 4],
-        ),  # form 1 after reshape
+        ("sum", np.ones((2, 12)), np.array([nan_labels, nan_labels]), [2, 8, 4]),
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
+        ("count", np.ones((12,)), labels, [3, 4, 5]),  # form 1
+        ("count", np.ones((12,)), nan_labels, [1, 4, 2]),  # form 1
+        ("count", np.ones((2, 12)), labels, [[3, 4, 5], [3, 4, 5]]),  # form 3
+        ("count", np.ones((2, 12)), nan_labels, [[1, 4, 2], [1, 4, 2]]),  # form 3
+        ("count", np.ones((2, 12)), np.array([labels, labels]), [6, 8, 10]),  # form 1 after reshape
+        ("count", np.ones((2, 12)), np.array([nan_labels, nan_labels]), [2, 8, 4]),
         ("nanmean", np.ones((12,)), labels, [1, 1, 1]),  # form 1
         ("nanmean", np.ones((12,)), nan_labels, [1, 1, 1]),  # form 1
         ("nanmean", np.ones((2, 12)), labels, [[1, 1, 1], [1, 1, 1]]),  # form 3
         ("nanmean", np.ones((2, 12)), nan_labels, [[1, 1, 1], [1, 1, 1]]),  # form 3
-        (
-            "nanmean",
-            np.ones((2, 12)),
-            np.array([labels, labels]),
-            [1, 1, 1],
-        ),  # form 1 after reshape
-        (
-            "nanmean",
-            np.ones((2, 12)),
-            np.array([nan_labels, nan_labels]),
-            [1, 1, 1],
-        ),  # form 1 after reshape
+        ("nanmean", np.ones((2, 12)), np.array([labels, labels]), [1, 1, 1]),
+        ("nanmean", np.ones((2, 12)), np.array([nan_labels, nan_labels]), [1, 1, 1]),
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split_out):
+def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split_out, dtype):
+    array = array.astype(dtype)
     if chunk:
         if expected_groups is None:
             pytest.skip()
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
         by = da.from_array(by, chunks=(3,) if by.ndim == 1 else (1, 3))
+
+    if "mean" in func:
+        expected = np.array(expected, dtype=float)
+    elif func == "sum":
+        expected = np.array(expected, dtype=dtype)
+    elif func == "count":
+        expected = np.array(expected, dtype=int)
 
     result, _ = groupby_reduce(
         array,
@@ -125,6 +125,27 @@ def test_groupby_reduce_all(size, func):
     if "arg" in func:
         assert actual.dtype.kind == "i"
     assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("size", ((12,), (12, 5)))
+@pytest.mark.parametrize("func", ("argmax", "nanargmax", "argmin", "nanargmin"))
+def test_arg_reduction_dtype_is_int(size, func):
+    """avoid bugs being hidden by the xfail in the above test."""
+
+    array = np.random.randn(*size)
+    by = np.ones(size[-1])
+
+    if "nanarg" in func and len(size) > 1:
+        array[[1, 4, 5], 1] = np.nan
+
+    expected = getattr(np, func)(array, axis=-1)
+    expected = np.expand_dims(expected, -1)
+
+    actual, _ = groupby_reduce(array, by, func=func)
+    assert actual.dtype.kind == "i"
+
+    actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func)
+    assert actual.dtype.kind == "i"
 
 
 def test_groupby_reduce_count():
@@ -355,7 +376,7 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape):
         axis=axis,
         fill_value=0,
     )
-    assert_equal(result, np.zeros(expected_shape))
+    assert_equal(result, np.zeros(expected_shape, dtype=np.int64))
 
     # now when subsets are NaN
     # labels = np.array([0, 0, 1, 1, 1], dtype=float)

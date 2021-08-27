@@ -251,7 +251,7 @@ argmax = Aggregation(
     fill_value=(dtypes.NINF, -1),
     final_fill_value=-1,
     finalize=lambda *x: x[1],
-    dtype=np.int,
+    dtype=np.intp,
 )
 
 argmin = Aggregation(
@@ -263,7 +263,7 @@ argmin = Aggregation(
     fill_value=(dtypes.INF, -1),
     final_fill_value=-1,
     finalize=lambda *x: x[1],
-    dtype=np.int,
+    dtype=np.intp,
 )
 
 nanargmax = Aggregation(
@@ -275,7 +275,7 @@ nanargmax = Aggregation(
     fill_value=(dtypes.NINF, -1),
     final_fill_value=-1,
     finalize=lambda *x: x[1],
-    dtype=np.int,
+    dtype=np.intp,
 )
 
 nanargmin = Aggregation(
@@ -287,7 +287,7 @@ nanargmin = Aggregation(
     fill_value=(dtypes.INF, -1),
     final_fill_value=-1,
     finalize=lambda *x: x[1],
-    dtype=np.int,
+    dtype=np.intp,
 )
 
 first = Aggregation("first", chunk="first", combine="first", fill_value=0)
