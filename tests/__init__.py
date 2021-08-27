@@ -35,16 +35,10 @@ def assert_equal(a, b):
         a = np.array(a)
     if isinstance(b, list):
         b = np.array(b)
-    if isinstance(a, da.Array) or isinstance(b, da.Array):
-        # does some validation of the dask graph
-        try:
-            da.utils.assert_eq(a, b)
-        except AssertionError:
-            # dask doesn't consider nans in the same place to be equal
-            # from xarray.core.duck_array_ops.array_equiv
-            flag_array = (a == b) | (np.isnan(a) & np.isnan(b))
-            assert bool(flag_array.all())
-    elif isinstance(a, xr.DataArray) | isinstance(b, xr.DataArray):
+    if isinstance(a, (xr.DataArray, xr.Dataset)) or isinstance(b, (xr.DataArray, xr.Dataset)):
         xr.testing.assert_identical(a, b)
+    elif isinstance(a, da.Array) or isinstance(b, da.Array):
+        # does some validation of the dask graph
+        da.utils.assert_eq(a, b, equal_nan=True)
     else:
         np.testing.assert_allclose(a, b, equal_nan=True)
