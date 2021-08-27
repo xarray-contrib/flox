@@ -16,8 +16,6 @@ labels2d = np.array([labels[:5], np.flip(labels[:5])])
 
 dask.config.set(scheduler="sync")
 
-# TODO: Add max,argmax here
-
 
 def test_alignment_error():
     da = np.ones((12,))
@@ -100,9 +98,9 @@ def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split
         "min",
         "nanmin",
         "argmax",
-        "nanargmax",
+        pytest.param("nanargmax", marks=(pytest.mark.xfail,)),
         "argmin",
-        "nanargmin",
+        pytest.param("nanargmin", marks=(pytest.mark.xfail,)),
     ),
 )
 def test_groupby_reduce_all(size, func):
@@ -119,9 +117,13 @@ def test_groupby_reduce_all(size, func):
     expected = np.expand_dims(expected, -1)
 
     actual, _ = groupby_reduce(array, by, func=func)
+    if "arg" in func:
+        assert actual.dtype.kind == "i"
     assert_equal(actual, expected)
 
     actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func)
+    if "arg" in func:
+        assert actual.dtype.kind == "i"
     assert_equal(actual, expected)
 
 
@@ -406,3 +408,15 @@ def test_bad_npg_behaviour():
         )[0]
         == -np.inf
     )
+
+
+@pytest.mark.xfail
+@pytest.mark.parametrize("func", ("nanargmax", "nanargmin"))
+def test_npg_nanarg_bug(func):
+    array = np.array([1, 1, 2, 1, 1, np.nan, 6, 1])
+    labels = np.array([1, 1, 1, 1, 1, 1, 1, 1]) - 1
+
+    actual = aggregate(labels, array, func=func).astype(int)
+    expected = getattr(np, func)(array)
+
+    assert_equal(actual, expected)
