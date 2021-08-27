@@ -113,7 +113,8 @@ def test_groupby_reduce_all(size, func):
     elif "nanarg" in func and len(size) > 1:
         array[[1, 4, 5], 1] = np.nan
 
-    expected = getattr(np, func)(array, axis=-1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        expected = getattr(np, func)(array, axis=-1)
     expected = np.expand_dims(expected, -1)
 
     actual, _ = groupby_reduce(array, by, func=func)
