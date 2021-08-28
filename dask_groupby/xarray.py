@@ -1,5 +1,5 @@
 import itertools
-from typing import TYPE_CHECKING, Hashable, Iterable, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Hashable, Iterable, Optional, Sequence, Tuple, Union
 
 import dask
 import numpy as np
@@ -53,6 +53,7 @@ def xarray_reduce(
     method: str = "mapreduce",
     keep_attrs: bool = True,
     skipna=True,
+    min_count: Optional[int] = None,
 ):
     """GroupBy reduce operations on xarray objects using numpy-groupies
 
@@ -235,6 +236,7 @@ def xarray_reduce(
             "split_out": split_out,
             "fill_value": fill_value,
             "method": method,
+            "min_count": min_count,
             # The following mess exists becuase for multiple `by`s I factorize eagerly
             # here before passing it on; this means I have to handle the
             # "binning by single by variable" case explicitly where the factorization
