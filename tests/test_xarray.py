@@ -16,6 +16,31 @@ from . import assert_equal, raise_if_dask_computes
 dask.config.set(scheduler="sync")
 
 
+@pytest.mark.parametrize("add_nan", [True, False])
+@pytest.mark.parametrize("skipna", [True, False])
+def test_xarray_reduce(skipna, add_nan):
+    arr = np.ones((4, 12))
+
+    if add_nan:
+        arr[1, ...] = np.nan
+        arr[[0, 2], [3, 4]] = np.nan
+
+    labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
+    labels = np.array(labels)
+    labels2 = np.array([1, 2, 2, 1])
+
+    da = xr.DataArray(
+        arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels": ("y", labels)}
+    ).expand_dims(z=4)
+
+    expected = da.groupby("labels").mean(skipna=skipna)
+    actual = xarray_reduce(da, "labels", func="mean", skipna=skipna)
+    assert_equal(expected, actual)
+
+    actual = xarray_reduce(da.transpose("y", ...), "labels", func="mean", skipna=skipna)
+    assert_equal(expected, actual)
+
+
 def test_xarray_groupby_reduce():
     arr = np.ones((4, 12))
 

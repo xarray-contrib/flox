@@ -39,6 +39,7 @@ def xarray_reduce(
     fill_value=None,
     blockwise: bool = False,
     keep_attrs: bool = True,
+    skipna=True,
 ):
     """GroupBy reduce operations on xarray objects using numpy-groupies
 
@@ -64,6 +65,8 @@ def xarray_reduce(
     blockwise : bool
         If True, only apply the reduction blockwise. If False (default), we
         apply blockwise and then compute a tree reduction of those results.
+    skipna: bool
+        Use NaN-skipping aggregations like nanmean?
 
     Raises
     ------
@@ -80,6 +83,9 @@ def xarray_reduce(
 
     unindexed_dims = tuple(b.name for b in by if isinstance(b, _DummyGroup))
     by = tuple(b.name if isinstance(b, _DummyGroup) else b for b in by)
+
+    if skipna and func != "count":
+        func = f"nan{func}"
 
     for b in by:
         if isinstance(b, xr.DataArray) and b.name is None:
@@ -122,7 +128,11 @@ def xarray_reduce(
     if dims_not_in_groupers == dim:
         # reducing along a dimension along which groups do not vary
         # This is really just a normal reduction.
-        result = getattr(ds, func)(dim=dim)
+        if skipna:
+            dsfunc = func[3:]
+        else:
+            dsfunc = func
+        result = getattr(ds, dsfunc)(dim=dim)
         return result
 
     axis = tuple(range(-len(dim), 0))
