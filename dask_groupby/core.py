@@ -3,22 +3,33 @@ import itertools
 import operator
 from collections import namedtuple
 from functools import partial
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
-import dask
-import dask.array
 import numpy as np
 import numpy_groupies as npg
 import pandas as pd
-from dask.array.core import normalize_chunks
-from dask.highlevelgraph import HighLevelGraph
 
 from . import aggregations
 from .aggregations import Aggregation, _count, _get_fill_value
-from .xrutils import is_duck_array
+from .xrutils import is_duck_array, is_duck_dask_array
+
+if TYPE_CHECKING:
+    import dask.array.Array as DaskArray
+
 
 IntermediateDict = Dict[Union[str, Callable], Any]
-FinalResultsDict = Dict[str, Union[dask.array.Array, np.ndarray]]
+FinalResultsDict = Dict[str, Union["DaskArray", np.ndarray]]
 
 
 def _get_chunk_reduction(reduction_type: str) -> Callable:
@@ -390,7 +401,7 @@ def _finalize_results(
         squeezed["intermediates"] = squeezed["intermediates"][:-1]
 
     # finalize step
-    result: Dict[str, Union[dask.array.Array, np.ndarray]] = {}
+    result: Dict[str, Union["DaskArray", np.ndarray]] = {}
     if agg.finalize is None:
         result[agg.name] = squeezed["intermediates"][0]
     else:
@@ -534,6 +545,10 @@ def _npg_combine(
 
 
 def split_blocks(applied, split_out, expected_groups, split_name):
+    import dask.array
+    from dask.array.core import normalize_chunks
+    from dask.highlevelgraph import HighLevelGraph
+
     chunk_tuples = tuple(itertools.product(*tuple(range(n) for n in applied.numblocks)))
     ngroups = len(expected_groups)
     group_chunks = normalize_chunks(np.ceil(ngroups / split_out), (ngroups,))[0]
@@ -562,8 +577,8 @@ def split_blocks(applied, split_out, expected_groups, split_name):
 
 
 def groupby_agg(
-    array: dask.array.Array,
-    by: Union[dask.array.Array, np.ndarray],
+    array: "DaskArray",
+    by: Union["DaskArray", np.ndarray],
     agg: Aggregation,
     expected_groups: Optional[Union[Sequence, np.ndarray]],
     axis: Sequence = None,
@@ -571,7 +586,10 @@ def groupby_agg(
     fill_value: Any = None,
     blockwise: bool = False,
     isbin: bool = False,
-) -> Tuple[dask.array.Array, Union[np.ndarray, dask.array.Array]]:
+) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
+
+    import dask.array
+    from dask.highlevelgraph import HighLevelGraph
 
     # I think _tree_reduce expects this
     assert isinstance(axis, Sequence)
@@ -749,8 +767,8 @@ def groupby_agg(
 
 
 def groupby_reduce(
-    array: Union[np.ndarray, dask.array.Array],
-    by: Union[np.ndarray, dask.array.Array],
+    array: Union[np.ndarray, "DaskArray"],
+    by: Union[np.ndarray, "DaskArray"],
     func: Union[str, Aggregation],
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis=None,
@@ -758,7 +776,7 @@ def groupby_reduce(
     split_out: int = 1,
     blockwise: bool = False,
     isbin: bool = False,
-) -> Tuple[dask.array.Array, Union[np.ndarray, dask.array.Array]]:
+) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
     """
     GroupBy reductions using tree reductions for dask.array
 
@@ -848,7 +866,7 @@ def groupby_reduce(
     reduction.fill_value[func] = _get_fill_value(reduction.dtype, reduction.fill_value[func])
 
     # TODO: handle reduction being something custom not present in numpy_groupies
-    if not isinstance(array, dask.array.Array) and not isinstance(by, dask.array.Array):
+    if not is_duck_dask_array(array) and not is_duck_dask_array(by):
         fv = reduction.fill_value[func] if fill_value is None else fill_value
         # for pure numpy grouping, we just use npg directly and avoid "finalizing"
         # (agg.finalize = None). We still need to do the reindexing step in finalize

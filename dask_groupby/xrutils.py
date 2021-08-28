@@ -18,3 +18,17 @@ def is_duck_array(value: Any) -> bool:
         and hasattr(value, "__array_function__")
         and hasattr(value, "__array_ufunc__")
     )
+
+
+def is_dask_collection(x):
+    try:
+        import dask
+
+        return dask.is_dask_collection(x)
+
+    except ImportError:
+        return False
+
+
+def is_duck_dask_array(x):
+    return is_duck_array(x) and is_dask_collection(x)
