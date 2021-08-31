@@ -111,6 +111,22 @@ def test_xarray_reduce_single_grouper():
     xr.testing.assert_allclose(actual, expected)
 
 
+def test_xarray_reduce_errors():
+
+    da = xr.DataArray(np.ones((12,)), dims="x")
+    by = xr.DataArray(np.ones((12,)), dims="x")
+
+    with pytest.raises(ValueError, match="group by unnamed"):
+        xarray_reduce(da, by, func="mean")
+
+    by.name = "by"
+    with pytest.raises(ValueError, match="cannot reduce over"):
+        xarray_reduce(da, by, func="mean", dim="foo")
+
+    with pytest.raises(NotImplementedError, match="provide expected_groups"):
+        xarray_reduce(da, by.chunk(), func="mean")
+
+
 def test_xarray_reduce_dataset():
 
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 4})

@@ -167,7 +167,7 @@ def xarray_reduce(
             expected_groups = (np.unique(by[0].data),)
         if expected_groups is None:
             raise NotImplementedError(
-                "Please provided expected_groups if not grouping by a numpy-backed DataArray"
+                "Please provide expected_groups if not grouping by a numpy-backed DataArray"
             )
         if isinstance(expected_groups, np.ndarray):
             expected_groups = (expected_groups,)
