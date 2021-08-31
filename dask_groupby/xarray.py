@@ -172,9 +172,9 @@ def xarray_reduce(
         if isinstance(expected_groups, np.ndarray):
             expected_groups = (expected_groups,)
         if isbin[0]:
-            group_shape = (len(expected_groups) - 1,)
+            group_shape = (len(expected_groups[0]) - 1,)
         else:
-            group_shape = (len(expected_groups),)
+            group_shape = (len(expected_groups[0]),)
         to_group = by[0]
 
     group_sizes = dict(zip(group_names, group_shape))
