@@ -112,6 +112,11 @@ def test_xarray_reduce_single_grouper():
     expected = ds.Tair.groupby("time.month").mean()
     xr.testing.assert_allclose(actual, expected)
 
+    # Ellipsis reduction
+    actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", dim=...)
+    expected = ds.Tair.groupby("time.month").mean(...)
+    xr.testing.assert_allclose(actual, expected)
+
     # Dataset
     expected = ds.groupby("time.month").mean()
     actual = xarray_reduce(ds, ds.time.dt.month, func="mean")

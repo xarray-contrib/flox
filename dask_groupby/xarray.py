@@ -30,7 +30,7 @@ def _get_input_core_dims(group_names, dim, ds, to_group):
 
 def _restore_dim_order(result, obj, by):
     def lookup_order(dimension):
-        if dimension == by.name:
+        if dimension == by.name and by.ndim == 1:
             (dimension,) = by.dims
         if dimension in obj.dims:
             axis = obj.get_axis_num(dimension)
@@ -125,6 +125,9 @@ def xarray_reduce(
 
     # broadcast all variables against each other along all dimensions in `by` variables
     # don't exclude `dim` because it need not be a dimension in any of the `by` variables!
+    # in the case where dim is Ellipsis, and by.ndim < obj.ndim
+    # then we also broadcast `by` to all `obj.dims`
+    # TODO: avoid this broadcasting
     exclude_dims = set(ds.dims) - grouper_dims
     if dim is not None:
         exclude_dims -= set(dim)
