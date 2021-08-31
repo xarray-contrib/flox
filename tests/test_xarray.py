@@ -105,9 +105,36 @@ def test_xarray_reduce_multiple_groupers():
 
 def test_xarray_reduce_single_grouper():
 
-    ds = xr.tutorial.open_dataset("rasm", chunks={"time": 4})
+    # DataArray
+    ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
     expected = ds.Tair.groupby("time.month").mean()
+    xr.testing.assert_allclose(actual, expected)
+
+    # Dataset
+    expected = ds.groupby("time.month").mean()
+    actual = xarray_reduce(ds, ds.time.dt.month, func="mean")
+    xr.testing.assert_allclose(actual, expected)
+
+    # add data var with missing grouper dim
+    ds["foo"] = ("bar", [1, 2, 3])
+    expected = ds.groupby("time.month").mean()
+    actual = xarray_reduce(ds, ds.time.dt.month, func="mean")
+    xr.testing.assert_allclose(actual, expected)
+    del ds["foo"]
+
+    # non-dim coord with missing grouper dim
+    ds.coords["foo"] = ("bar", [1, 2, 3])
+    expected = ds.groupby("time.month").mean()
+    actual = xarray_reduce(ds, ds.time.dt.month, func="mean")
+    xr.testing.assert_allclose(actual, expected)
+    del ds["foo"]
+
+    # unindexed dim
+    by = ds.time.dt.month.drop_vars("time")
+    ds = ds.drop_vars("time")
+    expected = ds.groupby(by).mean()
+    actual = xarray_reduce(ds, by, func="mean")
     xr.testing.assert_allclose(actual, expected)
 
 
@@ -125,15 +152,6 @@ def test_xarray_reduce_errors():
 
     with pytest.raises(NotImplementedError, match="provide expected_groups"):
         xarray_reduce(da, by.chunk(), func="mean")
-
-
-def test_xarray_reduce_dataset():
-
-    ds = xr.tutorial.open_dataset("rasm", chunks={"time": 4})
-    expected_da = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
-    expected = ds.assign(Tair=expected_da).drop_vars("time")
-    actual = xarray_reduce(ds, ds.time.dt.month, func="mean")
-    xr.testing.assert_identical(actual, expected)
 
 
 @pytest.mark.parametrize("isdask", [True, False])

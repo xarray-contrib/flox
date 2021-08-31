@@ -198,10 +198,12 @@ def xarray_reduce(
     # take them out to prevent errors.
     # apply_ufunc can handle non-dim coordinate variables without core dimensions
     missing_dim = {}
-    for k, v in ds.data_vars.items():
-        is_missing_dim = not (all(d in v.dims for d in dim))
-        if is_missing_dim:
-            missing_dim[k] = v
+    if isinstance(obj, xr.Dataset):
+        # broadcasting means the group dim gets added to ds, so we check the original obj
+        for k, v in obj.data_vars.items():
+            is_missing_dim = not (all(d in v.dims for d in dim))
+            if is_missing_dim:
+                missing_dim[k] = v
 
     # TODO: do this for specific reductions only
     bad_dtypes = tuple(k for k in ds.variables if ds[k].dtype.kind in ("S", "U"))
@@ -244,9 +246,6 @@ def xarray_reduce(
         if name in actual.indexes and isinstance(index, pd.MultiIndex):
             actual[name] = index
 
-    if missing_dim:
-        actual = actual.update(missing_dim)
-
     if unindexed_dims:
         actual = actual.drop_vars(unindexed_dims)
 
@@ -257,6 +256,11 @@ def xarray_reduce(
             else:
                 template = obj[var]
             actual[var] = _restore_dim_order(actual[var], template, by[0])
+
+    if missing_dim:
+        for k, v in missing_dim.items():
+            # The expand_dims is for backward compat with xarray's questionable behaviour
+            actual[k] = v.expand_dims(group_sizes)
 
     if isinstance(obj, xr.DataArray):
         return obj._from_temp_dataset(actual)
