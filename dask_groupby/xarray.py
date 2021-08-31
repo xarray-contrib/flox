@@ -28,6 +28,20 @@ def _get_input_core_dims(group_names, dim, ds, to_group):
     return input_core_dims
 
 
+def _restore_dim_order(result, obj, by):
+    def lookup_order(dimension):
+        if dimension == by.name:
+            (dimension,) = by.dims
+        if dimension in obj.dims:
+            axis = obj.get_axis_num(dimension)
+        else:
+            axis = 1e6  # some arbitrarily high value
+        return axis
+
+    new_order = sorted(result.dims, key=lookup_order)
+    return result.transpose(*new_order)
+
+
 def xarray_reduce(
     obj: Union["Dataset", "DataArray"],
     *by: Union["DataArray", Iterable[str], Iterable["DataArray"]],
@@ -236,6 +250,14 @@ def xarray_reduce(
     if unindexed_dims:
         actual = actual.drop_vars(unindexed_dims)
 
+    if len(by) == 1:
+        for var in actual:
+            if isinstance(obj, xr.DataArray):
+                template = obj
+            else:
+                template = obj[var]
+            actual[var] = _restore_dim_order(actual[var], template, by[0])
+
     if isinstance(obj, xr.DataArray):
         return obj._from_temp_dataset(actual)
     else:
@@ -369,12 +391,16 @@ def resample_reduce(
 
     obj = rechunk_to_group_boundaries(obj, dim, by)
 
-    result = xarray_reduce(
-        obj,
-        by,
-        func=func,
-        blockwise=True,
-        expected_groups=(resampler._unique_coord.data,),
-        keep_attrs=keep_attrs,
-    ).rename({"__resample_dim__": dim})
+    result = (
+        xarray_reduce(
+            obj,
+            by,
+            func=func,
+            blockwise=True,
+            expected_groups=(resampler._unique_coord.data,),
+            keep_attrs=keep_attrs,
+        )
+        .rename({"__resample_dim__": dim})
+        .transpose(dim, ...)
+    )
     return result

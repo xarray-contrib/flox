@@ -37,6 +37,7 @@ def test_xarray_reduce(skipna, add_nan):
     actual = xarray_reduce(da, "labels", func="mean", skipna=skipna)
     assert_equal(expected, actual)
 
+    expected = da.transpose("y", ...).groupby("labels").mean(skipna=skipna)
     actual = xarray_reduce(da.transpose("y", ...), "labels", func="mean", skipna=skipna)
     assert_equal(expected, actual)
 
@@ -107,9 +108,7 @@ def test_xarray_reduce_single_grouper():
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 4})
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
     expected = ds.Tair.groupby("time.month").mean()
-    xr.testing.assert_allclose(
-        actual.transpose("y", "x", "month"), expected.transpose("y", "x", "month")
-    )
+    xr.testing.assert_allclose(actual, expected)
 
 
 def test_xarray_reduce_dataset():
@@ -118,9 +117,7 @@ def test_xarray_reduce_dataset():
     expected_da = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
     expected = ds.assign(Tair=expected_da).drop_vars("time")
     actual = xarray_reduce(ds, ds.time.dt.month, func="mean")
-    xr.testing.assert_identical(
-        actual.transpose("y", "x", "month"), expected.transpose("y", "x", "month")
-    )
+    xr.testing.assert_identical(actual, expected)
 
 
 @pytest.mark.parametrize("isdask", [True, False])
@@ -137,7 +134,7 @@ def test_xarray_resample(chunklen, isdask, dataarray):
     resampler = ds.resample(time="M")
     actual = resample_reduce(resampler, "mean")
     expected = resampler.mean()
-    xr.testing.assert_allclose(actual, expected.transpose(*actual.dims))
+    xr.testing.assert_allclose(actual, expected)
 
 
 @pytest.mark.parametrize(
