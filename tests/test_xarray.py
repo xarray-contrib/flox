@@ -6,6 +6,7 @@ import xarray as xr
 
 from dask_groupby.xarray import (
     _get_optimal_chunks_for_groups,
+    rechunk_to_group_boundaries,
     resample_reduce,
     xarray_groupby_reduce,
     xarray_reduce,
@@ -185,11 +186,24 @@ def test_xarray_resample(chunklen, isdask, dataarray):
         [(7, 3), (7, 3)],
         [(8, 2), (7, 3)],
         [(9, 1), (10,)],
+        [(10,), (10,)],
     ],
 )
 def test_optimal_rechunking(inchunks, expected):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
+
+    da = xr.DataArray(dask.array.ones((10,), chunks=inchunks), dims="x", name="foo")
+    rechunked = rechunk_to_group_boundaries(da, "x", xr.DataArray(labels, dims="x"))
+    assert rechunked.chunks == (expected,)
+
+    da = xr.DataArray(dask.array.ones((5, 10), chunks=(-1, inchunks)), dims=("y", "x"), name="foo")
+    rechunked = rechunk_to_group_boundaries(da, "x", xr.DataArray(labels, dims="x"))
+    assert rechunked.chunks == ((5,), expected)
+
+    ds = da.to_dataset()
+    rechunked = rechunk_to_group_boundaries(ds, "x", xr.DataArray(labels, dims="x"))
+    assert rechunked.foo.chunks == ((5,), expected)
 
 
 # everything below this is copied from xarray's test_groupby.py
