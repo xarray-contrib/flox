@@ -5,7 +5,7 @@ import pytest
 from dask.array import from_array
 from numpy_groupies.aggregate_numpy import aggregate
 
-from dask_groupby.core import groupby_reduce, reindex_
+from dask_groupby.core import _get_optimal_chunks_for_groups, groupby_reduce, reindex_
 
 from . import assert_equal, raise_if_dask_computes
 
@@ -464,3 +464,25 @@ def test_groupby_bins(chunks):
     expected = np.array([3, 2, 0])
     assert_equal(groups, np.array([0, 1, 2]))
     assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "inchunks, expected",
+    [
+        [(1,) * 10, (3, 2, 2, 3)],
+        [(2,) * 5, (3, 2, 2, 3)],
+        [(3, 3, 3, 1), (3, 2, 5)],
+        [(3, 1, 1, 2, 1, 1, 1), (3, 2, 2, 3)],
+        [(3, 2, 2, 3), (3, 2, 2, 3)],
+        [(4, 4, 2), (3, 4, 3)],
+        [(5, 5), (5, 5)],
+        [(6, 4), (5, 5)],
+        [(7, 3), (7, 3)],
+        [(8, 2), (7, 3)],
+        [(9, 1), (10,)],
+        [(10,), (10,)],
+    ],
+)
+def test_optimal_rechunking(inchunks, expected):
+    labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
+    assert _get_optimal_chunks_for_groups(inchunks, labels) == expected

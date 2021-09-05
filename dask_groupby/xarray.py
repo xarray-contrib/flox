@@ -3,12 +3,11 @@ from typing import TYPE_CHECKING, Hashable, Iterable, Sequence, Tuple, Union
 
 import dask
 import numpy as np
-import numpy_groupies as npg
 import pandas as pd
 import xarray as xr
 
 from .aggregations import Aggregation, _atleast_1d
-from .core import factorize_, groupby_reduce, reindex_
+from .core import factorize_, groupby_reduce, rechunk_array, reindex_
 
 if TYPE_CHECKING:
     from xarray import DataArray, Dataset, GroupBy, Resample
@@ -312,39 +311,6 @@ def xarray_groupby_reduce(
     return actual
 
 
-def _get_optimal_chunks_for_groups(chunks, labels):
-    chunkidx = np.cumsum(chunks) - 1
-    # what are the groups at chunk boundaries
-    labels_at_chunk_bounds = np.unique(labels[chunkidx])
-    # what's the last index of all groups
-    last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
-    # what's the last index of groups at the chunk boundaries.
-    lastidx = last_indexes[labels_at_chunk_bounds]
-
-    if len(chunkidx) == len(lastidx) and (chunkidx == lastidx).all():
-        return chunks
-
-    first_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="first")
-    firstidx = first_indexes[labels_at_chunk_bounds]
-
-    newchunkidx = [0]
-    for c, f, l in zip(chunkidx, firstidx, lastidx):
-        Δf = abs(c - f)
-        Δl = abs(c - l)
-        if c == 0 or newchunkidx[-1] > l:
-            continue
-        if Δf < Δl and f > newchunkidx[-1]:
-            newchunkidx.append(f)
-        else:
-            newchunkidx.append(l + 1)
-    if newchunkidx[-1] != chunkidx[-1] + 1:
-        newchunkidx.append(chunkidx[-1] + 1)
-    newchunks = np.diff(newchunkidx)
-
-    assert sum(newchunks) == sum(chunks)
-    return tuple(newchunks)
-
-
 def rechunk_to_group_boundaries(obj: Union["DataArray", "Dataset"], dim: str, labels: "DataArray"):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
@@ -356,23 +322,19 @@ def rechunk_to_group_boundaries(obj: Union["DataArray", "Dataset"], dim: str, la
 
     obj = obj.copy(deep=True)
 
-    def _rechunk(array):
-        axis = array.get_axis_num(dim)
-        chunks = array.chunks[axis]
-        # TODO: lru_cache this?
-        newchunks = _get_optimal_chunks_for_groups(chunks, labels.data)
-        if newchunks == chunks:
-            return array
-        else:
-            return array.chunk({dim: newchunks})
-
     if isinstance(obj, xr.Dataset):
         for var in obj:
             if obj[var].chunks is not None:
-                obj[var] = _rechunk(obj[var])
+                obj[var] = obj[var].copy(
+                    data=rechunk_array(
+                        obj[var].data, axis=obj[var].get_axis_num(dim), labels=labels.data
+                    )
+                )
     else:
         if obj.chunks is not None:
-            obj = _rechunk(obj)
+            obj = obj.copy(
+                data=rechunk_array(obj.data, axis=obj.get_axis_num(dim), labels=labels.data)
+            )
 
     return obj
 
@@ -395,8 +357,6 @@ def resample_reduce(
             stop = slicer.stop
         tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
     by = xr.DataArray(np.hstack(tostack), dims=(dim,), name="__resample_dim__")
-
-    obj = rechunk_to_group_boundaries(obj, dim, by)
 
     result = (
         xarray_reduce(

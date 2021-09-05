@@ -55,6 +55,56 @@ def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
     return arr.reshape(newshape)
 
 
+def _get_optimal_chunks_for_groups(chunks, labels):
+    chunkidx = np.cumsum(chunks) - 1
+    # what are the groups at chunk boundaries
+    labels_at_chunk_bounds = np.unique(labels[chunkidx])
+    # what's the last index of all groups
+    last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
+    # what's the last index of groups at the chunk boundaries.
+    lastidx = last_indexes[labels_at_chunk_bounds]
+
+    if len(chunkidx) == len(lastidx) and (chunkidx == lastidx).all():
+        return chunks
+
+    first_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="first")
+    firstidx = first_indexes[labels_at_chunk_bounds]
+
+    newchunkidx = [0]
+    for c, f, l in zip(chunkidx, firstidx, lastidx):
+        Δf = abs(c - f)
+        Δl = abs(c - l)
+        if c == 0 or newchunkidx[-1] > l:
+            continue
+        if Δf < Δl and f > newchunkidx[-1]:
+            newchunkidx.append(f)
+        else:
+            newchunkidx.append(l + 1)
+    if newchunkidx[-1] != chunkidx[-1] + 1:
+        newchunkidx.append(chunkidx[-1] + 1)
+    newchunks = np.diff(newchunkidx)
+
+    assert sum(newchunks) == sum(chunks)
+    return tuple(newchunks)
+
+
+def rechunk_array(array, axis, labels):
+    """
+    Rechunks array so that group boundaries line up with chunk boundaries, allowing
+    parallel group reductions.
+
+    This only works when the groups are sequential (e.g. labels = [0,0,0,1,1,1,1,2,2]).
+    Such patterns occur when using ``.resample``.
+    """
+    chunks = array.chunks[axis]
+    # TODO: lru_cache this?
+    newchunks = _get_optimal_chunks_for_groups(chunks, labels)
+    if newchunks == chunks:
+        return array
+    else:
+        return array.rechunk({axis: newchunks})
+
+
 def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> np.ndarray:
 
     assert axis in (0, -1)
@@ -922,6 +972,9 @@ def groupby_reduce(
             reduction.chunk += (_count,)
             reduction.combine += ("sum",)
             reduction.fill_value["intermediate"] += (0,)
+
+        if blockwise and by.ndim == 1:
+            array = rechunk_array(array, axis=-1, labels=by)
 
         # Needed since we need not have equal number of groups per block
         # if expected_groups is None and len(axis) > 1:
