@@ -88,7 +88,120 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def rechunk_array(array, axis, labels):
+def chunks_maximize_cohorts(labels, chunksize, force_break_at):
+    """
+    Finds new chunks that align well with labels.
+
+    Parameters
+    ----------
+    labels: np.array
+        Group labels to align chunks with. This routine works
+        well when the labels are repeating sequences: e.g.
+        ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3``
+    chunksize: int
+        nominal chunk size. Chunk size is exceded when the label
+        in ``force_break_at`` is less than chunksize//2 elements away.
+    force_break_at:
+        label at which we must always start a new chunk. For
+        the example ``labels`` array, this would be `1``.
+
+    Returns
+    -------
+    newchunks: tuple of int
+    """
+
+    isbreak = labels == force_break_at
+    divisions = []
+    counter = 1
+    for idx, lab in enumerate(labels):
+        if lab == force_break_at:
+            divisions.append(idx)
+            counter = 1
+            continue
+
+        next_break = np.nonzero(isbreak[idx:])[0]
+        if next_break.any():
+            next_break_is_close = next_break[0] <= chunksize // 2
+            # print(idx, next_break_is_close)
+        else:
+            next_break_is_close = False
+
+        if counter >= chunksize and not next_break_is_close:
+            divisions.append(idx)
+            counter = 1
+            continue
+        counter += 1
+
+    divisions.append(len(labels))
+    newchunks = tuple(np.diff(divisions))
+    assert sum(newchunks) == len(labels)
+    return newchunks
+
+
+def find_group_cohorts(labels, chunks, merge=False):
+    """
+    Finds groups labels that occur together: "cohorts"
+
+    Parameters
+    ----------
+    labels: np.ndarray
+        Array of group labels
+    chunks: tuple
+        chunks along grouping dimension for array that is being reduced
+    merge: bool, optional
+        Attempt to merge cohorts when one cohort's chunks are a subset
+        of another cohort's chunks.
+
+    Returns
+    -------
+    cohorts: dict_values
+        Iterable of cohorts
+    """
+    import copy
+
+    import toolz as tlz
+
+    which_chunk = np.repeat(np.arange(len(chunks)), chunks)
+    # these are chunks where a label is present
+    label_chunks = {lab: tuple(np.unique(which_chunk[labels == lab])) for lab in labels}
+
+    # These invert the label_chunks mapping so we know which labels occur together.
+    chunks_cohorts = tlz.groupby(label_chunks.get, label_chunks.keys())
+    # TODO: sort by length of values (i.e. cohort);
+    # then loop in reverse and merge when keys are subsets of initial keys?
+    if merge:
+        items = tuple(chunks_cohorts.items())
+
+        merged_cohorts = {}
+        merged_keys = []
+
+        for idx, (k1, v1) in enumerate(items):
+            if k1 in merged_keys:
+                continue
+            merged_cohorts[k1] = copy.deepcopy(v1)
+            for k2, v2 in items[idx + 1 :]:
+                if k2 in merged_keys:
+                    continue
+                if set(k2).issubset(set(k1)):
+                    print(f"merging {k1}, {k2}")
+                    merged_cohorts[k1].extend(v2)
+                    merged_keys.append(k2)
+
+        return merged_cohorts.values()
+    else:
+        return chunks_cohorts.values()
+
+
+def rechunk_for_cohorts(array, axis, labels, chunksize, force_break_at):
+
+    newchunks = chunks_maximize_cohorts(labels, chunksize, force_break_at)
+    if newchunks == array.chunks[axis]:
+        return array
+    else:
+        return array.rechunk({axis: newchunks})
+
+
+def rechunk_for_blockwise(array, axis, labels):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     parallel group reductions.
@@ -816,60 +929,6 @@ def groupby_agg(
     return (result, *groups)
 
 
-def find_group_cohorts(labels, chunks, merge=False):
-    """
-    Finds groups labels that occur together: "cohorts"
-
-    Parameters
-    ----------
-    labels: np.ndarray
-        Array of group labels
-    chunks: tuple
-        chunks along grouping dimension for array that is being reduced
-    merge: bool, optional
-        Attempt to merge cohorts when one cohort's chunks are a subset
-        of another cohort's chunks.
-
-    Returns
-    -------
-    cohorts: dict_values
-        Iterable of cohorts
-    """
-    import copy
-
-    import toolz as tlz
-
-    which_chunk = np.repeat(np.arange(len(chunks)), chunks)
-    # these are chunks where a label is present
-    label_chunks = {lab: tuple(np.unique(which_chunk[labels == lab])) for lab in labels}
-
-    # These invert the label_chunks mapping so we know which labels occur together.
-    chunks_cohorts = tlz.groupby(label_chunks.get, label_chunks.keys())
-    # TODO: sort by length of values (i.e. cohort);
-    # then loop in reverse and merge when keys are subsets of initial keys?
-    if merge:
-        items = tuple(chunks_cohorts.items())
-
-        merged_cohorts = {}
-        merged_keys = []
-
-        for idx, (k1, v1) in enumerate(items):
-            if k1 in merged_keys:
-                continue
-            merged_cohorts[k1] = copy.deepcopy(v1)
-            for k2, v2 in items[idx + 1 :]:
-                if k2 in merged_keys:
-                    continue
-                if set(k2).issubset(set(k1)):
-                    print(f"merging {k1}, {k2}")
-                    merged_cohorts[k1].extend(v2)
-                    merged_keys.append(k2)
-
-        return merged_cohorts.values()
-    else:
-        return chunks_cohorts.values()
-
-
 def groupby_reduce(
     array: Union[np.ndarray, "DaskArray"],
     by: Union[np.ndarray, "DaskArray"],
@@ -919,7 +978,7 @@ def groupby_reduce(
                         out cohorts and reduces that subset using "mapreduce", repeat for all cohorts.
                         This works well for many time groupings where the group labels repeat
                         at regular intervals like 'hour', 'month', dayofyear' etc. Optimize
-                        chunking ``array`` for this method by first rechunking using ``rechunk_maximize_cohorts``.
+                        chunking ``array`` for this method by first rechunking using ``rechunk_for_cohorts``.
     isbin: bool, optional
         Are `expected_groups` bin edges?
 
@@ -1079,7 +1138,7 @@ def groupby_reduce(
                         "For method='blockwise', ``by`` must be 1D. "
                         f"Received {by.ndim} dimensions instead."
                     )
-                array = rechunk_array(array, axis=-1, labels=by)
+                array = rechunk_for_blockwise(array, axis=-1, labels=by)
 
             # TODO: test with mixed array kinds (numpy + dask; dask + numpy)
             result, *groups = groupby_agg(
