@@ -50,7 +50,7 @@ def xarray_reduce(
     dim: Hashable = None,
     split_out: int = 1,
     fill_value=None,
-    blockwise: bool = False,
+    method: str = "mapreduce",
     keep_attrs: bool = True,
     skipna=True,
 ):
@@ -75,9 +75,17 @@ def xarray_reduce(
     fill_value :
         Value used for missing groups in the output i.e. when one of the labels
         in `expected_groups` is not actually present in `by`
-    blockwise : bool
-        If True, only apply the reduction blockwise. If False (default), we
-        apply blockwise and then compute a tree reduction of those results.
+    method : {"mapreduce", blockwise"}
+       Strategy for reduction. Applies to dask arrays only
+          * "mapreduce" : First apply the reduction blockwise on ``array``, then
+                          combine a few newighbouring blocks, apply the reduction.
+                          Continue until finalizing. Usually, ``func`` will need
+                          to be an Aggregation instance for this method to work. Common
+                          aggregations are implemented.
+          * "blockwise" : Only reduce using blockwise and avoid aggregating blocks together.
+                          Useful for resampling reductions. The array is rechunked so that
+                          chunk boundaries line up with group boundaries i.e. each block
+                          contains exactly one group.
     skipna: bool
         Use NaN-skipping aggregations like nanmean?
 
@@ -226,7 +234,7 @@ def xarray_reduce(
             "axis": axis,
             "split_out": split_out,
             "fill_value": fill_value,
-            "blockwise": blockwise,
+            "method": method,
             # The following mess exists becuase for multiple `by`s I factorize eagerly
             # here before passing it on; this means I have to handle the
             # "binning by single by variable" case explicitly where the factorization
@@ -274,7 +282,7 @@ def xarray_groupby_reduce(
     groupby: "GroupBy",
     func: Union[str, Aggregation],
     split_out: int = 1,
-    blockwise: bool = False,
+    method: str = "mapreduce",
     keep_attrs: bool = True,
 ):
     """Apply on an existing Xarray groupby object for convenience."""
@@ -303,7 +311,7 @@ def xarray_groupby_reduce(
             "axis": -1,
             "split_out": split_out,
             "expected_groups": groups,
-            "blockwise": blockwise,
+            "method": method,
         },
     )
     actual[outdim] = groups
@@ -363,7 +371,7 @@ def resample_reduce(
             obj,
             by,
             func=func,
-            blockwise=True,
+            method="blockwise",
             expected_groups=(resampler._unique_coord.data,),
             keep_attrs=keep_attrs,
         )

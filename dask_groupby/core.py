@@ -634,7 +634,7 @@ def groupby_agg(
     axis: Sequence = None,
     split_out: int = 1,
     fill_value: Any = None,
-    blockwise: bool = False,
+    method: str = "mapreduce",
     isbin: bool = False,
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
 
@@ -653,7 +653,7 @@ def groupby_agg(
     # We need to rechunk before zipping up with the index
     # let's always do it anyway
     # but first save by if blockwise is True.
-    if blockwise:
+    if method == "blockwise":
         by_maybe_numpy = by
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
@@ -704,7 +704,7 @@ def groupby_agg(
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
         expected_agg = expected_groups
 
-    if not blockwise:
+    if method == "mapreduce":
         # reduced is really a dict mapping reduction name to array
         # and "groups" to an array of group labels
         # Note: it does not make sense to interpret axis relative to
@@ -797,7 +797,7 @@ def groupby_agg(
     layer: Dict[Tuple, Tuple] = {}  # type: ignore
     agg_name = f"{name}-{token}"
     for ochunk in itertools.product(*ochunks):
-        if blockwise:
+        if method == "blockwise":
             inchunk = ochunk
         else:
             inchunk = ochunk[:-1] + (0,) * (len(axis)) + (ochunk[-1],) * int(split_out > 1)
@@ -824,7 +824,7 @@ def groupby_reduce(
     axis=None,
     fill_value=None,
     split_out: int = 1,
-    blockwise: bool = False,
+    method="mapreduce",
     isbin: bool = False,
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
     """
@@ -849,9 +849,19 @@ def groupby_reduce(
         Value when a label in `expected_groups` is not present
     split_out: int, optional
         Number of chunks along group axis in output (last axis)
-    blockwise: bool, optional
-        Only reduce using blockwise and avoid aggregating blocks together.
-        Useful when 1 block = 1 group.
+    method: {"mapreduce", "blockwise"}, optional
+        Strategy for reduction. Applies to dask arrays only
+          * "mapreduce" : First apply the reduction blockwise on ``array``, then
+                          combine a few newighbouring blocks, apply the reduction.
+                          Continue until finalizing. Usually, ``func`` will need
+                          to be an Aggregation instance for this method to work. Common
+                          aggregations are implemented.
+          * "blockwise" : Only reduce using blockwise and avoid aggregating blocks together.
+                          Useful for resampling reductions. The array is rechunked so that
+                          chunk boundaries line up with group boundaries i.e. each block
+                          contains exactly one group.
+    isbin: bool, optional
+        Are `expected_groups` bin edges?
 
     Returns
     -------
@@ -973,7 +983,12 @@ def groupby_reduce(
             reduction.combine += ("sum",)
             reduction.fill_value["intermediate"] += (0,)
 
-        if blockwise and by.ndim == 1:
+        if method == "blockwise":
+            if by.ndim > 1:
+                raise ValueError(
+                    "For method='blockwise', by must be 1D. "
+                    f"Received {by.ndim} dimensions instead."
+                )
             array = rechunk_array(array, axis=-1, labels=by)
 
         # Needed since we need not have equal number of groups per block
@@ -991,7 +1006,7 @@ def groupby_reduce(
             axis=axis,
             split_out=split_out,
             fill_value=fill_value,
-            blockwise=blockwise,
+            method=method,
             isbin=isbin,
         )
 
