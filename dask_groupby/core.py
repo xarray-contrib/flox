@@ -21,7 +21,7 @@ import numpy_groupies as npg
 import pandas as pd
 
 from . import aggregations
-from .aggregations import Aggregation, _count, _get_fill_value
+from .aggregations import Aggregation, _atleast_1d, _count, _get_fill_value
 from .xrutils import is_duck_array, is_duck_dask_array
 
 if TYPE_CHECKING:
@@ -110,11 +110,13 @@ def chunks_maximize_cohorts(labels, chunksize, force_break_at):
     newchunks: tuple of int
     """
 
+    force_break_at = _atleast_1d(force_break_at)
+
     isbreak = labels == force_break_at
     divisions = []
     counter = 1
     for idx, lab in enumerate(labels):
-        if lab == force_break_at:
+        if lab in force_break_at:
             divisions.append(idx)
             counter = 1
             continue
