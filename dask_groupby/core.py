@@ -1108,10 +1108,12 @@ def groupby_reduce(
 
         if method == "cohorts":
             assert len(axis) == 1
-            cohorts = find_group_cohorts(by, array.chunks[axis[0]], merge=False)
+
+            cohorts = find_group_cohorts(by, array.chunks[axis[0]], merge=True)
             idx = np.arange(len(by))
 
             results = []
+            groups_ = []
             for cohort in cohorts:
                 # indexes for a subset of groups
                 subset_idx = idx[np.isin(by, cohort)]
@@ -1120,7 +1122,7 @@ def groupby_reduce(
                     array[..., subset_idx],
                     by[subset_idx],
                     reduction,
-                    expected_groups,
+                    expected_groups=cohort,
                     axis=axis,
                     split_out=split_out,
                     fill_value=fill_value,
@@ -1128,10 +1130,11 @@ def groupby_reduce(
                     isbin=isbin,
                 )
                 results.append(r)
+                groups_.append(g)
 
             # concatenate results together
-            groups = (np.hstack(g),)
-            result = np.hstack(results)
+            groups = (np.hstack(groups_),)
+            result = np.concatenate(results, axis=-1)
 
         else:
             if method == "blockwise":
