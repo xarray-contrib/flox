@@ -88,7 +88,7 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def chunks_maximize_cohorts(labels, chunksize, force_break_at):
+def chunks_maximize_cohorts(labels, chunksize, force_new_chunk_at):
     """
     Finds new chunks that align well with labels.
 
@@ -100,8 +100,8 @@ def chunks_maximize_cohorts(labels, chunksize, force_break_at):
         ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3``
     chunksize: int
         nominal chunk size. Chunk size is exceded when the label
-        in ``force_break_at`` is less than chunksize//2 elements away.
-    force_break_at:
+        in ``force_new_chunk_at`` is less than chunksize//2 elements away.
+    force_new_chunk_at:
         label at which we must always start a new chunk. For
         the example ``labels`` array, this would be `1``.
 
@@ -110,13 +110,13 @@ def chunks_maximize_cohorts(labels, chunksize, force_break_at):
     newchunks: tuple of int
     """
 
-    force_break_at = _atleast_1d(force_break_at)
+    force_new_chunk_at = _atleast_1d(force_new_chunk_at)
 
-    isbreak = labels == force_break_at
+    isbreak = labels == force_new_chunk_at
     divisions = []
     counter = 1
     for idx, lab in enumerate(labels):
-        if lab in force_break_at:
+        if lab in force_new_chunk_at:
             divisions.append(idx)
             counter = 1
             continue
@@ -194,9 +194,9 @@ def find_group_cohorts(labels, chunks, merge=False):
         return chunks_cohorts.values()
 
 
-def rechunk_for_cohorts(array, axis, labels, chunksize, force_break_at):
+def rechunk_for_cohorts(array, axis, labels, chunksize, force_new_chunk_at):
 
-    newchunks = chunks_maximize_cohorts(labels, chunksize, force_break_at)
+    newchunks = chunks_maximize_cohorts(labels, chunksize, force_new_chunk_at)
     if newchunks == array.chunks[axis]:
         return array
     else:
