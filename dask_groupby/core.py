@@ -975,7 +975,7 @@ def groupby_reduce(
           * "blockwise" : Only reduce using blockwise and avoid aggregating blocks together.
                           Useful for resampling reductions where group members are always together.
                           The array is rechunked so that chunk boundaries line up with group boundaries
-                          i.e. each block contains exactly one group.
+                          i.e. each block contains all members of any group present in that block.
           * "cohorts" : Finds group labels that tend to occur together ("cohorts"), indexes
                         out cohorts and reduces that subset using "mapreduce", repeat for all cohorts.
                         This works well for many time groupings where the group labels repeat
@@ -1070,14 +1070,12 @@ def groupby_reduce(
         )  # type: ignore
 
         if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
-            print(results["intermediates"][0])
             if array.ndim > 1 and by.ndim == 1:
                 # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
                 # will return wrong indices
                 results["intermediates"][0] = np.unravel_index(
                     results["intermediates"][0], array.shape
                 )[-1]
-                print(results["intermediates"][0])
 
         if isbin:
             expected_groups = np.arange(len(expected_groups) - 1)
