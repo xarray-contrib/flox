@@ -176,6 +176,21 @@ def test_xarray_resample(chunklen, isdask, dataarray):
     xr.testing.assert_allclose(actual, expected)
 
 
+def test_xarray_resample_dataset_multiple_arrays():
+    # regression test for #35
+    times = pd.date_range("2000", periods=5)
+    foo = xr.DataArray(range(5), dims=["time"], coords=[times], name="foo")
+    bar = xr.DataArray(range(1, 6), dims=["time"], coords=[times], name="bar")
+    ds = xr.merge([foo, bar]).chunk({"time": 4})
+
+    resampler = ds.resample(time="4D")
+    # The separate computes are necessary here to force xarray
+    # to compute all variables in result at the same time.
+    expected = resampler.mean().compute()
+    result = resample_reduce(resampler, "mean").compute()
+    xr.testing.assert_allclose(expected, result)
+
+
 @pytest.mark.parametrize(
     "inchunks, expected",
     [

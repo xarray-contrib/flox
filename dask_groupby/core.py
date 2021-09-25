@@ -755,7 +755,7 @@ def groupby_agg(
             dtype=array.dtype,
             meta=array._meta,
             align_arrays=False,
-            name=f"{name}-blockwise-agg",
+            name=f"{name}-blockwise-agg-{token}",
         )
         chunks = array.chunks[axis[0]]
 
