@@ -90,19 +90,20 @@ def _get_optimal_chunks_for_groups(chunks, labels):
 
 def chunks_maximize_cohorts(labels, chunksize, force_new_chunk_at):
     """
-    Finds new chunks that align well with labels.
+    Finds new chunks tuple that align well with labels.
 
     Parameters
     ----------
     labels: np.array
         Group labels to align chunks with. This routine works
-        well when the labels are repeating sequences: e.g.
-        ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3``
+        well when ``labels`` has repeating patterns: e.g.
+        ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
+        that the pattern must contain sequences.
     chunksize: int
         nominal chunk size. Chunk size is exceded when the label
-        in ``force_new_chunk_at`` is less than chunksize//2 elements away.
+        in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
     force_new_chunk_at:
-        label at which we must always start a new chunk. For
+        label at which we always start a new chunk. For
         the example ``labels`` array, this would be `1``.
 
     Returns
@@ -185,7 +186,6 @@ def find_group_cohorts(labels, chunks, merge=False):
                 if k2 in merged_keys:
                     continue
                 if set(k2).issubset(set(k1)):
-                    print(f"merging {k1}, {k2}")
                     merged_cohorts[k1].extend(v2)
                     merged_keys.append(k2)
 
@@ -194,8 +194,36 @@ def find_group_cohorts(labels, chunks, merge=False):
         return chunks_cohorts.values()
 
 
-def rechunk_for_cohorts(array, axis, labels, chunksize, force_new_chunk_at):
+def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None):
+    """
+    Rechunks array so that each new chunk contains groups that always occur together.
 
+    Parameters
+    ----------
+    array: dask.array.Array
+        array to rechunk
+    axis: int
+        Axis to rechunk
+    labels: np.array
+        1D Group labels to align chunks with. This routine works
+        well when ``labels`` has repeating patterns: e.g.
+        ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
+        that the pattern must contain sequences.
+    force_new_chunk_at:
+        label at which we always start a new chunk. For
+        the example ``labels`` array, this would be `1``.
+    chunksize: int, optional
+        nominal chunk size. Chunk size is exceded when the label
+        in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
+        If None, uses median chunksize along axis.
+
+    Returns
+    -------
+    dask.array.Array
+        rechunked array
+    """
+    if chunksize is None:
+        chunksize = np.median(array.chunks[axis])
     newchunks = chunks_maximize_cohorts(labels, chunksize, force_new_chunk_at)
     if newchunks == array.chunks[axis]:
         return array
