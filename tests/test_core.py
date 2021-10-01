@@ -122,10 +122,11 @@ def test_groupby_reduce_all(size, func):
         assert actual.dtype.kind == "i"
     assert_equal(actual, expected)
 
-    actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func)
-    if "arg" in func:
-        assert actual.dtype.kind == "i"
-    assert_equal(actual, expected)
+    for method in ["mapreduce", "cohorts"]:
+        actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func, method=method)
+        if "arg" in func:
+            assert actual.dtype.kind == "i"
+        assert_equal(actual, expected)
 
 
 @pytest.mark.parametrize("size", ((12,), (12, 5)))
