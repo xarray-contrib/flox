@@ -166,10 +166,10 @@ def find_group_cohorts(labels, chunks, merge=False):
 
     which_chunk = np.repeat(np.arange(len(chunks)), chunks)
     # these are chunks where a label is present
-    label_chunks = {lab: tuple(np.unique(which_chunk[labels == lab])) for lab in labels}
-
+    label_chunks = {lab: tuple(np.unique(which_chunk[labels == lab])) for lab in np.unique(labels)}
     # These invert the label_chunks mapping so we know which labels occur together.
     chunks_cohorts = tlz.groupby(label_chunks.get, label_chunks.keys())
+
     # TODO: sort by length of values (i.e. cohort);
     # then loop in reverse and merge when keys are subsets of initial keys?
     if merge:

@@ -5,7 +5,12 @@ import pytest
 from dask.array import from_array
 from numpy_groupies.aggregate_numpy import aggregate
 
-from dask_groupby.core import _get_optimal_chunks_for_groups, groupby_reduce, reindex_
+from dask_groupby.core import (
+    _get_optimal_chunks_for_groups,
+    find_group_cohorts,
+    groupby_reduce,
+    reindex_,
+)
 
 from . import assert_equal, raise_if_dask_computes
 
@@ -487,3 +492,19 @@ def test_groupby_bins(chunks):
 def test_optimal_rechunking(inchunks, expected):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
+
+
+@pytest.mark.parametrize(
+    "expected, labels, chunks, merge",
+    [
+        [[[1, 2, 3, 4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), True],
+        [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), False],
+        [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), False],
+        [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), True],
+        [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), True],
+        [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), False],
+    ],
+)
+def test_find_group_cohorts(expected, labels, chunks, merge):
+    actual = list(find_group_cohorts(labels, chunks, merge))
+    assert actual == expected, (actual, expected)
