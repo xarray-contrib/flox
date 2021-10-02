@@ -9,6 +9,7 @@ from dask_groupby.core import (
     _get_optimal_chunks_for_groups,
     find_group_cohorts,
     groupby_reduce,
+    rechunk_for_cohorts,
     reindex_,
 )
 
@@ -508,3 +509,18 @@ def test_optimal_rechunking(inchunks, expected):
 def test_find_group_cohorts(expected, labels, chunks, merge):
     actual = list(find_group_cohorts(labels, chunks, merge))
     assert actual == expected, (actual, expected)
+
+
+@pytest.mark.parametrize(
+    "chunk_at,expected",
+    [
+        [1, ((1, 6, 1, 6, 1, 6, 1, 6, 1, 1),)],
+        [0, ((7, 7, 7, 7, 2),)],
+        [3, ((3, 4, 3, 4, 3, 4, 3, 4, 2),)],
+    ],
+)
+def test_rechunk_for_cohorts(chunk_at, expected):
+    array = dask.array.ones((30,), chunks=7)
+    labels = np.arange(0, 30) % 7
+    rechunked = rechunk_for_cohorts(array, axis=-1, force_new_chunk_at=chunk_at, labels=labels)
+    assert rechunked.chunks == expected

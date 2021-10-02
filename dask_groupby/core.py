@@ -88,59 +88,6 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def chunks_maximize_cohorts(labels, chunksize, force_new_chunk_at):
-    """
-    Finds new chunks tuple that align well with labels.
-
-    Parameters
-    ----------
-    labels: np.array
-        Group labels to align chunks with. This routine works
-        well when ``labels`` has repeating patterns: e.g.
-        ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
-        that the pattern must contain sequences.
-    chunksize: int
-        nominal chunk size. Chunk size is exceded when the label
-        in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
-    force_new_chunk_at:
-        label at which we always start a new chunk. For
-        the example ``labels`` array, this would be `1``.
-
-    Returns
-    -------
-    newchunks: tuple of int
-    """
-
-    force_new_chunk_at = _atleast_1d(force_new_chunk_at)
-
-    isbreak = labels == force_new_chunk_at
-    divisions = []
-    counter = 1
-    for idx, lab in enumerate(labels):
-        if lab in force_new_chunk_at:
-            divisions.append(idx)
-            counter = 1
-            continue
-
-        next_break = np.nonzero(isbreak[idx:])[0]
-        if next_break.any():
-            next_break_is_close = next_break[0] <= chunksize // 2
-            # print(idx, next_break_is_close)
-        else:
-            next_break_is_close = False
-
-        if counter >= chunksize and not next_break_is_close:
-            divisions.append(idx)
-            counter = 1
-            continue
-        counter += 1
-
-    divisions.append(len(labels))
-    newchunks = tuple(np.diff(divisions))
-    assert sum(newchunks) == len(labels)
-    return newchunks
-
-
 def find_group_cohorts(labels, chunks, merge=False):
     """
     Finds groups labels that occur together: "cohorts"
@@ -223,8 +170,47 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
         rechunked array
     """
     if chunksize is None:
-        chunksize = np.median(array.chunks[axis])
-    newchunks = chunks_maximize_cohorts(labels, chunksize, force_new_chunk_at)
+        chunksize = np.median(array.chunks[axis]).astype(int)
+
+    if len(labels) != array.shape[axis]:
+        raise ValueError(
+            "labels must be equal to array.shape[axis]. "
+            f"Received length {len(labels)}.  Expected length {array.shape[axis]}"
+        )
+
+    force_new_chunk_at = _atleast_1d(force_new_chunk_at)
+    oldchunks = array.chunks[axis]
+    oldbreaks = np.insert(np.cumsum(oldchunks), 0, 0)
+
+    isbreak = np.isin(labels, force_new_chunk_at)
+    if not np.any(isbreak):
+        raise ValueError("One or more labels in ``force_new_chunk_at`` not present in ``labels``.")
+
+    divisions = []
+    counter = 1
+    for idx, lab in enumerate(labels):
+        if lab in force_new_chunk_at:
+            divisions.append(idx)
+            counter = 1
+            continue
+
+        next_break = np.nonzero(isbreak[idx:])[0]
+        if next_break.any():
+            next_break_is_close = next_break[0] <= chunksize // 2
+        else:
+            next_break_is_close = False
+
+        if idx in oldbreaks or (counter >= chunksize and not next_break_is_close):
+            divisions.append(idx)
+            counter = 1
+            continue
+        counter += 1
+
+    divisions.append(len(labels))
+    newchunks = tuple(np.diff(divisions))
+    assert sum(newchunks) == len(labels)
+
+    print(newchunks)
     if newchunks == array.chunks[axis]:
         return array
     else:
