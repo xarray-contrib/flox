@@ -208,7 +208,7 @@ def test_xarray_resample_dataset_multiple_arrays():
         [(10,), (10,)],
     ],
 )
-def test_optimal_rechunking(inchunks, expected):
+def test_rechunk_to_group_boundaries(inchunks, expected):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
 
     da = xr.DataArray(dask.array.ones((10,), chunks=inchunks), dims="x", name="foo")
