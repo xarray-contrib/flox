@@ -567,7 +567,6 @@ def _finalize_results(
 
     Parameters
     ----------
-
     mask_counts: bool
         Whether to mask out results using counts which is expected to be the last element in
         results["intermediates"]. Should be False when dask arrays are not involved.

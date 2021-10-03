@@ -73,7 +73,8 @@ def xarray_reduce(
         Reduction method
     expected_groups : Dict[str, Sequence]
         expected group labels corresponding to each `by` variable
-    isbin : If True, corresponding entry in `expected_groups` are bin edges. If False, the entry in `expected_groups` is treated as a simple label.
+    isbin : Iterable[bool]
+        If True, corresponding entry in `expected_groups` are bin edges. If False, the entry in `expected_groups` is treated as a simple label.
     dim : Hashable
         dimension name along which to reduce. If None, reduces across all
         dimensions of `by`
@@ -82,17 +83,24 @@ def xarray_reduce(
     fill_value :
         Value used for missing groups in the output i.e. when one of the labels
         in `expected_groups` is not actually present in `by`
-    method : {"mapreduce", blockwise"}
-       Strategy for reduction. Applies to dask arrays only
+    method: {"mapreduce", "blockwise", "cohorts"}, optional
+        Strategy for reduction. Applies to dask arrays only
+
           * "mapreduce" : First apply the reduction blockwise on ``array``, then
                           combine a few newighbouring blocks, apply the reduction.
                           Continue until finalizing. Usually, ``func`` will need
                           to be an Aggregation instance for this method to work. Common
                           aggregations are implemented.
           * "blockwise" : Only reduce using blockwise and avoid aggregating blocks together.
-                          Useful for resampling reductions. The array is rechunked so that
-                          chunk boundaries line up with group boundaries i.e. each block
-                          contains exactly one group.
+                          Useful for resampling reductions where group members are always together.
+                          The array is rechunked so that chunk boundaries line up with group boundaries
+                          i.e. each block contains all members of any group present in that block.
+          * "cohorts" : Finds group labels that tend to occur together ("cohorts"), indexes
+                        out cohorts and reduces that subset using "mapreduce", repeat for all cohorts.
+                        This works well for many time groupings where the group labels repeat
+                        at regular intervals like 'hour', 'month', dayofyear' etc. Optimize
+                        chunking ``array`` for this method by first rechunking using ``rechunk_for_cohorts``.
+
     skipna: bool
         Use NaN-skipping aggregations like nanmean?
 
