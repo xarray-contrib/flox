@@ -1140,6 +1140,15 @@ def groupby_reduce(
             reduction.combine += ("sum",)
             reduction.fill_value["intermediate"] += (0,)
 
+        partial_agg = partial(
+            groupby_agg,
+            agg=reduction,
+            axis=axis,
+            split_out=split_out,
+            fill_value=fill_value,
+            min_count=min_count,
+            isbin=isbin,
+        )
         if method == "cohorts":
             assert len(axis) == 1
 
@@ -1152,17 +1161,11 @@ def groupby_reduce(
                 # indexes for a subset of groups
                 subset_idx = idx[np.isin(by, cohort)]
                 # get final result for these groups
-                r, *g = groupby_agg(
+                r, *g = partial_agg(
                     array[..., subset_idx],
                     by[subset_idx],
-                    reduction,
                     expected_groups=cohort,
-                    axis=axis,
-                    split_out=split_out,
-                    fill_value=fill_value,
                     method="mapreduce",
-                    min_count=min_count,
-                    isbin=isbin,
                 )
                 results.append(r)
                 groups_.append(g)
@@ -1181,17 +1184,11 @@ def groupby_reduce(
                 array = rechunk_for_blockwise(array, axis=-1, labels=by)
 
             # TODO: test with mixed array kinds (numpy + dask; dask + numpy)
-            result, *groups = groupby_agg(
+            result, *groups = partial_agg(
                 array,
                 by,
-                reduction,
-                expected_groups,
-                axis=axis,
-                split_out=split_out,
-                fill_value=fill_value,
+                expected_groups=expected_groups,
                 method=method,
-                min_count=min_count,
-                isbin=isbin,
             )
 
     return (result, *groups)
