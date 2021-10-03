@@ -130,6 +130,9 @@ def xarray_reduce(
 
     if dim is Ellipsis:
         dim = tuple(obj.dims)
+        if by[0].name in ds.dims:
+            dim = tuple(d for d in dim if d != by[0].name)
+        dim = tuple(dim)
 
     # broadcast all variables against each other along all dimensions in `by` variables
     # don't exclude `dim` because it need not be a dimension in any of the `by` variables!
