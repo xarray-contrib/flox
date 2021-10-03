@@ -21,7 +21,7 @@ import numpy_groupies as npg
 import pandas as pd
 
 from . import aggregations
-from .aggregations import Aggregation, _count, _get_fill_value
+from .aggregations import Aggregation, _atleast_1d, _count, _get_fill_value
 from .xrutils import is_duck_array, is_duck_dask_array
 
 if TYPE_CHECKING:
@@ -88,7 +88,136 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def rechunk_array(array, axis, labels):
+def find_group_cohorts(labels, chunks, merge=False):
+    """
+    Finds groups labels that occur together: "cohorts"
+
+    Parameters
+    ----------
+    labels: np.ndarray
+        Array of group labels
+    chunks: tuple
+        chunks along grouping dimension for array that is being reduced
+    merge: bool, optional
+        Attempt to merge cohorts when one cohort's chunks are a subset
+        of another cohort's chunks.
+
+    Returns
+    -------
+    cohorts: dict_values
+        Iterable of cohorts
+    """
+    import copy
+
+    import toolz as tlz
+
+    which_chunk = np.repeat(np.arange(len(chunks)), chunks)
+    # these are chunks where a label is present
+    label_chunks = {lab: tuple(np.unique(which_chunk[labels == lab])) for lab in np.unique(labels)}
+    # These invert the label_chunks mapping so we know which labels occur together.
+    chunks_cohorts = tlz.groupby(label_chunks.get, label_chunks.keys())
+
+    # TODO: sort by length of values (i.e. cohort);
+    # then loop in reverse and merge when keys are subsets of initial keys?
+    if merge:
+        items = tuple(chunks_cohorts.items())
+
+        merged_cohorts = {}
+        merged_keys = []
+
+        for idx, (k1, v1) in enumerate(items):
+            if k1 in merged_keys:
+                continue
+            merged_cohorts[k1] = copy.deepcopy(v1)
+            for k2, v2 in items[idx + 1 :]:
+                if k2 in merged_keys:
+                    continue
+                if set(k2).issubset(set(k1)):
+                    merged_cohorts[k1].extend(v2)
+                    merged_keys.append(k2)
+
+        return merged_cohorts.values()
+    else:
+        return chunks_cohorts.values()
+
+
+def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None):
+    """
+    Rechunks array so that each new chunk contains groups that always occur together.
+
+    Parameters
+    ----------
+    array: dask.array.Array
+        array to rechunk
+    axis: int
+        Axis to rechunk
+    labels: np.array
+        1D Group labels to align chunks with. This routine works
+        well when ``labels`` has repeating patterns: e.g.
+        ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
+        that the pattern must contain sequences.
+    force_new_chunk_at:
+        label at which we always start a new chunk. For
+        the example ``labels`` array, this would be `1``.
+    chunksize: int, optional
+        nominal chunk size. Chunk size is exceded when the label
+        in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
+        If None, uses median chunksize along axis.
+
+    Returns
+    -------
+    dask.array.Array
+        rechunked array
+    """
+    if chunksize is None:
+        chunksize = np.median(array.chunks[axis]).astype(int)
+
+    if len(labels) != array.shape[axis]:
+        raise ValueError(
+            "labels must be equal to array.shape[axis]. "
+            f"Received length {len(labels)}.  Expected length {array.shape[axis]}"
+        )
+
+    force_new_chunk_at = _atleast_1d(force_new_chunk_at)
+    oldchunks = array.chunks[axis]
+    oldbreaks = np.insert(np.cumsum(oldchunks), 0, 0)
+
+    isbreak = np.isin(labels, force_new_chunk_at)
+    if not np.any(isbreak):
+        raise ValueError("One or more labels in ``force_new_chunk_at`` not present in ``labels``.")
+
+    divisions = []
+    counter = 1
+    for idx, lab in enumerate(labels):
+        if lab in force_new_chunk_at:
+            divisions.append(idx)
+            counter = 1
+            continue
+
+        next_break = np.nonzero(isbreak[idx:])[0]
+        if next_break.any():
+            next_break_is_close = next_break[0] <= chunksize // 2
+        else:
+            next_break_is_close = False
+
+        if idx in oldbreaks or (counter >= chunksize and not next_break_is_close):
+            divisions.append(idx)
+            counter = 1
+            continue
+        counter += 1
+
+    divisions.append(len(labels))
+    newchunks = tuple(np.diff(divisions))
+    assert sum(newchunks) == len(labels)
+
+    print(newchunks)
+    if newchunks == array.chunks[axis]:
+        return array
+    else:
+        return array.rechunk({axis: newchunks})
+
+
+def rechunk_for_blockwise(array, axis, labels):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     parallel group reductions.
@@ -857,24 +986,32 @@ def groupby_reduce(
         Value when a label in `expected_groups` is not present
     split_out: int, optional
         Number of chunks along group axis in output (last axis)
-    method: {"mapreduce", "blockwise"}, optional
+    method: {"mapreduce", "blockwise", "cohorts"}, optional
         Strategy for reduction. Applies to dask arrays only
+
           * "mapreduce" : First apply the reduction blockwise on ``array``, then
                           combine a few newighbouring blocks, apply the reduction.
                           Continue until finalizing. Usually, ``func`` will need
                           to be an Aggregation instance for this method to work. Common
                           aggregations are implemented.
           * "blockwise" : Only reduce using blockwise and avoid aggregating blocks together.
-                          Useful for resampling reductions. The array is rechunked so that
-                          chunk boundaries line up with group boundaries i.e. each block
-                          contains exactly one group.
+                          Useful for resampling reductions where group members are always together.
+                          The array is rechunked so that chunk boundaries line up with group boundaries
+                          i.e. each block contains all members of any group present in that block.
+          * "cohorts" : Finds group labels that tend to occur together ("cohorts"), indexes
+                        out cohorts and reduces that subset using "mapreduce", repeat for all cohorts.
+                        This works well for many time groupings where the group labels repeat
+                        at regular intervals like 'hour', 'month', dayofyear' etc. Optimize
+                        chunking ``array`` for this method by first rechunking using ``rechunk_for_cohorts``.
     isbin: bool, optional
         Are `expected_groups` bin edges?
 
     Returns
     -------
-    dict[str, [np.ndarray, dask.array.Array]]
-        Keys include ``"groups"`` and ``func``.
+    result
+        Aggregated result
+    *groups
+        Group labels
     """
 
     if not is_duck_array(by):
@@ -1003,32 +1140,55 @@ def groupby_reduce(
             reduction.combine += ("sum",)
             reduction.fill_value["intermediate"] += (0,)
 
-        if method == "blockwise":
-            if by.ndim > 1:
-                raise ValueError(
-                    "For method='blockwise', by must be 1D. "
-                    f"Received {by.ndim} dimensions instead."
-                )
-            array = rechunk_array(array, axis=-1, labels=by)
-
-        # Needed since we need not have equal number of groups per block
-        # if expected_groups is None and len(axis) > 1:
-        #     by = _collapse_axis(by, len(axis))
-        #     array = _collapse_axis(array, len(axis))
-        #     axis = (array.ndim - 1,)
-
-        # TODO: test with mixed array kinds (numpy + dask; dask + numpy)
-        result, *groups = groupby_agg(
-            array,
-            by,
-            reduction,
-            expected_groups,
+        partial_agg = partial(
+            groupby_agg,
+            agg=reduction,
             axis=axis,
             split_out=split_out,
             fill_value=fill_value,
-            method=method,
             min_count=min_count,
             isbin=isbin,
         )
+        if method == "cohorts":
+            assert len(axis) == 1
+
+            cohorts = find_group_cohorts(by, array.chunks[axis[0]], merge=True)
+            idx = np.arange(len(by))
+
+            results = []
+            groups_ = []
+            for cohort in cohorts:
+                # indexes for a subset of groups
+                subset_idx = idx[np.isin(by, cohort)]
+                # get final result for these groups
+                r, *g = partial_agg(
+                    array[..., subset_idx],
+                    by[subset_idx],
+                    expected_groups=cohort,
+                    method="mapreduce",
+                )
+                results.append(r)
+                groups_.append(g)
+
+            # concatenate results together
+            groups = (np.hstack(groups_),)
+            result = np.concatenate(results, axis=-1)
+
+        else:
+            if method == "blockwise":
+                if by.ndim > 1:
+                    raise ValueError(
+                        "For method='blockwise', ``by`` must be 1D. "
+                        f"Received {by.ndim} dimensions instead."
+                    )
+                array = rechunk_for_blockwise(array, axis=-1, labels=by)
+
+            # TODO: test with mixed array kinds (numpy + dask; dask + numpy)
+            result, *groups = partial_agg(
+                array,
+                by,
+                expected_groups=expected_groups,
+                method=method,
+            )
 
     return (result, *groups)

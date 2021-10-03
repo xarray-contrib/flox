@@ -7,7 +7,13 @@ import pandas as pd
 import xarray as xr
 
 from .aggregations import Aggregation, _atleast_1d
-from .core import factorize_, groupby_reduce, rechunk_array, reindex_
+from .core import (
+    factorize_,
+    groupby_reduce,
+    rechunk_for_blockwise,
+    rechunk_for_cohorts as rechunk_array_for_cohorts,
+    reindex_,
+)
 
 if TYPE_CHECKING:
     from xarray import DataArray, Dataset, GroupBy, Resample
@@ -338,6 +344,49 @@ def xarray_groupby_reduce(
     return actual
 
 
+def rechunk_for_cohorts(
+    obj: Union["DataArray", "Dataset"],
+    dim: str,
+    labels: "DataArray",
+    force_new_chunk_at,
+    chunksize: Optional[int] = None,
+):
+    """
+    Rechunks array so that each new chunk contains groups that always occur together.
+
+    Parameters
+    ----------
+    array: DataArray or Dataset
+        array to rechunk
+    dim: str
+        Dimension to rechunk
+    labels: DataArray
+        1D Group labels to align chunks with. This routine works
+        well when ``labels`` has repeating patterns: e.g.
+        ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
+        that the pattern must contain sequences.
+    force_new_chunk_at:
+        label at which we always start a new chunk. For
+        the example ``labels`` array, this would be `1``.
+    chunksize: int, optional
+        nominal chunk size. Chunk size is exceded when the label
+        in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
+        If None, uses median chunksize along ``dim``.
+    Returns
+    -------
+    dask.array.Array
+        rechunked array
+    """
+    return _rechunk(
+        rechunk_array_for_cohorts,
+        obj,
+        dim,
+        labels,
+        force_new_chunk_at=force_new_chunk_at,
+        chunksize=chunksize,
+    )
+
+
 def rechunk_to_group_boundaries(obj: Union["DataArray", "Dataset"], dim: str, labels: "DataArray"):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
@@ -347,20 +396,25 @@ def rechunk_to_group_boundaries(obj: Union["DataArray", "Dataset"], dim: str, la
     Such patterns occur when using ``.resample``.
     """
 
+    return _rechunk(rechunk_for_blockwise, obj, dim, labels)
+
+
+def _rechunk(func, obj, dim, labels, **kwargs):
+    """Common logic for rechunking xarray objects."""
     obj = obj.copy(deep=True)
 
     if isinstance(obj, xr.Dataset):
         for var in obj:
             if obj[var].chunks is not None:
                 obj[var] = obj[var].copy(
-                    data=rechunk_array(
-                        obj[var].data, axis=obj[var].get_axis_num(dim), labels=labels.data
+                    data=func(
+                        obj[var].data, axis=obj[var].get_axis_num(dim), labels=labels.data, **kwargs
                     )
                 )
     else:
         if obj.chunks is not None:
             obj = obj.copy(
-                data=rechunk_array(obj.data, axis=obj.get_axis_num(dim), labels=labels.data)
+                data=func(obj.data, axis=obj.get_axis_num(dim), labels=labels.data, **kwargs)
             )
 
     return obj

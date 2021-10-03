@@ -5,7 +5,13 @@ import pytest
 from dask.array import from_array
 from numpy_groupies.aggregate_numpy import aggregate
 
-from dask_groupby.core import _get_optimal_chunks_for_groups, groupby_reduce, reindex_
+from dask_groupby.core import (
+    _get_optimal_chunks_for_groups,
+    find_group_cohorts,
+    groupby_reduce,
+    rechunk_for_cohorts,
+    reindex_,
+)
 
 from . import assert_equal, raise_if_dask_computes
 
@@ -122,10 +128,11 @@ def test_groupby_reduce_all(size, func):
         assert actual.dtype.kind == "i"
     assert_equal(actual, expected)
 
-    actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func)
-    if "arg" in func:
-        assert actual.dtype.kind == "i"
-    assert_equal(actual, expected)
+    for method in ["mapreduce", "cohorts"]:
+        actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func, method=method)
+        if "arg" in func:
+            assert actual.dtype.kind == "i"
+        assert_equal(actual, expected)
 
 
 @pytest.mark.parametrize("size", ((12,), (12, 5)))
@@ -483,6 +490,37 @@ def test_groupby_bins(chunks):
         [(10,), (10,)],
     ],
 )
-def test_optimal_rechunking(inchunks, expected):
+def test_rechunk_for_blockwise(inchunks, expected):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
+
+
+@pytest.mark.parametrize(
+    "expected, labels, chunks, merge",
+    [
+        [[[1, 2, 3, 4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), True],
+        [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), False],
+        [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), False],
+        [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), True],
+        [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), True],
+        [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), False],
+    ],
+)
+def test_find_group_cohorts(expected, labels, chunks, merge):
+    actual = list(find_group_cohorts(labels, chunks, merge))
+    assert actual == expected, (actual, expected)
+
+
+@pytest.mark.parametrize(
+    "chunk_at,expected",
+    [
+        [1, ((1, 6, 1, 6, 1, 6, 1, 6, 1, 1),)],
+        [0, ((7, 7, 7, 7, 2),)],
+        [3, ((3, 4, 3, 4, 3, 4, 3, 4, 2),)],
+    ],
+)
+def test_rechunk_for_cohorts(chunk_at, expected):
+    array = dask.array.ones((30,), chunks=7)
+    labels = np.arange(0, 30) % 7
+    rechunked = rechunk_for_cohorts(array, axis=-1, force_new_chunk_at=chunk_at, labels=labels)
+    assert rechunked.chunks == expected
