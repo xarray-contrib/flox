@@ -113,6 +113,9 @@ def xarray_reduce(
         if isinstance(b, xr.DataArray) and b.name is None:
             raise ValueError("Cannot group by unnamed DataArrays.")
 
+    # eventually  drop the variables we are grouping by
+    maybe_drop = [b for b in by if isinstance(b, str)]
+
     by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
     if len(by) > 1 and any(dask.is_dask_collection(by_) for by_ in by):
@@ -128,6 +131,7 @@ def xarray_reduce(
     else:
         ds = obj
 
+    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
     if dim is Ellipsis:
         dim = tuple(obj.dims)
         if by[0].name in ds.dims:
