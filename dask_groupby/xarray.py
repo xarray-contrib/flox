@@ -138,6 +138,11 @@ def xarray_reduce(
             dim = tuple(d for d in dim if d != by[0].name)
         dim = tuple(dim)
 
+    # TODO: do this for specific reductions only
+    bad_dtypes = tuple(
+        k for k in ds.variables if k not in ds.dims and ds[k].dtype.kind in ("S", "U")
+    )
+
     # broadcast all variables against each other along all dimensions in `by` variables
     # don't exclude `dim` because it need not be a dimension in any of the `by` variables!
     # in the case where dim is Ellipsis, and by.ndim < obj.ndim
@@ -165,7 +170,10 @@ def xarray_reduce(
         else:
             dsfunc = func
         result = getattr(ds, dsfunc)(dim=dim)
-        return result
+        if isinstance(obj, xr.DataArray):
+            return obj._from_temp_dataset(result)
+        else:
+            return result
 
     axis = tuple(range(-len(dim), 0))
 
@@ -212,19 +220,18 @@ def xarray_reduce(
             result = reindexed.reshape(result.shape[:-1] + group_shape)
         return result
 
-    # These data variables do not have the core dimension,
+    # These data variables do not have any of the core dimension,
     # take them out to prevent errors.
     # apply_ufunc can handle non-dim coordinate variables without core dimensions
     missing_dim = {}
     if isinstance(obj, xr.Dataset):
         # broadcasting means the group dim gets added to ds, so we check the original obj
         for k, v in obj.data_vars.items():
-            is_missing_dim = not (all(d in v.dims for d in dim))
+            if k in bad_dtypes:
+                continue
+            is_missing_dim = not (any(d in v.dims for d in dim))
             if is_missing_dim:
                 missing_dim[k] = v
-
-    # TODO: do this for specific reductions only
-    bad_dtypes = tuple(k for k in ds.variables if ds[k].dtype.kind in ("S", "U"))
 
     actual = xr.apply_ufunc(
         wrapper,
@@ -278,8 +285,14 @@ def xarray_reduce(
 
     if missing_dim:
         for k, v in missing_dim.items():
+            missing_group_dims = {
+                dim: size for dim, size in group_sizes.items() if dim not in v.dims
+            }
             # The expand_dims is for backward compat with xarray's questionable behaviour
-            actual[k] = v.expand_dims(group_sizes)
+            if missing_group_dims:
+                actual[k] = v.expand_dims(missing_group_dims)
+            else:
+                actual[k] = v
 
     if isinstance(obj, xr.DataArray):
         return obj._from_temp_dataset(actual)
