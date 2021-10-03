@@ -128,7 +128,7 @@ def xarray_reduce(
         ds = obj
 
     if dim is Ellipsis:
-        dim = obj.dims
+        dim = tuple(obj.dims)
 
     # broadcast all variables against each other along all dimensions in `by` variables
     # don't exclude `dim` because it need not be a dimension in any of the `by` variables!
@@ -141,7 +141,7 @@ def xarray_reduce(
     ds, *by = xr.broadcast(ds, *by, exclude=exclude_dims)
 
     if dim is None:
-        dim = by[0].dims
+        dim = tuple(by[0].dims)
     else:
         dim = _atleast_1d(dim)
 
