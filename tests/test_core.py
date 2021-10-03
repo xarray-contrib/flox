@@ -490,7 +490,7 @@ def test_groupby_bins(chunks):
         [(10,), (10,)],
     ],
 )
-def test_optimal_rechunking(inchunks, expected):
+def test_rechunk_for_blockwise(inchunks, expected):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
 
