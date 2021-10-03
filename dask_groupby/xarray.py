@@ -100,12 +100,6 @@ def xarray_reduce(
     FIXME: Add docs.
     """
 
-    # TODO: handle this _DummyGroup stuff when dispatching from xarray
-    from xarray.core.groupby import _DummyGroup
-
-    unindexed_dims = tuple(b.name for b in by if isinstance(b, _DummyGroup))
-    by = tuple(b.name if isinstance(b, _DummyGroup) else b for b in by)
-
     if skipna and func != "count":
         func = f"nan{func}"
 
@@ -115,6 +109,9 @@ def xarray_reduce(
 
     # eventually  drop the variables we are grouping by
     maybe_drop = [b for b in by if isinstance(b, str)]
+    unindexed_dims = tuple(
+        b for b in by if isinstance(b, str) and b in obj.dims and b not in obj.indexes
+    )
 
     by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
