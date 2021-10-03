@@ -116,7 +116,7 @@ def xarray_reduce(
     by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
     if len(by) > 1 and any(dask.is_dask_collection(by_) for by_ in by):
-        raise ValueError("Grouping by multiple variables will call compute dask variables.")
+        raise NotImplementedError("Grouping by multiple variables will compute dask variables.")
 
     if isinstance(isbin, bool):
         isbin = (isbin,) * len(by)
