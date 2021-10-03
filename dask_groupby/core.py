@@ -955,13 +955,14 @@ def groupby_reduce(
     array: Union[np.ndarray, "DaskArray"],
     by: Union[np.ndarray, "DaskArray"],
     func: Union[str, Aggregation],
+    *,
     expected_groups: Union[Sequence, np.ndarray] = None,
+    isbin: bool = False,
     axis=None,
     fill_value=None,
     min_count: Optional[int] = None,
     split_out: int = 1,
-    method="mapreduce",
-    isbin: bool = False,
+    method: str = "mapreduce",
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
     """
     GroupBy reductions using tree reductions for dask.array
@@ -977,6 +978,8 @@ def groupby_reduce(
         Single function name or an Aggregation instance
     expected_groups: (optional) Sequence
         Expected unique labels.
+    isbin: bool, optional
+        Are `expected_groups` bin edges?
     axis: (optional) None or int or Sequence[int]
         If None, reduce across all dimensions of by
         Else, reduce across corresponding axes of array
@@ -1002,8 +1005,6 @@ def groupby_reduce(
                         This works well for many time groupings where the group labels repeat
                         at regular intervals like 'hour', 'month', dayofyear' etc. Optimize
                         chunking ``array`` for this method by first rechunking using ``rechunk_for_cohorts``.
-    isbin: bool, optional
-        Are `expected_groups` bin edges?
 
     Returns
     -------

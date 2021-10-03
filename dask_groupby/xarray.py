@@ -58,7 +58,7 @@ def xarray_reduce(
     fill_value=None,
     method: str = "mapreduce",
     keep_attrs: bool = True,
-    skipna=True,
+    skipna: bool = True,
     min_count: Optional[int] = None,
 ):
     """GroupBy reduce operations on xarray objects using numpy-groupies
