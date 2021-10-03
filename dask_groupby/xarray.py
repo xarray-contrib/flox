@@ -7,7 +7,13 @@ import pandas as pd
 import xarray as xr
 
 from .aggregations import Aggregation, _atleast_1d
-from .core import factorize_, groupby_reduce, rechunk_for_blockwise, reindex_
+from .core import (
+    factorize_,
+    groupby_reduce,
+    rechunk_for_blockwise,
+    rechunk_for_cohorts as rechunk_array_for_cohorts,
+    reindex_,
+)
 
 if TYPE_CHECKING:
     from xarray import DataArray, Dataset, GroupBy, Resample
@@ -353,7 +359,7 @@ def rechunk_for_cohorts(
         rechunked array
     """
     return _rechunk(
-        rechunk_for_cohorts,
+        rechunk_array_for_cohorts,
         obj,
         dim,
         labels,
@@ -389,7 +395,7 @@ def _rechunk(func, obj, dim, labels, **kwargs):
     else:
         if obj.chunks is not None:
             obj = obj.copy(
-                data=_rechunk(obj.data, axis=obj.get_axis_num(dim), labels=labels.data, **kwargs)
+                data=func(obj.data, axis=obj.get_axis_num(dim), labels=labels.data, **kwargs)
             )
 
     return obj
