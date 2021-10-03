@@ -470,9 +470,7 @@ def _finalize_results(
         result[agg.name] = reindex_(
             result[agg.name], squeezed["groups"], expected_groups, fill_value=fill_value
         )
-
-    # all groups need not have been present, so we don't use `squeezed["groups"]` here
-    result["groups"] = expected_groups
+        result["groups"] = expected_groups
 
     return result
 
