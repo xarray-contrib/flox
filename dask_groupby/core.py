@@ -557,7 +557,7 @@ def _finalize_results(
     axis: Sequence[int],
     expected_groups: Union[Sequence, np.ndarray, None],
     fill_value: Any,
-    mask_counts: bool = True,
+    min_count: Optional[int] = None,
 ):
     """Finalize results by
     1. Squeezing out dummy dimensions
@@ -575,28 +575,31 @@ def _finalize_results(
     """
     squeezed = _squeeze_results(results, axis)
 
-    if fill_value is not None and mask_counts:
-        counts = squeezed["intermediates"][-1]
-        squeezed["intermediates"] = squeezed["intermediates"][:-1]
-
     # finalize step
     result: Dict[str, Union["DaskArray", np.ndarray]] = {}
     if agg.finalize is None:
+        if min_count is not None:
+            counts = squeezed["intermediates"][-1]
+            squeezed["intermediates"] = squeezed["intermediates"][:-1]
         result[agg.name] = squeezed["intermediates"][0]
+        if min_count is not None:
+            result[agg.name] = np.where(counts >= min_count, result[agg.name], fill_value)
     else:
-        result[agg.name] = agg.finalize(*squeezed["intermediates"])
+        if fill_value is not None:
+            counts = squeezed["intermediates"][-1]
+            squeezed["intermediates"] = squeezed["intermediates"][:-1]
 
-    if fill_value is not None and mask_counts:
-        result[agg.name] = np.where(counts > 0, result[agg.name], fill_value)
+        if min_count is None:
+            min_count = 1
+        result[agg.name] = agg.finalize(*squeezed["intermediates"])
+        result[agg.name] = np.where(counts >= min_count, result[agg.name], fill_value)
 
     # Final reindexing has to be here to be lazy
     if expected_groups is not None:
         result[agg.name] = reindex_(
             result[agg.name], squeezed["groups"], expected_groups, fill_value=fill_value
         )
-
-    # all groups need not have been present, so we don't use `squeezed["groups"]` here
-    result["groups"] = expected_groups
+        result["groups"] = expected_groups
 
     return result
 
@@ -609,10 +612,11 @@ def _npg_aggregate(
     keepdims,
     group_ndim: int,
     fill_value: Any = None,
+    min_count: Optional[int] = None,
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
     results = _npg_combine(x_chunk, agg, axis, keepdims, group_ndim)
-    return _finalize_results(results, agg, axis, expected_groups, fill_value)
+    return _finalize_results(results, agg, axis, expected_groups, fill_value, min_count)
 
 
 def _npg_combine(
@@ -764,6 +768,7 @@ def groupby_agg(
     split_out: int = 1,
     fill_value: Any = None,
     method: str = "mapreduce",
+    min_count: Optional[int] = None,
     isbin: bool = False,
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
 
@@ -846,6 +851,7 @@ def groupby_agg(
                 expected_groups=expected_agg,
                 group_ndim=by.ndim,
                 fill_value=fill_value,
+                min_count=min_count,
             ),
             combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim),
             name=f"{name}-reduce",
@@ -874,6 +880,7 @@ def groupby_agg(
                 expected_groups=None,
                 group_ndim=by.ndim,
                 fill_value=fill_value,
+                min_count=min_count,
                 axis=axis,
                 keepdims=True,
             ),
@@ -952,6 +959,7 @@ def groupby_reduce(
     expected_groups: Union[Sequence, np.ndarray] = None,
     axis=None,
     fill_value=None,
+    min_count: Optional[int] = None,
     split_out: int = 1,
     method="mapreduce",
     isbin: bool = False,
@@ -1016,6 +1024,11 @@ def groupby_reduce(
             f"Received array of shape {array.shape} and by of shape {by.shape}"
         )
 
+    if min_count is not None and min_count > 1 and func not in ["nansum", "nanprod"]:
+        raise ValueError(
+            "min_count can be > 1 only for nansum, nanprod. This is an Xarray limitation."
+        )
+
     if axis is None:
         axis = tuple(array.ndim + np.arange(-by.ndim, 0))
     else:
@@ -1062,23 +1075,35 @@ def groupby_reduce(
     )
     reduction.fill_value[func] = _get_fill_value(reduction.dtype, reduction.fill_value[func])
 
+    if fill_value is None:
+        fill_value = reduction.fill_value[func]
+
+    if min_count is not None:
+        assert func in ["nansum", "nanprod"]
+        # nansum, nanprod have fill_value=0,1
+        # overwrite than when min_count is set
+        fill_value = np.nan
+
     # TODO: handle reduction being something custom not present in numpy_groupies
     if not is_duck_dask_array(array) and not is_duck_dask_array(by):
-        fv = reduction.fill_value[func] if fill_value is None else fill_value
         # for pure numpy grouping, we just use npg directly and avoid "finalizing"
         # (agg.finalize = None). We still need to do the reindexing step in finalize
         # so that everything matches the dask version.
-        # Also, npg's count counts the number of groups
+        reduction.finalize = None
+        # npg's count counts the number of groups
         # we want to count the number of non-NaN array elements in each group
         # So we use our custom _count instead of "count"
         func = reduction.name if reduction.name != "count" else _count
+        if min_count is not None:
+            func = (func, _count)
+
         results = chunk_reduce(
             array,
             by,
             func=func,
             axis=axis,
             expected_groups=expected_groups if isbin else None,
-            fill_value=fv,
+            fill_value=(fill_value, 0) if min_count is not None else fill_value,
             dtype=reduction.dtype,
             isbin=isbin,
         )  # type: ignore
@@ -1093,14 +1118,14 @@ def groupby_reduce(
 
         if isbin:
             expected_groups = np.arange(len(expected_groups) - 1)
-        reduction.finalize = None
+
         result = _finalize_results(
             results,
             reduction,
             axis,
             expected_groups,
             fill_value=fill_value,
-            mask_counts=False,
+            min_count=min_count,
         )
         groups = (result["groups"],)
         result = result[reduction.name]
@@ -1109,11 +1134,8 @@ def groupby_reduce(
         if func in ["first", "last"]:
             raise NotImplementedError("first, last not implemented for dask arrays")
 
-        if fill_value is None:
-            fill_value = reduction.fill_value[func]
-
         # we need to explicitly track counts so that we can mask at the end
-        if fill_value is not None:
+        if fill_value is not None or min_count is not None:
             reduction.chunk += (_count,)
             reduction.combine += ("sum",)
             reduction.fill_value["intermediate"] += (0,)
@@ -1139,6 +1161,7 @@ def groupby_reduce(
                     split_out=split_out,
                     fill_value=fill_value,
                     method="mapreduce",
+                    min_count=min_count,
                     isbin=isbin,
                 )
                 results.append(r)
@@ -1167,6 +1190,7 @@ def groupby_reduce(
                 split_out=split_out,
                 fill_value=fill_value,
                 method=method,
+                min_count=min_count,
                 isbin=isbin,
             )
 
