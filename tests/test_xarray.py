@@ -16,10 +16,11 @@ from . import assert_equal, raise_if_dask_computes
 dask.config.set(scheduler="sync")
 
 
+@pytest.mark.parametrize("backend", ["numpy", "numba"])
 @pytest.mark.parametrize("min_count", [None, 1, 3])
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("skipna", [True, False])
-def test_xarray_reduce(skipna, add_nan, min_count):
+def test_xarray_reduce(skipna, add_nan, min_count, backend):
     arr = np.ones((4, 12))
 
     if add_nan:
@@ -38,7 +39,9 @@ def test_xarray_reduce(skipna, add_nan, min_count):
     ).expand_dims(z=4)
 
     expected = da.groupby("labels").sum(skipna=skipna, min_count=min_count)
-    actual = xarray_reduce(da, "labels", func="sum", skipna=skipna, min_count=min_count)
+    actual = xarray_reduce(
+        da, "labels", func="sum", skipna=skipna, min_count=min_count, backend=backend
+    )
     assert_equal(expected, actual)
 
     # test dimension ordering

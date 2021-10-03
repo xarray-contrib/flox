@@ -32,6 +32,17 @@ IntermediateDict = Dict[Union[str, Callable], Any]
 FinalResultsDict = Dict[str, Union["DaskArray", np.ndarray]]
 
 
+def _get_aggregate(backend):
+    if backend == "numba":
+        return npg.aggregate_numba.aggregate
+    elif backend == "numpy":
+        return npg.aggregate_numpy.aggregate
+    else:
+        raise ValueError(
+            "Expected backend to be one of ['numpy', 'numba']. Received {backend} instead."
+        )
+
+
 def _get_chunk_reduction(reduction_type: str) -> Callable:
     if reduction_type == "reduce":
         return chunk_reduce
@@ -353,6 +364,7 @@ def chunk_argreduce(
     dtype=None,
     reindex: bool = False,
     isbin: bool = False,
+    backend: str = "numpy",
 ) -> IntermediateDict:
     """
     Per-chunk arg reduction.
@@ -371,6 +383,7 @@ def chunk_argreduce(
         fill_value=fill_value,
         isbin=isbin,
         dtype=dtype,
+        backend=backend,
     )
     if not np.isnan(results["groups"]).all():
         # will not work for empty groups...
@@ -398,6 +411,7 @@ def chunk_reduce(
     dtype=None,
     reindex: bool = False,
     isbin: bool = False,
+    backend: str = "numpy",
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -503,7 +517,7 @@ def chunk_reduce(
                     fill_value=fv,
                 )
             else:
-                result = npg.aggregate_numpy.aggregate(
+                result = _get_aggregate(backend)(
                     group_idx,
                     array,
                     axis=-1,
@@ -612,9 +626,10 @@ def _npg_aggregate(
     group_ndim: int,
     fill_value: Any = None,
     min_count: Optional[int] = None,
+    backend: str = "numpy",
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
-    results = _npg_combine(x_chunk, agg, axis, keepdims, group_ndim)
+    results = _npg_combine(x_chunk, agg, axis, keepdims, group_ndim, backend)
     return _finalize_results(results, agg, axis, expected_groups, fill_value, min_count)
 
 
@@ -624,6 +639,7 @@ def _npg_combine(
     axis: Sequence,
     keepdims: bool,
     group_ndim: int,
+    backend: str,
 ) -> IntermediateDict:
     """Combine intermediates step of tree reduction."""
     from dask.array.core import _concatenate2
@@ -682,6 +698,7 @@ def _npg_combine(
             expected_groups=None,
             fill_value=agg.fill_value["intermediate"][slicer],
             dtype=agg.dtype,
+            backend=backend,
         )
 
         if agg.chunk[-1] == _count:
@@ -696,6 +713,7 @@ def _npg_combine(
                     expected_groups=None,
                     fill_value=(0,),
                     dtype=np.intp,
+                    backend=backend,
                 )["intermediates"][0]
             )
 
@@ -720,6 +738,7 @@ def _npg_combine(
                     axis=axis,
                     expected_groups=None,
                     fill_value=fv,
+                    backend=backend,
                 )
                 results["intermediates"].append(*_results["intermediates"])
                 results["groups"] = _results["groups"]
@@ -769,6 +788,7 @@ def groupby_agg(
     method: str = "mapreduce",
     min_count: Optional[int] = None,
     isbin: bool = False,
+    backend: str = "numpy",
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
 
     import dask.array
@@ -806,6 +826,7 @@ def groupby_agg(
             fill_value=agg.fill_value["intermediate"],
             isbin=isbin,
             reindex=split_out > 1,
+            backend=backend,
         ),
         inds,
         array,
@@ -851,8 +872,9 @@ def groupby_agg(
                 group_ndim=by.ndim,
                 fill_value=fill_value,
                 min_count=min_count,
+                backend=backend,
             ),
-            combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim),
+            combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim, backend=backend),
             name=f"{name}-reduce",
             dtype=array.dtype,
             axis=axis,
@@ -880,6 +902,7 @@ def groupby_agg(
                 group_ndim=by.ndim,
                 fill_value=fill_value,
                 min_count=min_count,
+                backend=backend,
                 axis=axis,
                 keepdims=True,
             ),
@@ -963,6 +986,7 @@ def groupby_reduce(
     min_count: Optional[int] = None,
     split_out: int = 1,
     method: str = "mapreduce",
+    backend: str = "numpy",
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
     """
     GroupBy reductions using tree reductions for dask.array
@@ -1005,6 +1029,8 @@ def groupby_reduce(
                         This works well for many time groupings where the group labels repeat
                         at regular intervals like 'hour', 'month', dayofyear' etc. Optimize
                         chunking ``array`` for this method by first rechunking using ``rechunk_for_cohorts``.
+    backend: {"numpy", "numba"}, optional
+        Backend  for numpy_groupies. numpy by default.
 
     Returns
     -------
@@ -1148,6 +1174,7 @@ def groupby_reduce(
             fill_value=fill_value,
             min_count=min_count,
             isbin=isbin,
+            backend=backend,
         )
         if method == "cohorts":
             assert len(axis) == 1

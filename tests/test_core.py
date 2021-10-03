@@ -31,6 +31,7 @@ def test_alignment_error():
         groupby_reduce(da, labels, func="mean")
 
 
+@pytest.mark.parametrize("backend", ["numpy", "numba"])
 @pytest.mark.parametrize("dtype", (float, int))
 @pytest.mark.parametrize("chunk, split_out", [(False, 1), (True, 1), (True, 2), (True, 3)])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
@@ -59,7 +60,9 @@ def test_alignment_error():
         # (np.ones((12,)), np.array([labels, labels])),  # form 4
     ],
 )
-def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split_out, dtype):
+def test_groupby_reduce(
+    array, by, expected, func, expected_groups, chunk, split_out, dtype, backend
+):
     array = array.astype(dtype)
     if chunk:
         if expected_groups is None:
@@ -81,10 +84,12 @@ def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split
         expected_groups=expected_groups,
         fill_value=123,
         split_out=split_out,
+        backend=backend,
     )
     assert_equal(expected, result)
 
 
+@pytest.mark.parametrize("backend", ["numpy", "numba"])
 @pytest.mark.parametrize("size", ((12,), (12, 5)))
 @pytest.mark.parametrize(
     "func",
@@ -109,7 +114,7 @@ def test_groupby_reduce(array, by, expected, func, expected_groups, chunk, split
         pytest.param("nanargmin", marks=(pytest.mark.xfail,)),
     ),
 )
-def test_groupby_reduce_all(size, func):
+def test_groupby_reduce_all(size, func, backend):
 
     array = np.random.randn(*size)
     by = np.ones(size[-1])
@@ -123,13 +128,15 @@ def test_groupby_reduce_all(size, func):
         expected = getattr(np, func)(array, axis=-1)
     expected = np.expand_dims(expected, -1)
 
-    actual, _ = groupby_reduce(array, by, func=func)
+    actual, _ = groupby_reduce(array, by, func=func, backend=backend)
     if "arg" in func:
         assert actual.dtype.kind == "i"
     assert_equal(actual, expected)
 
     for method in ["mapreduce", "cohorts"]:
-        actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func, method=method)
+        actual, _ = groupby_reduce(
+            da.from_array(array, chunks=3), by, func=func, method=method, backend=backend
+        )
         if "arg" in func:
             assert actual.dtype.kind == "i"
         assert_equal(actual, expected)
@@ -336,14 +343,15 @@ def test_dask_reduce_axis_subset():
         )
 
 
+@pytest.mark.parametrize("backend", ["numpy", "numba"])
 @pytest.mark.parametrize(
     "axis", [None, (0, 1, 2), (0, 1), (0, 2), (1, 2), 0, 1, 2, (0,), (1,), (2,)]
 )
-def test_groupby_reduce_axis_subset_against_numpy(axis):
+def test_groupby_reduce_axis_subset_against_numpy(axis, backend):
     # tests against the numpy output to make sure dask compute matches
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
-    kwargs = dict(func="count", axis=axis, expected_groups=[0, 2], fill_value=123)
+    kwargs = dict(func="count", axis=axis, expected_groups=[0, 2], fill_value=123, backend=backend)
     with raise_if_dask_computes():
         actual, _ = groupby_reduce(
             da.from_array(array, chunks=(-1, 2, 3)),
@@ -354,6 +362,7 @@ def test_groupby_reduce_axis_subset_against_numpy(axis):
     assert_equal(actual, expected)
 
 
+@pytest.mark.parametrize("backend", ["numpy", "numba"])
 @pytest.mark.parametrize("chunks", [None, (2, 2, 3)])
 @pytest.mark.parametrize(
     "axis, groups, expected_shape",
@@ -363,7 +372,7 @@ def test_groupby_reduce_axis_subset_against_numpy(axis):
         (None, [0], (1,)),  # global reduction; 0 shaped group axis; 1 group
     ],
 )
-def test_groupby_reduce_nans(chunks, axis, groups, expected_shape):
+def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, backend):
     def _maybe_chunk(arr):
         if chunks:
             return da.from_array(arr, chunks=chunks)
@@ -383,6 +392,7 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape):
         expected_groups=groups,
         axis=axis,
         fill_value=0,
+        backend=backend,
     )
     assert_equal(result, np.zeros(expected_shape, dtype=np.int64))
 
@@ -394,7 +404,8 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape):
     # by = np.broadcast_to(labels2d, (3, *labels2d.shape))
 
 
-def test_groupby_all_nan_blocks():
+@pytest.mark.parametrize("backend", ["numpy", "numba"])
+def test_groupby_all_nan_blocks(backend):
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
     nan_labels = labels.astype(float)  # copy
     nan_labels[:5] = np.nan
@@ -410,6 +421,7 @@ def test_groupby_all_nan_blocks():
         da.from_array(by, chunks=(1, 3)),
         func="sum",
         expected_groups=None,
+        backend=backend,
     )
     assert_equal(actual, expected)
 

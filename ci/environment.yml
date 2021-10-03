@@ -15,5 +15,6 @@ dependencies:
   - numpy_groupies
   - pooch
   - toolz
+  - numba
   - pip:
     - icecream
