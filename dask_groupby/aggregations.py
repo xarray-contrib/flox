@@ -116,22 +116,8 @@ def nansum_of_squares(group_idx, array, size=None, fill_value=None):
     return sum_of_squares(group_idx, array, func="nansum", size=size, fill_value=fill_value)
 
 
-def _count(group_idx, array, size=None, fill_value=None):
-    import numpy_groupies as npg
-
-    return npg.aggregate_numpy.aggregate(
-        group_idx,
-        ~np.isnan(array),
-        axis=-1,
-        func="sum",
-        size=size,
-        fill_value=fill_value,
-        dtype=np.intp,
-    )
-
-
 count = Aggregation(
-    "count", chunk=_count, combine="sum", fill_value=0, final_fill_value=0, dtype=int
+    "count", chunk="nanlen", combine="sum", fill_value=0, final_fill_value=0, dtype=np.intp
 )
 
 # note that the fill values are  the result of np.func([np.nan, np.nan])
@@ -141,7 +127,7 @@ prod = Aggregation("prod", chunk="prod", combine="prod", fill_value=1, final_fil
 nanprod = Aggregation("nanprod", chunk="nanprod", combine="prod", fill_value=1, final_fill_value=1)
 mean = Aggregation(
     "mean",
-    chunk=("sum", _count),
+    chunk=("sum", "nanlen"),
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
     fill_value=(0, 0),
@@ -149,7 +135,7 @@ mean = Aggregation(
 )
 nanmean = Aggregation(
     "nanmean",
-    chunk=("nansum", _count),
+    chunk=("nansum", "nanlen"),
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
     fill_value=(0, 0),
@@ -171,7 +157,7 @@ def _std_finalize(sumsq, sum_, count, ddof=0):
 # var, std always promote to float, so we set nan
 var = Aggregation(
     "var",
-    chunk=(sum_of_squares, "sum", _count),
+    chunk=(sum_of_squares, "sum", "nanlen"),
     combine=("sum", "sum", "sum"),
     finalize=_var_finalize,
     fill_value=0,
@@ -180,7 +166,7 @@ var = Aggregation(
 )
 nanvar = Aggregation(
     "nanvar",
-    chunk=(nansum_of_squares, "nansum", _count),
+    chunk=(nansum_of_squares, "nansum", "nanlen"),
     combine=("sum", "sum", "sum"),
     finalize=_var_finalize,
     fill_value=0,
@@ -189,7 +175,7 @@ nanvar = Aggregation(
 )
 std = Aggregation(
     "std",
-    chunk=(sum_of_squares, "sum", _count),
+    chunk=(sum_of_squares, "sum", "nanlen"),
     combine=("sum", "sum", "sum"),
     finalize=_std_finalize,
     fill_value=0,
@@ -198,7 +184,7 @@ std = Aggregation(
 )
 nanstd = Aggregation(
     "nanstd",
-    chunk=(nansum_of_squares, "nansum", _count),
+    chunk=(nansum_of_squares, "nansum", "nanlen"),
     combine=("sum", "sum", "sum"),
     finalize=_std_finalize,
     fill_value=0,

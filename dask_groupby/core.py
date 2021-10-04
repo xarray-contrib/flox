@@ -21,7 +21,7 @@ import numpy_groupies as npg
 import pandas as pd
 
 from . import aggregations
-from .aggregations import Aggregation, _atleast_1d, _count, _get_fill_value
+from .aggregations import Aggregation, _atleast_1d, _get_fill_value
 from .xrutils import is_duck_array, is_duck_dask_array
 
 if TYPE_CHECKING:
@@ -525,7 +525,7 @@ def chunk_reduce(
                     size=size,
                     # important when reducing with "offset" groups
                     fill_value=fv,
-                    dtype=dtype,
+                    dtype=np.intp if reduction == "nanlen" else dtype,
                 )
             if np.any(~mask):
                 # remove NaN group label which should be last
@@ -578,13 +578,6 @@ def _finalize_results(
     2. Calling agg.finalize with intermediate results
     3. Mask using counts and fill with user-provided fill_value.
     4. reindex to expected_groups
-
-    Parameters
-    ----------
-    mask_counts: bool
-        Whether to mask out results using counts which is expected to be the last element in
-        results["intermediates"]. Should be False when dask arrays are not involved.
-
     """
     squeezed = _squeeze_results(results, axis)
 
@@ -682,7 +675,7 @@ def _npg_combine(
     if agg.reduction_type == "argreduce":
 
         # If _count was added for masking later, we need to account for that
-        if agg.chunk[-1] == _count:
+        if agg.chunk[-1] == "nanlen":
             slicer = slice(None, -1)
         else:
             slicer = slice(None, None)
@@ -701,7 +694,7 @@ def _npg_combine(
             backend=backend,
         )
 
-        if agg.chunk[-1] == _count:
+        if agg.chunk[-1] == "nanlen":
             counts = _conc2(key1="intermediates", key2=2, axis=axis)
             # sum the counts
             results["intermediates"].append(
@@ -1116,12 +1109,10 @@ def groupby_reduce(
         # (agg.finalize = None). We still need to do the reindexing step in finalize
         # so that everything matches the dask version.
         reduction.finalize = None
-        # npg's count counts the number of groups
-        # we want to count the number of non-NaN array elements in each group
-        # So we use our custom _count instead of "count"
-        func = reduction.name if reduction.name != "count" else _count
+        # xarray's count is npg's nanlen
+        func = reduction.name if reduction.name != "count" else "nanlen"
         if min_count is not None:
-            func = (func, _count)
+            func = (func, "nanlen")
 
         results = chunk_reduce(
             array,
@@ -1162,7 +1153,7 @@ def groupby_reduce(
 
         # we need to explicitly track counts so that we can mask at the end
         if fill_value is not None or min_count is not None:
-            reduction.chunk += (_count,)
+            reduction.chunk += ("nanlen",)
             reduction.combine += ("sum",)
             reduction.fill_value["intermediate"] += (0,)
 
