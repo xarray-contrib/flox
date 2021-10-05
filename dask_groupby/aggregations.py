@@ -1,5 +1,6 @@
 import numpy as np
-from xarray.core import dtypes, utils
+
+from . import xrdtypes as dtypes, xrutils
 
 
 def _get_fill_value(dtype, fill_value):
@@ -17,7 +18,7 @@ def _get_fill_value(dtype, fill_value):
 
 
 def _atleast_1d(inp):
-    if utils.is_scalar(inp):
+    if xrutils.is_scalar(inp):
         inp = (inp,)
     return inp
 
