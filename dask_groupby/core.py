@@ -673,8 +673,7 @@ def _npg_combine(
     groups = _conc2("groups", axis=group_conc_axis)
 
     if agg.reduction_type == "argreduce":
-
-        # If _count was added for masking later, we need to account for that
+        # If "nanlen" was added for masking later, we need to account for that
         if agg.chunk[-1] == "nanlen":
             slicer = slice(None, -1)
         else:
@@ -875,7 +874,7 @@ def groupby_agg(
             concatenate=False,
         )
         output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + (group_chunks,)
-    else:
+    elif method == "blockwise":
         # Blockwise apply the aggregation step so that one input chunk → one output chunk
         # TODO: We could combine this with the chunk reduction and do everything in one task.
         #       This would also optimize the single block along reduced-axis case.
@@ -917,6 +916,8 @@ def groupby_agg(
             len(np.unique(by_maybe_numpy[i0:i1])) for i0, i1 in zip(bnds[:-1], bnds[1:])
         )
         output_chunks = reduced.chunks[: -(len(axis))] + (groups_per_chunk,)
+    else:
+        raise ValueError(f"Unknown method={method}.")
 
     def _getitem(d, key1, key2):
         return d[key1][key2]
