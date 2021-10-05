@@ -236,6 +236,7 @@ def rechunk_for_blockwise(array, axis, labels):
     This only works when the groups are sequential (e.g. labels = [0,0,0,1,1,1,1,2,2]).
     Such patterns occur when using ``.resample``.
     """
+    labels = factorize_((labels,), axis=None)[0]
     chunks = array.chunks[axis]
     # TODO: lru_cache this?
     newchunks = _get_optimal_chunks_for_groups(chunks, labels)
@@ -643,7 +644,7 @@ def _npg_combine(
         x_chunk = [x_chunk]
 
     unique_groups = np.unique(
-        tuple(flatten(deepmap(lambda x: np.atleast_1d(x["groups"].squeeze()).tolist(), x_chunk)))
+        tuple(flatten(deepmap(lambda x: list(np.atleast_1d(x["groups"].squeeze())), x_chunk)))
     )
 
     def reindex_intermediates(x):
