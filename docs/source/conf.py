@@ -15,6 +15,8 @@ import datetime
 import os
 import sys
 
+import dask_groupby
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -24,7 +26,6 @@ cwd = os.getcwd()
 parent = os.path.dirname(cwd)
 sys.path.insert(0, parent)
 
-import dask_groupby
 
 # -- General configuration -----------------------------------------------------
 

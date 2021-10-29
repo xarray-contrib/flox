@@ -1,3 +1,36 @@
 [tool.black]
 line-length = 100
-target-version = ['py38']
+target-version = ["py38"]
+
+[tool.isort]
+profile = "black"
+skip_gitignore = true
+float_to_top = true
+combine_as_imports = true
+known_first_party = "dask_groupby"
+known_third_party = [
+    "dask",
+    "numpy",
+    "numpy_groupies",
+    "pandas",
+    "pkg_resources",
+    "pytest",
+    "setuptools",
+    "xarray"
+]
+
+[tool.mypy]
+allow_redefinition = true
+exclude = "properties|asv_bench|doc|tests|flycheck"
+files = "dask_groupby/*.py"
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module=[
+    "dask.*",
+    "numpy_groupies",
+    "pandas",
+    "setuptools",
+    "toolz"
+]
+ignore_missing_imports = true
