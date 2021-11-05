@@ -1,4 +1,0 @@
-dask
-numpy_groupies
-netcdf4
-toolz
