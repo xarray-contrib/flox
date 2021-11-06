@@ -112,17 +112,21 @@ def test_groupby_reduce(
         pytest.param("nanargmax", marks=(pytest.mark.xfail,)),
         "argmin",
         pytest.param("nanargmin", marks=(pytest.mark.xfail,)),
+        "any",
+        "all",
     ),
 )
 def test_groupby_reduce_all(size, func, backend):
 
-    array = np.random.randn(*size)
     by = np.ones(size[-1])
-
+    array = np.random.randn(*size)
     if "nan" in func and "nanarg" not in func:
         array[[1, 4, 5], ...] = np.nan
     elif "nanarg" in func and len(size) > 1:
         array[[1, 4, 5], 1] = np.nan
+
+    if func in ["any", "all"]:
+        array = array > 0.5
 
     with np.errstate(invalid="ignore", divide="ignore"):
         expected = getattr(np, func)(array, axis=-1)

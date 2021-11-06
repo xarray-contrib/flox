@@ -126,7 +126,7 @@ def xarray_reduce(
     FIXME: Add docs.
     """
 
-    if skipna and func != "count":
+    if skipna and func not in ["all", "any", "count"]:
         func = f"nan{func}"
 
     for b in by:
