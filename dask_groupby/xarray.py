@@ -14,6 +14,7 @@ from .core import (
     rechunk_for_cohorts as rechunk_array_for_cohorts,
     reindex_,
 )
+from .xrutils import isnull
 
 if TYPE_CHECKING:
     from xarray import DataArray, Dataset, GroupBy, Resample
@@ -241,6 +242,13 @@ def xarray_reduce(
                 axis=-1,
             )
             result = reindexed.reshape(result.shape[:-1] + group_shape)
+        else:
+            # TODO: migrate this to core.groupby_reduce
+            # index out NaN or NaT groups; these should be last
+            if np.any(isnull(groups)):
+                result = result[..., :-1]
+                groups = groups[:-1]
+
         return result
 
     # These data variables do not have any of the core dimension,

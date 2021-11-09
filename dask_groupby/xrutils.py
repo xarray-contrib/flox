@@ -78,3 +78,19 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
             or hasattr(value, "__array_function__")
         )
     )
+
+
+def isnull(data):
+    data = np.asarray(data)
+    scalar_type = data.dtype.type
+    if issubclass(scalar_type, (np.datetime64, np.timedelta64)):
+        # datetime types use NaT for null
+        # note: must check timedelta64 before integers, because currently
+        # timedelta64 inherits from np.integer
+        return np.isnat(data)
+    elif issubclass(scalar_type, np.inexact):
+        # float types use NaN for null
+        return np.isnan(data)
+    elif issubclass(scalar_type, (np.bool_, np.integer, np.character, np.void)):
+        # these types cannot represent missing values
+        return np.zeros_like(data, dtype=bool)
