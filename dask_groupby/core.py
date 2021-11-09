@@ -22,7 +22,7 @@ import pandas as pd
 
 from . import aggregations
 from .aggregations import Aggregation, _atleast_1d, _get_fill_value
-from .xrutils import is_duck_array, is_duck_dask_array
+from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
     import dask.array.Array as DaskArray
@@ -1056,9 +1056,8 @@ def groupby_reduce(
         axis = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
 
     if expected_groups is None and isinstance(by, np.ndarray):
-        expected_groups = np.unique(by)
-        if np.issubdtype(expected_groups.dtype, np.floating):  # type: ignore
-            expected_groups = expected_groups[~np.isnan(expected_groups)]
+        flatby = by.ravel()
+        expected_groups = np.unique(flatby[~isnull(flatby)])
 
     # TODO: make sure expected_groups is unique
     if len(axis) == 1 and by.ndim > 1 and expected_groups is None:

@@ -287,6 +287,8 @@ def xarray_reduce(
             # here before passing it on; this means I have to handle the
             # "binning by single by variable" case explicitly where the factorization
             # happens later allowing `by` to  be a dask variable.
+            # Another annoyance is that for resampling expected_groups is "disconnected"
+            # from "by" so we need the isbin part of the condition
             "expected_groups": expected_groups[0] if len(by) == 1 and isbin[0] else None,
             "isbin": isbin[0] if len(by) == 1 else False,
         },
