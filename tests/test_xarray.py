@@ -15,6 +15,12 @@ from . import assert_equal, raise_if_dask_computes
 
 dask.config.set(scheduler="sync")
 
+try:
+    # Should test against legacy xarray implementation
+    xr.set_options(use_numpy_groupies=False)
+except ValueError:
+    pass
+
 
 @pytest.mark.parametrize("backend", ["numpy", "numba"])
 @pytest.mark.parametrize("min_count", [None, 1, 3])
