@@ -94,3 +94,13 @@ def isnull(data):
     elif issubclass(scalar_type, (np.bool_, np.integer, np.character, np.void)):
         # these types cannot represent missing values
         return np.zeros_like(data, dtype=bool)
+    else:
+        # at this point, array should have dtype=object
+        if isinstance(data, (np.ndarray, dask.array.Array)):
+            return pd.isnull(data)
+        else:
+            # Not reachable yet, but intended for use with other duck array
+            # types. For full consistency with pandas, we should accept None as
+            # a null value as well as NaN, but it isn't clear how to do this
+            # with duck typing.
+            return data != data
