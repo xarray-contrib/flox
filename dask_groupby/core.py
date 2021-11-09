@@ -1170,6 +1170,7 @@ def groupby_reduce(
         )
         if method == "cohorts":
             assert len(axis) == 1
+            assert by.ndim == 1
 
             cohorts = find_group_cohorts(by, array.chunks[axis[0]], merge=True)
             idx = np.arange(len(by))
@@ -1179,12 +1180,17 @@ def groupby_reduce(
             for cohort in cohorts:
                 # indexes for a subset of groups
                 subset_idx = idx[np.isin(by, cohort)]
+                array_subset = array[..., subset_idx]
+                numblocks = len(array_subset.chunks[-1])
+
                 # get final result for these groups
                 r, *g = partial_agg(
-                    array[..., subset_idx],
+                    array_subset,
                     by[subset_idx],
                     expected_groups=cohort,
-                    method="mapreduce",
+                    # if only a single block along axis, we can just work blockwise
+                    # inspired by https://github.com/dask/dask/issues/8361
+                    method="blockwise" if numblocks == 1 else "mapreduce",
                 )
                 results.append(r)
                 groups_.append(g)
