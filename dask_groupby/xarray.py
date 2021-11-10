@@ -60,7 +60,7 @@ def xarray_reduce(
     method: str = "mapreduce",
     backend: str = "numpy",
     keep_attrs: bool = True,
-    skipna: bool = True,
+    skipna: Optional[bool] = None,
     min_count: Optional[int] = None,
     **finalize_kwargs,
 ):
@@ -113,10 +113,15 @@ def xarray_reduce(
     keep_attrs: bool, optional
         Preserve attrs?
     skipna: bool, optional
-        Use NaN-skipping aggregations like nanmean?
-    min_count: int, optional
-        NaN out when number of non-NaN values in aggregation is < min_count
-        Only applies to nansum, nanprod.
+        If True, skip missing values (as marked by NaN). By default, only
+        skips missing values for float dtypes; other dtypes either do not
+        have a sentinel missing value (int) or ``skipna=True`` has not been
+        implemented (object, datetime64 or timedelta64).
+    min_count : int, default: None
+        The required number of valid values to perform the operation. If
+        fewer than min_count non-NA values are present the result will be
+        NA. Only used if skipna is set to True or defaults to True for the
+        array's dtype.
     finalize_kwargs: dict, optional
         kwargs passed to the finalize function, like ddof for var, std.
 
@@ -129,9 +134,6 @@ def xarray_reduce(
     --------
     FIXME: Add docs.
     """
-
-    if (skipna or min_count is not None) and func not in ["all", "any", "count"]:
-        func = f"nan{func}"
 
     for b in by:
         if isinstance(b, xr.DataArray) and b.name is None:
@@ -285,6 +287,7 @@ def xarray_reduce(
             "fill_value": fill_value,
             "method": method,
             "min_count": min_count,
+            "skipna": skipna,
             "backend": backend,
             # The following mess exists becuase for multiple `by`s I factorize eagerly
             # here before passing it on; this means I have to handle the
