@@ -285,4 +285,7 @@ nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=
 all = Aggregation("all", chunk="all", combine="all", fill_value=True, final_fill_value=False)
 any = Aggregation("any", chunk="any", combine="any", fill_value=False, final_fill_value=False)
 
-# median - should be doable since dask implements t-digest percentile for 1D?
+# numpy_groupies does not support median
+# And the dask version is really hard!
+# median = Aggregation("median", chunk=None, combine=None, fill_value=None)
+# nanmedian = Aggregation("nanmedian", chunk=None, combine=None, fill_value=None)
