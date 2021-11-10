@@ -413,6 +413,7 @@ def chunk_reduce(
     reindex: bool = False,
     isbin: bool = False,
     backend: str = "numpy",
+    kwargs=None,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -457,6 +458,9 @@ def chunk_reduce(
 
     if not isinstance(fill_value, Sequence):
         fill_value = (fill_value,)
+
+    if kwargs is None:
+        kwargs = ({},) * len(func)
 
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
@@ -503,7 +507,7 @@ def chunk_reduce(
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
 
-    for reduction, fv in zip(func, fill_value):
+    for reduction, fv, kw in zip(func, fill_value, kwargs):
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
         else:
@@ -516,6 +520,7 @@ def chunk_reduce(
                     size=size,
                     # important when reducing with "offset" groups
                     fill_value=fv,
+                    **kw,
                 )
             else:
                 result = _get_aggregate(backend)(
@@ -527,6 +532,7 @@ def chunk_reduce(
                     # important when reducing with "offset" groups
                     fill_value=fv,
                     dtype=np.intp if reduction == "nanlen" else dtype,
+                    **kw,
                 )
             if np.any(~mask):
                 # remove NaN group label which should be last
@@ -573,6 +579,7 @@ def _finalize_results(
     expected_groups: Union[Sequence, np.ndarray, None],
     fill_value: Any,
     min_count: Optional[int] = None,
+    finalize_kwargs: Optional[Mapping] = None,
 ):
     """Finalize results by
     1. Squeezing out dummy dimensions
@@ -595,10 +602,11 @@ def _finalize_results(
         if fill_value is not None:
             counts = squeezed["intermediates"][-1]
             squeezed["intermediates"] = squeezed["intermediates"][:-1]
-
         if min_count is None:
             min_count = 1
-        result[agg.name] = agg.finalize(*squeezed["intermediates"])
+        if finalize_kwargs is None:
+            finalize_kwargs = {}
+        result[agg.name] = agg.finalize(*squeezed["intermediates"], **finalize_kwargs)
         result[agg.name] = np.where(counts >= min_count, result[agg.name], fill_value)
 
     # Final reindexing has to be here to be lazy
@@ -621,10 +629,13 @@ def _npg_aggregate(
     fill_value: Any = None,
     min_count: Optional[int] = None,
     backend: str = "numpy",
+    finalize_kwargs: Optional[Mapping] = None,
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
     results = _npg_combine(x_chunk, agg, axis, keepdims, group_ndim, backend)
-    return _finalize_results(results, agg, axis, expected_groups, fill_value, min_count)
+    return _finalize_results(
+        results, agg, axis, expected_groups, fill_value, min_count, finalize_kwargs
+    )
 
 
 def _npg_combine(
@@ -782,6 +793,7 @@ def groupby_agg(
     min_count: Optional[int] = None,
     isbin: bool = False,
     backend: str = "numpy",
+    finalize_kwargs: Optional[Mapping] = None,
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
 
     import dask.array
@@ -851,6 +863,14 @@ def groupby_agg(
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
         expected_agg = expected_groups
 
+    agg_kwargs = dict(
+        group_ndim=by.ndim,
+        fill_value=fill_value,
+        min_count=min_count,
+        backend=backend,
+        finalize_kwargs=finalize_kwargs,
+    )
+
     if method == "mapreduce":
         # reduced is really a dict mapping reduction name to array
         # and "groups" to an array of group labels
@@ -862,10 +882,7 @@ def groupby_agg(
                 _npg_aggregate,
                 agg=agg,
                 expected_groups=expected_agg,
-                group_ndim=by.ndim,
-                fill_value=fill_value,
-                min_count=min_count,
-                backend=backend,
+                **agg_kwargs,
             ),
             combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim, backend=backend),
             name=f"{name}-reduce",
@@ -892,10 +909,7 @@ def groupby_agg(
                 _npg_aggregate,
                 agg=agg,
                 expected_groups=None,
-                group_ndim=by.ndim,
-                fill_value=fill_value,
-                min_count=min_count,
-                backend=backend,
+                **agg_kwargs,
                 axis=axis,
                 keepdims=True,
             ),
@@ -982,6 +996,7 @@ def groupby_reduce(
     split_out: int = 1,
     method: str = "mapreduce",
     backend: str = "numpy",
+    finalize_kwargs: Optional[Mapping] = None,
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
     """
     GroupBy reductions using tree reductions for dask.array
@@ -1026,6 +1041,8 @@ def groupby_reduce(
                         chunking ``array`` for this method by first rechunking using ``rechunk_for_cohorts``.
     backend: {"numpy", "numba"}, optional
         Backend  for numpy_groupies. numpy by default.
+    finalize_kwargs: Mapping, optional
+        Kwargs passed to finalize the reduction such as ddof for var, std.
 
     Returns
     -------
@@ -1112,8 +1129,14 @@ def groupby_reduce(
         reduction.finalize = None
         # xarray's count is npg's nanlen
         func = reduction.name if reduction.name != "count" else "nanlen"
-        if min_count is not None:
+        if finalize_kwargs is None:
+            finalize_kwargs = {}
+        if isinstance(finalize_kwargs, Mapping):
+            finalize_kwargs = (finalize_kwargs,)
+        append_nanlen = min_count is not None or reduction.name in ["nanvar", "nanstd"]
+        if append_nanlen:
             func = (func, "nanlen")
+            finalize_kwargs = finalize_kwargs + ({},)
 
         results = chunk_reduce(
             array,
@@ -1121,9 +1144,10 @@ def groupby_reduce(
             func=func,
             axis=axis,
             expected_groups=expected_groups if isbin else None,
-            fill_value=(fill_value, 0) if min_count is not None else fill_value,
+            fill_value=(fill_value, 0) if append_nanlen else fill_value,
             dtype=reduction.dtype,
             isbin=isbin,
+            kwargs=finalize_kwargs,
         )  # type: ignore
 
         if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
@@ -1133,6 +1157,12 @@ def groupby_reduce(
                 results["intermediates"][0] = np.unravel_index(
                     results["intermediates"][0], array.shape
                 )[-1]
+        elif reduction.name in ["nanvar", "nanstd"]:
+            # Fix npg bug where all-NaN rows are 0 instead of NaN
+            value, counts = results["intermediates"]
+            mask = counts <= 0
+            value[mask] = np.nan
+            results["intermediates"] = (value,)
 
         if isbin:
             expected_groups = np.arange(len(expected_groups) - 1)
@@ -1167,6 +1197,7 @@ def groupby_reduce(
             min_count=min_count,
             isbin=isbin,
             backend=backend,
+            finalize_kwargs=finalize_kwargs,
         )
         if method == "cohorts":
             assert len(axis) == 1

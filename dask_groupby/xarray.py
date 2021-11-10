@@ -62,6 +62,7 @@ def xarray_reduce(
     keep_attrs: bool = True,
     skipna: bool = True,
     min_count: Optional[int] = None,
+    **finalize_kwargs,
 ):
     """GroupBy reduce operations on xarray objects using numpy-groupies
 
@@ -116,6 +117,8 @@ def xarray_reduce(
     min_count: int, optional
         NaN out when number of non-NaN values in aggregation is < min_count
         Only applies to nansum, nanprod.
+    finalize_kwargs: dict, optional
+        kwargs passed to the finalize function, like ddof for var, std.
 
     Raises
     ------
@@ -291,6 +294,7 @@ def xarray_reduce(
             # from "by" so we need the isbin part of the condition
             "expected_groups": expected_groups[0] if len(by) == 1 and isbin[0] else None,
             "isbin": isbin[0] if len(by) == 1 else False,
+            "finalize_kwargs": finalize_kwargs,
         },
     )
 

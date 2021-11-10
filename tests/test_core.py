@@ -114,6 +114,8 @@ def test_groupby_reduce(
         pytest.param("nanargmin", marks=(pytest.mark.xfail,)),
         "any",
         "all",
+        pytest.param("median", marks=(pytest.mark.skip,)),
+        pytest.param("nanmedian", marks=(pytest.mark.skip,)),
     ),
 )
 def test_groupby_reduce_all(size, func, backend):
@@ -128,22 +130,32 @@ def test_groupby_reduce_all(size, func, backend):
     if func in ["any", "all"]:
         array = array > 0.5
 
-    with np.errstate(invalid="ignore", divide="ignore"):
-        expected = getattr(np, func)(array, axis=-1)
-    expected = np.expand_dims(expected, -1)
+    finalize_kwargs = tuple({})
+    if "var" in func or "std" in func:
+        finalize_kwargs = finalize_kwargs + ({"ddof": 1}, {"ddof": 0})
 
-    actual, _ = groupby_reduce(array, by, func=func, backend=backend)
-    if "arg" in func:
-        assert actual.dtype.kind == "i"
-    assert_equal(actual, expected)
+    for kwargs in finalize_kwargs:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            expected = getattr(np, func)(array, axis=-1, **kwargs)
+        expected = np.expand_dims(expected, -1)
 
-    for method in ["mapreduce", "cohorts"]:
-        actual, _ = groupby_reduce(
-            da.from_array(array, chunks=3), by, func=func, method=method, backend=backend
-        )
+        actual, _ = groupby_reduce(array, by, func=func, backend=backend, finalize_kwargs=kwargs)
         if "arg" in func:
             assert actual.dtype.kind == "i"
         assert_equal(actual, expected)
+
+        for method in ["mapreduce", "cohorts"]:
+            actual, _ = groupby_reduce(
+                da.from_array(array, chunks=3),
+                by,
+                func=func,
+                method=method,
+                backend=backend,
+                finalize_kwargs=kwargs,
+            )
+            if "arg" in func:
+                assert actual.dtype.kind == "i"
+            assert_equal(actual, expected)
 
 
 @pytest.mark.parametrize("size", ((12,), (12, 5)))
