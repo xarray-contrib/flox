@@ -285,7 +285,7 @@ def test_xarray_groupby_bins(chunks):
         )
     expected = xr.DataArray(
         np.array([3, 2, 0]),
-        dims="labels",
-        coords={"labels": [pd.Interval(1, 2), pd.Interval(2, 4), pd.Interval(4, 5)]},
+        dims="labels_bins",
+        coords={"labels_bins": [pd.Interval(1, 2), pd.Interval(2, 4), pd.Interval(4, 5)]},
     )
     xr.testing.assert_equal(actual, expected)
