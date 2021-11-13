@@ -1006,22 +1006,22 @@ def groupby_reduce(
 
     Parameters
     ----------
-    array: numpy.ndarray, dask.array.Array
-        Array to be reduced, nD
-    by: numpy.ndarray, dask.array.Array
-        Array of labels to group over. Must be aligned with `array` so that
+    array : ndarray or DaskArray
+        Array to be reduced, possibly nD
+    by : ndarray or DaskArray
+        Array of labels to group over. Must be aligned with ``array`` so that
             ``array.shape[-by.ndim :] == by.shape``
-    func: str or Aggregation
+    func : str or Aggregation
         Single function name or an Aggregation instance
-    expected_groups: (optional) Sequence
+    expected_groups : (optional) Sequence
         Expected unique labels.
-    isbin: bool, optional
-        Are `expected_groups` bin edges?
-    axis: (optional) None or int or Sequence[int]
+    isbin : bool, optional
+        Are ``expected_groups`` bin edges?
+    axis : (optional) None or int or Sequence[int]
         If None, reduce across all dimensions of by
         Else, reduce across corresponding axes of array
         Negative integers are normalized using array.ndim
-    fill_value: Any
+    fill_value : Any
         Value when a label in `expected_groups` is not present
     skipna : bool, default: None
         If True, skip missing values (as marked by NaN). By default, only
@@ -1033,29 +1033,34 @@ def groupby_reduce(
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
         array's dtype.
-    split_out: int, optional
+    split_out : int, optional
         Number of chunks along group axis in output (last axis)
-    method: {"mapreduce", "blockwise", "cohorts"}, optional
-        Strategy for reduction. Applies to dask arrays only
-
-          * "mapreduce" : First apply the reduction blockwise on ``array``, then
-                          combine a few newighbouring blocks, apply the reduction.
-                          Continue until finalizing. Usually, ``func`` will need
-                          to be an Aggregation instance for this method to work. Common
-                          aggregations are implemented.
-          * "blockwise" : Only reduce using blockwise and avoid aggregating blocks together.
-                          Useful for resampling reductions where group members are always together.
-                          The array is rechunked so that chunk boundaries line up with group boundaries
-                          i.e. each block contains all members of any group present in that block.
-          * "cohorts" : Finds group labels that tend to occur together ("cohorts"), indexes
-                        out cohorts and reduces that subset using "mapreduce", repeat for all cohorts.
-                        This works well for many time groupings where the group labels repeat
-                        at regular intervals like 'hour', 'month', dayofyear' etc. Optimize
-                        chunking ``array`` for this method by first rechunking using ``rechunk_for_cohorts``.
-    backend: {"numpy", "numba"}, optional
-        Backend  for numpy_groupies. numpy by default.
-    finalize_kwargs: Mapping, optional
-        Kwargs passed to finalize the reduction such as ddof for var, std.
+    method : {"mapreduce", "blockwise", "cohorts"}, optional
+        Strategy for reduction of dask arrays only:
+          * ``"mapreduce"``:
+            First apply the reduction blockwise on ``array``, then
+            combine a few newighbouring blocks, apply the reduction.
+            Continue until finalizing. Usually, ``func`` will need
+            to be an Aggregation instance for this method to work.
+            Common aggregations are implemented.
+          * ``"blockwise"``:
+            Only reduce using blockwise and avoid aggregating blocks
+            together. Useful for resampling-style reductions where group
+            members are always together. The array is rechunked so that
+            chunk boundaries line up with group boundaries
+            i.e. each block contains all members of any group present
+            in that block.
+          * ``"cohorts"``:
+            Finds group labels that tend to occur together ("cohorts"),
+            indexes out cohorts and reduces that subset using "mapreduce",
+            repeat for all cohorts. This works well for many time groupings
+            where the group labels repeat at regular intervals like 'hour',
+            'month', dayofyear' etc. Optimize chunking ``array`` for this
+            method by first rechunking using ``rechunk_for_cohorts``.
+    backend : {"numpy", "numba"}, optional, default: ``"numpy"``
+        Backend for ``numpy_groupies``.
+    finalize_kwargs : dict, optional
+        Kwargs passed to finalize the reduction such as ``ddof`` for var, std.
 
     Returns
     -------
@@ -1063,6 +1068,11 @@ def groupby_reduce(
         Aggregated result
     *groups
         Group labels
+
+    See Also
+    --------
+    dask_groupby.xarray.xarray_reduce
+
     """
 
     if not is_duck_array(by):

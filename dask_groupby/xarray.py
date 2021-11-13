@@ -68,51 +68,53 @@ def xarray_reduce(
 
     Parameters
     ----------
-    obj : Union["Dataset", "DataArray"]
+    obj : DataArray or Dataset
         Xarray object to reduce
-    *by : Union["DataArray", Iterable[str], Iterable["DataArray"]]
-        Variables with which to group by `obj`
-    func : Union[str, Aggregation]
+    *by : DataArray or iterable of str or iterable of DataArray
+        Variables with which to group by ``obj``
+    func : str or Aggregation
         Reduction method
-    expected_groups : Dict[str, Sequence]
+    expected_groups : str or sequence
         expected group labels corresponding to each `by` variable
-    isbin : Iterable[bool]
-        If True, corresponding entry in `expected_groups` are bin edges.
-        If False, the entry in `expected_groups` is treated as a simple label.
-    dim : Hashable
+    isbin : iterable of bool
+        If True, corresponding entry in ``expected_groups`` are bin edges.
+        If False, the entry in ``expected_groups`` is treated as a simple label.
+    dim : hashable
         dimension name along which to reduce. If None, reduces across all
         dimensions of `by`
-    split_out : int
+    split_out : int, optional
         Number of output chunks along grouped dimension in output.
     fill_value :
         Value used for missing groups in the output i.e. when one of the labels
         in `expected_groups` is not actually present in `by`
-    method: {"mapreduce", "blockwise", "cohorts"}, optional
-        Strategy for reduction. Applies to dask arrays only
+    method : {"mapreduce", "blockwise", "cohorts"}, optional
+        Strategy for reduction of dask arrays only:
+          * ``"mapreduce"``:
+            First apply the reduction blockwise on ``array``, then
+            combine a few newighbouring blocks, apply the reduction.
+            Continue until finalizing. Usually, ``func`` will need
+            to be an Aggregation instance for this method to work.
+            Common aggregations are implemented.
+          * ``"blockwise"``:
+            Only reduce using blockwise and avoid aggregating blocks
+            together. Useful for resampling-style reductions where group
+            members are always together. The array is rechunked so that
+            chunk boundaries line up with group boundaries
+            i.e. each block contains all members of any group present
+            in that block.
+          * ``"cohorts"``:
+            Finds group labels that tend to occur together ("cohorts"),
+            indexes out cohorts and reduces that subset using "mapreduce",
+            repeat for all cohorts. This works well for many time groupings
+            where the group labels repeat at regular intervals like 'hour',
+            'month', dayofyear' etc. Optimize chunking ``array`` for this
+            method by first rechunking using ``rechunk_for_cohorts``.
 
-          * "mapreduce" : First apply the reduction blockwise on ``array``, then
-                          combine a few newighbouring blocks, apply the reduction.
-                          Continue until finalizing. Usually, ``func`` will need
-                          to be an Aggregation instance for this method to work.
-                          Common aggregations are implemented.
-          * "blockwise" : Only reduce using blockwise and avoid aggregating blocks
-                          together. Useful for resampling-style reductions where group
-                          members are always together. The array is rechunked so that
-                          chunk boundaries line up with group boundaries
-                          i.e. each block contains all members of any group present
-                          in that block.
-          * "cohorts" : Finds group labels that tend to occur together ("cohorts"),
-                        indexes out cohorts and reduces that subset using "mapreduce",
-                        repeat for all cohorts. This works well for many time groupings
-                        where the group labels repeat at regular intervals like 'hour',
-                        'month', dayofyear' etc. Optimize chunking ``array`` for this
-                        method by first rechunking using ``rechunk_for_cohorts``.
-
-    backend: {"numpy", "numba"}, optional
+    backend : {"numpy", "numba"}, optional
         Backend for numpy_groupies
-    keep_attrs: bool, optional
+    keep_attrs : bool, optional
         Preserve attrs?
-    skipna: bool, optional
+    skipna : bool, optional
         If True, skip missing values (as marked by NaN). By default, only
         skips missing values for float dtypes; other dtypes either do not
         have a sentinel missing value (int) or ``skipna=True`` has not been
@@ -122,8 +124,17 @@ def xarray_reduce(
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
         array's dtype.
-    finalize_kwargs: dict, optional
+    finalize_kwargs : dict, optional
         kwargs passed to the finalize function, like ddof for var, std.
+
+    Returns
+    -------
+    DataArray or Dataset
+        Reduced object
+
+    See Also
+    --------
+    dask_groupby.core.groupby_reduce
 
     Raises
     ------
