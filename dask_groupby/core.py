@@ -998,7 +998,6 @@ def groupby_reduce(
     isbin: bool = False,
     axis=None,
     fill_value=None,
-    skipna: Optional[bool] = None,
     min_count: Optional[int] = None,
     split_out: int = 1,
     method: str = "mapreduce",
@@ -1027,11 +1026,6 @@ def groupby_reduce(
         Negative integers are normalized using array.ndim
     fill_value : Any
         Value when a label in `expected_groups` is not present
-    skipna : bool, default: None
-        If True, skip missing values (as marked by NaN). By default, only
-        skips missing values for float dtypes; other dtypes either do not
-        have a sentinel missing value (int) or ``skipna=True`` has not been
-        implemented (object, datetime64 or timedelta64).
     min_count : int, default: None
         The required number of valid values to perform the operation. If
         fewer than min_count non-NA values are present the result will be
@@ -1089,24 +1083,9 @@ def groupby_reduce(
             f"Received array of shape {array.shape} and by of shape {by.shape}"
         )
 
-    # Handle skipna here because I need to know dtype to make a good default choice.
-    # We cannnot handle this easily for xarray Datasets in xarray_reduce
-    if skipna and func in ["all", "any", "count"]:
-        raise ValueError(f"skipna cannot be truthy for {func} reductions.")
-
-    if skipna or (skipna is None and array.dtype.kind in "cfO"):
-        if "nan" not in func and func not in ["all", "any", "count"]:
-            func = f"nan{func}"
-
     if min_count is not None and min_count > 1:
         if func not in ["nansum", "nanprod"]:
-            raise ValueError(
-                "min_count can be > 1 only for nansum, nanprod."
-                " or for sum, prod with skipna=True."
-                " This is an Xarray limitation."
-            )
-        elif "nan" not in func and skipna:
-            func = f"nan{func}"
+            raise ValueError("min_count can be > 1 only for nansum, nanprod.")
 
     if axis is None:
         axis = tuple(array.ndim + np.arange(-by.ndim, 0))

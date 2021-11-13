@@ -245,8 +245,17 @@ def xarray_reduce(
 
     group_sizes = dict(zip(group_names, group_shape))
 
-    def wrapper(*args, **kwargs):
-        result, groups = groupby_reduce(*args, **kwargs)
+    def wrapper(array, to_group, *, func, skipna, **kwargs):
+        # Handle skipna here because I need to know dtype to make a good default choice.
+        # We cannnot handle this easily for xarray Datasets in xarray_reduce
+        if skipna and func in ["all", "any", "count"]:
+            raise ValueError(f"skipna cannot be truthy for {func} reductions.")
+
+        if skipna or (skipna is None and array.dtype.kind in "cfO"):
+            if "nan" not in func and func not in ["all", "any", "count"]:
+                func = f"nan{func}"
+
+        result, groups = groupby_reduce(array, to_group, func=func, **kwargs)
         if len(by) > 1:
             # all groups need not be present. reindex here
             # TODO: add test
