@@ -319,7 +319,7 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
             # this makes the reindexing logic simpler.
             if expect is None:
                 raise ValueError("Please pass bin_edges in expected_groups.")
-            idx = np.digitize(groupvar, expect) - 1
+            idx = np.digitize(groupvar.ravel(), expect) - 1
             expect = np.arange(idx.max() + 1)
             found_groups.append(expect)
         else:
@@ -609,7 +609,8 @@ def _finalize_results(
         if finalize_kwargs is None:
             finalize_kwargs = {}
         result[agg.name] = agg.finalize(*squeezed["intermediates"], **finalize_kwargs)
-        result[agg.name] = np.where(counts >= min_count, result[agg.name], fill_value)
+        if fill_value is not None:
+            result[agg.name] = np.where(counts >= min_count, result[agg.name], fill_value)
 
     # Final reindexing has to be here to be lazy
     if expected_groups is not None:
