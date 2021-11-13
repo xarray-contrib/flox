@@ -1166,7 +1166,7 @@ def groupby_reduce(
         # so that everything matches the dask version.
         reduction.finalize = None
         # xarray's count is npg's nanlen
-        func = reduction.name if reduction.name != "count" else "nanlen"
+        func = reduction.numpy
         if finalize_kwargs is None:
             finalize_kwargs = {}
         if isinstance(finalize_kwargs, Mapping):

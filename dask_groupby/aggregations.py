@@ -27,8 +27,10 @@ class Aggregation:
     def __init__(
         self,
         name,
+        *,
         chunk,
         combine,
+        numpy=None,
         preprocess=None,
         aggregate=None,
         finalize=None,
@@ -42,6 +44,7 @@ class Aggregation:
         self.preprocess = preprocess
         # Use "chunk_reduce" or "chunk_argreduce"
         self.reduction_type = reduction_type
+        self.numpy = numpy if numpy else self.name
         # initialize blockwise reduction
         self.chunk = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
@@ -113,19 +116,65 @@ def sum_of_squares(group_idx, array, func="sum", size=None, fill_value=None):
     )
 
 
+def _nansum(group_idx, array, size=None, fill_value=None):
+    # npg takes out NaNs before calling np.bincount
+    # This means that all NaN groups are equivalent to absent groups
+    # This behaviour does not work for xarray
+    import numpy_groupies as npg
+
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        np.where(np.isnan(array), 0, array),
+        axis=-1,
+        func="sum",
+        size=size,
+        fill_value=fill_value,
+    )
+
+
+def _nanprod(group_idx, array, size=None, fill_value=None):
+    # npg takes out NaNs before calling np.bincount
+    # This means that all NaN groups are equivalent to absent groups
+    # This behaviour does not work for xarray
+    import numpy_groupies as npg
+
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        np.where(np.isnan(array), 1, array),
+        axis=-1,
+        func="prod",
+        size=size,
+        fill_value=fill_value,
+    )
+
+
 def nansum_of_squares(group_idx, array, size=None, fill_value=None):
     return sum_of_squares(group_idx, array, func="nansum", size=size, fill_value=fill_value)
 
 
 count = Aggregation(
-    "count", chunk="nanlen", combine="sum", fill_value=0, final_fill_value=0, dtype=np.intp
+    "count",
+    numpy="nanlen",
+    chunk="nanlen",
+    combine="sum",
+    fill_value=0,
+    final_fill_value=0,
+    dtype=np.intp,
 )
 
-# note that the fill values are  the result of np.func([np.nan, np.nan])
+# note that the fill values are the result of np.func([np.nan, np.nan])
+# final_fill_value is used for groups that don't exist. This is usually np.nan
 sum = Aggregation("sum", chunk="sum", combine="sum", fill_value=0, final_fill_value=0)
-nansum = Aggregation("nansum", chunk="nansum", combine="sum", fill_value=0, final_fill_value=0)
+nansum = Aggregation("nansum", chunk=_nansum, numpy=_nansum, combine="sum", fill_value=0)
 prod = Aggregation("prod", chunk="prod", combine="prod", fill_value=1, final_fill_value=1)
-nanprod = Aggregation("nanprod", chunk="nanprod", combine="prod", fill_value=1, final_fill_value=1)
+nanprod = Aggregation(
+    "nanprod",
+    numpy=_nanprod,
+    chunk=_nanprod,
+    combine="prod",
+    fill_value=1,
+    final_fill_value=dtypes.NA,
+)
 mean = Aggregation(
     "mean",
     chunk=("sum", "nanlen"),
