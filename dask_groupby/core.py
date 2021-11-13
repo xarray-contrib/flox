@@ -604,6 +604,9 @@ def _finalize_results(
         if fill_value is not None:
             counts = squeezed["intermediates"][-1]
             squeezed["intermediates"] = squeezed["intermediates"][:-1]
+        # This is needed for the dask pathway.
+        # Because we use intermediate fill_value since a group could be
+        # absent in one block, but present in another block
         if min_count is None:
             min_count = 1
         if finalize_kwargs is None:
