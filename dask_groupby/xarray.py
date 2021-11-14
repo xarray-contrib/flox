@@ -145,10 +145,6 @@ def xarray_reduce(
     --------
     FIXME: Add docs.
     """
-
-    # default for pd.cut
-    precision = 3
-
     for b in by:
         if isinstance(b, xr.DataArray) and b.name is None:
             raise ValueError("Cannot group by unnamed DataArrays.")
@@ -244,11 +240,13 @@ def xarray_reduce(
             expected_groups = (expected_groups,)
         if isbin[0]:
             if isinstance(expected_groups[0], int):
-                _, bins = pd.cut(by[0], bins=expected_groups[0], retbins=True)
-                # Can't apply precision here because that could change bins!
-                # Only apply later so it only affects the coordinate variable
-                expected_groups = (bins,)
-            group_shape = (len(expected_groups[0]) - 1,)
+                raise NotImplementedError(
+                    "Does not support binning into an integer number of bins yet."
+                )
+                #    factorized, bins = pd.cut(by[0], bins=expected_groups[0], retbins=True)
+                group_shape = (expected_groups[0],)
+            else:
+                group_shape = (len(expected_groups[0]) - 1,)
         else:
             group_shape = (len(expected_groups[0]),)
         to_group = by[0]
@@ -334,10 +332,7 @@ def xarray_reduce(
     renamer = {}
     for name, expect, isbin_ in zip(group_names, expected_groups, isbin):
         if isbin_:
-            expect = [
-                pd.Interval(np.round(left, precision), np.round(right, precision))
-                for left, right in zip(expect[:-1], expect[1:])
-            ]
+            expect = [pd.Interval(left, right) for left, right in zip(expect[:-1], expect[1:])]
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         actual[name] = expect
