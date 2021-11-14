@@ -319,7 +319,11 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
             # this makes the reindexing logic simpler.
             if expect is None:
                 raise ValueError("Please pass bin_edges in expected_groups.")
-            idx = np.digitize(groupvar.ravel(), expect) - 1
+            # idx = np.digitize(groupvar.ravel(), expect) - 1
+            idx = pd.cut(groupvar.ravel(), bins=expect, labels=False)
+            # same sentinel value as factorize
+            idx[np.isnan(idx)] = -1
+            idx = idx.astype(int)
             expect = np.arange(idx.max() + 1)
             found_groups.append(expect)
         else:

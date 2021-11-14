@@ -284,8 +284,14 @@ def test_xarray_groupby_bins(chunks):
             fill_value=0,
         )
     expected = xr.DataArray(
-        np.array([3, 2, 0]),
+        np.array([3, 1, 0]),
         dims="labels_bins",
         coords={"labels_bins": [pd.Interval(1, 2), pd.Interval(2, 4), pd.Interval(4, 5)]},
     )
     xr.testing.assert_equal(actual, expected)
+
+    # TODO: fix this test
+    # expected_xr = array.groupby_bins(labels, bins=[1, 2, 4, 5]).count().fillna(0)
+    # xr.testing.assert_equal(actual, expected_xr)
+
+    # TODO: test cut_kwargs

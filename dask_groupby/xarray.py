@@ -146,23 +146,28 @@ def xarray_reduce(
     FIXME: Add docs.
     """
 
+    # default for pd.cut
+    precision = 3
+
     for b in by:
         if isinstance(b, xr.DataArray) and b.name is None:
             raise ValueError("Cannot group by unnamed DataArrays.")
 
+    if isinstance(isbin, bool):
+        isbin = (isbin,) * len(by)
+
     # eventually  drop the variables we are grouping by
     maybe_drop = [b for b in by if isinstance(b, str)]
     unindexed_dims = tuple(
-        b for b in by if isinstance(b, str) and b in obj.dims and b not in obj.indexes
+        b
+        for b, isbin_ in zip(by, isbin)
+        if isinstance(b, str) and not isbin_ and b in obj.dims and b not in obj.indexes
     )
 
     by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
     if len(by) > 1 and any(dask.is_dask_collection(by_) for by_ in by):
         raise NotImplementedError("Grouping by multiple variables will compute dask variables.")
-
-    if isinstance(isbin, bool):
-        isbin = (isbin,) * len(by)
 
     grouper_dims = set(itertools.chain(*tuple(g.dims for g in by)))
 
@@ -238,6 +243,11 @@ def xarray_reduce(
         if isinstance(expected_groups, np.ndarray):
             expected_groups = (expected_groups,)
         if isbin[0]:
+            if isinstance(expected_groups[0], int):
+                _, bins = pd.cut(by[0], bins=expected_groups[0], retbins=True)
+                # Can't apply precision here because that could change bins!
+                # Only apply later so it only affects the coordinate variable
+                expected_groups = (bins,)
             group_shape = (len(expected_groups[0]) - 1,)
         else:
             group_shape = (len(expected_groups[0]),)
@@ -309,7 +319,7 @@ def xarray_reduce(
             "min_count": min_count,
             "skipna": skipna,
             "backend": backend,
-            # The following mess exists becuase for multiple `by`s I factorize eagerly
+            # The following mess exists because for multiple `by`s I factorize eagerly
             # here before passing it on; this means I have to handle the
             # "binning by single by variable" case explicitly where the factorization
             # happens later allowing `by` to  be a dask variable.
@@ -324,7 +334,10 @@ def xarray_reduce(
     renamer = {}
     for name, expect, isbin_ in zip(group_names, expected_groups, isbin):
         if isbin_:
-            expect = [pd.Interval(left, right) for left, right in zip(expect[:-1], expect[1:])]
+            expect = [
+                pd.Interval(np.round(left, precision), np.round(right, precision))
+                for left, right in zip(expect[:-1], expect[1:])
+            ]
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         actual[name] = expect
