@@ -361,15 +361,25 @@ def test_dask_reduce_axis_subset():
         )
 
 
+@pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("backend", ["numpy", "numba"])
 @pytest.mark.parametrize(
     "axis", [None, (0, 1, 2), (0, 1), (0, 2), (1, 2), 0, 1, 2, (0,), (1,), (2,)]
 )
-def test_groupby_reduce_axis_subset_against_numpy(axis, backend):
+def test_groupby_reduce_axis_subset_against_numpy(func, axis, backend):
+    if not isinstance(axis, int):
+        if "arg" in func and (axis is None or len(axis) > 1):
+            pytest.skip()
+    if func in ["all", "any"]:
+        fill_value = False
+    else:
+        fill_value = 123
     # tests against the numpy output to make sure dask compute matches
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
-    kwargs = dict(func="count", axis=axis, expected_groups=[0, 2], fill_value=123, backend=backend)
+    kwargs = dict(
+        func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value, backend=backend
+    )
     with raise_if_dask_computes():
         actual, _ = groupby_reduce(
             da.from_array(array, chunks=(-1, 2, 3)),

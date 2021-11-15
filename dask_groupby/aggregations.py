@@ -335,8 +335,12 @@ last = Aggregation("last", chunk="last", combine="last", fill_value=0)
 nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=np.nan)
 nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=np.nan)
 
-all = Aggregation("all", chunk="all", combine="all", fill_value=True, final_fill_value=False)
-any = Aggregation("any", chunk="any", combine="any", fill_value=False, final_fill_value=False)
+all = Aggregation(
+    "all", chunk="all", combine="all", fill_value=True, final_fill_value=False, dtype=bool
+)
+any = Aggregation(
+    "any", chunk="any", combine="any", fill_value=False, final_fill_value=False, dtype=bool
+)
 
 # numpy_groupies does not support median
 # And the dask version is really hard!
