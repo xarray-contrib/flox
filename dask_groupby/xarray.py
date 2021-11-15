@@ -175,9 +175,8 @@ def xarray_reduce(
     ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
     if dim is Ellipsis:
         dim = tuple(obj.dims)
-        if by[0].name in ds.dims:
+        if by[0].name in ds.dims and not isbin[0]:
             dim = tuple(d for d in dim if d != by[0].name)
-        dim = tuple(dim)
 
     # TODO: do this for specific reductions only
     bad_dtypes = tuple(
@@ -203,14 +202,16 @@ def xarray_reduce(
         raise ValueError(f"cannot reduce over dimensions {dim}")
 
     dims_not_in_groupers = tuple(d for d in dim if d not in grouper_dims)
-    if dims_not_in_groupers == dim:
+    if dims_not_in_groupers == dim and not any(isbin):
         # reducing along a dimension along which groups do not vary
         # This is really just a normal reduction.
+        # This is not right when binning so we exclude.
         if skipna:
             dsfunc = func[3:]
         else:
             dsfunc = func
-        result = getattr(ds, dsfunc)(dim=dim)
+        # TODO: skipna needs test
+        result = getattr(ds, dsfunc)(dim=dim, skipna=skipna)
         if isinstance(obj, xr.DataArray):
             return obj._from_temp_dataset(result)
         else:
