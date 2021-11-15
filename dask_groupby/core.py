@@ -606,7 +606,9 @@ def _finalize_results(
             counts = squeezed["intermediates"][-1]
             squeezed["intermediates"] = squeezed["intermediates"][:-1]
         result[agg.name] = squeezed["intermediates"][0]
-        if min_count is not None:
+        if min_count is not None and np.any(counts < min_count):
+            if fill_value is None:
+                raise ValueError("Filling is required but fill_value is None.")
             result[agg.name] = np.where(counts >= min_count, result[agg.name], fill_value)
     else:
         if fill_value is not None:
@@ -1170,7 +1172,9 @@ def groupby_reduce(
             func=func,
             axis=axis,
             expected_groups=expected_groups if isbin else None,
-            # This fill_value applies for groups that only contain NaN observations
+            # This fill_value should only apply to groups that only contain NaN observations
+            # BUT there is funkiness when axis is a subset of all possible values
+            # (see below)
             fill_value=(reduction.fill_value[reduction.name], 0),
             dtype=reduction.dtype,
             isbin=isbin,
@@ -1194,6 +1198,15 @@ def groupby_reduce(
         if isbin:
             expected_groups = np.arange(len(expected_groups) - 1)
 
+        # When axis is a subset of possible values; then npg will
+        # apply it to groups that don't exist along a particular axis (for e.g.)
+        # since these count as a group that is absent. thoo!
+        if len(axis) < by.ndim and min_count is None:
+            min_count = 1
+
+        if fill_value is None and "arg" not in reduction.name:
+            fill_value = xrdtypes.NA
+
         result = _finalize_results(
             results,
             reduction,
@@ -1202,7 +1215,7 @@ def groupby_reduce(
             # This fill_value applies to members of expected_groups not seen in groups
             # or when the min_count threshold is not satisfied
             # Use xarray's dtypes.NA to match type promotion rules
-            fill_value=xrdtypes.NA if fill_value is None else fill_value,
+            fill_value=fill_value,
             min_count=min_count,
         )
         groups = (result["groups"],)
