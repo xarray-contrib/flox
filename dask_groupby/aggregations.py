@@ -12,6 +12,10 @@ def _get_fill_value(dtype, fill_value):
     if fill_value == dtypes.NA:
         if np.issubdtype(dtype, np.floating):
             return np.nan
+        # This is madness, but npg checks that fill_value is compatible
+        # with array dtype even if the fill_value is never used.
+        elif np.issubdtype(dtype, np.integer):
+            return dtypes.get_neg_infinity(dtype, min_for_int=True)
         else:
             return None
     return fill_value
@@ -164,7 +168,7 @@ count = Aggregation(
 
 # note that the fill values are the result of np.func([np.nan, np.nan])
 # final_fill_value is used for groups that don't exist. This is usually np.nan
-sum = Aggregation("sum", chunk="sum", combine="sum", fill_value=0, final_fill_value=0)
+sum = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
 nansum = Aggregation("nansum", chunk=_nansum, numpy=_nansum, combine="sum", fill_value=0)
 prod = Aggregation("prod", chunk="prod", combine="prod", fill_value=1, final_fill_value=1)
 nanprod = Aggregation(

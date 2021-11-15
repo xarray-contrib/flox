@@ -20,7 +20,7 @@ import numpy as np
 import numpy_groupies as npg
 import pandas as pd
 
-from . import aggregations
+from . import aggregations, xrdtypes
 from .aggregations import Aggregation, _atleast_1d, _get_fill_value
 from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
@@ -280,6 +280,10 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
             loc = (idx == -1, ...)
         else:
             loc = (..., idx == -1)
+        # This allows us to match xarray's type promotion rules
+        if fill_value is xrdtypes.NA:
+            new_dtype, fill_value = xrdtypes.maybe_promote(reindexed.dtype)
+            reindexed = reindexed.astype(new_dtype)
         reindexed[loc] = fill_value
     return reindexed
 
@@ -1029,7 +1033,7 @@ def groupby_reduce(
         Else, reduce across corresponding axes of array
         Negative integers are normalized using array.ndim
     fill_value : Any
-        Value when a label in `expected_groups` is not present
+        Value to assign when a label in ``expected_groups`` is not present.
     min_count : int, default: None
         The required number of valid values to perform the operation. If
         fewer than min_count non-NA values are present the result will be
@@ -1136,12 +1140,13 @@ def groupby_reduce(
     )
     reduction.fill_value[func] = _get_fill_value(reduction.dtype, reduction.fill_value[func])
 
-    if fill_value is None:
-        fill_value = reduction.fill_value[func]
+    # TODO: delete?
+    # if fill_value is None:
+    #     fill_value = reduction.fill_value[func]
 
     if min_count is not None:
         assert func in ["nansum", "nanprod"]
-        # nansum, nanprod have fill_value=0,1
+        # nansum, nanprod have fill_value=0, 1
         # overwrite than when min_count is set
         fill_value = np.nan
 
@@ -1152,15 +1157,12 @@ def groupby_reduce(
         # so that everything matches the dask version.
         reduction.finalize = None
         # xarray's count is npg's nanlen
-        func = reduction.numpy
+        func = (reduction.numpy, "nanlen")
         if finalize_kwargs is None:
             finalize_kwargs = {}
         if isinstance(finalize_kwargs, Mapping):
             finalize_kwargs = (finalize_kwargs,)
-        append_nanlen = min_count is not None or reduction.name in ["nanvar", "nanstd"]
-        if append_nanlen:
-            func = (func, "nanlen")
-            finalize_kwargs = finalize_kwargs + ({},)
+        finalize_kwargs = finalize_kwargs + ({},) + ({},)
 
         results = chunk_reduce(
             array,
@@ -1168,7 +1170,8 @@ def groupby_reduce(
             func=func,
             axis=axis,
             expected_groups=expected_groups if isbin else None,
-            fill_value=(fill_value, 0) if append_nanlen else fill_value,
+            # This fill_value applies for groups that only contain NaN observations
+            fill_value=(reduction.fill_value[reduction.name], 0),
             dtype=reduction.dtype,
             isbin=isbin,
             kwargs=finalize_kwargs,
@@ -1186,7 +1189,7 @@ def groupby_reduce(
             value, counts = results["intermediates"]
             mask = counts <= 0
             value[mask] = np.nan
-            results["intermediates"] = (value,)
+            results["intermediates"][0] = value
 
         if isbin:
             expected_groups = np.arange(len(expected_groups) - 1)
@@ -1196,12 +1199,14 @@ def groupby_reduce(
             reduction,
             axis,
             expected_groups,
-            fill_value=fill_value,
+            # This fill_value applies to members of expected_groups not seen in groups
+            # or when the min_count threshold is not satisfied
+            # Use xarray's dtypes.NA to match type promotion rules
+            fill_value=xrdtypes.NA if fill_value is None else fill_value,
             min_count=min_count,
         )
         groups = (result["groups"],)
         result = result[reduction.name]
-
     else:
         if func in ["first", "last"]:
             raise NotImplementedError("first, last not implemented for dask arrays")

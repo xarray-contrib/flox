@@ -86,7 +86,7 @@ def xarray_reduce(
         Number of output chunks along grouped dimension in output.
     fill_value :
         Value used for missing groups in the output i.e. when one of the labels
-        in `expected_groups` is not actually present in `by`
+        in ``expected_groups`` is not actually present in ``by``.
     method : {"mapreduce", "blockwise", "cohorts"}, optional
         Strategy for reduction of dask arrays only:
           * ``"mapreduce"``:
