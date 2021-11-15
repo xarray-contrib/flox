@@ -22,11 +22,11 @@ except ValueError:
     pass
 
 
-@pytest.mark.parametrize("backend", ["numpy", "numba"])
+@pytest.mark.parametrize("engine", ["numpy", "numba"])
 @pytest.mark.parametrize("min_count", [None, 1, 3])
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("skipna", [True, False])
-def test_xarray_reduce(skipna, add_nan, min_count, backend):
+def test_xarray_reduce(skipna, add_nan, min_count, engine):
     arr = np.ones((4, 12))
 
     if add_nan:
@@ -46,7 +46,7 @@ def test_xarray_reduce(skipna, add_nan, min_count, backend):
 
     expected = da.groupby("labels").sum(skipna=skipna, min_count=min_count)
     actual = xarray_reduce(
-        da, "labels", func="sum", skipna=skipna, min_count=min_count, backend=backend
+        da, "labels", func="sum", skipna=skipna, min_count=min_count, engine=engine
     )
     assert_equal(expected, actual)
 

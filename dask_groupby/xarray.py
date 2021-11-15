@@ -58,7 +58,7 @@ def xarray_reduce(
     split_out: int = 1,
     fill_value=None,
     method: str = "mapreduce",
-    backend: str = "numpy",
+    engine: str = "numpy",
     keep_attrs: bool = True,
     skipna: Optional[bool] = None,
     min_count: Optional[int] = None,
@@ -110,8 +110,8 @@ def xarray_reduce(
             'month', dayofyear' etc. Optimize chunking ``array`` for this
             method by first rechunking using ``rechunk_for_cohorts``.
 
-    backend : {"numpy", "numba"}, optional
-        Backend for numpy_groupies
+    engine : {"numpy", "numba"}, optional
+        Engine for numpy_groupies
     keep_attrs : bool, optional
         Preserve attrs?
     skipna : bool, optional
@@ -316,7 +316,7 @@ def xarray_reduce(
             "method": method,
             "min_count": min_count,
             "skipna": skipna,
-            "backend": backend,
+            "engine": engine,
             # The following mess exists because for multiple `by`s I factorize eagerly
             # here before passing it on; this means I have to handle the
             # "binning by single by variable" case explicitly where the factorization
