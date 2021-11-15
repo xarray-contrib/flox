@@ -22,6 +22,31 @@ labels2d = np.array([labels[:5], np.flip(labels[:5])])
 
 dask.config.set(scheduler="sync")
 
+ALL_FUNCS = (
+    "sum",
+    "nansum",
+    "prod",
+    "nanprod",
+    "mean",
+    "nanmean",
+    "var",
+    "nanvar",
+    "std",
+    "nanstd",
+    "max",
+    "nanmax",
+    "min",
+    "nanmin",
+    "argmax",
+    pytest.param("nanargmax", marks=(pytest.mark.xfail,)),
+    "argmin",
+    pytest.param("nanargmin", marks=(pytest.mark.xfail,)),
+    "any",
+    "all",
+    pytest.param("median", marks=(pytest.mark.skip,)),
+    pytest.param("nanmedian", marks=(pytest.mark.skip,)),
+)
+
 
 def test_alignment_error():
     da = np.ones((12,))
@@ -93,30 +118,7 @@ def test_groupby_reduce(
 @pytest.mark.parametrize("size", ((12,), (12, 5)))
 @pytest.mark.parametrize(
     "func",
-    (
-        "sum",
-        "nansum",
-        "prod",
-        "nanprod",
-        "mean",
-        "nanmean",
-        "var",
-        "nanvar",
-        "std",
-        "nanstd",
-        "max",
-        "nanmax",
-        "min",
-        "nanmin",
-        "argmax",
-        pytest.param("nanargmax", marks=(pytest.mark.xfail,)),
-        "argmin",
-        pytest.param("nanargmin", marks=(pytest.mark.xfail,)),
-        "any",
-        "all",
-        pytest.param("median", marks=(pytest.mark.skip,)),
-        pytest.param("nanmedian", marks=(pytest.mark.skip,)),
-    ),
+    ALL_FUNCS,
 )
 def test_groupby_reduce_all(size, func, backend):
 
@@ -552,3 +554,29 @@ def test_rechunk_for_cohorts(chunk_at, expected):
     labels = np.arange(0, 30) % 7
     rechunked = rechunk_for_cohorts(array, axis=-1, force_new_chunk_at=chunk_at, labels=labels)
     assert rechunked.chunks == expected
+
+
+@pytest.mark.parametrize("func", ALL_FUNCS)
+def test_fill_value_behaviour(func):
+    if func in ["all", "any"] or "arg" in func:
+        pytest.skip()
+
+    if func == "count":
+
+        def npfunc(x):
+            x = np.asarray(x)
+            return (~np.isnan(x)).sum()
+
+    else:
+        npfunc = getattr(np, func)
+
+    fill_value = 123
+    by = np.array([1, 2, 3, 1, 2, 3])
+    array = np.array([np.nan, 1, 1, np.nan, 1, 1])
+    actual, _ = groupby_reduce(
+        array, by, func=func, fill_value=fill_value, expected_groups=[0, 1, 2, 3]
+    )
+    expected = np.array(
+        [fill_value, npfunc([np.nan, np.nan]), npfunc([1.0, 1.0]), npfunc([1.0, 1.0])]
+    )
+    assert_equal(actual, expected)
