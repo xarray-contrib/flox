@@ -367,9 +367,8 @@ def test_dask_reduce_axis_subset():
     "axis", [None, (0, 1, 2), (0, 1), (0, 2), (1, 2), 0, 1, 2, (0,), (1,), (2,)]
 )
 def test_groupby_reduce_axis_subset_against_numpy(func, axis, backend):
-    if not isinstance(axis, int):
-        if "arg" in func and (axis is None or len(axis) > 1):
-            pytest.skip()
+    if not isinstance(axis, int) and "arg" in func and (axis is None or len(axis) > 1):
+        pytest.skip()
     if func in ["all", "any"]:
         fill_value = False
     else:

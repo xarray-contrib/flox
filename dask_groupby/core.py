@@ -1186,12 +1186,18 @@ def groupby_reduce(
         )  # type: ignore
 
         if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
-            if array.ndim > 1 and by.ndim == 1:
+            if array.ndim > 1:
+                # default fill_value is -1; we can't unravel that;
+                # so replace -1 with 0; unravel; then replace 0 with -1
+                # UGH!
+                idx = results["intermediates"][0]
+                mask = idx == -1
+                idx[mask] = 0
                 # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
                 # will return wrong indices
-                results["intermediates"][0] = np.unravel_index(
-                    results["intermediates"][0], array.shape
-                )[-1]
+                idx = np.unravel_index(idx, array.shape)[-1]
+                idx[mask] = -1
+                results["intermediates"][0] = idx
         elif reduction.name in ["nanvar", "nanstd"]:
             # Fix npg bug where all-NaN rows are 0 instead of NaN
             value, counts = results["intermediates"]
