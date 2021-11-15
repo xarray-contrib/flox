@@ -116,10 +116,7 @@ def test_groupby_reduce(
 
 @pytest.mark.parametrize("engine", ["numpy", "numba"])
 @pytest.mark.parametrize("size", ((12,), (12, 5)))
-@pytest.mark.parametrize(
-    "func",
-    ALL_FUNCS,
-)
+@pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(size, func, engine):
 
     by = np.ones(size[-1])

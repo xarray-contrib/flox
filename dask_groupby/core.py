@@ -1146,15 +1146,14 @@ def groupby_reduce(
     )
     reduction.fill_value[func] = _get_fill_value(reduction.dtype, reduction.fill_value[func])
 
-    # TODO: delete?
-    # if fill_value is None:
-    #     fill_value = reduction.fill_value[func]
-
     if min_count is not None:
-        assert func in ["nansum", "nanprod"]
+        # Let this pass so that xarray can keep return np.nan for bins with
+        # no observations. The restriction of min_count to nansum, nanprod
+        # seems to be an Xarray limitation so there's no reason we need to copy it.
         # nansum, nanprod have fill_value=0, 1
         # overwrite than when min_count is set
-        fill_value = np.nan
+        if func in ["nansum", "nanprod"] and fill_value is None:
+            fill_value = np.nan
 
     # TODO: handle reduction being something custom not present in numpy_groupies
     if not is_duck_dask_array(array) and not is_duck_dask_array(by):
