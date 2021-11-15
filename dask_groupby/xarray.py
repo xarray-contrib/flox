@@ -217,9 +217,7 @@ def xarray_reduce(
             return result
 
     axis = tuple(range(-len(dim), 0))
-
-    group_names = tuple(g.name for g in by)
-    # ds = ds.drop_vars(tuple(g for g in group_names))
+    group_names = tuple(g.name if not binned else f"{g.name}_bins" for g, binned in zip(by, isbin))
 
     if len(by) > 1:
         group_idx, expected_groups, group_shape, _, _, _ = factorize_(
@@ -329,17 +327,12 @@ def xarray_reduce(
         },
     )
 
-    renamer = {}
     for name, expect, isbin_ in zip(group_names, expected_groups, isbin):
         if isbin_:
             expect = [pd.Interval(left, right) for left, right in zip(expect[:-1], expect[1:])]
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         actual[name] = expect
-        if isbin_:
-            renamer[name] = f"{name}_bins"
-    if renamer:
-        actual = actual.rename(renamer)
 
     # if grouping by multi-indexed variable, then restore it
     for name, index in ds.indexes.items():
