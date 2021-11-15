@@ -39,7 +39,7 @@ def _get_aggregate(engine):
         return npg.aggregate_numpy.aggregate
     else:
         raise ValueError(
-            "Expected engine to be one of ['numpy', 'numba']. Received {engine} instead."
+            f"Expected engine to be one of ['numpy', 'numba']. Received {engine} instead."
         )
 
 
