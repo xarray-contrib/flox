@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # flake8: noqa
-"""Top-level module for dask_groupby ."""
+"""Top-level module for flox ."""
 from .core import groupby_reduce  # noqa
 
 try:
@@ -10,7 +10,7 @@ except ImportError:
     from importlib_metadata import version as _version  # type: ignore[no-redef]
 
 try:
-    __version__ = _version("dask_groupby")
+    __version__ = _version("flox")
 except Exception:
     # Local copy or not installed with setuptools.
     # Disable minimum version checks on downstream libraries.

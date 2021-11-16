@@ -1,6 +1,9 @@
-python:
-  version: 3
-  setup_py_install: true
-  system_packages: true
-  install:
-    - requirements: docs/requirements-docs.txt
+version: 2
+
+build:
+    image: latest
+
+conda:
+    environment: ci/docs.yml
+
+formats: []

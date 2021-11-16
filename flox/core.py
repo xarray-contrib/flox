@@ -1083,7 +1083,7 @@ def groupby_reduce(
 
     See Also
     --------
-    dask_groupby.xarray.xarray_reduce
+    xarray.xarray_reduce
 
     """
 
