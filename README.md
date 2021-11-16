@@ -37,7 +37,8 @@ Xarray's current strategy is to find all unique group labels, index out each gro
 and then apply the reduction operation. Note that this only works if we know the group
 labels (i.e. you cannot use this strategy to group by a dask array).
 
-Schematically, this looks like:
+Schematically, this looks like (colors indicate group labels; separated groups of colors
+indicate different blocks of an array):
 ![xarray-current-strategy](/docs/diagrams/xarray-current-strategy.png)
 
 The first step is to extract all members of a group, which involves a *lot* of
