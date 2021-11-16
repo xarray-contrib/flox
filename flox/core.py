@@ -99,7 +99,7 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def find_group_cohorts(labels, chunks, merge=True):
+def find_group_cohorts(labels, chunks, merge=False):
     """
     Finds groups labels that occur together: "cohorts"
 
@@ -190,6 +190,8 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
         )
 
     force_new_chunk_at = _atleast_1d(force_new_chunk_at)
+    oldchunks = array.chunks[axis]
+    oldbreaks = np.insert(np.cumsum(oldchunks), 0, 0)
 
     isbreak = np.isin(labels, force_new_chunk_at)
     if not np.any(isbreak):
@@ -209,7 +211,7 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
         else:
             next_break_is_close = False
 
-        if counter >= chunksize and not next_break_is_close:
+        if idx in oldbreaks or (counter >= chunksize and not next_break_is_close):
             divisions.append(idx)
             counter = 1
             continue
@@ -219,6 +221,7 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
     newchunks = tuple(np.diff(divisions))
     assert sum(newchunks) == len(labels)
 
+    print(newchunks)
     if newchunks == array.chunks[axis]:
         return array
     else:
