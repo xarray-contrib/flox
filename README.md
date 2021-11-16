@@ -111,7 +111,7 @@ The idea here is to copy xarray's subsetting strategy but instead index out "coh
 that tend to occur next to each other.
 
 Consider this example of monthly average data; where 4 months are present in a single block (i.e. chunksize=4)
-[cohorts-schematic](/docs/diagrams/cohorts-month-chunk4.png)
+![cohorts-schematic](/docs/diagrams/cohorts-month-chunk4.png)
 
 Because a chunksize of 4 evenly divides the number of groups (12) all we need to do is index out blocks
 0, 3, 7 and then apply the `"mapreduce"` strategy to form the final result for months Jan-Apr. Repeat for the
@@ -128,6 +128,7 @@ If > 1; then it use `"mapreduce"`.
 One annoyance is that if the chunksize doesn't evenly divide the number of groups, we still end up splitting a number of chunks.
 For example, when `chunksize=5`
 ![cohorts-schematic](/docs/diagrams/cohorts-month-chunk5.png)
+
 ``` python
 >>> flox.core.find_group_cohorts(labels, array.chunks[-1]))
 [[1], [2, 3], [4, 5], [6], [7, 8], [9, 10], [11], [12]]  # 8 cohorts
