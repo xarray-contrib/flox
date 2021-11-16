@@ -38,7 +38,7 @@ and then apply the reduction operation. Note that this only works if we know the
 labels (i.e. you cannot use this strategy to group by a dask array).
 
 Schematically, this looks like:
-[xarray-current-strategy](/docs/diagrams/xarray-current-strategy.png)
+![xarray-current-strategy](/docs/diagrams/xarray-current-strategy.png)
 
 The first step is to extract all members of a group, which involves a *lot* of
 communication and is quite expensive (in dataframe terminology, this is a "shuffle").
@@ -61,7 +61,7 @@ or `xarray_reduce`.
 
 The first idea is to use the "map-reduce" strategy (inspired by `dask.dataframe`).
 
-[map-reduce-strategy-schematic](/docs/diagrams/mapreduce.png)
+![map-reduce-strategy-schematic](/docs/diagrams/mapreduce.png)
 
 The GroupBy reduction is first applied blockwise. Those intermediate results are
 combined by concatenating to form a new array which is then reduced
@@ -89,7 +89,7 @@ For resampling type reductions,
 In this case, it makes sense to use `dask.dataframe` resample strategy which is to rechunk
 so that all members of a group are in a single block. Then, the groupby operation can be applied blockwise.
 
-[blockwise-strategy-schematic](/docs/diagrams/blockwise.png)
+![blockwise-strategy-schematic](/docs/diagrams/blockwise.png)
 
 *Tradeoffs*
 1. Only works for certain groupings.
@@ -127,7 +127,7 @@ If > 1; then it use `"mapreduce"`.
 
 One annoyance is that if the chunksize doesn't evenly divide the number of groups, we still end up splitting a number of chunks.
 For example, when `chunksize=5`
-[cohorts-schematic](/docs/diagrams/cohorts-month-chunk5.png)
+![cohorts-schematic](/docs/diagrams/cohorts-month-chunk5.png)
 ``` python
 >>> flox.core.find_group_cohorts(labels, array.chunks[-1]))
 [[1], [2, 3], [4, 5], [6], [7, 8], [9, 10], [11], [12]]  # 8 cohorts
