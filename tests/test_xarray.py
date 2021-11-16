@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from dask_groupby.xarray import (
+from flox.xarray import (
     rechunk_to_group_boundaries,
     resample_reduce,
     xarray_groupby_reduce,

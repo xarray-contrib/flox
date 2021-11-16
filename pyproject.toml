@@ -19,7 +19,7 @@ profile = "black"
 skip_gitignore = true
 float_to_top = true
 combine_as_imports = true
-known_first_party = "dask_groupby"
+known_first_party = "flox"
 known_third_party = [
     "dask",
     "numpy",
@@ -34,7 +34,7 @@ known_third_party = [
 [tool.mypy]
 allow_redefinition = true
 exclude = "properties|asv_bench|doc|tests|flycheck"
-files = "dask_groupby/*.py"
+files = "flox/*.py"
 show_error_codes = true
 
 [[tool.mypy.overrides]]

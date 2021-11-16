@@ -1,22 +1,8 @@
-[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/dcherian/dask_groupby/CI?logo=github&style=for-the-badge)](https://github.com/dcherian/dask_groupby/actions)[![GitHub Workflow Code Style Status](https://img.shields.io/github/workflow/status/dcherian/dask_groupby/code-style?label=Code%20Style&style=for-the-badge)](https://github.com/dcherian/dask_groupby/actions)[![image](https://img.shields.io/codecov/c/github/dcherian/dask_groupby.svg?style=for-the-badge)](https://codecov.io/gh/dcherian/dask_groupby)
+[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/dcherian/flox/CI?logo=github&style=for-the-badge)](https://github.com/dcherian/flox/actions)[![GitHub Workflow Code Style Status](https://img.shields.io/github/workflow/status/dcherian/flox/code-style?label=Code%20Style&style=for-the-badge)](https://github.com/dcherian/flox/actions)[![image](https://img.shields.io/codecov/c/github/dcherian/flox.svg?style=for-the-badge)](https://codecov.io/gh/dcherian/flox)
 
-# dask_groupby
+# flox
 
-(See a
-[presentation](https://docs.google.com/presentation/d/1muj5Yzjw-zY8c6agjyNBd2JspfANadGSDvdd6nae4jg/edit?usp=sharing)
-about this package).
-
-## API
-
-There are three functions
-1.  `groupby_reduce(dask_array, by_dask_array, "mean")`
-    "pure" dask array interface
-2.  `xarray_groupby_reduce(groupby_object, "mean")`
-    xarray groupby interface that accepts a GroupBy object for convenience
-3.  `xarray_reduce(xarray_object, by_dataarray, "mean")`
-    "pure" xarray interface
-
-## Implementation
+This project explores strategies for fast GroupBy reductions with dask.array. It used to be called `dask_groupby`
 
 This repo explores strategies for a distributed GroupBy with dask
 arrays. It was motivated by
@@ -25,6 +11,26 @@ arrays. It was motivated by
     [blogpost](https://blog.dask.org/2019/10/08/df-groupby)
 2.  numpy_groupies in Xarray
     [issue](https://github.com/pydata/xarray/issues/4473)
+
+(See a
+[presentation](https://docs.google.com/presentation/d/1muj5Yzjw-zY8c6agjyNBd2JspfANadGSDvdd6nae4jg/edit?usp=sharing)
+about this package).
+
+## Acknowledgements
+
+This work was funded in part by NASA-ACCESS 80NSSC18M0156 "Community tools for analysis of NASA Earth Observing System
+Data in the Cloud" (PI J. Hamman), and [NCAR's Earth System Data Science Initiative](https://ncar.github.io/esds/).
+It was motivated by many discussions in the [Pangeo](https://pangeo.io) community.
+
+## API
+
+There are three functions
+1.  `flox.groupby_reduce(dask_array, by_dask_array, "mean")`
+    "pure" dask array interface
+1.  `flox.xarray.xarray_reduce(xarray_object, by_dataarray, "mean")`
+    "pure" xarray interface
+
+## Implementation
 
 The core GroupBy operation is outsourced to
 [numpy_groupies](https://github.com/ml31415/numpy-groupies). The GroupBy

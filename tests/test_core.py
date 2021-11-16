@@ -5,7 +5,7 @@ import pytest
 from dask.array import from_array
 from numpy_groupies.aggregate_numpy import aggregate
 
-from dask_groupby.core import (
+from flox.core import (
     _get_optimal_chunks_for_groups,
     find_group_cohorts,
     groupby_reduce,
