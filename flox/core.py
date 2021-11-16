@@ -99,7 +99,7 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def find_group_cohorts(labels, chunks, merge=False):
+def find_group_cohorts(labels, chunks, merge=True):
     """
     Finds groups labels that occur together: "cohorts"
 
