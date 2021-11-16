@@ -3,9 +3,7 @@
 # flox
 
 This project explores strategies for fast GroupBy reductions with dask.array. It used to be called `dask_groupby`
-
-This repo explores strategies for a distributed GroupBy with dask
-arrays. It was motivated by
+It was motivated by
 
 1.  Dask Dataframe GroupBy
     [blogpost](https://blog.dask.org/2019/10/08/df-groupby)
