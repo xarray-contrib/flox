@@ -3,17 +3,13 @@ channels:
   - conda-forge
 dependencies:
   - dask
-  - netcdf4
   - pip
   - xarray
   - numpydoc
   - numpy_groupies
-  - pooch
   - toolz
-  - numba
   - myst-parser
   - sphinx
-  - nbsphinx
   - sphinx-book-theme
   - pip:
     - git+https://github.com/dcherian/flox
