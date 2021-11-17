@@ -1,4 +1,4 @@
-name: dask-groupby-doc
+name: flox-doc
 channels:
   - conda-forge
 dependencies:
