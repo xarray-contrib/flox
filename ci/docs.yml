@@ -11,7 +11,7 @@ dependencies:
   - pooch
   - toolz
   - numba
-  - myst_parser
+  - myst-parser
   - sphinx
   - nbsphinx
   - sphinx-book-theme
