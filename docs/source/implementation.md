@@ -7,7 +7,7 @@ groups are distributed amongst the blocks of an array. `flox` implements 3 strat
 effective grouped reductions, each is appropriate for a particular distribution of groups
 among the blocks of a dask array.
 
-Switch between the various strategies by passing `method` to either `groupby_reduce`
+Switch between the various strategies by passing `method` to either {py:func}`flox.core.groupby_reduce`
 or `xarray_reduce`.
 
 
@@ -104,7 +104,7 @@ For example, when `chunksize=5`
 >>> flox.core.find_group_cohorts(labels, array.chunks[-1]))
 [[1], [2, 3], [4, 5], [6], [7, 8], [9, 10], [11], [12]]  # 8 cohorts
 ```
-We find 8 cohorts (note the original xarray strategy is equivalent to constructing 10 cohorts).
+We find 8 cohorts (note the original xarray strategy is equivalent to constructing 12 cohorts).
 
 It's possible that some initial rechunking makes the situation better (just rechunk from 5-4), but it isn't an obvious improvement.
 If you have ideas for improving this case, please open an issue.
@@ -112,7 +112,7 @@ If you have ideas for improving this case, please open an issue.
 *Tradeoffs*
 1. Generalizes well; when there's exactly one groups per chunk, this replicates Xarray's
    strategy which is optimal. For resampling type reductions, as long as the array
-   is chunked appropriately (`flox.core.rechunk_for_blockwise`, `flox.xarray.rechunk_for_blockwise`), `method="cohorts"` is equivalent to `method="blockwise"`!
+   is chunked appropriately ({py:func}`flox.core.rechunk_for_blockwise`, {py:func}`flox.xarray.rechunk_for_blockwise`), `method="cohorts"` is equivalent to `method="blockwise"`!
 1. Group labels must be known at graph construction time, so this only works for numpy arrays
 1. Currenltly implemented for grouping by 1D arrays. An nD generalization seems possible,
    but hard?
