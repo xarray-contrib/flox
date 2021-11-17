@@ -134,7 +134,7 @@ def xarray_reduce(
 
     See Also
     --------
-    dask_groupby.core.groupby_reduce
+    flox.core.groupby_reduce
 
     Raises
     ------
