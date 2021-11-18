@@ -8,14 +8,18 @@ import pytest
 try:
     import dask
     import dask.array as da
+
+    dask_array_type = da.Array
 except ImportError:
-    pass
+    dask_array_type = ()
 
 
 try:
     import xarray as xr
+
+    xr_types = (xr.DataArray, xr.Dataset)
 except ImportError:
-    pass
+    xr_types = ()
 
 
 def _importorskip(modname, minversion=None):
@@ -80,13 +84,9 @@ def assert_equal(a, b):
         a = np.array(a)
     if isinstance(b, list):
         b = np.array(b)
-    if (
-        has_xarray
-        and isinstance(a, (xr.DataArray, xr.Dataset))
-        or isinstance(b, (xr.DataArray, xr.Dataset))
-    ):
+    if has_xarray and isinstance(a, xr_types) or isinstance(b, xr_types):
         xr.testing.assert_identical(a, b)
-    elif has_dask and isinstance(a, da.Array) or isinstance(b, da.Array):
+    elif has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
         # does some validation of the dask graph
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
