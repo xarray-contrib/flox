@@ -12,7 +12,7 @@ try:
 
     dask_array_type = dask.array.Array
 except ImportError:
-    dask_array_type = None
+    dask_array_type = ()
 
 
 def is_duck_array(value: Any) -> bool:
