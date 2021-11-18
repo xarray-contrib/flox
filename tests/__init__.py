@@ -2,11 +2,20 @@ import importlib
 from contextlib import contextmanager
 from distutils import version
 
-import dask
-import dask.array as da
 import numpy as np
 import pytest
-import xarray as xr
+
+try:
+    import dask
+    import dask.array as da
+except ImportError:
+    pass
+
+
+try:
+    import xarray as xr
+except ImportError:
+    pass
 
 
 def _importorskip(modname, minversion=None):
@@ -71,9 +80,13 @@ def assert_equal(a, b):
         a = np.array(a)
     if isinstance(b, list):
         b = np.array(b)
-    if isinstance(a, (xr.DataArray, xr.Dataset)) or isinstance(b, (xr.DataArray, xr.Dataset)):
+    if (
+        has_xarray
+        and isinstance(a, (xr.DataArray, xr.Dataset))
+        or isinstance(b, (xr.DataArray, xr.Dataset))
+    ):
         xr.testing.assert_identical(a, b)
-    elif isinstance(a, da.Array) or isinstance(b, da.Array):
+    elif has_dask and isinstance(a, da.Array) or isinstance(b, da.Array):
         # does some validation of the dask graph
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
