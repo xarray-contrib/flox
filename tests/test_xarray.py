@@ -116,12 +116,13 @@ def test_xarray_reduce_multiple_groupers():
     actual = xarray_reduce(da, "labels", "labels2", func="count")
     xr.testing.assert_identical(expected, actual)
 
-    with raise_if_dask_computes():
-        actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), da.labels, da.labels2, func="count")
-    xr.testing.assert_identical(expected, actual)
+    if has_dask:
+        with raise_if_dask_computes():
+            actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), da.labels, da.labels2, func="count")
+        xr.testing.assert_identical(expected, actual)
 
-    with pytest.raises(NotImplementedError):
-        actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
+        with pytest.raises(NotImplementedError):
+            actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
     # xr.testing.assert_identical(expected, actual)
 
 
@@ -178,8 +179,9 @@ def test_xarray_reduce_errors():
     with pytest.raises(ValueError, match="cannot reduce over"):
         xarray_reduce(da, by, func="mean", dim="foo")
 
-    with pytest.raises(NotImplementedError, match="provide expected_groups"):
-        xarray_reduce(da, by.chunk(), func="mean")
+    if has_dask:
+        with pytest.raises(NotImplementedError, match="provide expected_groups"):
+            xarray_reduce(da, by.chunk(), func="mean")
 
 
 @pytest.mark.parametrize("isdask", [True, False])
