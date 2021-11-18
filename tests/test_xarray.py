@@ -1,4 +1,3 @@
-import dask
 import numpy as np
 import pandas as pd
 import pytest
@@ -16,9 +15,12 @@ from flox.xarray import (
 
 from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
+# isort: off
 if has_dask:
-    dask.config.set(scheduler="sync")
+    import dask
 
+    dask.config.set(scheduler="sync")
+# isort: on
 
 try:
     # Should test against legacy xarray implementation
