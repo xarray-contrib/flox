@@ -1,8 +1,5 @@
-import dask
-import dask.array as da
 import numpy as np
 import pytest
-from dask.array import from_array
 from numpy_groupies.aggregate_numpy import aggregate
 
 from flox.core import (
@@ -20,9 +17,15 @@ nan_labels = labels.astype(float)  # copy
 nan_labels[:5] = np.nan
 labels2d = np.array([labels[:5], np.flip(labels[:5])])
 
+# isort:off
 if has_dask:
-    dask.config.set(scheduler="sync")
+    import dask
+    import dask.array as da
+    from dask.array import from_array
 
+    dask.config.set(scheduler="sync")
+# isort:on
+#
 ALL_FUNCS = (
     "sum",
     "nansum",
