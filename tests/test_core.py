@@ -23,6 +23,7 @@ if has_dask:
     import dask.array as da
     from dask.array import from_array
 
+    dask_array_ones = da.ones
     dask.config.set(scheduler="sync")
 else:
 
