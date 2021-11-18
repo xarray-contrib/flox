@@ -1,7 +1,6 @@
 import itertools
 from typing import TYPE_CHECKING, Hashable, Iterable, Optional, Sequence, Tuple, Union
 
-import dask
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -14,7 +13,7 @@ from .core import (
     rechunk_for_cohorts as rechunk_array_for_cohorts,
     reindex_,
 )
-from .xrutils import isnull
+from .xrutils import is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
     from xarray import DataArray, Dataset, GroupBy, Resample
@@ -162,7 +161,7 @@ def xarray_reduce(
 
     by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
-    if len(by) > 1 and any(dask.is_dask_collection(by_) for by_ in by):
+    if len(by) > 1 and any(is_duck_dask_array(by_.data) for by_ in by):
         raise NotImplementedError("Grouping by multiple variables will compute dask variables.")
 
     grouper_dims = set(itertools.chain(*tuple(g.dims for g in by)))

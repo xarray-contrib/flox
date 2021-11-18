@@ -1,8 +1,5 @@
-import dask
-import dask.array as da
 import numpy as np
 import pytest
-from dask.array import from_array
 from numpy_groupies.aggregate_numpy import aggregate
 
 from flox.core import (
@@ -13,14 +10,28 @@ from flox.core import (
     reindex_,
 )
 
-from . import assert_equal, raise_if_dask_computes
+from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
 labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
 nan_labels = labels.astype(float)  # copy
 nan_labels[:5] = np.nan
 labels2d = np.array([labels[:5], np.flip(labels[:5])])
 
-dask.config.set(scheduler="sync")
+# isort:off
+if has_dask:
+    import dask
+    import dask.array as da
+    from dask.array import from_array
+
+    dask_array_ones = da.ones
+    dask.config.set(scheduler="sync")
+else:
+
+    def dask_array_ones(*args):
+        return None
+
+
+# isort:on
 
 ALL_FUNCS = (
     "sum",
@@ -90,7 +101,7 @@ def test_groupby_reduce(
 ):
     array = array.astype(dtype)
     if chunk:
-        if expected_groups is None:
+        if not has_dask or expected_groups is None:
             pytest.skip()
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
         by = da.from_array(by, chunks=(3,) if by.ndim == 1 else (1, 3))
@@ -143,6 +154,8 @@ def test_groupby_reduce_all(size, func, engine):
             assert actual.dtype.kind == "i"
         assert_equal(actual, expected)
 
+        if not has_dask:
+            continue
         for method in ["mapreduce", "cohorts"]:
             actual, _ = groupby_reduce(
                 da.from_array(array, chunks=3),
@@ -157,6 +170,7 @@ def test_groupby_reduce_all(size, func, engine):
             assert_equal(actual, expected)
 
 
+@requires_dask
 @pytest.mark.parametrize("size", ((12,), (12, 5)))
 @pytest.mark.parametrize("func", ("argmax", "nanargmax", "argmin", "nanargmin"))
 def test_arg_reduction_dtype_is_int(size, func):
@@ -185,6 +199,7 @@ def test_groupby_reduce_count():
     assert_equal(result, [1, 1, 2])
 
 
+@requires_dask
 @pytest.mark.parametrize("func", ("sum", "prod"))
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int32, np.int64])
 def test_groupby_reduce_preserves_dtype(dtype, func):
@@ -219,6 +234,7 @@ def test_numpy_reduce_nd_md():
     assert_equal(expected, actual)
 
 
+@requires_dask
 @pytest.mark.parametrize(
     "func",
     (
@@ -241,11 +257,11 @@ def test_numpy_reduce_nd_md():
 @pytest.mark.parametrize(
     "array, group_chunks",
     [
-        (da.ones((12,), (3,)), 3),  # form 1
-        (da.ones((12,), (3,)), (4,)),  # form 1, chunks not aligned
-        (da.ones((12,), ((3, 5, 4),)), (2,)),  # form 1
-        (da.ones((10, 12), (3, 3)), -1),  # form 3
-        (da.ones((10, 12), (3, 3)), 3),  # form 3
+        (dask_array_ones((12,), (3,)), 3),  # form 1
+        (dask_array_ones((12,), (3,)), (4,)),  # form 1, chunks not aligned
+        (dask_array_ones((12,), ((3, 5, 4),)), (2,)),  # form 1
+        (dask_array_ones((10, 12), (3, 3)), -1),  # form 3
+        (dask_array_ones((10, 12), (3, 3)), 3),  # form 3
     ],
 )
 def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype):
@@ -308,6 +324,7 @@ def test_numpy_reduce_axis_subset():
     assert_equal(result, expected)
 
 
+@requires_dask
 def test_dask_reduce_axis_subset():
 
     by = labels2d
@@ -358,6 +375,7 @@ def test_dask_reduce_axis_subset():
         )
 
 
+@requires_dask
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("engine", ["numpy", "numba"])
 @pytest.mark.parametrize(
@@ -399,6 +417,8 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
 def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, engine):
     def _maybe_chunk(arr):
         if chunks:
+            if not has_dask:
+                pytest.skip()
             return da.from_array(arr, chunks=chunks)
         else:
             return arr
@@ -428,6 +448,7 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, engine):
     # by = np.broadcast_to(labels2d, (3, *labels2d.shape))
 
 
+@requires_dask
 @pytest.mark.parametrize("engine", ["numpy", "numba"])
 def test_groupby_all_nan_blocks(engine):
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
@@ -492,6 +513,8 @@ def test_groupby_bins(chunks):
     labels = [1, 1.5, 1.9, 2, 3]
 
     if chunks:
+        if not has_dask:
+            pytest.skip()
         array = dask.array.from_array(array, chunks=chunks)
         labels = dask.array.from_array(labels, chunks=chunks)
 
@@ -547,6 +570,7 @@ def test_find_group_cohorts(expected, labels, chunks, merge):
     assert actual == expected, (actual, expected)
 
 
+@requires_dask
 @pytest.mark.parametrize(
     "chunk_at,expected",
     [
