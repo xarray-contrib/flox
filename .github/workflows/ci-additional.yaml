@@ -3,9 +3,6 @@ on:
   push:
     branches:
       - "*"
-  pull_request:
-    branches:
-      - "*"
   workflow_dispatch: # allows you to trigger manually
 
 jobs:
@@ -88,10 +85,9 @@ jobs:
           python -c "import flox"
       - name: Run tests
         run: |
-          python -m pytest -n 4 \
+          python -m pytest \
              --cov=flox \
-             --cov-report=xml \
-             $PYTEST_EXTRA_FLAGS
+             --cov-report=xml
 
       - name: Upload code coverage to Codecov
         uses: codecov/codecov-action@v2.1.0

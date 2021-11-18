@@ -4,9 +4,15 @@
 
 from typing import Any, Iterable
 
-import dask.array
 import numpy as np
 import pandas as pd
+
+try:
+    import dask.array
+
+    dask_array_type = dask.array.Array
+except ImportError:
+    dask_array_type = None
 
 
 def is_duck_array(value: Any) -> bool:
@@ -66,7 +72,7 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
 
     Any non-iterable, string, or 0-D array
     """
-    NON_NUMPY_SUPPORTED_ARRAY_TYPES = (dask.array.Array, pd.Index)
+    NON_NUMPY_SUPPORTED_ARRAY_TYPES = (dask_array_type, pd.Index)
 
     if include_0d:
         include_0d = getattr(value, "ndim", None) == 0
@@ -96,7 +102,7 @@ def isnull(data):
         return np.zeros_like(data, dtype=bool)
     else:
         # at this point, array should have dtype=object
-        if isinstance(data, (np.ndarray, dask.array.Array)):
+        if isinstance(data, (np.ndarray, dask_array_type)):
             return pd.isnull(data)
         else:
             # Not reachable yet, but intended for use with other duck array
