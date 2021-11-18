@@ -5,6 +5,7 @@ dependencies:
   - codecov
   - dask
   - netcdf4
+  - pandas
   - pip
   - pytest
   - pytest-cov

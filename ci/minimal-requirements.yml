@@ -8,5 +8,6 @@ dependencies:
   - pytest
   - pytest-cov
   - numpy_groupies
+  - pandas
   - pooch
   - toolz
