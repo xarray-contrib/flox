@@ -2,7 +2,10 @@ import dask
 import numpy as np
 import pandas as pd
 import pytest
-import xarray as xr
+
+# isort: off
+xr = pytest.importorskip("xarray")
+# isort: on
 
 from flox.xarray import (
     rechunk_to_group_boundaries,
@@ -11,9 +14,11 @@ from flox.xarray import (
     xarray_reduce,
 )
 
-from . import assert_equal, raise_if_dask_computes
+from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
-dask.config.set(scheduler="sync")
+if has_dask:
+    dask.config.set(scheduler="sync")
+
 
 try:
     # Should test against legacy xarray implementation
@@ -118,6 +123,7 @@ def test_xarray_reduce_multiple_groupers():
     # xr.testing.assert_identical(expected, actual)
 
 
+@requires_dask
 def test_xarray_reduce_single_grouper():
 
     # DataArray
@@ -178,9 +184,12 @@ def test_xarray_reduce_errors():
 @pytest.mark.parametrize("dataarray", [True, False])
 @pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
 def test_xarray_resample(chunklen, isdask, dataarray):
-    ds = xr.tutorial.open_dataset("air_temperature", chunks={"time": chunklen})
-    if not isdask:
-        ds = ds.compute()
+    if isdask:
+        if not has_dask:
+            pytest.skip()
+        ds = xr.tutorial.open_dataset("air_temperature", chunks={"time": chunklen})
+    else:
+        ds = xr.tutorial.open_dataset("air_temperature")
 
     if dataarray:
         ds = ds.air
@@ -191,6 +200,7 @@ def test_xarray_resample(chunklen, isdask, dataarray):
     xr.testing.assert_allclose(actual, expected)
 
 
+@requires_dask
 def test_xarray_resample_dataset_multiple_arrays():
     # regression test for #35
     times = pd.date_range("2000", periods=5)
@@ -206,6 +216,7 @@ def test_xarray_resample_dataset_multiple_arrays():
     xr.testing.assert_allclose(expected, result)
 
 
+@requires_dask
 @pytest.mark.parametrize(
     "inchunks, expected",
     [
@@ -233,8 +244,8 @@ def test_rechunk_to_group_boundaries(inchunks, expected):
     da = xr.DataArray(dask.array.ones((5, 10), chunks=(-1, inchunks)), dims=("y", "x"), name="foo")
     rechunked = rechunk_to_group_boundaries(da, "x", xr.DataArray(labels, dims="x"))
     assert rechunked.chunks == ((5,), expected)
-
     ds = da.to_dataset()
+
     rechunked = rechunk_to_group_boundaries(ds, "x", xr.DataArray(labels, dims="x"))
     assert rechunked.foo.chunks == ((5,), expected)
 
@@ -270,6 +281,8 @@ def test_xarray_groupby_bins(chunks):
     labels = xr.DataArray([1, 1.5, 1.9, 2, 3], dims="x", name="labels")
 
     if chunks:
+        if not has_dask:
+            pytest.skip()
         array = array.chunk({"x": chunks})
         labels = labels.chunk({"x": chunks})
 

@@ -1,6 +1,10 @@
+import importlib
+
 import dask
 import dask.array as da
 import numpy as np
+import pytest
+import version
 import xarray as xr
 
 
@@ -42,3 +46,27 @@ def assert_equal(a, b):
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
         np.testing.assert_allclose(a, b, equal_nan=True)
+
+
+def _importorskip(modname, minversion=None):
+    try:
+        mod = importlib.import_module(modname)
+        has = True
+        if minversion is not None:
+            if LooseVersion(mod.__version__) < LooseVersion(minversion):
+                raise ImportError("Minimum version not satisfied")
+    except ImportError:
+        has = False
+    func = pytest.mark.skipif(not has, reason=f"requires {modname}")
+    return has, func
+
+
+def LooseVersion(vstring):
+    # Our development version is something like '0.10.9+aac7bfc'
+    # This function just ignored the git commit id.
+    vstring = vstring.split("+")[0]
+    return version.LooseVersion(vstring)
+
+
+has_dask, requires_dask = _importorskip("dask")
+has_xarray, requires_xarray = _importorskip("xarray")
