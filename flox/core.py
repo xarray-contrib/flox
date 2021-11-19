@@ -678,19 +678,6 @@ def _npg_combine(
     if not isinstance(x_chunk, list):
         x_chunk = [x_chunk]
 
-    unique_groups = np.unique(
-        tuple(flatten(deepmap(lambda x: list(np.atleast_1d(x["groups"].squeeze())), x_chunk)))
-    )
-
-    def reindex_intermediates(x):
-        new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
-        newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
-        newx["intermediates"] = tuple(
-            reindex_(v, from_=x["groups"].squeeze(), to=unique_groups, fill_value=f)
-            for v, f in zip(x["intermediates"], agg.fill_value["intermediate"])
-        )
-        return newx
-
     def _conc2(key1, key2=None, axis=None) -> np.ndarray:
         """copied from dask.array.reductions.mean_combine"""
         if key2 is not None:
@@ -699,7 +686,24 @@ def _npg_combine(
             mapped = deepmap(lambda x: x[key1], x_chunk)
         return _concatenate2(mapped, axes=axis)
 
-    x_chunk = deepmap(reindex_intermediates, x_chunk)
+    if len(axis) != 1:
+        # when there's only a single axis of reduction, we can just concatenate later,
+        # reindexing is unnecessary
+        # I bet we can minimize the amount of reindexing for mD reductions too, but it's complicated
+        unique_groups = np.unique(
+            tuple(flatten(deepmap(lambda x: list(np.atleast_1d(x["groups"].squeeze())), x_chunk)))
+        )
+
+        def reindex_intermediates(x):
+            new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
+            newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
+            newx["intermediates"] = tuple(
+                reindex_(v, from_=x["groups"].squeeze(), to=unique_groups, fill_value=f)
+                for v, f in zip(x["intermediates"], agg.fill_value["intermediate"])
+            )
+            return newx
+
+        x_chunk = deepmap(reindex_intermediates, x_chunk)
 
     group_conc_axis: Iterable[int]
     if group_ndim == 1:
