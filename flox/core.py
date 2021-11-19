@@ -356,7 +356,7 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
     # so we'll add use (ngroups+1) as the sentinel
     # note we cannot simply remove the NaN locations;
     # that would mess up argmax, argmin
-    nan_sentinel = size + 1 if offset_group else ngroups + 1
+    nan_sentinel = size if offset_group else ngroups
     group_idx[group_idx == -1] = nan_sentinel
 
     props = FactorProps(offset_group, nan_sentinel)
@@ -512,6 +512,9 @@ def chunk_reduce(
             results["groups"] = np.array([np.nan])
         else:
             sortidx = np.argsort(groups)
+            if np.all(sortidx == np.arange(len(sortidx))):
+                # already sorted, avoid the copy.
+                sortidx = slice(None)
             results["groups"] = groups[sortidx]
 
     final_array_shape += results["groups"].shape
@@ -546,7 +549,7 @@ def chunk_reduce(
                     dtype=final_dtype,
                     **kw,
                 )
-                if final_dtype is not None:
+                if final_dtype is not None and result.dtype != final_dtype:
                     result = result.astype(final_dtype)
             if np.any(~mask):
                 # remove NaN group label which should be last
