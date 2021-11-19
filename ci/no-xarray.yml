@@ -8,7 +8,7 @@ dependencies:
   - pip
   - pytest
   - pytest-cov
-  - dask
+  - dask-core
   - numpydoc
   - pre-commit
   - numpy_groupies

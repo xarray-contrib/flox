@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - codecov
-  - dask
+  - dask-core
   - netcdf4
   - pandas
   - pip
