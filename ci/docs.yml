@@ -2,7 +2,7 @@ name: flox-doc
 channels:
   - conda-forge
 dependencies:
-  - dask
+  - dask-core
   - pip
   - xarray
   - numpydoc
