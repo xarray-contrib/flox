@@ -610,3 +610,21 @@ def test_fill_value_behaviour(func):
         [fill_value, npfunc([np.nan, np.nan]), npfunc([1.0, 1.0]), npfunc([1.0, 1.0])]
     )
     assert_equal(actual, expected)
+
+
+@requires_dask
+@pytest.mark.parametrize("func", ["mean", "sum"])
+@pytest.mark.parametrize("dtype", ["float32", "float64", "int32", "int64"])
+def test_dtype_preservation(dtype, func):
+    if func == "sum" or (func == "mean" and "float" in dtype):
+        expected = np.dtype(dtype)
+    elif func == "mean" and "int" in dtype:
+        expected = np.float64
+    array = np.ones((20,), dtype=dtype)
+    by = np.ones(array.shape, dtype=int)
+    actual, _ = groupby_reduce(array, by, func=func)
+    assert actual.dtype == expected
+
+    array = dask.array.from_array(array, chunks=(4,))
+    actual, _ = groupby_reduce(array, by, func=func)
+    assert actual.dtype == expected

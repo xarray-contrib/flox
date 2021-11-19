@@ -533,6 +533,8 @@ def chunk_reduce(
                     **kw,
                 )
             else:
+                # TODO: avoid hardcoding nanlen
+                final_dtype = np.intp if reduction == "nanlen" else dtype
                 result = _get_aggregate(engine)(
                     group_idx,
                     array,
@@ -541,9 +543,11 @@ def chunk_reduce(
                     size=size,
                     # important when reducing with "offset" groups
                     fill_value=fv,
-                    dtype=np.intp if reduction == "nanlen" else dtype,
+                    dtype=final_dtype,
                     **kw,
                 )
+                if final_dtype is not None:
+                    result = result.astype(final_dtype)
             if np.any(~mask):
                 # remove NaN group label which should be last
                 result = result[..., :-1]
@@ -1140,6 +1144,17 @@ def groupby_reduce(
 
     if reduction.dtype is None:
         reduction.dtype = array.dtype
+    elif reduction.dtype is np.floating:
+        # mean, std, var always result in floating
+        # but we preserve the array's dtype if it is floating
+        if array.dtype.kind in "fcmM":
+            reduction.dtype = array.dtype
+        else:
+            reduction.dtype = np.dtype("float64")
+
+    elif not isinstance(reduction.dtype, np.dtype):
+        reduction.dtype = np.dtype(reduction.dtype)
+
     # Replace sentinel fill values according to dtype
     reduction.fill_value["intermediate"] = tuple(
         _get_fill_value(reduction.dtype, fv) for fv in reduction.fill_value["intermediate"]

@@ -73,13 +73,7 @@ class Aggregation:
             raise ValueError(f"Bad fill_value specified for Aggregation {name}.")
         self.fill_value["intermediate"] = fill_value
 
-        # np.dtype(None) = np.dtype("float64")!
-        if dtype is None:
-            self.dtype = None
-        elif not isinstance(dtype, np.dtype):
-            self.dtype = np.dtype(dtype)
-        else:
-            self.dtype = dtype
+        self.dtype = dtype
 
     def __dask_tokenize__(self):
         return (
@@ -185,7 +179,7 @@ mean = Aggregation(
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
     fill_value=(0, 0),
-    dtype=np.float64,
+    dtype=np.floating,
 )
 nanmean = Aggregation(
     "nanmean",
@@ -193,7 +187,7 @@ nanmean = Aggregation(
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
     fill_value=(0, 0),
-    dtype=np.float64,
+    dtype=np.floating,
 )
 
 
@@ -216,7 +210,7 @@ var = Aggregation(
     finalize=_var_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtype=np.float64,
+    dtype=np.floating,
 )
 nanvar = Aggregation(
     "nanvar",
@@ -225,7 +219,7 @@ nanvar = Aggregation(
     finalize=_var_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtype=np.float64,
+    dtype=np.floating,
 )
 std = Aggregation(
     "std",
@@ -234,7 +228,7 @@ std = Aggregation(
     finalize=_std_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtype=np.float64,
+    dtype=np.floating,
 )
 nanstd = Aggregation(
     "nanstd",
@@ -243,7 +237,7 @@ nanstd = Aggregation(
     finalize=_std_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtype=np.float64,
+    dtype=np.floating,
 )
 
 
