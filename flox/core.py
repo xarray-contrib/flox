@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 IntermediateDict = Dict[Union[str, Callable], Any]
 FinalResultsDict = Dict[str, Union["DaskArray", np.ndarray]]
+FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel")
 
 
 def _get_aggregate(engine):
@@ -358,7 +359,6 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
     nan_sentinel = size + 1 if offset_group else ngroups + 1
     group_idx[group_idx == -1] = nan_sentinel
 
-    FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel")
     props = FactorProps(offset_group, nan_sentinel)
     return group_idx, found_groups, grp_shape, ngroups, size, props
 
