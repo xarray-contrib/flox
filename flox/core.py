@@ -282,7 +282,7 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
         else:
             loc = (..., idx == -1)
         # This allows us to match xarray's type promotion rules
-        if fill_value is xrdtypes.NA:
+        if fill_value is xrdtypes.NA or np.isnan(fill_value):
             new_dtype, fill_value = xrdtypes.maybe_promote(reindexed.dtype)
             reindexed = reindexed.astype(new_dtype)
         reindexed[loc] = fill_value

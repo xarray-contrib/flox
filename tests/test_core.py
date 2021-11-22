@@ -586,8 +586,11 @@ def test_rechunk_for_cohorts(chunk_at, expected):
     assert rechunked.chunks == expected
 
 
+@pytest.mark.parametrize("fill_value", [123, np.nan])
 @pytest.mark.parametrize("func", ALL_FUNCS)
-def test_fill_value_behaviour(func):
+def test_fill_value_behaviour(func, fill_value):
+    # fill_value = np.nan tests promotion of int counts to float
+    # This is used by xarray
     if func in ["all", "any"] or "arg" in func:
         pytest.skip()
 
@@ -600,7 +603,6 @@ def test_fill_value_behaviour(func):
     else:
         npfunc = getattr(np, func)
 
-    fill_value = 123
     by = np.array([1, 2, 3, 1, 2, 3])
     array = np.array([np.nan, 1, 1, np.nan, 1, 1])
     actual, _ = groupby_reduce(
