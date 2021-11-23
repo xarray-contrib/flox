@@ -21,7 +21,7 @@ import numpy_groupies as npg
 import pandas as pd
 
 from . import aggregations, xrdtypes
-from .aggregations import Aggregation, _atleast_1d, _get_fill_value
+from .aggregations import Aggregation, _atleast_1d, _get_fill_value, generic_aggregate
 from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
@@ -33,15 +33,18 @@ FinalResultsDict = Dict[str, Union["DaskArray", np.ndarray]]
 FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel")
 
 
-def _get_aggregate(engine):
-    if engine == "numba":
-        return npg.aggregate_numba.aggregate
-    elif engine == "numpy":
-        return npg.aggregate_numpy.aggregate
+def _prepare_for_flox(group_idx, array):
+    """
+    Sort the input array once to save time.
+    """
+    issorted = (group_idx[:-1] <= group_idx[1:]).all()
+    if issorted:
+        ordered_array = array
     else:
-        raise ValueError(
-            f"Expected engine to be one of ['numpy', 'numba']. Received {engine} instead."
-        )
+        perm = group_idx.argsort()
+        group_idx = group_idx[..., perm]
+        ordered_array = array[..., perm]
+    return group_idx, ordered_array
 
 
 def _get_chunk_reduction(reduction_type: str) -> Callable:
@@ -298,7 +301,7 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
         # This allows us to match xarray's type promotion rules
         if fill_value is xrdtypes.NA or np.isnan(fill_value):
             new_dtype, fill_value = xrdtypes.maybe_promote(reindexed.dtype)
-            reindexed = reindexed.astype(new_dtype)
+            reindexed = reindexed.astype(new_dtype, copy=False)
         reindexed[loc] = fill_value
     return reindexed
 
@@ -342,7 +345,7 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
             idx = pd.cut(groupvar.ravel(), bins=expect, labels=False)
             # same sentinel value as factorize
             idx[np.isnan(idx)] = -1
-            idx = idx.astype(int)
+            idx = idx.astype(int, copy=False)
             expect = np.arange(idx.max() + 1)
             found_groups.append(expect)
         else:
@@ -525,11 +528,14 @@ def chunk_reduce(
         if empty:
             results["groups"] = np.array([np.nan])
         else:
-            sortidx = np.argsort(groups)
-            if np.all(sortidx == np.arange(len(sortidx))):
-                # already sorted, avoid the copy.
+            if (groups[:-1] <= groups[1:]).all():
                 sortidx = slice(None)
+            else:
+                sortidx = groups.argsort()
             results["groups"] = groups[sortidx]
+
+    if engine == "flox":
+        group_idx, array = _prepare_for_flox(group_idx, array)
 
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
@@ -552,10 +558,11 @@ def chunk_reduce(
             else:
                 # TODO: avoid hardcoding nanlen
                 final_dtype = np.intp if reduction == "nanlen" else dtype
-                result = _get_aggregate(engine)(
+                result = generic_aggregate(
                     group_idx,
                     array,
                     axis=-1,
+                    engine=engine,
                     func=reduction,
                     size=size,
                     # important when reducing with "offset" groups
@@ -563,8 +570,8 @@ def chunk_reduce(
                     dtype=final_dtype,
                     **kw,
                 )
-                if final_dtype is not None and result.dtype != final_dtype:
-                    result = result.astype(final_dtype)
+                if final_dtype is not None:
+                    result = result.astype(final_dtype, copy=False)
             if np.any(~mask):
                 # remove NaN group label which should be last
                 result = result[..., :-1]
@@ -679,6 +686,24 @@ def _npg_aggregate(
     )
 
 
+def _conc2(x_chunk, key1, key2=None, axis=None) -> np.ndarray:
+    """copied from dask.array.reductions.mean_combine"""
+    from dask.array.core import _concatenate2
+    from dask.utils import deepmap
+
+    if key2 is not None:
+        mapped = deepmap(lambda x: x[key1][key2], x_chunk)
+    else:
+        mapped = deepmap(lambda x: x[key1], x_chunk)
+    return _concatenate2(mapped, axes=axis)
+
+    # This doesn't seem to improve things at all; and some tests fail...
+    # from dask.array.core import concatenate3
+    # for _ in range(mapped[0].ndim-1):
+    #    mapped = [mapped]
+    # return concatenate3(mapped)
+
+
 def _npg_combine(
     x_chunk,
     agg: Aggregation,
@@ -688,20 +713,11 @@ def _npg_combine(
     engine: str,
 ) -> IntermediateDict:
     """Combine intermediates step of tree reduction."""
-    from dask.array.core import _concatenate2
     from dask.base import flatten
     from dask.utils import deepmap
 
     if not isinstance(x_chunk, list):
         x_chunk = [x_chunk]
-
-    def _conc2(key1, key2=None, axis=None) -> np.ndarray:
-        """copied from dask.array.reductions.mean_combine"""
-        if key2 is not None:
-            mapped = deepmap(lambda x: x[key1][key2], x_chunk)
-        else:
-            mapped = deepmap(lambda x: x[key1], x_chunk)
-        return _concatenate2(mapped, axes=axis)
 
     if len(axis) != 1:
         # when there's only a single axis of reduction, we can just concatenate later,
@@ -727,7 +743,7 @@ def _npg_combine(
         group_conc_axis = (0,)
     else:
         group_conc_axis = sorted(group_ndim - ax - 1 for ax in axis)
-    groups = _conc2("groups", axis=group_conc_axis)
+    groups = _conc2(x_chunk, "groups", axis=group_conc_axis)
 
     if agg.reduction_type == "argreduce":
         # If "nanlen" was added for masking later, we need to account for that
@@ -738,7 +754,9 @@ def _npg_combine(
 
         # We need to send the intermediate array values & indexes at the same time
         # intermediates are (value e.g. max, index e.g. argmax, counts)
-        array_idx = tuple(_conc2(key1="intermediates", key2=idx, axis=axis) for idx in (0, 1))
+        array_idx = tuple(
+            _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis) for idx in (0, 1)
+        )
         results = chunk_argreduce(
             array_idx,
             groups,
@@ -751,7 +769,7 @@ def _npg_combine(
         )
 
         if agg.chunk[-1] == "nanlen":
-            counts = _conc2(key1="intermediates", key2=2, axis=axis)
+            counts = _conc2(x_chunk, key1="intermediates", key2=2, axis=axis)
             # sum the counts
             results["intermediates"].append(
                 chunk_reduce(
@@ -770,7 +788,7 @@ def _npg_combine(
         # Here we reduce the intermediates individually
         results = {"groups": None, "intermediates": []}
         for idx, (combine, fv) in enumerate(zip(agg.combine, agg.fill_value["intermediate"])):
-            array = _conc2(key1="intermediates", key2=idx, axis=axis)
+            array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis)
             if array.shape[-1] == 0:
                 # all empty when combined
                 results["intermediates"].append(
@@ -1223,6 +1241,7 @@ def groupby_reduce(
             dtype=reduction.dtype,
             isbin=isbin,
             kwargs=finalize_kwargs,
+            engine=engine,
         )  # type: ignore
 
         if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:

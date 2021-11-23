@@ -1,6 +1,37 @@
-import numpy as np
+from functools import partial
 
-from . import xrdtypes as dtypes, xrutils
+import numpy as np
+import numpy_groupies as npg
+
+from . import aggregate_flox, aggregate_npg, xrdtypes as dtypes, xrutils
+
+
+def generic_aggregate(
+    group_idx, array, *, engine, func, axis=-1, size=None, fill_value=None, dtype=None, **kwargs
+):
+    if engine == "flox":
+        try:
+            method = getattr(aggregate_flox, func)
+        except AttributeError:
+            method = partial(npg.aggregate_numpy.aggregate, func=func)
+    elif engine == "numpy":
+        try:
+            method = getattr(aggregate_npg, func)
+        except AttributeError:
+            method = partial(npg.aggregate_numpy.aggregate, func=func)
+    elif engine == "numba":
+        try:
+            method = getattr(aggregate_npg, f"{func}")
+        except AttributeError:
+            method = partial(npg.aggregate_numba.aggregate, func=func)
+    else:
+        raise ValueError(
+            f"Expected engine to be one of ['flox', 'numpy', 'numba']. Received {engine} instead."
+        )
+
+    return method(
+        group_idx, array, axis=axis, size=size, fill_value=fill_value, dtype=dtype, **kwargs
+    )
 
 
 def _get_fill_value(dtype, fill_value):
@@ -101,55 +132,6 @@ class Aggregation:
         )
 
 
-def sum_of_squares(group_idx, array, func="sum", size=None, fill_value=None):
-    import numpy_groupies as npg
-
-    return npg.aggregate_numpy.aggregate(
-        group_idx,
-        array ** 2,
-        axis=-1,
-        func=func,
-        size=size,
-        fill_value=fill_value,
-    )
-
-
-def _nansum(group_idx, array, size=None, fill_value=None):
-    # npg takes out NaNs before calling np.bincount
-    # This means that all NaN groups are equivalent to absent groups
-    # This behaviour does not work for xarray
-    import numpy_groupies as npg
-
-    return npg.aggregate_numpy.aggregate(
-        group_idx,
-        np.where(np.isnan(array), 0, array),
-        axis=-1,
-        func="sum",
-        size=size,
-        fill_value=fill_value,
-    )
-
-
-def _nanprod(group_idx, array, size=None, fill_value=None):
-    # npg takes out NaNs before calling np.bincount
-    # This means that all NaN groups are equivalent to absent groups
-    # This behaviour does not work for xarray
-    import numpy_groupies as npg
-
-    return npg.aggregate_numpy.aggregate(
-        group_idx,
-        np.where(np.isnan(array), 1, array),
-        axis=-1,
-        func="prod",
-        size=size,
-        fill_value=fill_value,
-    )
-
-
-def nansum_of_squares(group_idx, array, size=None, fill_value=None):
-    return sum_of_squares(group_idx, array, func="nansum", size=size, fill_value=fill_value)
-
-
 count = Aggregation(
     "count",
     numpy="nanlen",
@@ -163,12 +145,11 @@ count = Aggregation(
 # note that the fill values are the result of np.func([np.nan, np.nan])
 # final_fill_value is used for groups that don't exist. This is usually np.nan
 sum = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
-nansum = Aggregation("nansum", chunk=_nansum, numpy=_nansum, combine="sum", fill_value=0)
+nansum = Aggregation("nansum", chunk="nansum", combine="sum", fill_value=0)
 prod = Aggregation("prod", chunk="prod", combine="prod", fill_value=1, final_fill_value=1)
 nanprod = Aggregation(
     "nanprod",
-    numpy=_nanprod,
-    chunk=_nanprod,
+    chunk="nanprod",
     combine="prod",
     fill_value=1,
     final_fill_value=dtypes.NA,
@@ -205,7 +186,7 @@ def _std_finalize(sumsq, sum_, count, ddof=0):
 # var, std always promote to float, so we set nan
 var = Aggregation(
     "var",
-    chunk=(sum_of_squares, "sum", "nanlen"),
+    chunk=("sum_of_squares", "sum", "nanlen"),
     combine=("sum", "sum", "sum"),
     finalize=_var_finalize,
     fill_value=0,
@@ -214,7 +195,7 @@ var = Aggregation(
 )
 nanvar = Aggregation(
     "nanvar",
-    chunk=(nansum_of_squares, "nansum", "nanlen"),
+    chunk=("nansum_of_squares", "nansum", "nanlen"),
     combine=("sum", "sum", "sum"),
     finalize=_var_finalize,
     fill_value=0,
@@ -223,7 +204,7 @@ nanvar = Aggregation(
 )
 std = Aggregation(
     "std",
-    chunk=(sum_of_squares, "sum", "nanlen"),
+    chunk=("sum_of_squares", "sum", "nanlen"),
     combine=("sum", "sum", "sum"),
     finalize=_std_finalize,
     fill_value=0,
@@ -232,7 +213,7 @@ std = Aggregation(
 )
 nanstd = Aggregation(
     "nanstd",
-    chunk=(nansum_of_squares, "nansum", "nanlen"),
+    chunk=("nansum_of_squares", "nansum", "nanlen"),
     combine=("sum", "sum", "sum"),
     finalize=_std_finalize,
     fill_value=0,

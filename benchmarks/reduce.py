@@ -13,21 +13,27 @@ class ChunkReduce:
     def setup(self, *args, **kwargs):
         raise NotImplementedError
 
-    @parameterized("func", ["sum", "nansum", "mean", "nanmean", "argmax"])
-    def time_reduce(self, func):
+    @parameterized(
+        "func, engine", [["sum", "nansum", "mean", "nanmean", "argmax"], ["flox", "numpy", "numba"]]
+    )
+    def time_reduce(self, func, engine):
         flox.groupby_reduce(
             self.array,
             self.labels,
             func=func,
+            engine=engine,
             axis=self.axis,
         )
 
-    @parameterized("func", ["sum", "nansum", "mean", "nanmean", "argmax"])
-    def peakmem_reduce(self, func):
+    @parameterized(
+        "func, engine", [["sum", "nansum", "mean", "nanmean", "argmax"], ["flox", "numpy", "numba"]]
+    )
+    def peakmem_reduce(self, func, engine):
         flox.groupby_reduce(
             self.array,
             self.labels,
             func=func,
+            engine=engine,
             axis=self.axis,
         )
 
