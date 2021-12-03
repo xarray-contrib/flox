@@ -86,7 +86,7 @@ def xarray_reduce(
     fill_value :
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
-    method : {"mapreduce", "blockwise", "cohorts"}, optional
+    method : {"mapreduce", "blockwise", "cohorts", "split-reduce"}, optional
         Strategy for reduction of dask arrays only:
           * ``"mapreduce"``:
             First apply the reduction blockwise on ``array``, then
@@ -108,6 +108,10 @@ def xarray_reduce(
             where the group labels repeat at regular intervals like 'hour',
             'month', dayofyear' etc. Optimize chunking ``array`` for this
             method by first rechunking using ``rechunk_for_cohorts``.
+          * ``"split-reduce"``:
+            Break out each group into its own array and then ``"map-reduce"``.
+            This is implemented by having each group be its own cohort,
+            and is identical to xarray's default strategy.
 
     engine : {"numpy", "numba"}, optional
         Engine for numpy_groupies
