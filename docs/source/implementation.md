@@ -28,7 +28,7 @@ communication and is quite expensive (in dataframe terminology, this is a "shuff
 This is fundamentally why many groupby reductions don't work well right now with
 big datasets.
 
-### `method="mapreduce"`
+### `method="map-reduce"`
 
 The first idea is to use the "map-reduce" strategy (inspired by `dask.dataframe`).
 
@@ -49,7 +49,7 @@ till all group results are in one block. At that point the result is
 
 ### `method="blockwise"`
 
-One case where `"mapreduce"` doesn't work well is the case of "resampling" reductions. An
+One case where `"map-reduce"` doesn't work well is the case of "resampling" reductions. An
 example here is resampling from daily frequency to monthly frequency data:  `da.resample(time="M").mean()`
 For resampling type reductions,
 1. Group members occur sequentially (all days in January 2001 occur one after the other)
@@ -85,7 +85,7 @@ Consider this example of monthly average data; where 4 months are present in a s
 ![cohorts-schematic](/../diagrams/cohorts-month-chunk4.png)
 
 Because a chunksize of 4 evenly divides the number of groups (12) all we need to do is index out blocks
-0, 3, 7 and then apply the `"mapreduce"` strategy to form the final result for months Jan-Apr. Repeat for the
+0, 3, 7 and then apply the `"map-reduce"` strategy to form the final result for months Jan-Apr. Repeat for the
 remaining groups of months (May-Aug; Sep-Dec) and then concatenate.
 
 `flox` can find these cohorts, below it identifies the cohorts with labels `1,2,3,4`; `5,6,7,8`, and `9,10,11,12`.
@@ -94,7 +94,7 @@ remaining groups of months (May-Aug; Sep-Dec) and then concatenate.
 [[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]  # 3 cohorts
 ```
 For each cohort, it counts the number of blocks that need to be reduced. If `1` then it applies the reduction blockwise.
-If > 1; then it use `"mapreduce"`.
+If > 1; then it uses `"map-reduce"`.
 
 One annoyance is that if the chunksize doesn't evenly divide the number of groups, we still end up splitting a number of chunks.
 For example, when `chunksize=5`
