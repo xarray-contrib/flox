@@ -56,7 +56,7 @@ def xarray_reduce(
     dim: Hashable = None,
     split_out: int = 1,
     fill_value=None,
-    method: str = "mapreduce",
+    method: str = "map-reduce",
     engine: str = "numpy",
     keep_attrs: bool = True,
     skipna: Optional[bool] = None,
@@ -86,9 +86,9 @@ def xarray_reduce(
     fill_value :
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
-    method : {"mapreduce", "blockwise", "cohorts", "split-reduce"}, optional
+    method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
         Strategy for reduction of dask arrays only:
-          * ``"mapreduce"``:
+          * ``"map-reduce"``:
             First apply the reduction blockwise on ``array``, then
             combine a few newighbouring blocks, apply the reduction.
             Continue until finalizing. Usually, ``func`` will need
@@ -103,7 +103,7 @@ def xarray_reduce(
             in that block.
           * ``"cohorts"``:
             Finds group labels that tend to occur together ("cohorts"),
-            indexes out cohorts and reduces that subset using "mapreduce",
+            indexes out cohorts and reduces that subset using "map-reduce",
             repeat for all cohorts. This works well for many time groupings
             where the group labels repeat at regular intervals like 'hour',
             'month', dayofyear' etc. Optimize chunking ``array`` for this
@@ -375,7 +375,7 @@ def xarray_groupby_reduce(
     groupby: "GroupBy",
     func: Union[str, Aggregation],
     split_out: int = 1,
-    method: str = "mapreduce",
+    method: str = "map-reduce",
     keep_attrs: bool = True,
 ):
     """Apply on an existing Xarray groupby object for convenience."""

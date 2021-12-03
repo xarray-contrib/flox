@@ -156,7 +156,7 @@ def test_groupby_reduce_all(size, func, engine):
 
         if not has_dask:
             continue
-        for method in ["mapreduce", "cohorts"]:
+        for method in ["map-reduce", "cohorts"]:
             actual, _ = groupby_reduce(
                 da.from_array(array, chunks=3),
                 by,
@@ -642,7 +642,7 @@ def test_dtype_preservation(dtype, func):
 
 
 @requires_dask
-@pytest.mark.parametrize("method", ["split-reduce", "mapreduce", "cohorts"])
+@pytest.mark.parametrize("method", ["split-reduce", "map-reduce", "cohorts"])
 def test_cohorts(method):
     repeats = [4, 4, 12, 2, 3, 4]
     labels = np.repeat(np.arange(6), repeats)

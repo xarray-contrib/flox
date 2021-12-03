@@ -834,7 +834,7 @@ def groupby_agg(
     axis: Sequence = None,
     split_out: int = 1,
     fill_value: Any = None,
-    method: str = "mapreduce",
+    method: str = "map-reduce",
     min_count: Optional[int] = None,
     isbin: bool = False,
     engine: str = "numpy",
@@ -916,7 +916,7 @@ def groupby_agg(
         finalize_kwargs=finalize_kwargs,
     )
 
-    if method == "mapreduce":
+    if method == "map-reduce":
         # reduced is really a dict mapping reduction name to array
         # and "groups" to an array of group labels
         # Note: it does not make sense to interpret axis relative to
@@ -1039,7 +1039,7 @@ def groupby_reduce(
     fill_value=None,
     min_count: Optional[int] = None,
     split_out: int = 1,
-    method: str = "mapreduce",
+    method: str = "map-reduce",
     engine: str = "numpy",
     finalize_kwargs: Optional[Mapping] = None,
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
@@ -1072,9 +1072,9 @@ def groupby_reduce(
         array's dtype.
     split_out : int, optional
         Number of chunks along group axis in output (last axis)
-    method : {"mapreduce", "blockwise", "cohorts", "split-reduce"}, optional
+    method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
         Strategy for reduction of dask arrays only:
-          * ``"mapreduce"``:
+          * ``"map-reduce"``:
             First apply the reduction blockwise on ``array``, then
             combine a few newighbouring blocks, apply the reduction.
             Continue until finalizing. Usually, ``func`` will need
@@ -1089,7 +1089,7 @@ def groupby_reduce(
             in that block.
           * ``"cohorts"``:
             Finds group labels that tend to occur together ("cohorts"),
-            indexes out cohorts and reduces that subset using "mapreduce",
+            indexes out cohorts and reduces that subset using "map-reduce",
             repeat for all cohorts. This works well for many time groupings
             where the group labels repeat at regular intervals like 'hour',
             'month', dayofyear' etc. Optimize chunking ``array`` for this
@@ -1319,7 +1319,7 @@ def groupby_reduce(
                     expected_groups=cohort,
                     # if only a single block along axis, we can just work blockwise
                     # inspired by https://github.com/dask/dask/issues/8361
-                    method="blockwise" if numblocks == 1 else "mapreduce",
+                    method="blockwise" if numblocks == 1 else "map-reduce",
                 )
                 results.append(r)
                 groups_.append(cohort)
