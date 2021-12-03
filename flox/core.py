@@ -100,19 +100,21 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def find_group_cohorts(labels, chunks, merge=True):
+def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     """
     Finds groups labels that occur together: "cohorts"
 
     Parameters
     ----------
     labels: np.ndarray
-        Array of group labels
+        1D Array of group labels
     chunks: tuple
         chunks along grouping dimension for array that is being reduced
     merge: bool, optional
         Attempt to merge cohorts when one cohort's chunks are a subset
         of another cohort's chunks.
+    method: ["split-reduce", "cohorts"], optional
+        Which method are we using?
 
     Returns
     -------
@@ -122,6 +124,9 @@ def find_group_cohorts(labels, chunks, merge=True):
     import copy
 
     import toolz as tlz
+
+    if method == "split-reduce":
+        return np.unique(labels).reshape(-1, 1)
 
     which_chunk = np.repeat(np.arange(len(chunks)), chunks)
     # these are chunks where a label is present
@@ -1067,7 +1072,7 @@ def groupby_reduce(
         array's dtype.
     split_out : int, optional
         Number of chunks along group axis in output (last axis)
-    method : {"mapreduce", "blockwise", "cohorts"}, optional
+    method : {"mapreduce", "blockwise", "cohorts", "split-reduce"}, optional
         Strategy for reduction of dask arrays only:
           * ``"mapreduce"``:
             First apply the reduction blockwise on ``array``, then
@@ -1089,6 +1094,11 @@ def groupby_reduce(
             where the group labels repeat at regular intervals like 'hour',
             'month', dayofyear' etc. Optimize chunking ``array`` for this
             method by first rechunking using ``rechunk_for_cohorts``.
+          * ``"split-reduce"``:
+            Break out each group into its own array and then ``"map-reduce"``.
+            This is implemented by having each group be its own cohort,
+            and is identical to xarray's default strategy.
+
     engine : {"numpy", "numba"}, optional, default: ``"numpy"``
         Engine for ``numpy_groupies``.
     finalize_kwargs : dict, optional
@@ -1285,11 +1295,12 @@ def groupby_reduce(
             engine=engine,
             finalize_kwargs=finalize_kwargs,
         )
-        if method == "cohorts":
+
+        if method in ["split-reduce", "cohorts"]:
             assert axis == (array.ndim - 1,)
             assert by.ndim == 1
 
-            cohorts = find_group_cohorts(by, array.chunks[axis[0]], merge=True)
+            cohorts = find_group_cohorts(by, array.chunks[axis[0]], merge=True, method=method)
             idx = np.arange(len(by))
 
             results = []

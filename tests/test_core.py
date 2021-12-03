@@ -572,8 +572,11 @@ def test_rechunk_for_blockwise(inchunks, expected):
     ],
 )
 def test_find_group_cohorts(expected, labels, chunks, merge):
-    actual = list(find_group_cohorts(labels, chunks, merge))
+    actual = list(find_group_cohorts(labels, chunks, merge, method="cohorts"))
     assert actual == expected, (actual, expected)
+
+    actual = find_group_cohorts(labels, chunks, merge, method="split-reduce")
+    expected = np.array([label] for label in np.unique(labels))
 
 
 @requires_dask
@@ -639,11 +642,12 @@ def test_dtype_preservation(dtype, func):
 
 
 @requires_dask
-def test_cohorts():
+@pytest.mark.parametrize("method", ["split-reduce", "mapreduce", "cohorts"])
+def test_cohorts(method):
     repeats = [4, 4, 12, 2, 3, 4]
     labels = np.repeat(np.arange(6), repeats)
     array = dask.array.from_array(labels, chunks=(4, 8, 4, 9, 4))
 
-    actual, actual_groups = groupby_reduce(array, labels, func="count", method="cohorts")
+    actual, actual_groups = groupby_reduce(array, labels, func="count", method=method)
     assert_equal(actual_groups, np.arange(6))
     assert_equal(actual, repeats)
