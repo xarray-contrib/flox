@@ -560,9 +560,15 @@ def test_rechunk_for_blockwise(inchunks, expected):
         [[[1, 2, 3, 4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), True],
         [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), False],
         [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), False],
-        [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), True],
+        [[[3], [2], [1], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), True],
         [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), True],
         [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), False],
+        [
+            [[2, 3, 4, 1], [5], [0]],
+            np.repeat(np.arange(6), [4, 4, 12, 2, 3, 4]),
+            (4, 8, 4, 9, 4),
+            True,
+        ],
     ],
 )
 def test_find_group_cohorts(expected, labels, chunks, merge):
@@ -630,3 +636,14 @@ def test_dtype_preservation(dtype, func):
     array = dask.array.from_array(array, chunks=(4,))
     actual, _ = groupby_reduce(array, by, func=func)
     assert actual.dtype == expected
+
+
+@requires_dask
+def test_cohorts():
+    repeats = [4, 4, 12, 2, 3, 4]
+    labels = np.repeat(np.arange(6), repeats)
+    array = dask.array.from_array(labels, chunks=(4, 8, 4, 9, 4))
+
+    actual, actual_groups = groupby_reduce(array, labels, func="count", method="cohorts")
+    assert_equal(actual_groups, np.arange(6))
+    assert_equal(actual, repeats)

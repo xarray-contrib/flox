@@ -132,11 +132,20 @@ def find_group_cohorts(labels, chunks, merge=True):
     # TODO: sort by length of values (i.e. cohort);
     # then loop in reverse and merge when keys are subsets of initial keys?
     if merge:
-        items = tuple(chunks_cohorts.items())
+        # First sort by number of chunks occupied by cohort
+        sorted_chunks_cohorts = dict(
+            reversed(sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0])))
+        )
+
+        items = tuple(sorted_chunks_cohorts.items())
 
         merged_cohorts = {}
         merged_keys = []
 
+        # Now we iterate starting with the longest number of chunks,
+        # and then merge in cohorts that are present in a subset of those chunks
+        # I think this is suboptimal and must fail at some point.
+        # But it might work for most cases. There must be a better way...
         for idx, (k1, v1) in enumerate(items):
             if k1 in merged_keys:
                 continue
@@ -1277,7 +1286,7 @@ def groupby_reduce(
             finalize_kwargs=finalize_kwargs,
         )
         if method == "cohorts":
-            assert len(axis) == 1
+            assert axis == (array.ndim - 1,)
             assert by.ndim == 1
 
             cohorts = find_group_cohorts(by, array.chunks[axis[0]], merge=True)
@@ -1286,6 +1295,7 @@ def groupby_reduce(
             results = []
             groups_ = []
             for cohort in cohorts:
+                cohort = sorted(cohort)
                 # indexes for a subset of groups
                 subset_idx = idx[np.isin(by, cohort)]
                 array_subset = array[..., subset_idx]
@@ -1301,11 +1311,14 @@ def groupby_reduce(
                     method="blockwise" if numblocks == 1 else "mapreduce",
                 )
                 results.append(r)
-                groups_.append(g)
+                groups_.append(cohort)
 
-            # concatenate results together
-            groups = (np.hstack(groups_),)
-            result = np.concatenate(results, axis=-1)
+            # concatenate results together,
+            # sort to make sure we match expected output
+            allgroups = np.hstack(groups_)
+            sorted_idx = np.argsort(allgroups)
+            result = np.concatenate(results, axis=-1)[..., sorted_idx]
+            groups = (allgroups[sorted_idx],)
 
         else:
             if method == "blockwise":
