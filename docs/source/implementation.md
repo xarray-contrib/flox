@@ -3,8 +3,8 @@
 `flox` outsources the core GroupBy operation to the vectorized implementations in
 [numpy_groupies](https://github.com/ml31415/numpy-groupies). Constructing
 an efficient groupby reduction with dask is hard, and depends on how the
-groups are distributed amongst the blocks of an array. `flox` implements 3 strategies for
-effective grouped reductions, each is appropriate for a particular distribution of groups
+groups are distributed amongst the blocks of an array. `flox` implements 4 strategies for
+grouped reductions, each is appropriate for a particular distribution of groups
 among the blocks of a dask array.
 
 Switch between the various strategies by passing `method` to either {py:func}`flox.core.groupby_reduce`
@@ -13,7 +13,7 @@ or `xarray_reduce`.
 
 First we describe xarray's current strategy
 
-### Xarray's current GroupBy strategy
+### `method="split-reduce"`: Xarray's current GroupBy strategy
 
 Xarray's current strategy is to find all unique group labels, index out each group,
 and then apply the reduction operation. Note that this only works if we know the group
@@ -21,7 +21,7 @@ labels (i.e. you cannot use this strategy to group by a dask array).
 
 Schematically, this looks like (colors indicate group labels; separated groups of colors
 indicate different blocks of an array):
-![xarray-current-strategy](../diagrams/xarray-current-strategy.png)
+![xarray-current-strategy](../diagrams/split-reduce.png)
 
 The first step is to extract all members of a group, which involves a *lot* of
 communication and is quite expensive (in dataframe terminology, this is a "shuffle").
