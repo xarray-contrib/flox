@@ -4,7 +4,11 @@ import numpy as np
 
 
 def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None):
-    # depends on input being sorted
+    """
+    most of this code is from shoyer's gist
+    https://gist.github.com/shoyer/f538ac78ae904c936844
+    """
+    # assumes input is sorted, which I do in core._prepare_for_flox
     aux = group_idx
 
     flag = np.concatenate(([True], aux[1:] != aux[:-1]))
@@ -19,7 +23,10 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
     if out is None:
         out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
 
-    out[..., uniques] = op.reduceat(array, inv_idx, axis=axis, dtype=dtype)
+    if ((uniques[1:] - uniques[:-1]) == 1).all():
+        op.reduceat(array, inv_idx, axis=axis, dtype=dtype, out=out)
+    else:
+        out[..., uniques] = op.reduceat(array, inv_idx, axis=axis, dtype=dtype)
 
     return out
 
