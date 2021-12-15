@@ -132,7 +132,8 @@ def test_groupby_reduce(
 def test_groupby_reduce_all(size, func, engine):
 
     by = np.ones(size[-1])
-    array = np.random.randn(*size)
+    rng = np.random.default_rng(12345)
+    array = rng.random(size)
     if "nan" in func and "nanarg" not in func:
         array[[1, 4, 5], ...] = np.nan
     elif "nanarg" in func and len(size) > 1:
@@ -177,7 +178,8 @@ def test_groupby_reduce_all(size, func, engine):
 def test_arg_reduction_dtype_is_int(size, func):
     """avoid bugs being hidden by the xfail in the above test."""
 
-    array = np.random.randn(*size)
+    rng = np.random.default_rng(12345)
+    array = rng.random(size)
     by = np.ones(size[-1])
 
     if "nanarg" in func and len(size) > 1:
@@ -377,7 +379,8 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         fill_value = 123
     # tests against the numpy output to make sure dask compute matches
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
-    array = np.ones_like(by)
+    rng = np.random.default_rng(12345)
+    array = rng.random(by.shape)
     kwargs = dict(
         func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value, engine=engine
     )
