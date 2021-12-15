@@ -294,33 +294,34 @@ def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype):
     assert_equal(expected, actual[..., [0, 2, 1]])
 
 
-def test_numpy_reduce_axis_subset():
+@pytest.mark.parametrize("engine", ALL_ENGINES)
+def test_numpy_reduce_axis_subset(engine):
     # TODO: add NaNs
     by = labels2d
     array = np.ones_like(by)
-    result, _ = groupby_reduce(array, by, "count", axis=1)
+    result, _ = groupby_reduce(array, by, "count", axis=1, engine=engine)
     assert_equal(result, [[2, 3], [2, 3]])
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
-    result, _ = groupby_reduce(array, by, "count", axis=1)
+    result, _ = groupby_reduce(array, by, "count", axis=1, engine=engine)
     subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, "count", axis=2)
+    result, _ = groupby_reduce(array, by, "count", axis=2, engine=engine)
     subarr = np.array([[2, 3], [2, 3]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, "count", axis=(1, 2))
+    result, _ = groupby_reduce(array, by, "count", axis=(1, 2), engine=engine)
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, "count", axis=(2, 1))
+    result, _ = groupby_reduce(array, by, "count", axis=(2, 1), engine=engine)
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by[0, ...], "count", axis=(1, 2))
+    result, _ = groupby_reduce(array, by[0, ...], "count", axis=(1, 2), engine=engine)
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result, expected)
 
@@ -402,6 +403,10 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
             **kwargs,
         )
     expected, _ = groupby_reduce(array, by, **kwargs)
+    if engine == "flox":
+        kwargs.pop("engine")
+        expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
+        assert_equal(expected_npg, expected)
     assert_equal(actual, expected)
 
 
