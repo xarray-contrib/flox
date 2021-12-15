@@ -40,8 +40,10 @@ nansum = partial(_nan_grouped_op, func=sum, fillna=0)
 prod = partial(_np_grouped_op, op=np.multiply)
 nanprod = partial(_nan_grouped_op, func=prod, fillna=1)
 max = partial(_np_grouped_op, op=np.maximum)
+nanmax = partial(_nan_grouped_op, func=max, fillna=-np.inf)
 min = partial(_np_grouped_op, op=np.minimum)
-# TODO: nanmax, nanmin, all, any
+nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
+# TODO: all, any
 
 
 def sum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
