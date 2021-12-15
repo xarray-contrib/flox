@@ -4,14 +4,8 @@ import numpy as np
 
 
 def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None):
-    issorted = (group_idx[:-1] <= group_idx[1:]).all()
-    if issorted:
-        aux = group_idx
-        ordered_array = array
-    else:
-        perm = group_idx.argsort()
-        aux = group_idx[perm]
-        ordered_array = np.take(array, perm, axis=axis)
+    # depends on input being sorted
+    aux = group_idx
 
     flag = np.concatenate(([True], aux[1:] != aux[:-1]))
     uniques = aux[flag]
@@ -23,7 +17,7 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
         dtype = array.dtype
     result = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
 
-    result[..., uniques] = op.reduceat(ordered_array, inv_idx, axis=axis, dtype=dtype)
+    result[..., uniques] = op.reduceat(array, inv_idx, axis=axis, dtype=dtype)
 
     return result
 
