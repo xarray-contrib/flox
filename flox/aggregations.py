@@ -72,7 +72,8 @@ class Aggregation:
         finalize=None,
         fill_value=None,
         final_fill_value=dtypes.NA,
-        dtype=None,
+        dtypes=None,
+        final_dtype=None,
         reduction_type="reduce",
     ):
         self.name = name
@@ -91,21 +92,24 @@ class Aggregation:
         self.finalize = finalize if finalize else lambda x: x
 
         self.fill_value = {}
-
         # This is used for the final reindexing
         self.fill_value[name] = final_fill_value
-
         # Aggregation.fill_value is used to reindex to group labels
         # at the *intermediate* step.
         # They should make sense when aggregated together with results from other blocks
-        fill_value = _atleast_1d(fill_value)
-        if len(fill_value) == 1 and len(fill_value) < len(self.chunk):
-            fill_value = fill_value * len(self.chunk)
-        if len(fill_value) != len(self.chunk):
-            raise ValueError(f"Bad fill_value specified for Aggregation {name}.")
-        self.fill_value["intermediate"] = fill_value
+        self.fill_value["intermediate"] = self._normalize_dtype_fill_value(fill_value, "fill_value")
 
-        self.dtype = dtype
+        self.dtype = {}
+        self.dtype[name] = final_dtype
+        self.dtype["intermediate"] = self._normalize_dtype_fill_value(dtypes, "dtype")
+
+    def _normalize_dtype_fill_value(self, value, name):
+        value = _atleast_1d(value)
+        if len(value) == 1 and len(value) < len(self.chunk):
+            value = value * len(self.chunk)
+        if len(value) != len(self.chunk):
+            raise ValueError(f"Bad {name} specified for Aggregation {name}.")
+        return value
 
     def __dask_tokenize__(self):
         return (
@@ -140,7 +144,8 @@ count = Aggregation(
     combine="sum",
     fill_value=0,
     final_fill_value=0,
-    dtype=np.intp,
+    dtypes=np.intp,
+    final_dtype=np.intp,
 )
 
 # note that the fill values are the result of np.func([np.nan, np.nan])
@@ -161,7 +166,8 @@ mean = Aggregation(
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
     fill_value=(0, 0),
-    dtype=np.floating,
+    dtypes=(None, np.intp),
+    final_dtype=np.floating,
 )
 nanmean = Aggregation(
     "nanmean",
@@ -169,7 +175,8 @@ nanmean = Aggregation(
     combine=("sum", "sum"),
     finalize=lambda sum_, count: sum_ / count,
     fill_value=(0, 0),
-    dtype=np.floating,
+    dtypes=(None, np.intp),
+    final_dtype=np.floating,
 )
 
 
@@ -192,7 +199,8 @@ var = Aggregation(
     finalize=_var_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtype=np.floating,
+    dtypes=(None, None, np.intp),
+    final_dtype=np.floating,
 )
 nanvar = Aggregation(
     "nanvar",
@@ -201,7 +209,8 @@ nanvar = Aggregation(
     finalize=_var_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtype=np.floating,
+    dtypes=(None, None, np.intp),
+    final_dtype=np.floating,
 )
 std = Aggregation(
     "std",
@@ -210,7 +219,8 @@ std = Aggregation(
     finalize=_std_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtype=np.floating,
+    dtypes=(None, None, np.intp),
+    final_dtype=np.floating,
 )
 nanstd = Aggregation(
     "nanstd",
@@ -219,7 +229,8 @@ nanstd = Aggregation(
     finalize=_std_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtype=np.floating,
+    dtypes=(None, None, np.intp),
+    final_dtype=np.floating,
 )
 
 
@@ -267,7 +278,8 @@ argmax = Aggregation(
     fill_value=(dtypes.NINF, 0),
     final_fill_value=-1,
     finalize=lambda *x: x[1],
-    dtype=np.intp,
+    dtypes=(None, np.intp),
+    final_dtype=np.intp,
 )
 
 argmin = Aggregation(
@@ -279,7 +291,8 @@ argmin = Aggregation(
     fill_value=(dtypes.INF, 0),
     final_fill_value=-1,
     finalize=lambda *x: x[1],
-    dtype=np.intp,
+    dtypes=(None, np.intp),
+    final_dtype=np.intp,
 )
 
 nanargmax = Aggregation(
@@ -291,7 +304,8 @@ nanargmax = Aggregation(
     fill_value=(dtypes.NINF, -1),
     final_fill_value=-1,
     finalize=lambda *x: x[1],
-    dtype=np.intp,
+    dtypes=(None, np.intp),
+    final_dtype=np.intp,
 )
 
 nanargmin = Aggregation(
@@ -303,7 +317,8 @@ nanargmin = Aggregation(
     fill_value=(dtypes.INF, -1),
     final_fill_value=-1,
     finalize=lambda *x: x[1],
-    dtype=np.intp,
+    dtypes=(None, np.intp),
+    final_dtype=np.intp,
 )
 
 first = Aggregation("first", chunk="first", combine="first", fill_value=0)
@@ -312,10 +327,22 @@ nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_va
 nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=np.nan)
 
 all = Aggregation(
-    "all", chunk="all", combine="all", fill_value=True, final_fill_value=False, dtype=bool
+    "all",
+    chunk="all",
+    combine="all",
+    fill_value=True,
+    final_fill_value=False,
+    dtypes=bool,
+    final_dtype=bool,
 )
 any = Aggregation(
-    "any", chunk="any", combine="any", fill_value=False, final_fill_value=False, dtype=bool
+    "any",
+    chunk="any",
+    combine="any",
+    fill_value=False,
+    final_fill_value=False,
+    dtypes=bool,
+    final_dtype=bool,
 )
 
 # numpy_groupies does not support median

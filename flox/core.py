@@ -47,6 +47,21 @@ def _prepare_for_flox(group_idx, array):
     return group_idx, ordered_array
 
 
+def _normalize_dtype(dtype, array_dtype):
+    if dtype is None:
+        dtype = array_dtype
+    elif dtype is np.floating:
+        # mean, std, var always result in floating
+        # but we preserve the array's dtype if it is floating
+        if array_dtype.kind in "fcmM":
+            dtype = array_dtype
+        else:
+            dtype = np.dtype("float64")
+    elif not isinstance(dtype, np.dtype):
+        dtype = np.dtype(dtype)
+    return dtype
+
+
 def _get_chunk_reduction(reduction_type: str) -> Callable:
     if reduction_type == "reduce":
         return chunk_reduce
@@ -474,6 +489,11 @@ def chunk_reduce(
     dict
     """
 
+    if dtype is not None:
+        assert isinstance(dtype, Sequence)
+    if fill_value is not None:
+        assert isinstance(fill_value, Sequence)
+
     if isinstance(func, str) or callable(func):
         func = (func,)  # type: ignore
 
@@ -547,7 +567,7 @@ def chunk_reduce(
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
 
-    for reduction, fv, kw in zip(func, fill_value, kwargs):
+    for reduction, fv, kw, dt in zip(func, fill_value, kwargs, dtype):
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
         else:
@@ -560,11 +580,10 @@ def chunk_reduce(
                     size=size,
                     # important when reducing with "offset" groups
                     fill_value=fv,
+                    dtype=dt,
                     **kw,
                 )
             else:
-                # TODO: avoid hardcoding nanlen
-                final_dtype = np.intp if reduction == "nanlen" else dtype
                 result = generic_aggregate(
                     group_idx,
                     array,
@@ -574,11 +593,9 @@ def chunk_reduce(
                     size=size,
                     # important when reducing with "offset" groups
                     fill_value=fv,
-                    dtype=final_dtype,
+                    dtype=dt,
                     **kw,
-                )
-                if final_dtype is not None:
-                    result = result.astype(final_dtype, copy=False)
+                ).astype(dt, copy=False)
             if np.any(props.nanmask):
                 # remove NaN group label which should be last
                 result = result[..., :-1]
@@ -662,7 +679,11 @@ def _finalize_results(
             finalize_kwargs = {}
         result[agg.name] = agg.finalize(*squeezed["intermediates"], **finalize_kwargs)
         if fill_value is not None:
-            result[agg.name] = np.where(counts >= min_count, result[agg.name], fill_value)
+            count_mask = counts < min_count
+            if count_mask.any():
+                # For one this check prevents promoting bool to dtype(fill_value) unless
+                # necessary
+                result[agg.name] = np.where(count_mask, fill_value, result[agg.name])
 
     # Final reindexing has to be here to be lazy
     if expected_groups is not None:
@@ -771,7 +792,7 @@ def _npg_combine(
             axis=axis,
             expected_groups=None,
             fill_value=agg.fill_value["intermediate"][slicer],
-            dtype=agg.dtype,
+            dtype=agg.dtype["intermediate"][slicer],
             engine=engine,
         )
 
@@ -786,7 +807,7 @@ def _npg_combine(
                     axis=axis,
                     expected_groups=None,
                     fill_value=(0,),
-                    dtype=np.intp,
+                    dtype=(np.intp,),
                     engine=engine,
                 )["intermediates"][0]
             )
@@ -794,7 +815,9 @@ def _npg_combine(
     elif agg.reduction_type == "reduce":
         # Here we reduce the intermediates individually
         results = {"groups": None, "intermediates": []}
-        for idx, (combine, fv) in enumerate(zip(agg.combine, agg.fill_value["intermediate"])):
+        for idx, (combine, fv, dtype) in enumerate(
+            zip(agg.combine, agg.fill_value["intermediate"], agg.dtype["intermediate"])
+        ):
             array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis)
             if array.shape[-1] == 0:
                 # all empty when combined
@@ -811,7 +834,8 @@ def _npg_combine(
                     func=combine,
                     axis=axis,
                     expected_groups=None,
-                    fill_value=fv,
+                    fill_value=(fv,),
+                    dtype=(dtype,),
                     engine=engine,
                 )
                 results["intermediates"].append(*_results["intermediates"])
@@ -899,6 +923,7 @@ def groupby_agg(
             # only reindex to groups present at combine stage
             expected_groups=expected_groups if split_out > 1 or isbin else None,
             fill_value=agg.fill_value["intermediate"],
+            dtype=agg.dtype["intermediate"],
             isbin=isbin,
             reindex=split_out > 1,
             engine=engine,
@@ -909,7 +934,7 @@ def groupby_agg(
         by,
         inds[-by.ndim :],
         concatenate=False,
-        dtype=array.dtype,
+        dtype=array.dtype,  # this is purely for show
         meta=array._meta,
         align_arrays=False,
         token=f"{name}-chunk-{token}",
@@ -1047,7 +1072,7 @@ def groupby_agg(
         HighLevelGraph.from_collections(agg_name, layer, dependencies=[reduced]),
         agg_name,
         chunks=output_chunks,
-        dtype=agg.dtype,
+        dtype=agg.dtype[agg.name],
     )
 
     return (result, *groups)
@@ -1192,25 +1217,19 @@ def groupby_reduce(
             raise NotImplementedError(f"Reduction {func!r} not implemented yet")
     else:
         reduction = func
+        func = reduction.name
 
-    if reduction.dtype is None:
-        reduction.dtype = array.dtype
-    elif reduction.dtype is np.floating:
-        # mean, std, var always result in floating
-        # but we preserve the array's dtype if it is floating
-        if array.dtype.kind in "fcmM":
-            reduction.dtype = array.dtype
-        else:
-            reduction.dtype = np.dtype("float64")
-
-    elif not isinstance(reduction.dtype, np.dtype):
-        reduction.dtype = np.dtype(reduction.dtype)
+    reduction.dtype[func] = _normalize_dtype(reduction.dtype[func], array.dtype)
+    reduction.dtype["intermediate"] = [
+        _normalize_dtype(dtype, array.dtype) for dtype in reduction.dtype["intermediate"]
+    ]
 
     # Replace sentinel fill values according to dtype
     reduction.fill_value["intermediate"] = tuple(
-        _get_fill_value(reduction.dtype, fv) for fv in reduction.fill_value["intermediate"]
+        _get_fill_value(dt, fv)
+        for dt, fv in zip(reduction.dtype["intermediate"], reduction.fill_value["intermediate"])
     )
-    reduction.fill_value[func] = _get_fill_value(reduction.dtype, reduction.fill_value[func])
+    reduction.fill_value[func] = _get_fill_value(reduction.dtype[func], reduction.fill_value[func])
 
     if min_count is not None:
         # Let this pass so that xarray can keep return np.nan for bins with
@@ -1245,7 +1264,7 @@ def groupby_reduce(
             # BUT there is funkiness when axis is a subset of all possible values
             # (see below)
             fill_value=(reduction.fill_value[reduction.name], 0),
-            dtype=reduction.dtype,
+            dtype=(reduction.dtype[reduction.name], np.intp),
             isbin=isbin,
             kwargs=finalize_kwargs,
             engine=engine,
@@ -1309,6 +1328,7 @@ def groupby_reduce(
             reduction.chunk += ("nanlen",)
             reduction.combine += ("sum",)
             reduction.fill_value["intermediate"] += (0,)
+            reduction.dtype["intermediate"] += (np.intp,)
 
         partial_agg = partial(
             groupby_agg,
