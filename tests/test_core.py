@@ -236,23 +236,7 @@ def test_numpy_reduce_nd_md():
 
 
 @requires_dask
-@pytest.mark.parametrize(
-    "func",
-    (
-        "sum",
-        "count",
-        "prod",
-        "mean",
-        "std",
-        "var",
-        "max",
-        "min",
-        "argmax",
-        "argmin",
-        # "first",
-        # "last",
-    ),
-)
+@pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("add_nan", [False, True])
 @pytest.mark.parametrize("dtype", (float,))
 @pytest.mark.parametrize(
@@ -265,7 +249,8 @@ def test_numpy_reduce_nd_md():
         (dask_array_ones((10, 12), (3, 3)), 3),  # form 3
     ],
 )
-def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype):
+@pytest.mark.parametrize("engine", ALL_ENGINES)
+def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype, engine):
     """Tests groupby_reduce with dask arrays against groupby_reduce with numpy arrays"""
 
     array = array.astype(dtype)
@@ -282,14 +267,14 @@ def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype):
     kwargs = dict(func=func, expected_groups=[0, 1, 2], fill_value=123)
 
     by = from_array(labels, group_chunks)
-    expected, _ = groupby_reduce(array.compute(), by.compute(), **kwargs)
+    expected, _ = groupby_reduce(array.compute(), by.compute(), engine="numpy", **kwargs)
     with raise_if_dask_computes():
-        actual, _ = groupby_reduce(array, by, **kwargs)
+        actual, _ = groupby_reduce(array, by, engine=engine, **kwargs)
     assert_equal(expected, actual)
 
     kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
-        actual, groups = groupby_reduce(array, by, **kwargs)
+        actual, groups = groupby_reduce(array, by, engine=engine, **kwargs)
     assert_equal(groups, [0, 2, 1])
     assert_equal(expected, actual[..., [0, 2, 1]])
 
