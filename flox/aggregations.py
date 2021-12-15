@@ -16,6 +16,7 @@ def generic_aggregate(
             method = partial(npg.aggregate_numpy.aggregate, func=func)
     elif engine == "numpy":
         try:
+            # TODO: fix numba here
             method = getattr(aggregate_npg, func)
         except AttributeError:
             method = partial(npg.aggregate_numpy.aggregate, func=func)

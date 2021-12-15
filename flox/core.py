@@ -536,8 +536,13 @@ def chunk_reduce(
                 sortidx = groups.argsort()
             results["groups"] = groups[sortidx]
 
+    # npg's argmax ensures that index of first "max" is returned assuming there
+    # are many elements equal to the "max". Sorting messes this up totally.
+    # so we skip this for argreductions
     if engine == "flox":
-        group_idx, array = _prepare_for_flox(group_idx, array)
+        is_arg_reduction = any("arg" in f for f in func if isinstance(f, str))
+        if not is_arg_reduction:
+            group_idx, array = _prepare_for_flox(group_idx, array)
 
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
