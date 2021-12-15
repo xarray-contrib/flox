@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 IntermediateDict = Dict[Union[str, Callable], Any]
 FinalResultsDict = Dict[str, Union["DaskArray", np.ndarray]]
-FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel")
+FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 
 
 def _prepare_for_flox(group_idx, array):
@@ -366,7 +366,7 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
         group_idx, ngroups, size = offset_labels(group_idx.reshape(by[0].shape))
         group_idx = group_idx.ravel()
     else:
-        size = None
+        size = ngroups
         offset_group = False
 
     # numpy_groupies cannot deal with group_idx = -1
@@ -374,9 +374,12 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
     # note we cannot simply remove the NaN locations;
     # that would mess up argmax, argmin
     nan_sentinel = size if offset_group else ngroups
-    group_idx[group_idx == -1] = nan_sentinel
+    nanmask = group_idx == -1
+    if nanmask.any() and not offset_group:
+        size += 1
+    group_idx[nanmask] = nan_sentinel
 
-    props = FactorProps(offset_group, nan_sentinel)
+    props = FactorProps(offset_group, nan_sentinel, nanmask)
     return group_idx, found_groups, grp_shape, ngroups, size, props
 
 
@@ -518,8 +521,7 @@ def chunk_reduce(
     array = array.reshape(newshape)
 
     assert group_idx.ndim == 1
-    mask = np.logical_not(group_idx == props.nan_sentinel)
-    empty = np.all(~mask) or np.prod(by.shape) == 0
+    empty = np.all(props.nanmask) or np.prod(by.shape) == 0
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
     if reindex and expected_groups is not None:
@@ -572,7 +574,7 @@ def chunk_reduce(
                 )
                 if final_dtype is not None:
                     result = result.astype(final_dtype, copy=False)
-            if np.any(~mask):
+            if np.any(props.nanmask):
                 # remove NaN group label which should be last
                 result = result[..., :-1]
             if props.offset_group:

@@ -1,21 +1,28 @@
 import numpy as np
+import numpy_groupies as npg
 
 import flox
 
 from . import parameterized
 
 N = 1000
+funcs = ["sum", "nansum", "mean", "nanmean", "argmax"]
+engines = ["flox", "numpy"]
 
 
 class ChunkReduce:
     """Time the core reduction function."""
 
     def setup(self, *args, **kwargs):
+        # pre-compile jitted funcs
+        if "numba" in engines:
+            for func in funcs:
+                npg.aggregate_numba.aggregate(
+                    np.ones((100,), dtype=int), np.ones((100,), dtype=int), func=func
+                )
         raise NotImplementedError
 
-    @parameterized(
-        "func, engine", [["sum", "nansum", "mean", "nanmean", "argmax"], ["flox", "numpy", "numba"]]
-    )
+    @parameterized("func, engine", [funcs, engines])
     def time_reduce(self, func, engine):
         flox.groupby_reduce(
             self.array,
@@ -25,9 +32,7 @@ class ChunkReduce:
             axis=self.axis,
         )
 
-    @parameterized(
-        "func, engine", [["sum", "nansum", "mean", "nanmean", "argmax"], ["flox", "numpy", "numba"]]
-    )
+    @parameterized("func, engine", [funcs, engines])
     def peakmem_reduce(self, func, engine):
         flox.groupby_reduce(
             self.array,
