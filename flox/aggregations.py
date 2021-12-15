@@ -117,6 +117,7 @@ class Aggregation:
             self.name,
             self.preprocess,
             self.reduction_type,
+            self.numpy,
             self.chunk,
             self.combine,
             self.aggregate,
