@@ -91,3 +91,13 @@ def assert_equal(a, b):
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
         np.testing.assert_allclose(a, b, equal_nan=True)
+
+
+@pytest.fixture(scope="module", params=["flox", "numpy", "numba"])
+def engine(request):
+    if request.param == "numba":
+        try:
+            import numba
+        except ImportError:
+            pytest.xfail()
+    return request.param

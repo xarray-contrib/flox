@@ -10,7 +10,7 @@ from flox.core import (
     reindex_,
 )
 
-from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
+from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
 
 labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
 nan_labels = labels.astype(float)  # copy
@@ -56,7 +56,6 @@ ALL_FUNCS = (
     pytest.param("median", marks=(pytest.mark.skip,)),
     pytest.param("nanmedian", marks=(pytest.mark.skip,)),
 )
-ALL_ENGINES = ["flox", "numpy", "numba"]
 
 
 def test_alignment_error():
@@ -67,7 +66,6 @@ def test_alignment_error():
         groupby_reduce(da, labels, func="mean")
 
 
-@pytest.mark.parametrize("engine", ALL_ENGINES)
 @pytest.mark.parametrize("dtype", (float, int))
 @pytest.mark.parametrize("chunk, split_out", [(False, 1), (True, 1), (True, 2), (True, 3)])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
@@ -125,7 +123,6 @@ def test_groupby_reduce(
     assert_equal(expected, result)
 
 
-@pytest.mark.parametrize("engine", ALL_ENGINES)
 @pytest.mark.parametrize("size", ((12,), (12, 5)))
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(size, func, engine):
@@ -250,7 +247,6 @@ def test_numpy_reduce_nd_md():
         ((10, 12), (3, 3), 3),  # form 3
     ],
 )
-@pytest.mark.parametrize("engine", ALL_ENGINES)
 def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtype, engine):
     """Tests groupby_reduce with dask arrays against groupby_reduce with numpy arrays"""
 
@@ -292,7 +288,6 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     assert_equal(expected, actual[..., [0, 2, 1]])
 
 
-@pytest.mark.parametrize("engine", ALL_ENGINES)
 def test_numpy_reduce_axis_subset(engine):
     # TODO: add NaNs
     by = labels2d
@@ -377,7 +372,6 @@ def test_dask_reduce_axis_subset():
 
 @requires_dask
 @pytest.mark.parametrize("func", ALL_FUNCS)
-@pytest.mark.parametrize("engine", ALL_ENGINES)
 @pytest.mark.parametrize(
     "axis", [None, (0, 1, 2), (0, 1), (0, 2), (1, 2), 0, 1, 2, (0,), (1,), (2,)]
 )
@@ -412,7 +406,6 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize("engine", ALL_ENGINES)
 @pytest.mark.parametrize("chunks", [None, (2, 2, 3)])
 @pytest.mark.parametrize(
     "axis, groups, expected_shape",
@@ -457,7 +450,6 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, engine):
 
 
 @requires_dask
-@pytest.mark.parametrize("engine", ALL_ENGINES)
 def test_groupby_all_nan_blocks(engine):
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
     nan_labels = labels.astype(float)  # copy
