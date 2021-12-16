@@ -41,7 +41,7 @@ def _prepare_for_flox(group_idx, array):
     if issorted:
         ordered_array = array
     else:
-        perm = group_idx.argsort()
+        perm = group_idx.argsort(kind="stable")
         group_idx = group_idx[..., perm]
         ordered_array = array[..., perm]
     return group_idx, ordered_array
@@ -254,7 +254,6 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
     newchunks = tuple(np.diff(divisions))
     assert sum(newchunks) == len(labels)
 
-    print(newchunks)
     if newchunks == array.chunks[axis]:
         return array
     else:
@@ -560,9 +559,9 @@ def chunk_reduce(
     # are many elements equal to the "max". Sorting messes this up totally.
     # so we skip this for argreductions
     if engine == "flox":
-        is_arg_reduction = any("arg" in f for f in func if isinstance(f, str))
-        if not is_arg_reduction:
-            group_idx, array = _prepare_for_flox(group_idx, array)
+        # is_arg_reduction = any("arg" in f for f in func if isinstance(f, str))
+        # if not is_arg_reduction:
+        group_idx, array = _prepare_for_flox(group_idx, array)
 
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
@@ -1166,6 +1165,12 @@ def groupby_reduce(
     xarray.xarray_reduce
 
     """
+
+    if engine == "flox" and "arg" in func:
+        raise NotImplementedError(
+            "argreductions not supported for engine='flox' yet."
+            "Try engine='numpy' or engine='numba' instead."
+        )
 
     if not is_duck_array(by):
         by = np.asarray(by)

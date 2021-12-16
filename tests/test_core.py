@@ -23,7 +23,6 @@ if has_dask:
     import dask.array as da
     from dask.array import from_array
 
-    dask_array_ones = da.ones
     dask.config.set(scheduler="sync")
 else:
 
@@ -242,22 +241,27 @@ def test_numpy_reduce_nd_md():
 @pytest.mark.parametrize("add_nan", [False, True])
 @pytest.mark.parametrize("dtype", (float,))
 @pytest.mark.parametrize(
-    "array, group_chunks",
+    "shape, array_chunks, group_chunks",
     [
-        (dask_array_ones((12,), (3,)), 3),  # form 1
-        (dask_array_ones((12,), (3,)), (4,)),  # form 1, chunks not aligned
-        (dask_array_ones((12,), ((3, 5, 4),)), (2,)),  # form 1
-        (dask_array_ones((10, 12), (3, 3)), -1),  # form 3
-        (dask_array_ones((10, 12), (3, 3)), 3),  # form 3
+        ((12,), (3,), 3),  # form 1
+        ((12,), (3,), (4,)),  # form 1, chunks not aligned
+        ((12,), ((3, 5, 4),), (2,)),  # form 1
+        ((10, 12), (3, 3), -1),  # form 3
+        ((10, 12), (3, 3), 3),  # form 3
     ],
 )
 @pytest.mark.parametrize("engine", ALL_ENGINES)
-def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype, engine):
+def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtype, engine):
     """Tests groupby_reduce with dask arrays against groupby_reduce with numpy arrays"""
 
-    array = array.astype(dtype)
+    rng = np.random.default_rng(12345)
+    array = dask.array.from_array(rng.random(shape), chunks=array_chunks).astype(dtype)
+    array = dask.array.ones(shape, chunks=array_chunks)
 
     if func in ["first", "last"]:
+        pytest.skip()
+
+    if "arg" in func and engine == "flox":
         pytest.skip()
 
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
@@ -268,8 +272,15 @@ def test_groupby_agg_dask(func, array, group_chunks, add_nan, dtype, engine):
 
     kwargs = dict(func=func, expected_groups=[0, 1, 2], fill_value=123)
 
+    expected, _ = groupby_reduce(array.compute(), labels, engine="numpy", **kwargs)
+    actual, _ = groupby_reduce(array.compute(), labels, engine=engine, **kwargs)
+    assert_equal(actual, expected)
+
+    with raise_if_dask_computes():
+        actual, _ = groupby_reduce(array, labels, engine=engine, **kwargs)
+    assert_equal(actual, expected)
+
     by = from_array(labels, group_chunks)
-    expected, _ = groupby_reduce(array.compute(), by.compute(), engine="numpy", **kwargs)
     with raise_if_dask_computes():
         actual, _ = groupby_reduce(array, by, engine=engine, **kwargs)
     assert_equal(expected, actual)
@@ -371,6 +382,9 @@ def test_dask_reduce_axis_subset():
     "axis", [None, (0, 1, 2), (0, 1), (0, 2), (1, 2), 0, 1, 2, (0,), (1,), (2,)]
 )
 def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
+    if "arg" in func and engine == "flox":
+        pytest.skip()
+
     if not isinstance(axis, int) and "arg" in func and (axis is None or len(axis) > 1):
         pytest.skip()
     if func in ["all", "any"]:
