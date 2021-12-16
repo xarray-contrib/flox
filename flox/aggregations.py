@@ -19,12 +19,12 @@ def generic_aggregate(
             # TODO: fix numba here
             method = getattr(aggregate_npg, func)
         except AttributeError:
-            method = partial(npg.aggregate_numpy.aggregate, func=func)
+            method = partial(npg.aggregate_np, func=func)
     elif engine == "numba":
         try:
             method = getattr(aggregate_npg, f"{func}")
         except AttributeError:
-            method = partial(npg.aggregate_nb.aggregate, func=func)
+            method = partial(npg.aggregate_nb, func=func)
     else:
         raise ValueError(
             f"Expected engine to be one of ['flox', 'numpy', 'numba']. Received {engine} instead."
