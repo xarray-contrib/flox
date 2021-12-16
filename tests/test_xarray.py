@@ -13,7 +13,7 @@ from flox.xarray import (
     xarray_reduce,
 )
 
-from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
+from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
 
 # isort: off
 if has_dask:
@@ -29,7 +29,6 @@ except ValueError:
     pass
 
 
-@pytest.mark.parametrize("engine", ["numpy", "numba"])
 @pytest.mark.parametrize("min_count", [None, 1, 3])
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("skipna", [True, False])
