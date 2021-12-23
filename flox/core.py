@@ -1238,7 +1238,8 @@ def groupby_reduce(
         except AttributeError:
             raise NotImplementedError(f"Reduction {func!r} not implemented yet")
     else:
-        reduction = func
+        # TODO: test that func is a valid Aggregation
+        reduction = copy.deepcopy(func)
         func = reduction.name
 
     reduction.dtype[func] = _normalize_dtype(reduction.dtype[func], array.dtype)
