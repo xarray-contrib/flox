@@ -22,6 +22,7 @@ import pandas as pd
 
 from . import aggregations, xrdtypes
 from .aggregations import Aggregation, _atleast_1d, _get_fill_value, generic_aggregate
+from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
@@ -118,9 +119,14 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
+@memoize
 def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     """
-    Finds groups labels that occur together: "cohorts"
+    Finds groups labels that occur together aka "cohorts"
+
+    If available, results are cached in a 1MB cache managed by `cachey`.
+    This allows us to be quick when repeatedly calling groupby_reduce
+    for arrays with the same chunking (e.g. an xarray Dataset).
 
     Parameters
     ----------
