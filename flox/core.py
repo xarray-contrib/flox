@@ -150,7 +150,7 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     import toolz as tlz
 
     if method == "split-reduce":
-        return np.unique(labels).reshape(-1, 1)
+        return np.unique(labels).reshape(-1, 1).tolist()
 
     which_chunk = np.repeat(np.arange(len(chunks)), chunks)
     # these are chunks where a label is present
