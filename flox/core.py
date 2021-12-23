@@ -1381,6 +1381,11 @@ def groupby_reduce(
         )
 
         if method in ["split-reduce", "cohorts"]:
+            if by.ndim > 1:
+                raise ValueError(
+                    "`by` must be  1D when method='split-reduce' and method='cohorts'. "
+                    f"Received {by.ndim}D array. Please use method='map-reduce' instead."
+                )
             cohorts = find_group_cohorts(
                 by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=True, method=method
             )
