@@ -131,9 +131,9 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     Parameters
     ----------
     labels: np.ndarray
-        mD Array of group labels
-    array: tuple
-        nD array that is being reduced
+        1D Array of group labels
+    chunks: tuple
+        chunks along grouping dimension for array that is being reduced
     merge: bool, optional
         Attempt to merge cohorts when one cohort's chunks are a subset
         of another cohort's chunks.
@@ -147,35 +147,19 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     """
     import copy
 
-    import dask
     import toolz as tlz
 
     if method == "split-reduce":
-        return np.unique(labels).reshape(-1, 1).tolist()
+        return np.unique(labels).reshape(-1, 1)
 
-    # To do this, we must have values in memory so casting to numpy should be safe
-    labels = np.asarray(labels)
-
-    # Build an array with the shape of labels, but where every element is the "chunk number"
-    # 1. First subset the array appropriately
-    axis = range(-labels.ndim, 0)
-    # Easier to create a dask array and use the .blocks property
-    array = dask.array.ones(tuple(sum(c) for c in chunks), chunks=chunks)
-
-    #  Iterate over each block and create a new block of same shape with "chunk number"
-    shape = tuple(array.blocks.shape[ax] for ax in axis)
-    blocks = np.empty(np.prod(shape), dtype=object)
-    for idx, block in enumerate(array.blocks.ravel()):
-        blocks[idx] = np.full(tuple(block.shape[ax] for ax in axis), idx)
-    which_chunk = np.block(blocks.reshape(shape).tolist()).ravel()
-
+    which_chunk = np.repeat(np.arange(len(chunks)), chunks)
     # these are chunks where a label is present
-    label_chunks = {
-        lab: tuple(np.unique(which_chunk[labels.ravel() == lab])) for lab in np.unique(labels)
-    }
+    label_chunks = {lab: tuple(np.unique(which_chunk[labels == lab])) for lab in np.unique(labels)}
     # These invert the label_chunks mapping so we know which labels occur together.
     chunks_cohorts = tlz.groupby(label_chunks.get, label_chunks.keys())
 
+    # TODO: sort by length of values (i.e. cohort);
+    # then loop in reverse and merge when keys are subsets of initial keys?
     if merge:
         # First sort by number of chunks occupied by cohort
         sorted_chunks_cohorts = dict(
@@ -1386,9 +1370,9 @@ def groupby_reduce(
                     "`by` must be  1D when method='split-reduce' and method='cohorts'. "
                     f"Received {by.ndim}D array. Please use method='map-reduce' instead."
                 )
-            cohorts = find_group_cohorts(
-                by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=True, method=method
-            )
+            assert axis == (array.ndim - 1,)
+
+            cohorts = find_group_cohorts(by, array.chunks[axis[0]], merge=True, method=method)
             idx = np.arange(len(by))
 
             results = []

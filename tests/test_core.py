@@ -583,10 +583,10 @@ def test_rechunk_for_blockwise(inchunks, expected):
     ],
 )
 def test_find_group_cohorts(expected, labels, chunks, merge):
-    actual = list(find_group_cohorts(labels, (chunks,), merge, method="cohorts"))
+    actual = list(find_group_cohorts(labels, chunks, merge, method="cohorts"))
     assert actual == expected, (actual, expected)
 
-    actual = find_group_cohorts(labels, (chunks,), merge, method="split-reduce")
+    actual = find_group_cohorts(labels, chunks, merge, method="split-reduce")
     expected = [[label] for label in np.unique(labels)]
     assert actual == expected, (actual, expected)
 
