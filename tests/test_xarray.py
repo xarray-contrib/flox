@@ -307,3 +307,18 @@ def test_xarray_groupby_bins(chunks):
     xr.testing.assert_equal(actual, expected)
 
     # TODO: test cut_kwargs
+
+
+def test_func_is_aggregation():
+    from flox.aggregations import mean
+
+    ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
+    expected = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
+    actual = xarray_reduce(ds.Tair, ds.time.dt.month, func=mean)
+    xr.testing.assert_allclose(actual, expected)
+
+    with pytest.raises(ValueError):
+        xarray_reduce(ds.Tair, ds.time.dt.month, func=mean, skipna=True)
+
+    with pytest.raises(ValueError):
+        xarray_reduce(ds.Tair, ds.time.dt.month, func=mean, skipna=False)

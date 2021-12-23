@@ -198,6 +198,16 @@ def test_groupby_reduce_count():
     assert_equal(result, [1, 1, 2])
 
 
+def test_func_is_aggregation():
+    from flox.aggregations import mean
+
+    array = np.array([0, 0, np.nan, np.nan, np.nan, 1, 1])
+    labels = np.array(["a", "b", "b", "b", "c", "c", "c"])
+    expected, _ = groupby_reduce(array, labels, func="mean")
+    actual, _ = groupby_reduce(array, labels, func=mean)
+    assert_equal(actual, expected)
+
+
 @requires_dask
 @pytest.mark.parametrize("func", ("sum", "prod"))
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int32, np.int64])

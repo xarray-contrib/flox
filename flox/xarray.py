@@ -159,6 +159,10 @@ def xarray_reduce(
     --------
     FIXME: Add docs.
     """
+
+    if skipna is not None and isinstance(func, Aggregation):
+        raise ValueError("skipna must be None when func is an Aggregation.")
+
     for b in by:
         if isinstance(b, xr.DataArray) and b.name is None:
             raise ValueError("Cannot group by unnamed DataArrays.")
@@ -272,7 +276,7 @@ def xarray_reduce(
         if skipna and func in ["all", "any", "count"]:
             raise ValueError(f"skipna cannot be truthy for {func} reductions.")
 
-        if skipna or (skipna is None and array.dtype.kind in "cfO"):
+        if skipna or (skipna is None and isinstance(func, str) and array.dtype.kind in "cfO"):
             if "nan" not in func and func not in ["all", "any", "count"]:
                 func = f"nan{func}"
 
