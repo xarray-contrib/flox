@@ -554,6 +554,7 @@ def test_rechunk_for_blockwise(inchunks, expected):
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
 
 
+@requires_dask
 @pytest.mark.parametrize(
     "expected, labels, chunks, merge",
     [

@@ -2,6 +2,7 @@ name: flox-tests
 channels:
   - conda-forge
 dependencies:
+  - cachey
   - codecov
   - dask-core
   - netcdf4
