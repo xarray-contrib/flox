@@ -907,6 +907,7 @@ def groupby_agg(
     method: str = "map-reduce",
     min_count: Optional[int] = None,
     isbin: bool = False,
+    reindex: bool = False,
     engine: str = "numpy",
     finalize_kwargs: Optional[Mapping] = None,
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
@@ -946,7 +947,7 @@ def groupby_agg(
             fill_value=agg.fill_value["intermediate"],
             dtype=agg.dtype["intermediate"],
             isbin=isbin,
-            reindex=split_out > 1,
+            reindex=reindex or (split_out > 1),
             engine=engine,
         ),
         inds,
@@ -1382,33 +1383,34 @@ def groupby_reduce(
         )
 
         if method in ["split-reduce", "cohorts"]:
-            if by.ndim > 1:
-                raise ValueError(
-                    "`by` must be  1D when method='split-reduce' and method='cohorts'. "
-                    f"Received {by.ndim}D array. Please use method='map-reduce' instead."
-                )
             cohorts = find_group_cohorts(
                 by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=True, method=method
             )
-            idx = np.arange(len(by))
 
             results = []
             groups_ = []
             for cohort in cohorts:
                 cohort = sorted(cohort)
-                # indexes for a subset of groups
-                subset_idx = idx[np.isin(by, cohort)]
-                array_subset = array[..., subset_idx]
-                numblocks = len(array_subset.chunks[-1])
+                # equivalent of xarray.DataArray.where(mask, drop=True)
+                mask = np.isin(by, cohort)
+                indexer = [np.unique(v) for v in np.nonzero(mask)]
+                array_subset = array
+                for ax, idxr in zip(range(-by.ndim, 0), indexer):
+                    array_subset = np.take(array_subset, idxr, axis=ax)
+                numblocks = np.prod([len(array_subset.chunks[ax]) for ax in range(-by.ndim, 0)])
 
                 # get final result for these groups
                 r, *g = partial_agg(
                     array_subset,
-                    by[subset_idx],
+                    by[np.ix_(*indexer)],
                     expected_groups=cohort,
+                    # reindex to expected_groups at the blockwise step.
+                    # this approach avoids replacing non-cohort members with
+                    # np.nan or some other sentinel value, and preserves dtypes
+                    reindex=True,
                     # if only a single block along axis, we can just work blockwise
                     # inspired by https://github.com/dask/dask/issues/8361
-                    method="blockwise" if numblocks == 1 else "map-reduce",
+                    method="blockwise" if numblocks == 1 and len(axis) == 1 else "map-reduce",
                 )
                 results.append(r)
                 groups_.append(cohort)

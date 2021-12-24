@@ -663,3 +663,19 @@ def test_cohorts(method):
     actual, actual_groups = groupby_reduce(array, labels, func="count", method=method)
     assert_equal(actual_groups, np.arange(6))
     assert_equal(actual, repeats)
+
+
+@requires_dask
+def test_cohorts_nd_by():
+    o = dask.array.ones((3,), chunks=-1)
+    o2 = dask.array.ones((2, 3), chunks=-1)
+
+    array = dask.array.block([[o, 2 * o], [3 * o2, 4 * o2]])
+    by = array.compute().astype(int)
+    by[0, 1] = 30
+    by[2, 1] = 40
+    array = np.broadcast_to(array, (2,) + array.shape)
+
+    actual = groupby_reduce(array, by, func="count", method="cohorts")[0].compute()
+    expected = groupby_reduce(array, by, func="count", method="map-reduce")[0].compute()
+    assert_equal(actual, expected)
