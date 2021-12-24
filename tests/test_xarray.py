@@ -183,7 +183,7 @@ def test_xarray_reduce_errors():
         xarray_reduce(da, by, func="mean")
 
     by.name = "by"
-    with pytest.raises(ValueError, match="cannot reduce over"):
+    with pytest.raises(ValueError, match="Cannot reduce over"):
         xarray_reduce(da, by, func="mean", dim="foo")
 
     if has_dask:
