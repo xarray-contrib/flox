@@ -309,6 +309,7 @@ def test_xarray_groupby_bins(chunks):
     # TODO: test cut_kwargs
 
 
+@requires_dask
 def test_func_is_aggregation():
     from flox.aggregations import mean
 
