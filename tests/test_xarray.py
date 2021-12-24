@@ -56,6 +56,14 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine):
     )
     assert_equal(expected, actual)
 
+    da["labels2"] = da.labels2.astype(float)
+    da["labels2"][0] = np.nan
+    expected = da.groupby("labels2").sum(skipna=skipna, min_count=min_count)
+    actual = xarray_reduce(
+        da, "labels2", func="sum", skipna=skipna, min_count=min_count, engine=engine
+    )
+    assert_equal(expected, actual)
+
     # test dimension ordering
     # actual = xarray_reduce(
     #    da.transpose("y", ...), "labels", func="sum", skipna=skipna, min_count=min_count

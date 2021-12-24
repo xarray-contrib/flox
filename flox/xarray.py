@@ -217,7 +217,7 @@ def xarray_reduce(
         dim = _atleast_1d(dim)
 
     if any(d not in grouper_dims and d not in obj.dims for d in dim):
-        raise ValueError(f"cannot reduce over dimensions {dim}")
+        raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
 
     dims_not_in_groupers = tuple(d for d in dim if d not in grouper_dims)
     if dims_not_in_groupers == dim and not any(isbin):
@@ -248,7 +248,11 @@ def xarray_reduce(
         to_group = xr.DataArray(group_idx, dims=dim, coords={d: by[0][d] for d in by[0].indexes})
     else:
         if expected_groups is None and isinstance(by[0].data, np.ndarray):
-            expected_groups = (np.unique(by[0].data),)
+            uniques = np.unique(by[0].data)
+            nans = isnull(uniques)
+            if nans.any():
+                uniques = uniques[~nans]
+            expected_groups = (uniques,)
         if expected_groups is None:
             raise NotImplementedError(
                 "Please provide expected_groups if not grouping by a numpy-backed DataArray"
@@ -345,6 +349,12 @@ def xarray_reduce(
             "finalize_kwargs": finalize_kwargs,
         },
     )
+
+    # restore non-dim coord variables without the core dimension
+    # TODO: shouldn't apply_ufunc handle this?
+    for var in set(ds.variables) - set(ds.dims):
+        if all(d not in ds[var].dims for d in dim):
+            actual[var] = ds[var]
 
     for name, expect, isbin_ in zip(group_names, expected_groups, isbin):
         if isbin_:
