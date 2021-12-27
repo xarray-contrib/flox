@@ -666,7 +666,8 @@ def test_cohorts(method):
 
 
 @requires_dask
-def test_cohorts_nd_by():
+@pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce", "split-reduce"])
+def test_cohorts_nd_by(method):
     o = dask.array.ones((3,), chunks=-1)
     o2 = dask.array.ones((2, 3), chunks=-1)
 
@@ -674,8 +675,12 @@ def test_cohorts_nd_by():
     by = array.compute().astype(int)
     by[0, 1] = 30
     by[2, 1] = 40
-    array = np.broadcast_to(array, (2,) + array.shape)
+    by[0, 4] = 31
+    array = np.broadcast_to(
+        array,
+        (2, 3) + array.shape,
+    )
 
-    actual = groupby_reduce(array, by, func="count", method="cohorts")[0].compute()
-    expected = groupby_reduce(array, by, func="count", method="map-reduce")[0].compute()
+    actual = groupby_reduce(array, by, func="count", method=method)[0].compute()
+    expected = groupby_reduce(array.compute(), by, func="count")[0]
     assert_equal(actual, expected)

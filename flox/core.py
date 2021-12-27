@@ -1013,12 +1013,7 @@ def groupby_agg(
         # Blockwise apply the aggregation step so that one input chunk → one output chunk
         # TODO: We could combine this with the chunk reduction and do everything in one task.
         #       This would also optimize the single block along reduced-axis case.
-        if (
-            expected_groups is None
-            or split_out > 1
-            or len(axis) > 1
-            or not isinstance(by_maybe_numpy, np.ndarray)
-        ):
+        if expected_groups is None or split_out > 1 or not isinstance(by_maybe_numpy, np.ndarray):
             raise NotImplementedError
 
         reduced = dask.array.blockwise(
@@ -1037,17 +1032,17 @@ def groupby_agg(
             dtype=array.dtype,
             meta=array._meta,
             align_arrays=False,
-            name=f"{name}-blockwise-agg-{token}",
+            name=f"{name}-blockwise-{token}",
         )
-        chunks = array.chunks[axis[0]]
 
         # find number of groups in each chunk, this is needed for output chunks
         # along the reduced axis
-        bnds = np.insert(np.cumsum(chunks), 0, 0)
-        groups_per_chunk = tuple(
-            len(np.unique(by_maybe_numpy[i0:i1])) for i0, i1 in zip(bnds[:-1], bnds[1:])
-        )
-        output_chunks = reduced.chunks[: -(len(axis))] + (groups_per_chunk,)
+        from dask.array.core import slices_from_chunks
+
+        slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
+        groups_in_block = tuple(np.unique(by_maybe_numpy[slc]) for slc in slices)
+        ngroups_per_block = tuple(len(groups) for groups in groups_in_block)
+        output_chunks = reduced.chunks[: -(len(axis))] + (ngroups_per_block,)
     else:
         raise ValueError(f"Unknown method={method}.")
 
@@ -1076,15 +1071,22 @@ def groupby_agg(
             ),
         )
     else:
-        groups = (expected_groups,)
+        if method == "map-reduce":
+            groups = (expected_groups,)
+        else:
+            groups = (np.concatenate(groups_in_block),)
 
     layer: Dict[Tuple, Tuple] = {}  # type: ignore
     agg_name = f"{name}-{token}"
     for ochunk in itertools.product(*ochunks):
         if method == "blockwise":
-            inchunk = ochunk
+            if len(axis) == 1:
+                inchunk = ochunk
+            else:
+                nblocks = tuple(len(array.chunks[ax]) for ax in range(-by.ndim, 0))
+                inchunk = ochunk[:-1] + np.unravel_index(ochunk[-1], nblocks)
         else:
-            inchunk = ochunk[:-1] + (0,) * (len(axis)) + (ochunk[-1],) * int(split_out > 1)
+            inchunk = ochunk[:-1] + (0,) * len(axis) + (ochunk[-1],) * int(split_out > 1)
         layer[(agg_name, *ochunk)] = (
             operator.getitem,
             (reduced.name, *inchunk),
@@ -1155,10 +1157,11 @@ def groupby_reduce(
           * ``"blockwise"``:
             Only reduce using blockwise and avoid aggregating blocks
             together. Useful for resampling-style reductions where group
-            members are always together. The array is rechunked so that
-            chunk boundaries line up with group boundaries
+            members are always together. If  `by` is 1D,  `array` is automatically
+            rechunked so that chunk boundaries line up with group boundaries
             i.e. each block contains all members of any group present
-            in that block.
+            in that block. For nD `by`, you must make sure that all members of a group
+            are present in a single block.
           * ``"cohorts"``:
             Finds group labels that tend to occur together ("cohorts"),
             indexes out cohorts and reduces that subset using "map-reduce",
@@ -1410,26 +1413,19 @@ def groupby_reduce(
                     reindex=True,
                     # if only a single block along axis, we can just work blockwise
                     # inspired by https://github.com/dask/dask/issues/8361
-                    method="blockwise" if numblocks == 1 and len(axis) == 1 else "map-reduce",
+                    method="blockwise" if numblocks == 1 and len(axis) == by.ndim else "map-reduce",
                 )
                 results.append(r)
                 groups_.append(cohort)
 
             # concatenate results together,
             # sort to make sure we match expected output
-            allgroups = np.hstack(groups_)
-            sorted_idx = np.argsort(allgroups)
-            result = np.concatenate(results, axis=-1)[..., sorted_idx]
-            groups = (allgroups[sorted_idx],)
-
+            groups = (np.hstack(groups_),)
+            result = np.concatenate(results, axis=-1)
         else:
             if method == "blockwise":
-                if by.ndim > 1:
-                    raise ValueError(
-                        "For method='blockwise', ``by`` must be 1D. "
-                        f"Received {by.ndim} dimensions instead."
-                    )
-                array = rechunk_for_blockwise(array, axis=-1, labels=by)
+                if by.ndim == 1:
+                    array = rechunk_for_blockwise(array, axis=-1, labels=by)
 
             # TODO: test with mixed array kinds (numpy + dask; dask + numpy)
             result, *groups = partial_agg(
@@ -1438,5 +1434,10 @@ def groupby_reduce(
                 expected_groups=expected_groups,
                 method=method,
             )
+        if method != "map-reduce":
+            assert len(groups) == 1
+            sorted_idx = np.argsort(groups[0])
+            result = result[..., sorted_idx]
+            groups = (groups[0][sorted_idx],)
 
     return (result, *groups)
