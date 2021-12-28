@@ -688,6 +688,9 @@ def test_cohorts_nd_by(func, method, axis):
     else:
         fill_value = -123
 
+    if axis is not None and method != "map-reduce":
+        pytest.xfail()
+
     kwargs = dict(func=func, method=method, axis=axis, fill_value=fill_value)
     actual, _ = groupby_reduce(array, by, **kwargs)
     expected, sorted_groups = groupby_reduce(array.compute(), by, **kwargs)

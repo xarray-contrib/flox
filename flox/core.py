@@ -1084,7 +1084,7 @@ def groupby_agg(
             if len(axis) == 1:
                 inchunk = ochunk
             else:
-                nblocks = tuple(len(array.chunks[ax]) for ax in range(-by.ndim, 0))
+                nblocks = tuple(len(array.chunks[ax]) for ax in axis)
                 inchunk = ochunk[:-1] + np.unravel_index(ochunk[-1], nblocks)
         else:
             inchunk = ochunk[:-1] + (0,) * len(axis) + (ochunk[-1],) * int(split_out > 1)
@@ -1234,6 +1234,11 @@ def groupby_reduce(
         axis = tuple(array.ndim + np.arange(-by.ndim, 0))
     else:
         axis = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
+
+    if method in ["blockwise", "cohorts", "split-reduce"] and len(axis) != by.ndim:
+        raise NotImplementedError(
+            "Must reduce along all dimensions of `by` when method != 'map-reduce'."
+        )
 
     if expected_groups is None and isinstance(by, np.ndarray):
         flatby = by.ravel()
@@ -1394,7 +1399,7 @@ def groupby_reduce(
 
         if method in ["split-reduce", "cohorts"]:
             cohorts = find_group_cohorts(
-                by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=True, method=method
+                by, [array.chunks[ax] for ax in axis], merge=True, method=method
             )
 
             results = []
@@ -1407,7 +1412,7 @@ def groupby_reduce(
                 array_subset = array
                 for ax, idxr in zip(range(-by.ndim, 0), indexer):
                     array_subset = np.take(array_subset, idxr, axis=ax)
-                numblocks = np.prod([len(array_subset.chunks[ax]) for ax in range(-by.ndim, 0)])
+                numblocks = np.prod([len(array_subset.chunks[ax]) for ax in axis])
 
                 # get final result for these groups
                 r, *g = partial_agg(
@@ -1434,7 +1439,7 @@ def groupby_reduce(
                 if by.ndim == 1:
                     array = rechunk_for_blockwise(array, axis=-1, labels=by)
 
-            # TODO: test with mixed array kinds (numpy + dask; dask + numpy)
+            # TODO: test with mixed array kinds (numpy array + dask by)
             result, *groups = partial_agg(
                 array,
                 by,
