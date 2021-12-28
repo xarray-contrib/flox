@@ -53,6 +53,7 @@ def xarray_reduce(
     func: Union[str, Aggregation],
     expected_groups=None,
     isbin: Union[bool, Sequence[bool]] = False,
+    sort: bool = True,
     dim: Hashable = None,
     split_out: int = 1,
     fill_value=None,
@@ -78,6 +79,10 @@ def xarray_reduce(
     isbin : iterable of bool
         If True, corresponding entry in ``expected_groups`` are bin edges.
         If False, the entry in ``expected_groups`` is treated as a simple label.
+    sort : (optional), bool
+        Whether groups should be returned in sorted order. Only applies for dask
+        reductions when ``method`` is not `"map-reduce"`. For ``"map-reduce", the groups
+        are always sorted.
     dim : hashable
         dimension name along which to reduce. If None, reduces across all
         dimensions of `by`
@@ -97,17 +102,19 @@ def xarray_reduce(
           * ``"blockwise"``:
             Only reduce using blockwise and avoid aggregating blocks
             together. Useful for resampling-style reductions where group
-            members are always together. The array is rechunked so that
-            chunk boundaries line up with group boundaries
+            members are always together. If  `by` is 1D,  `array` is automatically
+            rechunked so that chunk boundaries line up with group boundaries
             i.e. each block contains all members of any group present
-            in that block.
+            in that block. For nD `by`, you must make sure that all members of a group
+            are present in a single block.
           * ``"cohorts"``:
             Finds group labels that tend to occur together ("cohorts"),
             indexes out cohorts and reduces that subset using "map-reduce",
             repeat for all cohorts. This works well for many time groupings
             where the group labels repeat at regular intervals like 'hour',
             'month', dayofyear' etc. Optimize chunking ``array`` for this
-            method by first rechunking using ``rechunk_for_cohorts``.
+            method by first rechunking using ``rechunk_for_cohorts``
+            (for 1D ``by`` only).
           * ``"split-reduce"``:
             Break out each group into its own array and then ``"map-reduce"``.
             This is implemented by having each group be its own cohort,

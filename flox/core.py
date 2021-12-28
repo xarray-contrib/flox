@@ -1112,6 +1112,7 @@ def groupby_reduce(
     func: Union[str, Aggregation],
     *,
     expected_groups: Union[Sequence, np.ndarray] = None,
+    sort: bool = True,
     isbin: bool = False,
     axis=None,
     fill_value=None,
@@ -1137,6 +1138,10 @@ def groupby_reduce(
         Expected unique labels.
     isbin : bool, optional
         Are ``expected_groups`` bin edges?
+    sort : (optional), bool
+        Whether groups should be returned in sorted order. Only applies for dask
+        reductions when ``method`` is not `"map-reduce"`. For ``"map-reduce", the groups
+        are always sorted.
     axis : (optional) None or int or Sequence[int]
         If None, reduce across all dimensions of by
         Else, reduce across corresponding axes of array
@@ -1172,7 +1177,8 @@ def groupby_reduce(
             repeat for all cohorts. This works well for many time groupings
             where the group labels repeat at regular intervals like 'hour',
             'month', dayofyear' etc. Optimize chunking ``array`` for this
-            method by first rechunking using ``rechunk_for_cohorts``.
+            method by first rechunking using ``rechunk_for_cohorts``
+            (for 1D ``by`` only).
           * ``"split-reduce"``:
             Break out each group into its own array and then ``"map-reduce"``.
             This is implemented by having each group be its own cohort,
@@ -1438,7 +1444,7 @@ def groupby_reduce(
                 expected_groups=expected_groups,
                 method=method,
             )
-        if method != "map-reduce":
+        if sort and method != "map-reduce":
             assert len(groups) == 1
             sorted_idx = np.argsort(groups[0])
             result = result[..., sorted_idx]

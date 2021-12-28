@@ -682,5 +682,15 @@ def test_cohorts_nd_by(method):
     )
 
     actual = groupby_reduce(array, by, func="count", method=method)[0].compute()
-    expected = groupby_reduce(array.compute(), by, func="count")[0]
+    expected, sorted_groups = groupby_reduce(array.compute(), by, func="count")
     assert_equal(actual, expected)
+
+    actual, groups = groupby_reduce(array, by, func="count", method=method, sort=False)
+    if method == "cohorts":
+        assert_equal(groups, [4, 3, 40, 2, 31, 1, 30])
+    elif method == "blockwise":
+        assert_equal(groups, [1, 30, 2, 31, 3, 40, 4])
+    else:
+        assert_equal(groups, [1, 2, 3, 4, 30, 31, 40])
+    reindexed = reindex_(actual, groups, sorted_groups)
+    assert_equal(reindexed, expected)
