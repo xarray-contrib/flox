@@ -24,7 +24,7 @@ if has_dask:
 
 try:
     # Should test against legacy xarray implementation
-    xr.set_options(use_numpy_groupies=False)
+    xr.set_options(use_flox=False)
 except ValueError:
     pass
 
