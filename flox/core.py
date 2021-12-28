@@ -315,7 +315,6 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
         reindexed = np.full(array.shape[:-1] + (len(to),), fill_value, dtype=array.dtype)
         return reindexed
 
-    from_ = np.atleast_1d(from_)
     if from_.dtype.kind == "O" and isinstance(from_[0], tuple):
         raise NotImplementedError(
             "Currently does not support reindexing with object arrays of tuples. "
@@ -943,7 +942,7 @@ def groupby_agg(
             axis=axis,
             # with the current implementation we want reindexing at the blockwise step
             # only reindex to groups present at combine stage
-            expected_groups=expected_groups if split_out > 1 or isbin else None,
+            expected_groups=expected_groups if reindex or split_out > 1 or isbin else None,
             fill_value=agg.fill_value["intermediate"],
             dtype=agg.dtype["intermediate"],
             isbin=isbin,
@@ -1040,7 +1039,12 @@ def groupby_agg(
         from dask.array.core import slices_from_chunks
 
         slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
-        groups_in_block = tuple(np.unique(by_maybe_numpy[slc]) for slc in slices)
+        if expected_groups is None:
+            groups_in_block = tuple(np.unique(by_maybe_numpy[slc]) for slc in slices)
+        else:
+            groups_in_block = tuple(
+                np.intersect1d(by_maybe_numpy[slc], expected_groups) for slc in slices
+            )
         ngroups_per_block = tuple(len(groups) for groups in groups_in_block)
         output_chunks = reduced.chunks[: -(len(axis))] + (ngroups_per_block,)
     else:
