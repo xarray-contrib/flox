@@ -154,7 +154,7 @@ def test_groupby_reduce_all(size, func, engine):
 
         if not has_dask:
             continue
-        for method in ["map-reduce", "cohorts"]:
+        for method in ["map-reduce", "cohorts", "split-reduce"]:
             actual, _ = groupby_reduce(
                 da.from_array(array, chunks=3),
                 by,
@@ -666,8 +666,10 @@ def test_cohorts(method):
 
 
 @requires_dask
+@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("axis", (-1, None))
 @pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce", "split-reduce"])
-def test_cohorts_nd_by(method):
+def test_cohorts_nd_by(func, method, axis):
     o = dask.array.ones((3,), chunks=-1)
     o2 = dask.array.ones((2, 3), chunks=-1)
 
@@ -676,16 +678,22 @@ def test_cohorts_nd_by(method):
     by[0, 1] = 30
     by[2, 1] = 40
     by[0, 4] = 31
-    array = np.broadcast_to(
-        array,
-        (2, 3) + array.shape,
-    )
+    array = np.broadcast_to(array, (2, 3) + array.shape)
 
-    actual = groupby_reduce(array, by, func="count", method=method)[0].compute()
-    expected, sorted_groups = groupby_reduce(array.compute(), by, func="count")
+    if "arg" in func and axis is None:
+        pytest.skip()
+
+    if func in ["any", "all"]:
+        fill_value = False
+    else:
+        fill_value = -123
+
+    kwargs = dict(func=func, method=method, axis=axis, fill_value=fill_value)
+    actual, _ = groupby_reduce(array, by, **kwargs)
+    expected, sorted_groups = groupby_reduce(array.compute(), by, **kwargs)
     assert_equal(actual, expected)
 
-    actual, groups = groupby_reduce(array, by, func="count", method=method, sort=False)
+    actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
     if method == "cohorts":
         assert_equal(groups, [4, 3, 40, 2, 31, 1, 30])
     elif method == "blockwise":
