@@ -1039,6 +1039,9 @@ def groupby_agg(
         if expected_groups is None:
             groups_in_block = tuple(np.unique(by_maybe_numpy[slc]) for slc in slices)
         else:
+            # For cohorts, we could be indexing a block with groups that
+            # are not in the cohort (usually for nD `by`)
+            # Only keep the expected groups.
             groups_in_block = tuple(
                 np.intersect1d(by_maybe_numpy[slc], expected_groups) for slc in slices
             )
