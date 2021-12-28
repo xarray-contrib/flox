@@ -8,7 +8,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Iterable,
     Mapping,
     Optional,
     Sequence,
@@ -721,14 +720,14 @@ def _npg_aggregate(
     expected_groups: Union[Sequence, np.ndarray, None],
     axis: Sequence,
     keepdims,
-    group_ndim: int,
+    neg_axis: Sequence,
     fill_value: Any = None,
     min_count: Optional[int] = None,
     engine: str = "numpy",
     finalize_kwargs: Optional[Mapping] = None,
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
-    results = _npg_combine(x_chunk, agg, axis, keepdims, group_ndim, engine)
+    results = _npg_combine(x_chunk, agg, axis, keepdims, neg_axis, engine)
     return _finalize_results(
         results, agg, axis, expected_groups, fill_value, min_count, finalize_kwargs
     )
@@ -757,7 +756,7 @@ def _npg_combine(
     agg: Aggregation,
     axis: Sequence,
     keepdims: bool,
-    group_ndim: int,
+    neg_axis: Sequence,
     engine: str,
 ) -> IntermediateDict:
     """Combine intermediates step of tree reduction."""
@@ -786,12 +785,7 @@ def _npg_combine(
 
         x_chunk = deepmap(reindex_intermediates, x_chunk)
 
-    group_conc_axis: Iterable[int]
-    if group_ndim == 1:
-        group_conc_axis = (0,)
-    else:
-        group_conc_axis = sorted(group_ndim - ax - 1 for ax in axis)
-    groups = _conc2(x_chunk, "groups", axis=group_conc_axis)
+    groups = _conc2(x_chunk, "groups", axis=neg_axis)
 
     if agg.reduction_type == "argreduce":
         # If "nanlen" was added for masking later, we need to account for that
@@ -845,7 +839,7 @@ def _npg_combine(
                     np.empty(shape=(1,) * (len(axis) - 1) + (0,), dtype=agg.dtype)
                 )
                 results["groups"] = np.empty(
-                    shape=(1,) * (len(group_conc_axis) - 1) + (0,), dtype=groups.dtype
+                    shape=(1,) * (len(neg_axis) - 1) + (0,), dtype=groups.dtype
                 )
             else:
                 _results = chunk_reduce(
@@ -918,6 +912,9 @@ def groupby_agg(
     assert isinstance(axis, Sequence)
     assert all(ax >= 0 for ax in axis)
 
+    # these are negative axis indices useful for concatenating the intermediates
+    neg_axis = range(-len(axis), 0)
+
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
     token = dask.base.tokenize(array, by, agg, expected_groups, axis, split_out)
@@ -980,7 +977,7 @@ def groupby_agg(
         expected_agg = expected_groups
 
     agg_kwargs = dict(
-        group_ndim=by.ndim,
+        neg_axis=neg_axis,
         fill_value=fill_value,
         min_count=min_count,
         engine=engine,
@@ -1000,7 +997,7 @@ def groupby_agg(
                 expected_groups=expected_agg,
                 **agg_kwargs,
             ),
-            combine=partial(_npg_combine, agg=agg, group_ndim=by.ndim, engine=engine),
+            combine=partial(_npg_combine, agg=agg, neg_axis=neg_axis, engine=engine),
             name=f"{name}-reduce",
             dtype=array.dtype,
             axis=axis,
