@@ -154,7 +154,7 @@ def test_groupby_reduce_all(size, func, engine):
 
         if not has_dask:
             continue
-        for method in ["map-reduce", "cohorts"]:
+        for method in ["map-reduce", "cohorts", "split-reduce"]:
             actual, _ = groupby_reduce(
                 da.from_array(array, chunks=3),
                 by,
@@ -583,10 +583,10 @@ def test_rechunk_for_blockwise(inchunks, expected):
     ],
 )
 def test_find_group_cohorts(expected, labels, chunks, merge):
-    actual = list(find_group_cohorts(labels, chunks, merge, method="cohorts"))
+    actual = list(find_group_cohorts(labels, (chunks,), merge, method="cohorts"))
     assert actual == expected, (actual, expected)
 
-    actual = find_group_cohorts(labels, chunks, merge, method="split-reduce")
+    actual = find_group_cohorts(labels, (chunks,), merge, method="split-reduce")
     expected = [[label] for label in np.unique(labels)]
     assert actual == expected, (actual, expected)
 
@@ -663,3 +663,45 @@ def test_cohorts(method):
     actual, actual_groups = groupby_reduce(array, labels, func="count", method=method)
     assert_equal(actual_groups, np.arange(6))
     assert_equal(actual, repeats)
+
+
+@requires_dask
+@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("axis", (-1, None))
+@pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce", "split-reduce"])
+def test_cohorts_nd_by(func, method, axis):
+    o = dask.array.ones((3,), chunks=-1)
+    o2 = dask.array.ones((2, 3), chunks=-1)
+
+    array = dask.array.block([[o, 2 * o], [3 * o2, 4 * o2]])
+    by = array.compute().astype(int)
+    by[0, 1] = 30
+    by[2, 1] = 40
+    by[0, 4] = 31
+    array = np.broadcast_to(array, (2, 3) + array.shape)
+
+    if "arg" in func and axis is None:
+        pytest.skip()
+
+    if func in ["any", "all"]:
+        fill_value = False
+    else:
+        fill_value = -123
+
+    if axis is not None and method != "map-reduce":
+        pytest.xfail()
+
+    kwargs = dict(func=func, method=method, axis=axis, fill_value=fill_value)
+    actual, _ = groupby_reduce(array, by, **kwargs)
+    expected, sorted_groups = groupby_reduce(array.compute(), by, **kwargs)
+    assert_equal(actual, expected)
+
+    actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
+    if method == "cohorts":
+        assert_equal(groups, [4, 3, 40, 2, 31, 1, 30])
+    elif method == "blockwise":
+        assert_equal(groups, [1, 30, 2, 31, 3, 40, 4])
+    else:
+        assert_equal(groups, [1, 2, 3, 4, 30, 31, 40])
+    reindexed = reindex_(actual, groups, sorted_groups)
+    assert_equal(reindexed, expected)
