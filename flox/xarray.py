@@ -16,7 +16,7 @@ from .core import (
 from .xrutils import is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
-    from xarray import DataArray, Dataset, GroupBy, Resample
+    from xarray import DataArray, Dataset, Resample
 
 
 def _get_input_core_dims(group_names, dim, ds, to_group):
@@ -401,47 +401,6 @@ def xarray_reduce(
         return obj._from_temp_dataset(actual)
     else:
         return actual
-
-
-def xarray_groupby_reduce(
-    groupby: "GroupBy",
-    func: Union[str, Aggregation],
-    split_out: int = 1,
-    method: str = "map-reduce",
-    keep_attrs: bool = True,
-):
-    """Apply on an existing Xarray groupby object for convenience."""
-
-    def wrapper(*args, **kwargs):
-        result, _ = groupby_reduce(*args, **kwargs)
-        return result
-
-    groups = list(groupby.groups.keys())
-    outdim = groupby._unique_coord.name
-    groupdim = groupby._group_dim
-
-    actual = xr.apply_ufunc(
-        wrapper,
-        groupby._obj,
-        groupby._group,
-        input_core_dims=[[groupdim], [groupdim]],
-        # for xarray's test_groupby_duplicate_coordinate_labels
-        exclude_dims=set(groupdim),
-        output_core_dims=[[outdim]],
-        dask="allowed",
-        dask_gufunc_kwargs=dict(output_sizes={outdim: len(groups)}),
-        keep_attrs=keep_attrs,
-        kwargs={
-            "func": func,
-            "axis": -1,
-            "split_out": split_out,
-            "expected_groups": groups,
-            "method": method,
-        },
-    )
-    actual[outdim] = groups
-
-    return actual
 
 
 def rechunk_for_cohorts(

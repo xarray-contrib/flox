@@ -6,12 +6,7 @@ import pytest
 xr = pytest.importorskip("xarray")
 # isort: on
 
-from flox.xarray import (
-    rechunk_to_group_boundaries,
-    resample_reduce,
-    xarray_groupby_reduce,
-    xarray_reduce,
-)
+from flox.xarray import rechunk_to_group_boundaries, resample_reduce, xarray_reduce
 
 from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
 
@@ -68,32 +63,6 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine):
     # actual = xarray_reduce(
     #    da.transpose("y", ...), "labels", func="sum", skipna=skipna, min_count=min_count
     # )
-    # assert_equal(expected, actual)
-
-
-def test_xarray_groupby_reduce():
-    arr = np.ones((4, 12))
-
-    labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
-    labels = np.array(labels)
-    labels2 = np.array([1, 2, 2, 1])
-
-    da = xr.DataArray(
-        arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels": ("y", labels)}
-    ).expand_dims(z=4)
-
-    grouped = da.groupby("labels")
-    expected = grouped.mean()
-    actual = xarray_groupby_reduce(grouped, "mean")
-    assert_equal(expected, actual)
-
-    actual = xarray_groupby_reduce(da.transpose("y", ...).groupby("labels"), "mean")
-    assert_equal(expected, actual)
-
-    # TODO: fails because of stacking
-    # grouped = da.groupby("labels2")
-    # expected = grouped.mean()
-    # actual = xarray_groupby_reduce(grouped, "mean")
     # assert_equal(expected, actual)
 
 
