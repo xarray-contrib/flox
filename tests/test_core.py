@@ -184,10 +184,10 @@ def test_arg_reduction_dtype_is_int(size, func):
     expected = getattr(np, func)(array, axis=-1)
     expected = np.expand_dims(expected, -1)
 
-    actual, _ = groupby_reduce(array, by, func=func)
+    actual, _ = groupby_reduce(array, by, func=func, engine="numpy")
     assert actual.dtype.kind == "i"
 
-    actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func)
+    actual, _ = groupby_reduce(da.from_array(array, chunks=3), by, func=func, engine="numpy")
     assert actual.dtype.kind == "i"
 
 
@@ -609,7 +609,7 @@ def test_rechunk_for_cohorts(chunk_at, expected):
 
 @pytest.mark.parametrize("fill_value", [123, np.nan])
 @pytest.mark.parametrize("func", ALL_FUNCS)
-def test_fill_value_behaviour(func, fill_value):
+def test_fill_value_behaviour(func, fill_value, engine):
     # fill_value = np.nan tests promotion of int counts to float
     # This is used by xarray
     if func in ["all", "any"] or "arg" in func:
@@ -627,7 +627,7 @@ def test_fill_value_behaviour(func, fill_value):
     by = np.array([1, 2, 3, 1, 2, 3])
     array = np.array([np.nan, 1, 1, np.nan, 1, 1])
     actual, _ = groupby_reduce(
-        array, by, func=func, fill_value=fill_value, expected_groups=[0, 1, 2, 3]
+        array, by, func=func, engine=engine, fill_value=fill_value, expected_groups=[0, 1, 2, 3]
     )
     expected = np.array(
         [fill_value, npfunc([np.nan, np.nan]), npfunc([1.0, 1.0]), npfunc([1.0, 1.0])]
@@ -638,18 +638,18 @@ def test_fill_value_behaviour(func, fill_value):
 @requires_dask
 @pytest.mark.parametrize("func", ["mean", "sum"])
 @pytest.mark.parametrize("dtype", ["float32", "float64", "int32", "int64"])
-def test_dtype_preservation(dtype, func):
+def test_dtype_preservation(dtype, func, engine):
     if func == "sum" or (func == "mean" and "float" in dtype):
         expected = np.dtype(dtype)
     elif func == "mean" and "int" in dtype:
         expected = np.float64
     array = np.ones((20,), dtype=dtype)
     by = np.ones(array.shape, dtype=int)
-    actual, _ = groupby_reduce(array, by, func=func)
+    actual, _ = groupby_reduce(array, by, func=func, engine=engine)
     assert actual.dtype == expected
 
     array = dask.array.from_array(array, chunks=(4,))
-    actual, _ = groupby_reduce(array, by, func=func)
+    actual, _ = groupby_reduce(array, by, func=func, engine=engine)
     assert actual.dtype == expected
 
 
@@ -668,8 +668,9 @@ def test_cohorts(method):
 @requires_dask
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("axis", (-1, None))
+@pytest.mark.parametrize("engine", ["numpy", "flox"])
 @pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce", "split-reduce"])
-def test_cohorts_nd_by(func, method, axis):
+def test_cohorts_nd_by(func, method, axis, engine):
     o = dask.array.ones((3,), chunks=-1)
     o2 = dask.array.ones((2, 3), chunks=-1)
 
@@ -680,7 +681,7 @@ def test_cohorts_nd_by(func, method, axis):
     by[0, 4] = 31
     array = np.broadcast_to(array, (2, 3) + array.shape)
 
-    if "arg" in func and axis is None:
+    if "arg" in func and (axis is None or engine == "flox"):
         pytest.skip()
 
     if func in ["any", "all"]:
@@ -691,7 +692,7 @@ def test_cohorts_nd_by(func, method, axis):
     if axis is not None and method != "map-reduce":
         pytest.xfail()
 
-    kwargs = dict(func=func, method=method, axis=axis, fill_value=fill_value)
+    kwargs = dict(func=func, engine=engine, method=method, axis=axis, fill_value=fill_value)
     actual, _ = groupby_reduce(array, by, **kwargs)
     expected, sorted_groups = groupby_reduce(array.compute(), by, **kwargs)
     assert_equal(actual, expected)
