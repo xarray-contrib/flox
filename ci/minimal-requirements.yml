@@ -7,6 +7,7 @@ dependencies:
   - pip
   - pytest
   - pytest-cov
+  - pytest-xdist
   - numpy_groupies
   - pandas
   - pooch

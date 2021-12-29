@@ -8,6 +8,7 @@ dependencies:
   - pip
   - pytest
   - pytest-cov
+  - pytest-xdist
   - xarray
   - numpydoc
   - pre-commit
