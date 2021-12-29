@@ -671,7 +671,6 @@ def test_cohorts(method):
 @requires_dask
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("axis", (-1, None))
-@pytest.mark.parametrize("engine", ["numpy", "flox"])
 @pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce", "split-reduce"])
 def test_cohorts_nd_by(func, method, axis, engine):
     o = dask.array.ones((3,), chunks=-1)
