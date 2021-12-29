@@ -47,9 +47,12 @@ def _prepare_for_flox(group_idx, array):
     return group_idx, ordered_array
 
 
-def _normalize_dtype(dtype, array_dtype):
+def _normalize_dtype(dtype, array_dtype, fill_value=None):
     if dtype is None:
-        dtype = array_dtype
+        if fill_value is not None and np.isnan(fill_value):
+            dtype = np.floating
+        else:
+            dtype = array_dtype
     elif dtype is np.floating:
         # mean, std, var always result in floating
         # but we preserve the array's dtype if it is floating
@@ -1276,7 +1279,7 @@ def groupby_reduce(
         reduction = copy.deepcopy(func)
         func = reduction.name
 
-    reduction.dtype[func] = _normalize_dtype(reduction.dtype[func], array.dtype)
+    reduction.dtype[func] = _normalize_dtype(reduction.dtype[func], array.dtype, fill_value)
     reduction.dtype["intermediate"] = [
         _normalize_dtype(dtype, array.dtype) for dtype in reduction.dtype["intermediate"]
     ]
@@ -1297,7 +1300,6 @@ def groupby_reduce(
         if func in ["nansum", "nanprod"] and fill_value is None:
             fill_value = np.nan
 
-    # TODO: handle reduction being something custom not present in numpy_groupies
     if not is_duck_dask_array(array) and not is_duck_dask_array(by):
         # for pure numpy grouping, we just use npg directly and avoid "finalizing"
         # (agg.finalize = None). We still need to do the reindexing step in finalize
