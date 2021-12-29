@@ -10,6 +10,7 @@ dependencies:
   - pip
   - pytest
   - pytest-cov
+  - pytest-xdist
   - xarray
   - pre-commit
   - numpy_groupies

@@ -91,6 +91,7 @@ jobs:
       - name: Run tests
         run: |
           python -m pytest \
+             -n auto \
              --cov=flox \
              --cov-report=xml
 
