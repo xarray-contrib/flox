@@ -708,3 +708,17 @@ def test_cohorts_nd_by(func, method, axis, engine):
         assert_equal(groups, [1, 2, 3, 4, 30, 31, 40])
     reindexed = reindex_(actual, groups, sorted_groups)
     assert_equal(reindexed, expected)
+
+
+@pytest.mark.parametrize("func", ["sum", "count"])
+@pytest.mark.parametrize(
+    "fill_value, expected", ((None, np.floating), (0, np.integer), (np.nan, np.floating))
+)
+def test_dtype_promotion(func, fill_value, expected, engine):
+    array = np.array([1, 1])
+    by = [0, 1]
+
+    actual, _ = groupby_reduce(
+        array, by, func=func, expected_groups=[1, 2], fill_value=fill_value, engine=engine
+    )
+    assert np.issubdtype(actual.dtype, expected)
