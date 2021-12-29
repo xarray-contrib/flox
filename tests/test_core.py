@@ -722,3 +722,21 @@ def test_dtype_promotion(func, fill_value, expected, engine):
         array, by, func=func, expected_groups=[1, 2], fill_value=fill_value, engine=engine
     )
     assert np.issubdtype(actual.dtype, expected)
+
+
+@pytest.mark.parametrize("func", ["mean", "nanmean"])
+def test_empty_bins(func, engine):
+    array = np.ones((2, 3, 2))
+    by = np.broadcast_to([0, 1], array.shape)
+
+    actual, _ = groupby_reduce(
+        array,
+        by,
+        func=func,
+        expected_groups=[-1, 0, 1, 2],
+        isbin=True,
+        engine=engine,
+        axis=(0, 1, 2),
+    )
+    expected = np.array([1.0, 1.0, np.nan])
+    assert_equal(actual, expected)

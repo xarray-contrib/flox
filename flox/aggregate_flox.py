@@ -90,7 +90,7 @@ def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     if fill_value is None:
         fill_value = 0
     out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
-    sum(group_idx, array, axis=axis, dtype=dtype, out=out)
+    sum(group_idx, array, axis=axis, size=size, dtype=dtype, out=out)
     out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
 
@@ -99,6 +99,6 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     if fill_value is None:
         fill_value = 0
     out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
-    nansum(group_idx, array, axis=axis, dtype=dtype, out=out)
+    nansum(group_idx, array, size=size, axis=axis, dtype=dtype, out=out)
     out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
