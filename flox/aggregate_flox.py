@@ -36,7 +36,16 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
 
 
 def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
-    return func(group_idx, np.where(np.isnan(array), fillna, array), *args, **kwargs)
+    result = func(group_idx, np.where(np.isnan(array), fillna, array), *args, **kwargs)
+    # np.nanmax([np.nan, np.nan]) = np.nan
+    # To recover this behaviour, we need to search for the fillna value
+    # (either np.inf or -np.inf), and replace with NaN
+    # Our choice of fillna does the right thing for sum, prod
+    if fillna in (np.inf, -np.inf):
+        allnangroups = result == fillna
+        if allnangroups.any():
+            result[allnangroups] = kwargs["fill_value"]
+    return result
 
 
 sum = partial(_np_grouped_op, op=np.add)
