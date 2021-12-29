@@ -516,17 +516,18 @@ def test_npg_nanarg_bug(func):
     expected = getattr(np, func)(array)
     assert_equal(actual, expected)
 
-
-@pytest.mark.parametrize("chunks", ((), (2,)))
-def test_groupby_bins(chunks):
-    array = [1, 1, 1, 1, 1]
-    labels = [1, 1.5, 1.9, 2, 3]
+@pytest.mark.parametrize("chunk_labels", [False, True])
+@pytest.mark.parametrize("chunks", ((), (1,), (2,)))
+def test_groupby_bins(chunk_labels, chunks, engine) -> None:
+    array = [1, 1, 1, 1, 1, 1]
+    labels = [0.2, 1.5, 1.9, 2, 3, 20]
 
     if chunks:
         if not has_dask:
             pytest.skip()
         array = dask.array.from_array(array, chunks=chunks)
-        labels = dask.array.from_array(labels, chunks=chunks)
+        if chunk_labels:
+            labels = dask.array.from_array(labels, chunks=chunks)
 
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(
@@ -536,6 +537,7 @@ def test_groupby_bins(chunks):
             expected_groups=np.array([1, 2, 4, 5]),
             isbin=True,
             fill_value=0,
+            engine=engine,
         )
     expected = np.array([3, 1, 0])
     assert_equal(groups, np.array([0, 1, 2]))

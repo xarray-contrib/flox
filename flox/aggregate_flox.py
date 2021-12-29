@@ -23,7 +23,11 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
     if out is None:
         out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
 
-    if ((uniques[1:] - uniques[:-1]) == 1).all():
+    if (len(uniques) == size) and (uniques == np.arange(size)).all():
+        # The previous version of this if condition
+        #     ((uniques[1:] - uniques[:-1]) == 1).all():
+        # does not work when group_idx is [1, 2] for e.g.
+        # This happens  during binning
         op.reduceat(array, inv_idx, axis=axis, dtype=dtype, out=out)
     else:
         out[..., uniques] = op.reduceat(array, inv_idx, axis=axis, dtype=dtype)
