@@ -483,6 +483,7 @@ def resample_reduce(
     resampler: "Resample",
     func: Union[str, Aggregation],
     keep_attrs: bool = True,
+    **kwargs,
 ):
 
     obj = resampler._obj
@@ -506,6 +507,7 @@ def resample_reduce(
             method="blockwise",
             expected_groups=(resampler._unique_coord.data,),
             keep_attrs=keep_attrs,
+            **kwargs,
         )
         .rename({"__resample_dim__": dim})
         .transpose(dim, ...)

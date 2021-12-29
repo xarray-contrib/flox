@@ -66,7 +66,7 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine):
     # assert_equal(expected, actual)
 
 
-def test_xarray_reduce_multiple_groupers():
+def test_xarray_reduce_multiple_groupers(engine):
     arr = np.ones((4, 12))
 
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
@@ -83,18 +83,20 @@ def test_xarray_reduce_multiple_groupers():
         coords={"labels": ["a", "c", "b", "f"], "labels2": [1, 2]},
     ).expand_dims(z=4)
 
-    actual = xarray_reduce(da, da.labels, da.labels2, func="count")
+    actual = xarray_reduce(da, da.labels, da.labels2, func="count", engine=engine)
     xr.testing.assert_identical(expected, actual)
 
-    actual = xarray_reduce(da, "labels", da.labels2, func="count")
+    actual = xarray_reduce(da, "labels", da.labels2, func="count", engine=engine)
     xr.testing.assert_identical(expected, actual)
 
-    actual = xarray_reduce(da, "labels", "labels2", func="count")
+    actual = xarray_reduce(da, "labels", "labels2", func="count", engine=engine)
     xr.testing.assert_identical(expected, actual)
 
     if has_dask:
         with raise_if_dask_computes():
-            actual = xarray_reduce(da.chunk({"x": 2, "z": 1}), da.labels, da.labels2, func="count")
+            actual = xarray_reduce(
+                da.chunk({"x": 2, "z": 1}), da.labels, da.labels2, func="count", engine=engine
+            )
         xr.testing.assert_identical(expected, actual)
 
         with pytest.raises(NotImplementedError):
@@ -103,35 +105,35 @@ def test_xarray_reduce_multiple_groupers():
 
 
 @requires_dask
-def test_xarray_reduce_single_grouper():
+def test_xarray_reduce_single_grouper(engine):
 
     # DataArray
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
-    actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
+    actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", engine=engine)
     expected = ds.Tair.groupby("time.month").mean()
     xr.testing.assert_allclose(actual, expected)
 
     # Ellipsis reduction
-    actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", dim=...)
+    actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", dim=..., engine=engine)
     expected = ds.Tair.groupby("time.month").mean(...)
     xr.testing.assert_allclose(actual, expected)
 
     # Dataset
     expected = ds.groupby("time.month").mean()
-    actual = xarray_reduce(ds, ds.time.dt.month, func="mean")
+    actual = xarray_reduce(ds, ds.time.dt.month, func="mean", engine=engine)
     xr.testing.assert_allclose(actual, expected)
 
     # add data var with missing grouper dim
     ds["foo"] = ("bar", [1, 2, 3])
     expected = ds.groupby("time.month").mean()
-    actual = xarray_reduce(ds, ds.time.dt.month, func="mean")
+    actual = xarray_reduce(ds, ds.time.dt.month, func="mean", engine=engine)
     xr.testing.assert_allclose(actual, expected)
     del ds["foo"]
 
     # non-dim coord with missing grouper dim
     ds.coords["foo"] = ("bar", [1, 2, 3])
     expected = ds.groupby("time.month").mean()
-    actual = xarray_reduce(ds, ds.time.dt.month, func="mean")
+    actual = xarray_reduce(ds, ds.time.dt.month, func="mean", engine=engine)
     xr.testing.assert_allclose(actual, expected)
     del ds["foo"]
 
@@ -163,7 +165,7 @@ def test_xarray_reduce_errors():
 @pytest.mark.parametrize("isdask", [True, False])
 @pytest.mark.parametrize("dataarray", [True, False])
 @pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
-def test_xarray_resample(chunklen, isdask, dataarray):
+def test_xarray_resample(chunklen, isdask, dataarray, engine):
     if isdask:
         if not has_dask:
             pytest.skip()
@@ -175,13 +177,13 @@ def test_xarray_resample(chunklen, isdask, dataarray):
         ds = ds.air
 
     resampler = ds.resample(time="M")
-    actual = resample_reduce(resampler, "mean")
+    actual = resample_reduce(resampler, "mean", engine=engine)
     expected = resampler.mean()
     xr.testing.assert_allclose(actual, expected)
 
 
 @requires_dask
-def test_xarray_resample_dataset_multiple_arrays():
+def test_xarray_resample_dataset_multiple_arrays(engine):
     # regression test for #35
     times = pd.date_range("2000", periods=5)
     foo = xr.DataArray(range(5), dims=["time"], coords=[times], name="foo")
@@ -192,7 +194,7 @@ def test_xarray_resample_dataset_multiple_arrays():
     # The separate computes are necessary here to force xarray
     # to compute all variables in result at the same time.
     expected = resampler.mean().compute()
-    result = resample_reduce(resampler, "mean").compute()
+    result = resample_reduce(resampler, "mean", engine=engine).compute()
     xr.testing.assert_allclose(expected, result)
 
 
@@ -235,15 +237,15 @@ def test_rechunk_to_group_boundaries(inchunks, expected):
 # TODO: dim=None, dim=Ellipsis, groupby unindexed dim
 
 
-def test_groupby_duplicate_coordinate_labels():
+def test_groupby_duplicate_coordinate_labels(engine):
     # fix for http://stackoverflow.com/questions/38065129
     array = xr.DataArray([1, 2, 3], [("x", [1, 1, 2])])
     expected = xr.DataArray([3, 3], [("x", [1, 2])])
-    actual = xarray_reduce(array, array.x, func="sum")
+    actual = xarray_reduce(array, array.x, func="sum", engine=engine)
     assert_equal(expected, actual)
 
 
-def test_multi_index_groupby_sum():
+def test_multi_index_groupby_sum(engine):
     # regression test for xarray GH873
     ds = xr.Dataset(
         {"foo": (("x", "y", "z"), np.ones((3, 4, 2)))},
@@ -251,12 +253,12 @@ def test_multi_index_groupby_sum():
     )
     expected = ds.sum("z")
     stacked = ds.stack(space=["x", "y"])
-    actual = xarray_reduce(stacked, "space", dim="z", func="sum")
+    actual = xarray_reduce(stacked, "space", dim="z", func="sum", engine=engine)
     assert_equal(expected, actual.unstack("space"))
 
 
 @pytest.mark.parametrize("chunks", (None, 2))
-def test_xarray_groupby_bins(chunks):
+def test_xarray_groupby_bins(chunks, engine):
     array = xr.DataArray([1, 1, 1, 1, 1], dims="x")
     labels = xr.DataArray([1, 1.5, 1.9, 2, 3], dims="x", name="labels")
 
@@ -272,6 +274,7 @@ def test_xarray_groupby_bins(chunks):
             labels,
             dim="x",
             func="count",
+            engine=engine,
             expected_groups=np.array([1, 2, 4, 5]),
             isbin=True,
             fill_value=0,
