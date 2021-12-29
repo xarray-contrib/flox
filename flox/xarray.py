@@ -58,7 +58,7 @@ def xarray_reduce(
     split_out: int = 1,
     fill_value=None,
     method: str = "map-reduce",
-    engine: str = "numpy",
+    engine: str = "flox",
     keep_attrs: bool = True,
     skipna: Optional[bool] = None,
     min_count: Optional[int] = None,
@@ -483,6 +483,7 @@ def resample_reduce(
     resampler: "Resample",
     func: Union[str, Aggregation],
     keep_attrs: bool = True,
+    **kwargs,
 ):
 
     obj = resampler._obj
@@ -506,6 +507,7 @@ def resample_reduce(
             method="blockwise",
             expected_groups=(resampler._unique_coord.data,),
             keep_attrs=keep_attrs,
+            **kwargs,
         )
         .rename({"__resample_dim__": dim})
         .transpose(dim, ...)

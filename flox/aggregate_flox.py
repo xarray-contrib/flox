@@ -23,7 +23,11 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
     if out is None:
         out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
 
-    if ((uniques[1:] - uniques[:-1]) == 1).all():
+    if (len(uniques) == size) and (uniques == np.arange(size)).all():
+        # The previous version of this if condition
+        #     ((uniques[1:] - uniques[:-1]) == 1).all():
+        # does not work when group_idx is [1, 2] for e.g.
+        # This happens  during binning
         op.reduceat(array, inv_idx, axis=axis, dtype=dtype, out=out)
     else:
         out[..., uniques] = op.reduceat(array, inv_idx, axis=axis, dtype=dtype)
@@ -32,7 +36,16 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
 
 
 def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
-    return func(group_idx, np.where(np.isnan(array), fillna, array), *args, **kwargs)
+    result = func(group_idx, np.where(np.isnan(array), fillna, array), *args, **kwargs)
+    # np.nanmax([np.nan, np.nan]) = np.nan
+    # To recover this behaviour, we need to search for the fillna value
+    # (either np.inf or -np.inf), and replace with NaN
+    # Our choice of fillna does the right thing for sum, prod
+    if fillna in (np.inf, -np.inf):
+        allnangroups = result == fillna
+        if allnangroups.any():
+            result[allnangroups] = kwargs["fill_value"]
+    return result
 
 
 sum = partial(_np_grouped_op, op=np.add)

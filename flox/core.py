@@ -374,14 +374,13 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
             # when binning we change expected groups to integers marking the interval
             # this makes the reindexing logic simpler.
             if expect is None:
-                raise ValueError("Please pass bin_edges in expected_groups.")
+                raise ValueError("Please pass bin edges in expected_groups.")
             # idx = np.digitize(groupvar.ravel(), expect) - 1
             idx = pd.cut(groupvar.ravel(), bins=expect, labels=False)
             # same sentinel value as factorize
             idx[np.isnan(idx)] = -1
             idx = idx.astype(int, copy=False)
-            expect = np.arange(idx.max() + 1)
-            found_groups.append(expect)
+            found_groups.append(np.arange(len(expect) - 1))
         else:
             idx, groups = pd.factorize(groupvar.ravel())
             found_groups.append(np.array(groups))
@@ -1119,7 +1118,7 @@ def groupby_reduce(
     min_count: Optional[int] = None,
     split_out: int = 1,
     method: str = "map-reduce",
-    engine: str = "numpy",
+    engine: str = "flox",
     finalize_kwargs: Optional[Mapping] = None,
 ) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
     """
@@ -1213,7 +1212,7 @@ def groupby_reduce(
 
     """
 
-    if engine == "flox" and "arg" in func:
+    if engine == "flox" and isinstance(func, str) and "arg" in func:
         raise NotImplementedError(
             "argreductions not supported for engine='flox' yet."
             "Try engine='numpy' or engine='numba' instead."
