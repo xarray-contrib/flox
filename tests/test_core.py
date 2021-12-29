@@ -516,6 +516,7 @@ def test_npg_nanarg_bug(func):
     expected = getattr(np, func)(array)
     assert_equal(actual, expected)
 
+
 @pytest.mark.parametrize("chunk_labels", [False, True])
 @pytest.mark.parametrize("chunks", ((), (1,), (2,)))
 def test_groupby_bins(chunk_labels, chunks, engine) -> None:
