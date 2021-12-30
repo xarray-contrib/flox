@@ -927,6 +927,11 @@ def groupby_agg(
     # but first save by if blockwise is True.
     if method == "blockwise":
         by_maybe_numpy = by
+    if not isinstance(by, dask.array.Array):
+        # chunk numpy arrays like the input array
+        # This removes an extra rechunk-merge layer that would be
+        # added otherwise
+        by = dask.array.from_array(by, chunks=tuple(array.chunks[ax] for ax in range(-by.ndim, 0)))
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
     # preprocess the array
