@@ -177,6 +177,9 @@ def xarray_reduce(
     if isinstance(isbin, bool):
         isbin = (isbin,) * len(by)
 
+    if not sort:
+        raise NotImplementedError
+
     # eventually  drop the variables we are grouping by
     maybe_drop = [b for b in by if isinstance(b, str)]
     unindexed_dims = tuple(
@@ -339,6 +342,7 @@ def xarray_reduce(
         kwargs={
             "func": func,
             "axis": axis,
+            "sort": sort,
             "split_out": split_out,
             "fill_value": fill_value,
             "method": method,
