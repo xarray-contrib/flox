@@ -1,8 +1,12 @@
 import random
 from itertools import product
 
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+from .core import find_group_cohorts
 
 
 def draw_mesh(
@@ -19,9 +23,6 @@ def draw_mesh(
     x0=0,
     append=False,
 ):
-
-    import matplotlib as mpl
-    import matplotlib.pyplot as plt
 
     dx = 2
     xpts = x0 + np.arange(0, (ncol + nspaces) * dx, dx)
@@ -72,12 +73,10 @@ def draw_mesh(
         plt.gcf().set_size_inches((ncol * pxin, (nrow + 2) * pxin))
 
 
-def visualize_groups(array, labels, axis=-1, colors=None, cmap=None):
+def visualize_groups_1d(array, labels, axis=-1, colors=None, cmap=None):
     """
     Visualize group distribution for a 1D array of group labels.
     """
-    import matplotlib as mpl
-    import matplotlib.pyplot as plt
 
     labels = np.asarray(labels)
     assert labels.ndim == 1
@@ -111,3 +110,47 @@ def visualize_groups(array, labels, axis=-1, colors=None, cmap=None):
 
     pxin = 0.8
     plt.gcf().set_size_inches((len(labels) * pxin, 1 * pxin))
+
+
+def get_colormap(N):
+
+    cmap = mpl.cm.get_cmap("tab20_r").copy()
+    ncolors = len(cmap.colors)
+    q = N // ncolors
+    r = N % ncolors
+    cmap = mpl.colors.ListedColormap(np.concatenate([cmap.colors] * q + [cmap.colors[:r]]))
+    cmap.set_under(color="w")
+    return cmap
+
+
+def visualize_cohorts_2d(by, array, merge=True, method="cohorts"):
+    assert by.ndim == 2
+    print("finding cohorts...")
+    cohorts = find_group_cohorts(
+        by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=merge, method=method
+    )
+
+    factorized = np.full(by.shape, -1)
+    for idx, cohort in enumerate(cohorts):
+        factorized[np.isin(by, cohort)] = idx
+    ncohorts = idx
+
+    xticks = np.cumsum(array.chunks[-1])
+    yticks = np.cumsum(array.chunks[-2])
+
+    f, ax = plt.subplots(2, 1, constrained_layout=True, sharex=True, sharey=True)
+
+    flat = by.ravel()
+    ngroups = len(np.unique(flat[~np.isnan(flat)]))
+
+    h0 = ax[0].imshow(by, cmap=get_colormap(ngroups))
+    h1 = ax[1].imshow(factorized, aspect="equal", vmin=0, cmap=get_colormap(ncohorts))
+    for axx in ax:
+        axx.grid(True, which="both")
+        axx.set_xticks(xticks)
+        axx.set_yticks(yticks)
+    f.colorbar(h0, ax=ax[0])
+    f.colorbar(h1, ax=ax[1])
+    ax[0].set_title("by")
+    ax[1].set_title("cohorts")
+    f.set_size_inches((6, 6))
