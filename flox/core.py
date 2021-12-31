@@ -755,6 +755,20 @@ def _conc2(x_chunk, key1, key2=None, axis=None) -> np.ndarray:
     # return concatenate3(mapped)
 
 
+def reindex_intermediates(x, agg, unique_groups):
+    new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
+    newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
+    newx["intermediates"] = tuple(
+        reindex_(v, from_=x["groups"].squeeze(), to=unique_groups, fill_value=f)
+        for v, f in zip(x["intermediates"], agg.fill_value["intermediate"])
+    )
+    return newx
+
+
+def listify_groups(x):
+    return list(np.atleast_1d(x["groups"].squeeze()))
+
+
 def _npg_combine(
     x_chunk,
     agg: Aggregation,
@@ -774,23 +788,14 @@ def _npg_combine(
         # when there's only a single axis of reduction, we can just concatenate later,
         # reindexing is unnecessary
         # I bet we can minimize the amount of reindexing for mD reductions too, but it's complicated
-        unique_groups = np.unique(
-            tuple(flatten(deepmap(lambda x: list(np.atleast_1d(x["groups"].squeeze())), x_chunk)))
-        )
+        unique_groups = np.unique(tuple(flatten(deepmap(listify_groups, x_chunk))))
         unique_groups = unique_groups[~np.isnan(unique_groups)]
         if len(unique_groups) == 0:
             unique_groups = [np.nan]
 
-        def reindex_intermediates(x):
-            new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
-            newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
-            newx["intermediates"] = tuple(
-                reindex_(v, from_=x["groups"].squeeze(), to=unique_groups, fill_value=f)
-                for v, f in zip(x["intermediates"], agg.fill_value["intermediate"])
-            )
-            return newx
-
-        x_chunk = deepmap(reindex_intermediates, x_chunk)
+        x_chunk = deepmap(
+            partial(reindex_intermediates, agg=agg, unique_groups=unique_groups), x_chunk
+        )
 
     groups = _conc2(x_chunk, "groups", axis=neg_axis)
 
