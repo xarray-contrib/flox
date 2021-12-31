@@ -777,6 +777,9 @@ def _npg_combine(
         unique_groups = np.unique(
             tuple(flatten(deepmap(lambda x: list(np.atleast_1d(x["groups"].squeeze())), x_chunk)))
         )
+        unique_groups = unique_groups[~np.isnan(unique_groups)]
+        if len(unique_groups) == 0:
+            unique_groups = [np.nan]
 
         def reindex_intermediates(x):
             new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
