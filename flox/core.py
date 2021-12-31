@@ -737,15 +737,12 @@ def _npg_aggregate(
     )
 
 
-def _conc2(x_chunk, key1, key2=None, axis=None) -> np.ndarray:
+def _conc2(x_chunk, key1, key2=slice(None), axis=None) -> np.ndarray:
     """copied from dask.array.reductions.mean_combine"""
     from dask.array.core import _concatenate2
     from dask.utils import deepmap
 
-    if key2 is not None:
-        mapped = deepmap(lambda x: x[key1][key2], x_chunk)
-    else:
-        mapped = deepmap(lambda x: x[key1], x_chunk)
+    mapped = deepmap(lambda x: x[key1][key2], x_chunk)
     return _concatenate2(mapped, axes=axis)
 
     # This doesn't seem to improve things at all; and some tests fail...
@@ -925,7 +922,7 @@ def groupby_agg(
     assert all(ax >= 0 for ax in axis)
 
     # these are negative axis indices useful for concatenating the intermediates
-    neg_axis = range(-len(axis), 0)
+    neg_axis = tuple(range(-len(axis), 0))
 
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
