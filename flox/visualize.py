@@ -123,34 +123,50 @@ def get_colormap(N):
     return cmap
 
 
-def visualize_cohorts_2d(by, array, merge=True, method="cohorts"):
-    assert by.ndim == 2
-    print("finding cohorts...")
-    cohorts = find_group_cohorts(
-        by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=merge, method=method
-    )
+def factorize_cohorts(by, cohorts):
 
     factorized = np.full(by.shape, -1)
     for idx, cohort in enumerate(cohorts):
         factorized[np.isin(by, cohort)] = idx
-    ncohorts = idx
+    return factorized
+
+
+def visualize_cohorts_2d(by, array, method="cohorts"):
+    assert by.ndim == 2
+    print("finding cohorts...")
+    before_merged = find_group_cohorts(
+        by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=False, method=method
+    )
+    merged = find_group_cohorts(
+        by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=True, method=method
+    )
+    print("finished cohorts...")
 
     xticks = np.cumsum(array.chunks[-1])
     yticks = np.cumsum(array.chunks[-2])
 
-    f, ax = plt.subplots(2, 1, constrained_layout=True, sharex=True, sharey=True)
-
+    f, ax = plt.subplots(2, 2, constrained_layout=True, sharex=True, sharey=True)
+    ax = ax.ravel()
+    ax[1].set_visible(False)
+    ax = ax[[0, 2, 3]]
     flat = by.ravel()
     ngroups = len(np.unique(flat[~np.isnan(flat)]))
 
     h0 = ax[0].imshow(by, cmap=get_colormap(ngroups))
-    h1 = ax[1].imshow(factorized, aspect="equal", vmin=0, cmap=get_colormap(ncohorts))
+    h1 = ax[1].imshow(
+        factorize_cohorts(by, before_merged),
+        vmin=0,
+        cmap=get_colormap(len(before_merged)),
+    )
+    h2 = ax[2].imshow(factorize_cohorts(by, merged), vmin=0, cmap=get_colormap(len(merged)))
     for axx in ax:
         axx.grid(True, which="both")
         axx.set_xticks(xticks)
         axx.set_yticks(yticks)
-    f.colorbar(h0, ax=ax[0])
-    f.colorbar(h1, ax=ax[1])
-    ax[0].set_title("by")
-    ax[1].set_title("cohorts")
+    for h, axx in zip([h0, h1, h2], ax):
+        f.colorbar(h, ax=axx, orientation="horizontal")
+
+    ax[0].set_title(f"by: {ngroups} groups")
+    ax[1].set_title(f"{len(before_merged)} cohorts")
+    ax[2].set_title(f"{len(merged)} merged cohorts")
     f.set_size_inches((6, 6))
