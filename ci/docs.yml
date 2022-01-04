@@ -10,6 +10,6 @@ dependencies:
   - toolz
   - myst-parser
   - sphinx
-  - sphinx-book-theme
+  - furo
   - pip:
     - git+https://github.com/dcherian/flox

@@ -31,6 +31,7 @@ Visualization
 
     visualize.draw_mesh
     visualize.visualize_groups
+    visualize.visualize_cohorts_2d
 
 Aggregation Objects
 ~~~~~~~~~~~~~~~~~~~

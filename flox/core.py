@@ -132,14 +132,14 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
 
     Parameters
     ----------
-    labels: np.ndarray
+    labels : np.ndarray
         mD Array of group labels
-    array: tuple
+    chunks : tuple
         nD array that is being reduced
-    merge: bool, optional
+    merge : bool, optional
         Attempt to merge cohorts when one cohort's chunks are a subset
         of another cohort's chunks.
-    method: ["split-reduce", "cohorts"], optional
+    method : ["split-reduce", "cohorts"], optional
         Which method are we using?
 
     Returns
@@ -217,19 +217,19 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
 
     Parameters
     ----------
-    array: dask.array.Array
+    array : dask.array.Array
         array to rechunk
-    axis: int
+    axis : int
         Axis to rechunk
-    labels: np.array
+    labels : np.array
         1D Group labels to align chunks with. This routine works
         well when ``labels`` has repeating patterns: e.g.
         ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
         that the pattern must contain sequences.
-    force_new_chunk_at:
+    force_new_chunk_at
         label at which we always start a new chunk. For
         the example ``labels`` array, this would be `1``.
-    chunksize: int, optional
+    chunksize : int, optional
         nominal chunk size. Chunk size is exceded when the label
         in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
         If None, uses median chunksize along axis.
@@ -496,14 +496,14 @@ def chunk_reduce(
 
     Parameters
     ----------
-    array: numpy.ndarray
+    array : numpy.ndarray
         Array of values to reduced
-    by: numpy.ndarray
+    by : numpy.ndarray
         Array to group by.
-    func: str or Callable or Sequence[str] or Sequence[Callable]
+    func : str or Callable or Sequence[str] or Sequence[Callable]
         Name of reduction or function, passed to numpy_groupies.
         Supports multiple reductions.
-    axis: (optional) int or Sequence[int]
+    axis : (optional) int or Sequence[int]
         If None, reduce along all dimensions of array.
         Else reduce along specified axes.
 
@@ -1145,18 +1145,18 @@ def groupby_reduce(
         Array to be reduced, possibly nD
     by : ndarray or DaskArray
         Array of labels to group over. Must be aligned with ``array`` so that
-            ``array.shape[-by.ndim :] == by.shape``
+        ``array.shape[-by.ndim :] == by.shape``
     func : str or Aggregation
         Single function name or an Aggregation instance
     expected_groups : (optional) Sequence
         Expected unique labels.
     isbin : bool, optional
         Are ``expected_groups`` bin edges?
-    sort : (optional), bool
+    sort : bool, optional
         Whether groups should be returned in sorted order. Only applies for dask
-        reductions when ``method`` is not `"map-reduce"`. For ``"map-reduce", the groups
+        reductions when ``method`` is not ``"map-reduce"``. For ``"map-reduce"``, the groups
         are always sorted.
-    axis : (optional) None or int or Sequence[int]
+    axis : None or int or Sequence[int], optional
         If None, reduce across all dimensions of by
         Else, reduce across corresponding axes of array
         Negative integers are normalized using array.ndim
@@ -1197,10 +1197,8 @@ def groupby_reduce(
             Break out each group into its own array and then ``"map-reduce"``.
             This is implemented by having each group be its own cohort,
             and is identical to xarray's default strategy.
-
-    engine : {"flox", numpy", "numba"}, optional
-        Underlying algorithm to compute the groupby reduction on non-dask arrays
-        and on each dask chunk at compute-time.
+    engine : {"flox", "numpy", "numba"}, optional
+        Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk.
           * ``"flox"``:
             Use an internal implementation where the data is sorted so that
             all members of a group occur sequentially, and then numpy.ufunc.reduceat
@@ -1210,7 +1208,6 @@ def groupby_reduce(
             Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
-
     finalize_kwargs : dict, optional
         Kwargs passed to finalize the reduction such as ``ddof`` for var, std.
 
