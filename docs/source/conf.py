@@ -58,7 +58,7 @@ extlinks = {
 templates_path = ["_templates"]
 
 # The suffix of source filenames.
-source_suffix = ".rst"
+source_suffix = [".rst", ".md"]
 
 # Enable notebook execution
 # https://nbsphinx.readthedocs.io/en/0.4.2/never-execute.html
