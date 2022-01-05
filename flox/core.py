@@ -226,8 +226,8 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
         well when ``labels`` has repeating patterns: e.g.
         ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
         that the pattern must contain sequences.
-    force_new_chunk_at
-        label at which we always start a new chunk. For
+    force_new_chunk_at : Sequence
+        Labels at which we always start a new chunk. For
         the example ``labels`` array, this would be `1`.
     chunksize : int, optional
         nominal chunk size. Chunk size is exceded when the label

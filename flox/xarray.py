@@ -416,7 +416,7 @@ def rechunk_for_cohorts(
 
     Parameters
     ----------
-    array : DataArray or Dataset
+    obj : DataArray or Dataset
         array to rechunk
     dim : str
         Dimension to rechunk
@@ -425,8 +425,8 @@ def rechunk_for_cohorts(
         well when ``labels`` has repeating patterns: e.g.
         ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
         that the pattern must contain sequences.
-    force_new_chunk_at:
-        label at which we always start a new chunk. For
+    force_new_chunk_at : Sequence
+        Labels at which we always start a new chunk. For
         the example ``labels`` array, this would be `1`.
     chunksize : int, optional
         nominal chunk size. Chunk size is exceded when the label
@@ -459,10 +459,10 @@ def rechunk_for_blockwise(obj: Union["DataArray", "Dataset"], dim: str, labels: 
 
     Parameters
     ----------
-    array : DataArray or Dataset
+    obj : DataArray or Dataset
         Array to rechunk
     dim : hashable
-        Name of dimension t o rechunk
+        Name of dimension to rechunk
     labels : DataArray
         Group labels
 
