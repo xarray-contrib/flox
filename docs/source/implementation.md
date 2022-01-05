@@ -1,4 +1,4 @@
-## Algorithms
+# Algorithms
 
 `flox` outsources the core GroupBy operation to the vectorized implementations in
 [numpy_groupies](https://github.com/ml31415/numpy-groupies). Constructing
@@ -13,7 +13,7 @@ or `xarray_reduce`.
 
 First we describe xarray's current strategy
 
-### `method="split-reduce"`: Xarray's current GroupBy strategy
+## `method="split-reduce"`: Xarray's current GroupBy strategy
 
 Xarray's current strategy is to find all unique group labels, index out each group,
 and then apply the reduction operation. Note that this only works if we know the group
@@ -28,11 +28,11 @@ communication and is quite expensive (in dataframe terminology, this is a "shuff
 This is fundamentally why many groupby reductions don't work well right now with
 big datasets.
 
-### `method="map-reduce"`
+## `method="map-reduce"`
 
 The first idea is to use the "map-reduce" strategy (inspired by `dask.dataframe`).
 
-![map-reduce-strategy-schematic](/../diagrams/mapreduce.png)
+![map-reduce-strategy-schematic](/../diagrams/map-reduce.png)
 
 The GroupBy reduction is first applied blockwise. Those intermediate results are
 combined by concatenating to form a new array which is then reduced
@@ -47,7 +47,7 @@ till all group results are in one block. At that point the result is
    reduction at the first combine step is effective. "effective" means we actually
    reduce values and release some memory.
 
-### `method="blockwise"`
+## `method="blockwise"`
 
 One case where `"map-reduce"` doesn't work well is the case of "resampling" reductions. An
 example here is resampling from daily frequency to monthly frequency data:  `da.resample(time="M").mean()`
@@ -70,7 +70,7 @@ so that all members of a group are in a single block. Then, the groupby operatio
 1. Works better when multiple groups are already in a single block; so that the intial
    rechunking only involves a small amount of communication.
 
-### `method="cohorts"`
+## `method="cohorts"`
 
 We can combine all of the above ideas for cases where members from different groups tend to occur close to each other.
 One example is the construction of "climatologies" which is a climate science term for something like `groupby("time.month")`

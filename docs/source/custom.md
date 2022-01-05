@@ -1,10 +1,10 @@
-## Custom reductions
+# Custom reductions
 
 `flox` implements all common reductions provided by `numpy_groupies` in `aggregations.py`.
 It also allows you to specify a custom Aggregation (again inspired by dask.dataframe),
 though this might not be fully functional at the moment. See `aggregations.py` for examples.
 
-``` python
+```python
     mean = Aggregation(
         # name used for dask tasks
         name="mean",

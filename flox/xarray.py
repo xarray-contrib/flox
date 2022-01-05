@@ -9,7 +9,7 @@ from .aggregations import Aggregation, _atleast_1d
 from .core import (
     factorize_,
     groupby_reduce,
-    rechunk_for_blockwise,
+    rechunk_for_blockwise as rechunk_array_for_blockwise,
     rechunk_for_cohorts as rechunk_array_for_cohorts,
     reindex_,
 )
@@ -81,14 +81,14 @@ def xarray_reduce(
         If False, the entry in ``expected_groups`` is treated as a simple label.
     sort : (optional), bool
         Whether groups should be returned in sorted order. Only applies for dask
-        reductions when ``method`` is not `"map-reduce"`. For ``"map-reduce", the groups
+        reductions when ``method`` is not ``"map-reduce"``. For ``"map-reduce"``, the groups
         are always sorted.
     dim : hashable
         dimension name along which to reduce. If None, reduces across all
         dimensions of `by`
     split_out : int, optional
         Number of output chunks along grouped dimension in output.
-    fill_value :
+    fill_value
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
     method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
@@ -119,10 +119,8 @@ def xarray_reduce(
             Break out each group into its own array and then ``"map-reduce"``.
             This is implemented by having each group be its own cohort,
             and is identical to xarray's default strategy.
-
-    engine : {"flox", numpy", "numba"}, optional
-        Underlying algorithm to compute the groupby reduction on non-dask arrays
-        and on each dask chunk at compute-time.
+    engine : {"flox", "numpy", "numba"}, optional
+        Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"flox"``:
             Use an internal implementation where the data is sorted so that
             all members of a group occur sequentially, and then numpy.ufunc.reduceat
@@ -132,7 +130,6 @@ def xarray_reduce(
             Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
-
     keep_attrs : bool, optional
         Preserve attrs?
     skipna : bool, optional
@@ -145,8 +142,8 @@ def xarray_reduce(
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
         array's dtype.
-    finalize_kwargs : dict, optional
-        kwargs passed to the finalize function, like ddof for var, std.
+    **finalize_kwargs :
+        kwargs passed to the finalize function, like ``ddof`` for var, std.
 
     Returns
     -------
@@ -419,26 +416,27 @@ def rechunk_for_cohorts(
 
     Parameters
     ----------
-    array: DataArray or Dataset
+    obj : DataArray or Dataset
         array to rechunk
-    dim: str
+    dim : str
         Dimension to rechunk
-    labels: DataArray
+    labels : DataArray
         1D Group labels to align chunks with. This routine works
         well when ``labels`` has repeating patterns: e.g.
         ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
         that the pattern must contain sequences.
-    force_new_chunk_at:
-        label at which we always start a new chunk. For
-        the example ``labels`` array, this would be `1``.
-    chunksize: int, optional
+    force_new_chunk_at : Sequence
+        Labels at which we always start a new chunk. For
+        the example ``labels`` array, this would be `1`.
+    chunksize : int, optional
         nominal chunk size. Chunk size is exceded when the label
         in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
         If None, uses median chunksize along ``dim``.
+
     Returns
     -------
-    dask.array.Array
-        rechunked array
+    DataArray or Dataset
+        Xarray object with rechunked arrays.
     """
     return _rechunk(
         rechunk_array_for_cohorts,
@@ -450,16 +448,30 @@ def rechunk_for_cohorts(
     )
 
 
-def rechunk_to_group_boundaries(obj: Union["DataArray", "Dataset"], dim: str, labels: "DataArray"):
+def rechunk_for_blockwise(obj: Union["DataArray", "Dataset"], dim: str, labels: "DataArray"):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
-    parallel group reductions.
+    embarassingly parallel group reductions.
 
-    This only works when the groups are sequential (e.g. labels = [0,0,0,1,1,1,1,2,2]).
+    This only works when the groups are sequential
+    (e.g. labels = ``[0,0,0,1,1,1,1,2,2]``).
     Such patterns occur when using ``.resample``.
-    """
 
-    return _rechunk(rechunk_for_blockwise, obj, dim, labels)
+    Parameters
+    ----------
+    obj : DataArray or Dataset
+        Array to rechunk
+    dim : hashable
+        Name of dimension to rechunk
+    labels : DataArray
+        Group labels
+
+    Returns
+    -------
+    DataArray or Dataset
+        Xarray object with rechunked arrays.
+    """
+    return _rechunk(rechunk_array_for_blockwise, obj, dim, labels)
 
 
 def _rechunk(func, obj, dim, labels, **kwargs):

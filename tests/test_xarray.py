@@ -6,7 +6,7 @@ import pytest
 xr = pytest.importorskip("xarray")
 # isort: on
 
-from flox.xarray import rechunk_to_group_boundaries, resample_reduce, xarray_reduce
+from flox.xarray import rechunk_for_blockwise, resample_reduce, xarray_reduce
 
 from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
 
@@ -216,19 +216,19 @@ def test_xarray_resample_dataset_multiple_arrays(engine):
         [(10,), (10,)],
     ],
 )
-def test_rechunk_to_group_boundaries(inchunks, expected):
+def test_rechunk_for_blockwise(inchunks, expected):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
 
     da = xr.DataArray(dask.array.ones((10,), chunks=inchunks), dims="x", name="foo")
-    rechunked = rechunk_to_group_boundaries(da, "x", xr.DataArray(labels, dims="x"))
+    rechunked = rechunk_for_blockwise(da, "x", xr.DataArray(labels, dims="x"))
     assert rechunked.chunks == (expected,)
 
     da = xr.DataArray(dask.array.ones((5, 10), chunks=(-1, inchunks)), dims=("y", "x"), name="foo")
-    rechunked = rechunk_to_group_boundaries(da, "x", xr.DataArray(labels, dims="x"))
+    rechunked = rechunk_for_blockwise(da, "x", xr.DataArray(labels, dims="x"))
     assert rechunked.chunks == ((5,), expected)
     ds = da.to_dataset()
 
-    rechunked = rechunk_to_group_boundaries(ds, "x", xr.DataArray(labels, dims="x"))
+    rechunked = rechunk_for_blockwise(ds, "x", xr.DataArray(labels, dims="x"))
     assert rechunked.foo.chunks == ((5,), expected)
 
 

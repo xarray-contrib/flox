@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # flake8: noqa
 """Top-level module for flox ."""
-from .core import groupby_reduce  # noqa
+from .core import groupby_reduce, rechunk_for_blockwise, rechunk_for_cohorts  # noqa
 
 try:
     from importlib.metadata import version as _version
