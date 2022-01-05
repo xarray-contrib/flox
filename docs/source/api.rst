@@ -9,7 +9,7 @@ Functions
 .. autosummary::
     :toctree: generated/
 
-    core.groupby_reduce
+    ~core.groupby_reduce
     xarray.xarray_reduce
 
 Rechunking
@@ -18,8 +18,8 @@ Rechunking
 .. autosummary::
     :toctree: generated/
 
-    core.rechunk_for_blockwise
-    core.rechunk_for_cohorts
+    ~core.rechunk_for_blockwise
+    ~core.rechunk_for_cohorts
     xarray.rechunk_for_blockwise
     xarray.rechunk_for_cohorts
 

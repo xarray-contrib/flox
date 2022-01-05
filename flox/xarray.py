@@ -9,7 +9,7 @@ from .aggregations import Aggregation, _atleast_1d
 from .core import (
     factorize_,
     groupby_reduce,
-    rechunk_for_blockwise,
+    rechunk_for_blockwise as rechunk_array_for_blockwise,
     rechunk_for_cohorts as rechunk_array_for_cohorts,
     reindex_,
 )
@@ -427,15 +427,16 @@ def rechunk_for_cohorts(
         that the pattern must contain sequences.
     force_new_chunk_at:
         label at which we always start a new chunk. For
-        the example ``labels`` array, this would be `1``.
+        the example ``labels`` array, this would be `1`.
     chunksize : int, optional
         nominal chunk size. Chunk size is exceded when the label
         in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
         If None, uses median chunksize along ``dim``.
+
     Returns
     -------
-    dask.array.Array
-        rechunked array
+    DataArray or Dataset
+        Xarray object with rechunked arrays.
     """
     return _rechunk(
         rechunk_array_for_cohorts,
@@ -447,16 +448,30 @@ def rechunk_for_cohorts(
     )
 
 
-def rechunk_to_group_boundaries(obj: Union["DataArray", "Dataset"], dim: str, labels: "DataArray"):
+def rechunk_for_blockwise(obj: Union["DataArray", "Dataset"], dim: str, labels: "DataArray"):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
-    parallel group reductions.
+    embarassingly parallel group reductions.
 
-    This only works when the groups are sequential (e.g. labels = [0,0,0,1,1,1,1,2,2]).
+    This only works when the groups are sequential
+    (e.g. labels = ``[0,0,0,1,1,1,1,2,2]``).
     Such patterns occur when using ``.resample``.
-    """
 
-    return _rechunk(rechunk_for_blockwise, obj, dim, labels)
+    Parameters
+    ----------
+    array : DataArray or Dataset
+        Array to rechunk
+    dim : hashable
+        Name of dimension t o rechunk
+    labels : DataArray
+        Group labels
+
+    Returns
+    -------
+    DataArray or Dataset
+        Xarray object with rechunked arrays.
+    """
+    return _rechunk(rechunk_array_for_blockwise, obj, dim, labels)
 
 
 def _rechunk(func, obj, dim, labels, **kwargs):

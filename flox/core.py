@@ -228,7 +228,7 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
         that the pattern must contain sequences.
     force_new_chunk_at
         label at which we always start a new chunk. For
-        the example ``labels`` array, this would be `1``.
+        the example ``labels`` array, this would be `1`.
     chunksize : int, optional
         nominal chunk size. Chunk size is exceded when the label
         in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
@@ -289,10 +289,25 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
 def rechunk_for_blockwise(array, axis, labels):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
-    parallel group reductions.
+    embarassingly parallel group reductions.
 
-    This only works when the groups are sequential (e.g. labels = [0,0,0,1,1,1,1,2,2]).
+    This only works when the groups are sequential
+    (e.g. labels = ``[0,0,0,1,1,1,1,2,2]``).
     Such patterns occur when using ``.resample``.
+
+    Parameters
+    ----------
+    array : DaskArray
+        Array to rechunk
+    axis : int
+        Axis along which to rechunk the array.
+    labels : np.ndarray
+        Group labels
+
+    Returns
+    -------
+    DaskArray
+        Rechunked array
     """
     labels = factorize_((labels,), axis=None)[0]
     chunks = array.chunks[axis]

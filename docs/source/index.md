@@ -1,14 +1,12 @@
-# flox: An Overview
-
-Fast & furious GroupBy reductions for `dask.array`
+# flox: fast & furious GroupBy reductions for `dask.array`
 
 ## Overview
 
-[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/dcherian/flox/CI?logo=github&style=for-the-badge)](https://github.com/dcherian/flox/actions)
-[![GitHub Workflow Code Style Status](https://img.shields.io/github/workflow/status/dcherian/flox/code-style?label=Code%20Style&style=for-the-badge)](https://github.com/dcherian/flox/actions)
-[![image](https://img.shields.io/codecov/c/github/dcherian/flox.svg?style=for-the-badge)](https://codecov.io/gh/dcherian/flox)
-[![PyPI](https://img.shields.io/pypi/v/flox.svg?style=for-the-badge)](https://pypi.org/project/flox/)
-[![Conda-forge](https://img.shields.io/conda/vn/conda-forge/flox.svg?style=for-the-badge)](https://anaconda.org/conda-forge/flox)
+[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/dcherian/flox/CI?logo=github&style=flat)](https://github.com/dcherian/flox/actions)
+[![GitHub Workflow Code Style Status](https://img.shields.io/github/workflow/status/dcherian/flox/code-style?label=Code%20Style&style=flat)](https://github.com/dcherian/flox/actions)
+[![image](https://img.shields.io/codecov/c/github/dcherian/flox.svg?style=flat)](https://codecov.io/gh/dcherian/flox)
+[![PyPI](https://img.shields.io/pypi/v/flox.svg?style=flat)](https://pypi.org/project/flox/)
+[![Conda-forge](https://img.shields.io/conda/vn/conda-forge/flox.svg?style=flat)](https://anaconda.org/conda-forge/flox)
 
 This project explores strategies for fast GroupBy reductions with dask.array. It used to be called `dask_groupby`. It was motivated by
 
@@ -17,9 +15,7 @@ This project explores strategies for fast GroupBy reductions with dask.array. It
 2.  numpy_groupies in Xarray
     [issue](https://github.com/pydata/xarray/issues/4473)
 
-(See a
-[presentation](https://docs.google.com/presentation/d/1YubKrwu9zPHC_CzVBhvORuQBW-z148BvX3Ne8XcvWsQ/edit?usp=sharing)
-about this package, from the Pangeo Showcase).
+See a presentation ([video](https://discourse.pangeo.io/t/november-17-2021-flox-fast-furious-groupby-reductions-with-dask-at-pangeo-scale/2016), [slides](https://docs.google.com/presentation/d/1YubKrwu9zPHC_CzVBhvORuQBW-z148BvX3Ne8XcvWsQ/edit?usp=sharing)) about this package, from the Pangeo Showcase.
 
 ## Installing
 
