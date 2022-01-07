@@ -360,7 +360,7 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
     return reindexed
 
 
-def offset_labels(labels: np.ndarray, ngroups: int) -> Tuple[np.ndarray, int, int]:
+def offset_labels(labels: np.ndarray, ngroups: int) -> Tuple[np.ndarray, int]:
     """
     Offset group labels by dimension. This is used when we
     reduce over a subset of the dimensions of by. It assumes that the reductions
@@ -374,7 +374,7 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> Tuple[np.ndarray, int, in
     # -1 indicates NaNs. preserve these otherwise we aggregate in the wrong groups!
     offset[labels == -1] = -1
     size: int = np.prod(labels.shape[:-1]) * ngroups  # type: ignore
-    return offset, ngroups, size
+    return offset, size
 
 
 def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = None):
@@ -415,7 +415,7 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
     if np.isscalar(axis) and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
         offset_group = True
-        group_idx, ngroups, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
+        group_idx, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
         group_idx = group_idx.ravel()
     else:
         size = ngroups
