@@ -325,11 +325,12 @@ def xarray_reduce(
             if is_missing_dim:
                 missing_dim[k] = v
 
+    input_core_dims = _get_input_core_dims(group_names, dim, ds, to_group)
     actual = xr.apply_ufunc(
         wrapper,
-        ds.drop_vars(tuple(missing_dim) + bad_dtypes),
+        ds.drop_vars(tuple(missing_dim) + bad_dtypes).transpose(..., *to_group.dims),
         to_group,
-        input_core_dims=_get_input_core_dims(group_names, dim, ds, to_group),
+        input_core_dims=input_core_dims,
         # for xarray's test_groupby_duplicate_coordinate_labels
         exclude_dims=set(dim),
         output_core_dims=[group_names],

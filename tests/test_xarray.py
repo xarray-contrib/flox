@@ -268,17 +268,16 @@ def test_xarray_groupby_bins(chunks, engine):
         array = array.chunk({"x": chunks})
         labels = labels.chunk({"x": chunks})
 
+    kwargs = dict(
+        dim="x",
+        func="count",
+        engine=engine,
+        expected_groups=np.array([1, 2, 4, 5]),
+        isbin=True,
+        fill_value=0,
+    )
     with raise_if_dask_computes():
-        actual = xarray_reduce(
-            array,
-            labels,
-            dim="x",
-            func="count",
-            engine=engine,
-            expected_groups=np.array([1, 2, 4, 5]),
-            isbin=True,
-            fill_value=0,
-        )
+        actual = xarray_reduce(array, labels, **kwargs)
     expected = xr.DataArray(
         np.array([3, 1, 0]),
         dims="labels_bins",
@@ -286,7 +285,18 @@ def test_xarray_groupby_bins(chunks, engine):
     )
     xr.testing.assert_equal(actual, expected)
 
-    # TODO: test cut_kwargs
+    # 3D array, 2D by, single dim, with NaNs in by
+    array = array.expand_dims(y=2, z=3)
+    labels = labels.expand_dims(y=2).copy()
+    labels.data[-1, -1] = np.nan
+    with raise_if_dask_computes():
+        actual = xarray_reduce(array, labels, **kwargs)
+    expected = xr.DataArray(
+        np.array([[[3, 1, 0]] * 3, [[3, 0, 0]] * 3]),
+        dims=("y", "z", "labels_bins"),
+        coords={"labels_bins": [pd.Interval(1, 2), pd.Interval(2, 4), pd.Interval(4, 5)]},
+    )
+    xr.testing.assert_equal(actual, expected)
 
 
 @requires_dask
