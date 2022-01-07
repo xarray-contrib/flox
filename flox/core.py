@@ -360,7 +360,7 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
     return reindexed
 
 
-def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
+def offset_labels(labels: np.ndarray, ngroups: int) -> Tuple[np.ndarray, int]:
     """
     Offset group labels by dimension. This is used when we
     reduce over a subset of the dimensions of by. It assumes that the reductions
@@ -368,14 +368,13 @@ def offset_labels(labels: np.ndarray) -> Tuple[np.ndarray, int, int]:
     Copied from xhistogram &
     https://stackoverflow.com/questions/46256279/bin-elements-per-row-vectorized-2d-bincount-for-numpy
     """
-    ngroups: int = labels.max() + 1  # type: ignore
     offset: np.ndarray = (
         labels + np.arange(np.prod(labels.shape[:-1])).reshape((*labels.shape[:-1], -1)) * ngroups
     )
     # -1 indicates NaNs. preserve these otherwise we aggregate in the wrong groups!
     offset[labels == -1] = -1
     size: int = np.prod(labels.shape[:-1]) * ngroups  # type: ignore
-    return offset, ngroups, size
+    return offset, size
 
 
 def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = None):
@@ -416,19 +415,20 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
     if np.isscalar(axis) and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
         offset_group = True
-        group_idx, ngroups, size = offset_labels(group_idx.reshape(by[0].shape))
+        group_idx, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
         group_idx = group_idx.ravel()
     else:
         size = ngroups
         offset_group = False
 
     # numpy_groupies cannot deal with group_idx = -1
-    # so we'll add use (ngroups+1) as the sentinel
+    # so we'll add use ngroups as the sentinel
     # note we cannot simply remove the NaN locations;
     # that would mess up argmax, argmin
     nan_sentinel = size if offset_group else ngroups
     nanmask = group_idx == -1
-    if nanmask.any() and not offset_group:
+    if nanmask.any():
+        # bump it up so there's a place to assign values to the nan_sentinel index
         size += 1
     group_idx[nanmask] = nan_sentinel
 
