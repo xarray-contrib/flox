@@ -231,7 +231,7 @@ def xarray_reduce(
         # reducing along a dimension along which groups do not vary
         # This is really just a normal reduction.
         # This is not right when binning so we exclude.
-        if skipna:
+        if skipna and isinstance(func, str):
             dsfunc = func[3:]
         else:
             dsfunc = func
