@@ -88,6 +88,7 @@ def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
     return arr.reshape(newshape)
 
 
+@memoize
 def _get_optimal_chunks_for_groups(chunks, labels):
     chunkidx = np.cumsum(chunks) - 1
     # what are the groups at chunk boundaries
