@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import itertools
-from typing import TYPE_CHECKING, Hashable, Iterable, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Hashable, Iterable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -48,11 +50,11 @@ def _restore_dim_order(result, obj, by):
 
 
 def xarray_reduce(
-    obj: Union["Dataset", "DataArray"],
-    *by: Union["DataArray", Iterable[str], Iterable["DataArray"]],
-    func: Union[str, Aggregation],
+    obj: Dataset | DataArray,
+    *by: DataArray | Iterable[str] | Iterable[DataArray],
+    func: str | Aggregation,
     expected_groups=None,
-    isbin: Union[bool, Sequence[bool]] = False,
+    isbin: bool | Sequence[bool] = False,
     sort: bool = True,
     dim: Hashable = None,
     split_out: int = 1,
@@ -60,8 +62,8 @@ def xarray_reduce(
     method: str = "map-reduce",
     engine: str = "flox",
     keep_attrs: bool = True,
-    skipna: Optional[bool] = None,
-    min_count: Optional[int] = None,
+    skipna: bool | None = None,
+    min_count: int | None = None,
     **finalize_kwargs,
 ):
     """GroupBy reduce operations on xarray objects using numpy-groupies
@@ -185,7 +187,7 @@ def xarray_reduce(
         if isinstance(b, str) and not isbin_ and b in obj.dims and b not in obj.indexes
     )
 
-    by: Tuple["DataArray"] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
+    by: tuple[DataArray] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
     if len(by) > 1 and any(is_duck_dask_array(by_.data) for by_ in by):
         raise NotImplementedError("Grouping by multiple variables will compute dask variables.")
@@ -406,11 +408,11 @@ def xarray_reduce(
 
 
 def rechunk_for_cohorts(
-    obj: Union["DataArray", "Dataset"],
+    obj: DataArray | Dataset,
     dim: str,
-    labels: "DataArray",
+    labels: DataArray,
     force_new_chunk_at,
-    chunksize: Optional[int] = None,
+    chunksize: int | None = None,
 ):
     """
     Rechunks array so that each new chunk contains groups that always occur together.
@@ -449,7 +451,7 @@ def rechunk_for_cohorts(
     )
 
 
-def rechunk_for_blockwise(obj: Union["DataArray", "Dataset"], dim: str, labels: "DataArray"):
+def rechunk_for_blockwise(obj: DataArray | Dataset, dim: str, labels: DataArray):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     embarassingly parallel group reductions.
@@ -497,8 +499,8 @@ def _rechunk(func, obj, dim, labels, **kwargs):
 
 
 def resample_reduce(
-    resampler: "Resample",
-    func: Union[str, Aggregation],
+    resampler: Resample,
+    func: str | Aggregation,
     keep_attrs: bool = True,
     **kwargs,
 ):
