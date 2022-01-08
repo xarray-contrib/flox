@@ -313,3 +313,25 @@ def test_func_is_aggregation():
 
     with pytest.raises(ValueError):
         xarray_reduce(ds.Tair, ds.time.dt.month, func=mean, skipna=False)
+
+
+@requires_dask
+def test_cache():
+    pytest.importorskip("cachey")
+
+    from flox.cache import cache
+
+    ds = xr.Dataset(
+        {
+            "foo": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
+            "bar": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
+        },
+        coords={"labels": ("y", np.repeat([1, 2], 10))},
+    )
+
+    cache.clear()
+    xarray_reduce(ds, "labels", func="mean", method="cohorts")
+    assert len(cache.data) == 1
+
+    xarray_reduce(ds, "labels", func="mean", method="blockwise")
+    assert len(cache.data) == 2
