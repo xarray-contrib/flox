@@ -47,6 +47,15 @@ def _prepare_for_flox(group_idx, array):
     return group_idx, ordered_array
 
 
+def _get_expected_groups(by, raise_if_dask=True) -> Optional[np.ndarray]:
+    if is_duck_dask_array(by):
+        if raise_if_dask:
+            raise ValueError("Please provide `expected_groups`.")
+        return None
+    flatby = by.ravel()
+    return np.unique(flatby[~isnull(flatby)])
+
+
 def _normalize_dtype(dtype, array_dtype, fill_value=None):
     if dtype is None:
         if fill_value is not None and np.isnan(fill_value):
@@ -326,6 +335,10 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
 
     from_ = np.atleast_1d(from_)
     to = np.atleast_1d(to)
+
+    if to.ndim > 1:
+        raise ValueError(f"Cannot reindex to a multidimensional array: {to}")
+
     # short-circuit for trivial case
     if len(from_) == len(to) and np.all(from_ == to):
         return array
@@ -731,7 +744,7 @@ def _finalize_results(
         )
         finalized["groups"] = expected_groups
     else:
-        finalized["groups"] = results["groups"].squeeze()
+        finalized["groups"] = squeezed["groups"]
 
     return finalized
 
@@ -946,13 +959,15 @@ def groupby_agg(
     name = f"groupby_{agg.name}"
     token = dask.base.tokenize(array, by, agg, expected_groups, axis, split_out)
 
-    # This is necessary for argreductions.
+    if expected_groups is None and (reindex or split_out > 1):
+        expected_groups = _get_expected_groups(by)
+
+    by_input = by
+
+    # Unifying chunks is necessary for argreductions.
     # We need to rechunk before zipping up with the index
     # let's always do it anyway
-    # but first save by if blockwise is True.
-    if method == "blockwise":
-        by_maybe_numpy = by
-    if not isinstance(by, dask.array.Array):
+    if not is_duck_dask_array(by):
         # chunk numpy arrays like the input array
         # This removes an extra rechunk-merge layer that would be
         # added otherwise
@@ -1005,6 +1020,8 @@ def groupby_agg(
         # from this point on, we just work with bin indexes when binning
         if isbin:
             expected_groups = np.arange(len(expected_groups) - 1)
+        if expected_groups is None:
+            expected_groups = _get_expected_groups(by_input, raise_if_dask=False)
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
         expected_agg = expected_groups
 
@@ -1041,7 +1058,7 @@ def groupby_agg(
         # Blockwise apply the aggregation step so that one input chunk → one output chunk
         # TODO: We could combine this with the chunk reduction and do everything in one task.
         #       This would also optimize the single block along reduced-axis case.
-        if expected_groups is None or split_out > 1 or not isinstance(by_maybe_numpy, np.ndarray):
+        if split_out > 1 or not isinstance(by_input, np.ndarray):
             raise NotImplementedError
 
         reduced = dask.array.blockwise(
@@ -1069,13 +1086,13 @@ def groupby_agg(
 
         slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
         if expected_groups is None:
-            groups_in_block = tuple(np.unique(by_maybe_numpy[slc]) for slc in slices)
+            groups_in_block = tuple(np.unique(by_input[slc]) for slc in slices)
         else:
             # For cohorts, we could be indexing a block with groups that
             # are not in the cohort (usually for nD `by`)
             # Only keep the expected groups.
             groups_in_block = tuple(
-                np.intersect1d(by_maybe_numpy[slc], expected_groups) for slc in slices
+                np.intersect1d(by_input[slc], expected_groups) for slc in slices
             )
         ngroups_per_block = tuple(len(groups) for groups in groups_in_block)
         output_chunks = reduced.chunks[: -(len(axis))] + (ngroups_per_block,)
@@ -1089,7 +1106,7 @@ def groupby_agg(
     result: Dict = {}
     layer: Dict[Tuple, Tuple] = {}
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
-    if expected_groups is None:
+    if is_duck_dask_array(by_input) and expected_groups is None:
         groups_name = f"groups-{name}-{token}"
         # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
         first_block = len(ochunks) * (0,)
@@ -1108,6 +1125,8 @@ def groupby_agg(
         )
     else:
         if method == "map-reduce":
+            if expected_groups is None:
+                expected_groups = _get_expected_groups(by_input)
             groups = (expected_groups,)
         else:
             groups = (np.concatenate(groups_in_block),)
@@ -1272,22 +1291,21 @@ def groupby_reduce(
             "Must reduce along all dimensions of `by` when method != 'map-reduce'."
         )
 
-    if expected_groups is None and isinstance(by, np.ndarray):
-        flatby = by.ravel()
-        expected_groups = np.unique(flatby[~isnull(flatby)])
-
     # TODO: make sure expected_groups is unique
     if len(axis) == 1 and by.ndim > 1 and expected_groups is None:
-        # When we reduce along all axes, it guarantees that we will see all
-        # groups in the final combine stage, so everything works.
-        # This is not necessarily true when reducing along a subset of axes
-        # (of by)
-        # TODO: depends on chunking of by?
-        # we could relax this if there is only one chunk along all
-        # by dim != axis?
-        raise NotImplementedError(
-            "Please provide ``expected_groups`` when not reducing along all axes."
-        )
+        if not is_duck_dask_array(by):
+            expected_groups = _get_expected_groups(by)
+        else:
+            # When we reduce along all axes, we are guaranteed to see all
+            # groups in the final combine stage, so everything works.
+            # This is not necessarily true when reducing along a subset of axes
+            # (of by)
+            # TODO: Does this depend on chunking of by?
+            # For e.g., we could relax this if there is only one chunk along all
+            # by dim != axis?
+            raise NotImplementedError(
+                "Please provide ``expected_groups`` when not reducing along all axes."
+            )
 
     if isinstance(axis, Sequence) and len(axis) < by.ndim:
         by = _move_reduce_dims_to_end(by, -array.ndim + np.array(axis) + by.ndim)
