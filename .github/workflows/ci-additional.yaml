@@ -70,7 +70,7 @@ jobs:
           mamba-version: "*"
           activate-environment: flox-tests
           auto-update-conda: false
-          python-version: 3.8
+          python-version: 3.9
           use-only-tar-bz2: true
 
       - name: Install conda dependencies
