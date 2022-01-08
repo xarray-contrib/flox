@@ -1,19 +1,11 @@
+from __future__ import annotations
+
 import copy
 import itertools
 import operator
 from collections import namedtuple
 from functools import partial
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping, Sequence, Union
 
 import numpy as np
 import numpy_groupies as npg
@@ -47,7 +39,7 @@ def _prepare_for_flox(group_idx, array):
     return group_idx, ordered_array
 
 
-def _get_expected_groups(by, raise_if_dask=True) -> Optional[np.ndarray]:
+def _get_expected_groups(by, raise_if_dask=True) -> np.ndarray | None:
     if is_duck_dask_array(by):
         if raise_if_dask:
             raise ValueError("Please provide `expected_groups`.")
@@ -374,7 +366,7 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
     return reindexed
 
 
-def offset_labels(labels: np.ndarray, ngroups: int) -> Tuple[np.ndarray, int]:
+def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     """
     Offset group labels by dimension. This is used when we
     reduce over a subset of the dimensions of by. It assumes that the reductions
@@ -391,7 +383,7 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> Tuple[np.ndarray, int]:
     return offset, size
 
 
-def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = None):
+def factorize_(by: tuple, axis, expected_groups: tuple = None, isbin: tuple = None):
     if not isinstance(by, tuple):
         raise ValueError(f"Expected `by` to be a tuple. Received {type(by)} instead")
 
@@ -451,12 +443,12 @@ def factorize_(by: Tuple, axis, expected_groups: Tuple = None, isbin: Tuple = No
 
 
 def chunk_argreduce(
-    array_plus_idx: Tuple[np.ndarray, ...],
+    array_plus_idx: tuple[np.ndarray, ...],
     by: np.ndarray,
     func: Sequence[str],
-    expected_groups: Optional[Union[Sequence, np.ndarray]],
-    axis: Union[int, Sequence[int]],
-    fill_value: Mapping[Union[str, Callable], Any],
+    expected_groups: Sequence | np.ndarray | None,
+    axis: int | Sequence[int],
+    fill_value: Mapping[str | Callable, Any],
     dtype=None,
     reindex: bool = False,
     isbin: bool = False,
@@ -502,10 +494,10 @@ def chunk_argreduce(
 def chunk_reduce(
     array: np.ndarray,
     by: np.ndarray,
-    func: Union[str, Callable, Sequence[str], Sequence[Callable]],
-    expected_groups: Union[Sequence, np.ndarray] = None,
-    axis: Union[int, Sequence[int]] = None,
-    fill_value: Mapping[Union[str, Callable], Any] = None,
+    func: str | Callable | Sequence[str] | Sequence[Callable],
+    expected_groups: Sequence | np.ndarray = None,
+    axis: int | Sequence[int] = None,
+    fill_value: Mapping[str | Callable, Any] = None,
     dtype=None,
     reindex: bool = False,
     isbin: bool = False,
@@ -549,7 +541,7 @@ def chunk_reduce(
     if isinstance(func, str) or callable(func):
         func = (func,)  # type: ignore
 
-    func: Union[Sequence[str], Sequence[Callable]]
+    func: Sequence[str] | Sequence[Callable]
 
     nax = len(axis) if isinstance(axis, Sequence) else by.ndim
     final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
@@ -690,10 +682,10 @@ def _finalize_results(
     results: IntermediateDict,
     agg: Aggregation,
     axis: Sequence[int],
-    expected_groups: Union[Sequence, np.ndarray, None],
+    expected_groups: Sequence | np.ndarray | None,
     fill_value: Any,
-    min_count: Optional[int] = None,
-    finalize_kwargs: Optional[Mapping] = None,
+    min_count: int | None = None,
+    finalize_kwargs: Mapping | None = None,
 ):
     """Finalize results by
     1. Squeezing out dummy dimensions
@@ -704,7 +696,7 @@ def _finalize_results(
     squeezed = _squeeze_results(results, axis)
 
     # finalize step
-    finalized: Dict[str, Union["DaskArray", np.ndarray]] = {}
+    finalized: dict[str, DaskArray | np.ndarray] = {}
     if agg.finalize is None:
         if min_count is not None:
             counts = squeezed["intermediates"][-1]
@@ -752,14 +744,14 @@ def _finalize_results(
 def _npg_aggregate(
     x_chunk,
     agg: Aggregation,
-    expected_groups: Union[Sequence, np.ndarray, None],
+    expected_groups: Sequence | np.ndarray | None,
     axis: Sequence,
     keepdims,
     neg_axis: Sequence,
     fill_value: Any = None,
-    min_count: Optional[int] = None,
+    min_count: int | None = None,
     engine: str = "numpy",
-    finalize_kwargs: Optional[Mapping] = None,
+    finalize_kwargs: Mapping | None = None,
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
     results = _npg_combine(x_chunk, agg, axis, keepdims, neg_axis, engine)
@@ -930,20 +922,20 @@ def split_blocks(applied, split_out, expected_groups, split_name):
 
 
 def groupby_agg(
-    array: "DaskArray",
-    by: Union["DaskArray", np.ndarray],
+    array: DaskArray,
+    by: DaskArray | np.ndarray,
     agg: Aggregation,
-    expected_groups: Optional[Union[Sequence, np.ndarray]],
+    expected_groups: Sequence | np.ndarray | None,
     axis: Sequence = None,
     split_out: int = 1,
     fill_value: Any = None,
     method: str = "map-reduce",
-    min_count: Optional[int] = None,
+    min_count: int | None = None,
     isbin: bool = False,
     reindex: bool = False,
     engine: str = "numpy",
-    finalize_kwargs: Optional[Mapping] = None,
-) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
+    finalize_kwargs: Mapping | None = None,
+) -> tuple[DaskArray, np.ndarray | DaskArray]:
 
     import dask.array
     from dask.highlevelgraph import HighLevelGraph
@@ -1103,8 +1095,8 @@ def groupby_agg(
         return d[key1][key2]
 
     # extract results from the dict
-    result: Dict = {}
-    layer: Dict[Tuple, Tuple] = {}
+    result: dict = {}
+    layer: dict[tuple, tuple] = {}
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
     if is_duck_dask_array(by_input) and expected_groups is None:
         groups_name = f"groups-{name}-{token}"
@@ -1131,7 +1123,7 @@ def groupby_agg(
         else:
             groups = (np.concatenate(groups_in_block),)
 
-    layer: Dict[Tuple, Tuple] = {}  # type: ignore
+    layer: dict[tuple, tuple] = {}  # type: ignore
     agg_name = f"{name}-{token}"
     for ochunk in itertools.product(*ochunks):
         if method == "blockwise":
@@ -1158,21 +1150,21 @@ def groupby_agg(
 
 
 def groupby_reduce(
-    array: Union[np.ndarray, "DaskArray"],
-    by: Union[np.ndarray, "DaskArray"],
-    func: Union[str, Aggregation],
+    array: np.ndarray | DaskArray,
+    by: np.ndarray | DaskArray,
+    func: str | Aggregation,
     *,
-    expected_groups: Union[Sequence, np.ndarray] = None,
+    expected_groups: Sequence | np.ndarray = None,
     sort: bool = True,
     isbin: bool = False,
     axis=None,
     fill_value=None,
-    min_count: Optional[int] = None,
+    min_count: int | None = None,
     split_out: int = 1,
     method: str = "map-reduce",
     engine: str = "flox",
-    finalize_kwargs: Optional[Mapping] = None,
-) -> Tuple["DaskArray", Union[np.ndarray, "DaskArray"]]:
+    finalize_kwargs: Mapping | None = None,
+) -> tuple[DaskArray, np.ndarray | DaskArray]:
     """
     GroupBy reductions using tree reductions for dask.array
 
