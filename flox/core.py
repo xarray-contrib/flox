@@ -691,20 +691,20 @@ def _finalize_results(
     squeezed = _squeeze_results(results, axis)
 
     # finalize step
-    result: Dict[str, Union["DaskArray", np.ndarray]] = {}
+    finalized: Dict[str, Union["DaskArray", np.ndarray]] = {}
     if agg.finalize is None:
         if min_count is not None:
             counts = squeezed["intermediates"][-1]
             squeezed["intermediates"] = squeezed["intermediates"][:-1]
-        result[agg.name] = squeezed["intermediates"][0]
+        finalized[agg.name] = squeezed["intermediates"][0]
         if min_count is not None and np.any(counts < min_count):
             if fill_value is None:
                 raise ValueError("Filling is required but fill_value is None.")
             # This allows us to match xarray's type promotion rules
             if fill_value is xrdtypes.NA:
-                new_dtype, fill_value = xrdtypes.maybe_promote(result[agg.name].dtype)
-                result[agg.name] = result[agg.name].astype(new_dtype)
-            result[agg.name] = np.where(counts >= min_count, result[agg.name], fill_value)
+                new_dtype, fill_value = xrdtypes.maybe_promote(finalized[agg.name].dtype)
+                finalized[agg.name] = finalized[agg.name].astype(new_dtype)
+            finalized[agg.name] = np.where(counts >= min_count, finalized[agg.name], fill_value)
     else:
         if fill_value is not None:
             counts = squeezed["intermediates"][-1]
@@ -716,22 +716,24 @@ def _finalize_results(
             min_count = 1
         if finalize_kwargs is None:
             finalize_kwargs = {}
-        result[agg.name] = agg.finalize(*squeezed["intermediates"], **finalize_kwargs)
+        finalized[agg.name] = agg.finalize(*squeezed["intermediates"], **finalize_kwargs)
         if fill_value is not None:
             count_mask = counts < min_count
             if count_mask.any():
                 # For one this check prevents promoting bool to dtype(fill_value) unless
                 # necessary
-                result[agg.name] = np.where(count_mask, fill_value, result[agg.name])
+                finalized[agg.name] = np.where(count_mask, fill_value, finalized[agg.name])
 
     # Final reindexing has to be here to be lazy
     if expected_groups is not None:
-        result[agg.name] = reindex_(
-            result[agg.name], squeezed["groups"], expected_groups, fill_value=fill_value
+        finalized[agg.name] = reindex_(
+            finalized[agg.name], squeezed["groups"], expected_groups, fill_value=fill_value
         )
-        result["groups"] = expected_groups
+        finalized["groups"] = expected_groups
+    else:
+        finalized["groups"] = results["groups"].squeeze()
 
-    return result
+    return finalized
 
 
 def _npg_aggregate(
