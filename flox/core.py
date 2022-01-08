@@ -149,8 +149,6 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     cohorts: dict_values
         Iterable of cohorts
     """
-    import copy
-
     import dask
     import toolz as tlz
 
@@ -313,7 +311,6 @@ def rechunk_for_blockwise(array, axis, labels):
     """
     labels = factorize_((labels,), axis=None)[0]
     chunks = array.chunks[axis]
-    # TODO: lru_cache this?
     newchunks = _get_optimal_chunks_for_groups(chunks, labels)
     if newchunks == chunks:
         return array
@@ -775,6 +772,18 @@ def _conc2(x_chunk, key1, key2=slice(None), axis=None) -> np.ndarray:
     # return concatenate3(mapped)
 
 
+def _assert_by_is_aligned(shape, by):
+    for idx, b in enumerate(by):
+        if shape[-b.ndim :] != b.shape:
+            raise ValueError(
+                "`array` and `by` arrays must be aligned "
+                "i.e. array.shape[-by.ndim :] == by.shape. "
+                "for every array in `by`."
+                f"Received array of shape {shape} but "
+                f"array {idx} in `by` has shape {b.shape}."
+            )
+
+
 def reindex_intermediates(x, agg, unique_groups):
     new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
     newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
@@ -1149,6 +1158,33 @@ def groupby_agg(
     return (result, *groups)
 
 
+def _initialize_aggregation(func: str | Aggregation, array_dtype, fill_value) -> Aggregation:
+    if not isinstance(func, Aggregation):
+        try:
+            # TODO: need better interface
+            # we set dtype, fillvalue on reduction later. so deepcopy now
+            reduction = copy.deepcopy(getattr(aggregations, func))
+        except AttributeError:
+            raise NotImplementedError(f"Reduction {func!r} not implemented yet")
+    else:
+        # TODO: test that func is a valid Aggregation
+        reduction = copy.deepcopy(func)
+        func = reduction.name
+
+    reduction.dtype[func] = _normalize_dtype(reduction.dtype[func], array_dtype, fill_value)
+    reduction.dtype["intermediate"] = [
+        _normalize_dtype(dtype, array_dtype) for dtype in reduction.dtype["intermediate"]
+    ]
+
+    # Replace sentinel fill values according to dtype
+    reduction.fill_value["intermediate"] = tuple(
+        _get_fill_value(dt, fv)
+        for dt, fv in zip(reduction.dtype["intermediate"], reduction.fill_value["intermediate"])
+    )
+    reduction.fill_value[func] = _get_fill_value(reduction.dtype[func], reduction.fill_value[func])
+    return reduction
+
+
 def groupby_reduce(
     array: np.ndarray | DaskArray,
     by: np.ndarray | DaskArray,
@@ -1263,11 +1299,8 @@ def groupby_reduce(
         by = np.asarray(by)
     if not is_duck_array(array):
         array = np.asarray(array)
-    if array.shape[-by.ndim :] != by.shape:
-        raise ValueError(
-            "array and by must be aligned i.e. array.shape[-by.ndim :] == by.shape. "
-            f"Received array of shape {array.shape} and by of shape {by.shape}"
-        )
+
+    _assert_by_is_aligned(array.shape, by)
 
     if min_count is not None and min_count > 1:
         if func not in ["nansum", "nanprod"]:
@@ -1304,29 +1337,7 @@ def groupby_reduce(
         array = _move_reduce_dims_to_end(array, axis)
         axis = tuple(array.ndim + np.arange(-len(axis), 0))
 
-    if not isinstance(func, Aggregation):
-        try:
-            # TODO: need better interface
-            # we set dtype, fillvalue on reduction later. so deepcopy now
-            reduction = copy.deepcopy(getattr(aggregations, func))
-        except AttributeError:
-            raise NotImplementedError(f"Reduction {func!r} not implemented yet")
-    else:
-        # TODO: test that func is a valid Aggregation
-        reduction = copy.deepcopy(func)
-        func = reduction.name
-
-    reduction.dtype[func] = _normalize_dtype(reduction.dtype[func], array.dtype, fill_value)
-    reduction.dtype["intermediate"] = [
-        _normalize_dtype(dtype, array.dtype) for dtype in reduction.dtype["intermediate"]
-    ]
-
-    # Replace sentinel fill values according to dtype
-    reduction.fill_value["intermediate"] = tuple(
-        _get_fill_value(dt, fv)
-        for dt, fv in zip(reduction.dtype["intermediate"], reduction.fill_value["intermediate"])
-    )
-    reduction.fill_value[func] = _get_fill_value(reduction.dtype[func], reduction.fill_value[func])
+    reduction = _initialize_aggregation(func, array.dtype, fill_value)
 
     if min_count is not None:
         # Let this pass so that xarray can keep return np.nan for bins with
@@ -1343,7 +1354,7 @@ def groupby_reduce(
         # so that everything matches the dask version.
         reduction.finalize = None
         # xarray's count is npg's nanlen
-        func = (reduction.numpy, "nanlen")
+        func: tuple[str] = (reduction.numpy, "nanlen")
         if finalize_kwargs is None:
             finalize_kwargs = {}
         if isinstance(finalize_kwargs, Mapping):
