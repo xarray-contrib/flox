@@ -302,29 +302,29 @@ def test_numpy_reduce_axis_subset(engine):
     # TODO: add NaNs
     by = labels2d
     array = np.ones_like(by)
-    result, _ = groupby_reduce(array, by, "count", axis=1, engine=engine)
+    result, _ = groupby_reduce(array, by, func="count", axis=1, engine=engine)
     assert_equal(result, [[2, 3], [2, 3]])
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
-    result, _ = groupby_reduce(array, by, "count", axis=1, engine=engine)
+    result, _ = groupby_reduce(array, by, func="count", axis=1, engine=engine)
     subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, "count", axis=2, engine=engine)
+    result, _ = groupby_reduce(array, by, func="count", axis=2, engine=engine)
     subarr = np.array([[2, 3], [2, 3]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, "count", axis=(1, 2), engine=engine)
+    result, _ = groupby_reduce(array, by, func="count", axis=(1, 2), engine=engine)
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, "count", axis=(2, 1), engine=engine)
+    result, _ = groupby_reduce(array, by, func="count", axis=(2, 1), engine=engine)
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by[0, ...], "count", axis=(1, 2), engine=engine)
+    result, _ = groupby_reduce(array, by[0, ...], func="count", axis=(1, 2), engine=engine)
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result, expected)
 
@@ -338,7 +338,7 @@ def test_dask_reduce_axis_subset():
         result, _ = groupby_reduce(
             da.from_array(array, chunks=(2, 3)),
             da.from_array(by, chunks=(2, 2)),
-            "count",
+            func="count",
             axis=1,
             expected_groups=[0, 2],
         )
@@ -352,7 +352,7 @@ def test_dask_reduce_axis_subset():
         result, _ = groupby_reduce(
             da.from_array(array, chunks=(1, 2, 3)),
             da.from_array(by, chunks=(2, 2, 2)),
-            "count",
+            func="count",
             axis=1,
             expected_groups=[0, 2],
             fill_value=123,
@@ -365,7 +365,7 @@ def test_dask_reduce_axis_subset():
         result, _ = groupby_reduce(
             da.from_array(array, chunks=(1, 2, 3)),
             da.from_array(by, chunks=(2, 2, 2)),
-            "count",
+            func="count",
             axis=2,
             expected_groups=[0, 2],
         )
@@ -375,7 +375,7 @@ def test_dask_reduce_axis_subset():
         groupby_reduce(
             da.from_array(array, chunks=(1, 3, 2)),
             da.from_array(by, chunks=(2, 2, 2)),
-            "count",
+            func="count",
             axis=2,
         )
 
@@ -443,7 +443,7 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, engine):
     result, _ = groupby_reduce(
         _maybe_chunk(array),
         _maybe_chunk(by),
-        "count",
+        func="count",
         expected_groups=groups,
         axis=axis,
         fill_value=0,
