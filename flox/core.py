@@ -593,31 +593,35 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, _, ngroups, size, props = factorize_(
+    group_idx, groups, group_shape, ngroups, size, props = factorize_(
         by, axis, expected_groups=expected_groups, isbin=isbin
     )
-    groups = groups[0]
 
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by_ndim] + (np.prod(array.shape[-by_ndim:]),)
     array = array.reshape(newshape)
 
-    assert group_idx.ndim == 1
+    group_idx = group_idx.ravel()
     empty = np.all(props.nanmask)  # or np.prod(by.shape) == 0
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
     # TODO: hack
     if reindex and expected_groups[0] is not None:
         results["groups"] = np.array(expected_groups[0])
+        group_shape = expected_groups[0].shape
     else:
         if empty:
             results["groups"] = np.array([np.nan])
+            group_shape = (1,)
         else:
-            if (groups[:-1] <= groups[1:]).all():
-                sortidx = slice(None)
-            else:
-                sortidx = groups.argsort()
-            results["groups"] = groups[sortidx]
+            sortidx = [slice(None)] * len(final_array_shape)
+            for g in groups:
+                if (g[:-1] <= g[1:]).all():
+                    sortidx.append(slice(None))
+                    results["groups"].append(g)
+                else:
+                    sortidx.append(g.argsort())
+                    results["groups"].append(g[sortidx[-1]])
 
     # npg's argmax ensures that index of first "max" is returned assuming there
     # are many elements equal to the "max". Sorting messes this up totally.
@@ -668,9 +672,7 @@ def chunk_reduce(
                 assert len(expected_groups) == 1
                 if expected_groups[0] is not None:
                     result = reindex_(result, groups, expected_groups[0], fill_value=fv)
-            else:
-                result = result[..., sortidx]
-            result = result.reshape(final_array_shape)
+            result = result.reshape(final_array_shape)[sortidx]
         results["intermediates"].append(result)
     if final_groups_shape:
         # This happens when to_group is broadcasted, and we reduce along the broadcast
