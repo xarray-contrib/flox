@@ -333,8 +333,6 @@ def rechunk_for_blockwise(array, axis, labels):
 
 def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> np.ndarray:
 
-    assert axis in (0, -1)
-
     from_ = np.atleast_1d(from_)
     to = np.atleast_1d(to)
 
@@ -364,15 +362,12 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
     if any(idx == -1):
         if fill_value is None:
             raise ValueError("Filling is required. fill_value cannot be None.")
-        if axis == 0:
-            loc = (idx == -1, ...)
-        else:
-            loc = (..., idx == -1)
+        indexer[axis] = idx == -1
         # This allows us to match xarray's type promotion rules
         if fill_value is xrdtypes.NA or np.isnan(fill_value):
             new_dtype, fill_value = xrdtypes.maybe_promote(reindexed.dtype)
             reindexed = reindexed.astype(new_dtype, copy=False)
-        reindexed[loc] = fill_value
+        reindexed[indexer] = fill_value
     return reindexed
 
 
@@ -632,8 +627,8 @@ def chunk_reduce(
         # if not is_arg_reduction:
         group_idx, array = _prepare_for_flox(group_idx, array)
 
-    final_array_shape += results["groups"].shape
-    final_groups_shape += results["groups"].shape
+    final_array_shape += group_shape
+    final_groups_shape += group_shape
 
     for reduction, fv, kw, dt in zip(func, fill_value, kwargs, dtype):
         if empty:
