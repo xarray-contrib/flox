@@ -970,6 +970,51 @@ def groupby_agg(
     if agg.preprocess:
         array = agg.preprocess(array, axis=axis)
 
+    # Some notes on the approach here:
+    # 1. We first apply the groupby-reduction blockwise to generate "intermediates"
+    # 2. These intermediate results are combined to generate the final result using a
+    #    "map-reduce" or "tree reduction" approach.
+    #
+    # The code below is a complicated implementation of the above strategy for a few reasons
+    # (below). The easier way would be to pass `expected_groups` and `reindex=True` in the
+    # blockwise call, and only return a numpy array from chunk_*reduce .
+    # This would ensure that all intermediate results have the same shape
+    # along the group axis. We can then simply call the appropriate reduction on the intermediate
+    # array(e.g. .sum, .max) to combine the intermediate results using the tree-reduction approach.
+    # This is xhistogram's current approach where the specified `bins` are called `expected_groups` here.
+    #
+    # So why not the simpler approach?
+    # 1. I did not understand the problem well enough at the outset. Also xhistogram's approach was
+    #    signficantly cleaned up *after* I implemented the more complicated version.
+    # 2. I was overly influenced by the dask.dataframe implementation.
+    #
+    # That said, there are a few advantages to the more complicated approach:
+    # 1. Support for unknown groups when grouping by a dask array.
+    #    Since we don't need `expected_groups` we can discover them at compute time. I don't know a practical
+    #    application for this; but it appears to be useful for dask.dataframe. A lot of the complications really
+    #    result from this "design goal". But see the next point.
+    #
+    # 2. Lower memory usage for intermediates:
+    #    By only accumulating results for bins that exist in a chunk, the intermediates are smaller.
+    #    This is particularly important where only a small number of groups are present in a block
+    #    relative to total number of groups (mostly in "time" reductions) AND if there are only a small
+    #    number of elements per group in a chunk. For e.g., for groupby("time.month") of monthly mean data
+    #    where .chunks["time"] = (1,1,...); each block would immediately be expanded to 12X the original size.
+    #    This is bad, but can now be avoided by using `method="cohorts"`. Before implementing "cohorts",
+    #    the current "complex" implementation seemed like the only way out.
+    #
+    # 3. Supports argmax, argmin.
+    #    I'm not sure the "simple" implementation can be adapted for argreductions, but again this might be a niche
+    #    feature.
+    #
+    # 4. Support for custom aggregations
+    #    This approach is more flexible (which is why we can support argreductions) but again seems like a niche
+    #    feature.
+    #
+    # We could delete a significant amount of code by switching to the "simpler" implementation but at this point
+    # things work and we have cool "features" (discovering groups at compute-time + lower intermediate memory usage)
+    # that might pay off later.
+
     # apply reduction on chunk
     applied = dask.array.blockwise(
         partial(
