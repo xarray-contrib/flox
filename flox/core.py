@@ -681,8 +681,6 @@ def _finalize_results(
     axis: Sequence[int],
     expected_groups: Sequence | np.ndarray | None,
     fill_value: Any,
-    min_count: int | None = None,
-    finalize_kwargs: Mapping | None = None,
 ):
     """Finalize results by
     1. Squeezing out dummy dimensions
@@ -695,18 +693,18 @@ def _finalize_results(
     # finalize step
     finalized: dict[str, DaskArray | np.ndarray] = {}
     if agg.finalize is None:
-        if min_count is not None:
+        if agg.min_count is not None:
             counts = squeezed["intermediates"][-1]
             squeezed["intermediates"] = squeezed["intermediates"][:-1]
         finalized[agg.name] = squeezed["intermediates"][0]
-        if min_count is not None and np.any(counts < min_count):
+        if agg.min_count is not None and np.any(counts < agg.min_count):
             if fill_value is None:
                 raise ValueError("Filling is required but fill_value is None.")
             # This allows us to match xarray's type promotion rules
             if fill_value is xrdtypes.NA:
                 new_dtype, fill_value = xrdtypes.maybe_promote(finalized[agg.name].dtype)
                 finalized[agg.name] = finalized[agg.name].astype(new_dtype)
-            finalized[agg.name] = np.where(counts >= min_count, finalized[agg.name], fill_value)
+            finalized[agg.name] = np.where(counts >= agg.min_count, finalized[agg.name], fill_value)
     else:
         if fill_value is not None:
             counts = squeezed["intermediates"][-1]
@@ -714,13 +712,11 @@ def _finalize_results(
         # This is needed for the dask pathway.
         # Because we use intermediate fill_value since a group could be
         # absent in one block, but present in another block
-        if min_count is None:
-            min_count = 1
-        if finalize_kwargs is None:
-            finalize_kwargs = {}
-        finalized[agg.name] = agg.finalize(*squeezed["intermediates"], **finalize_kwargs)
+        if agg.min_count is None:
+            agg.min_count = 1
+        finalized[agg.name] = agg.finalize(*squeezed["intermediates"], **agg.finalize_kwargs)
         if fill_value is not None:
-            count_mask = counts < min_count
+            count_mask = counts < agg.min_count
             if count_mask.any():
                 # For one this check prevents promoting bool to dtype(fill_value) unless
                 # necessary
@@ -746,15 +742,11 @@ def _npg_aggregate(
     keepdims,
     neg_axis: Sequence,
     fill_value: Any = None,
-    min_count: int | None = None,
     engine: str = "numpy",
-    finalize_kwargs: Mapping | None = None,
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
     results = _npg_combine(x_chunk, agg, axis, keepdims, neg_axis, engine)
-    return _finalize_results(
-        results, agg, axis, expected_groups, fill_value, min_count, finalize_kwargs
-    )
+    return _finalize_results(results, agg, axis, expected_groups, fill_value)
 
 
 def _conc2(x_chunk, key1, key2=slice(None), axis=None) -> np.ndarray:
@@ -932,15 +924,13 @@ def split_blocks(applied, split_out, expected_groups, split_name):
 def _reduce_blockwise(
     array,
     by,
-    reduction,
+    agg,
     *,
     axis,
     expected_groups,
-    min_count,
     fill_value,
     isbin,
     engine,
-    finalize_kwargs,
 ):
     """
     Blockwise groupby reduction that produces the final result. This code path is
@@ -950,11 +940,12 @@ def _reduce_blockwise(
     # for pure numpy grouping, we just use npg directly and avoid "finalizing"
     # (agg.finalize = None). We still need to do the reindexing step in finalize
     # so that everything matches the dask version.
-    reduction.finalize = None
+    agg.finalize = None
     # xarray's count is npg's nanlen
-    func: tuple[str] = (reduction.numpy, "nanlen")
-    if finalize_kwargs is None:
-        finalize_kwargs = {}
+    func: tuple[str] = (agg.numpy, "nanlen")
+
+    assert agg.finalize_kwargs is not None
+    finalize_kwargs = agg.finalize_kwargs
     if isinstance(finalize_kwargs, Mapping):
         finalize_kwargs = (finalize_kwargs,)
     finalize_kwargs = finalize_kwargs + ({},) + ({},)
@@ -968,14 +959,14 @@ def _reduce_blockwise(
         # This fill_value should only apply to groups that only contain NaN observations
         # BUT there is funkiness when axis is a subset of all possible values
         # (see below)
-        fill_value=(reduction.fill_value[reduction.name], 0),
-        dtype=(reduction.dtype[reduction.name], np.intp),
+        fill_value=(agg.fill_value[agg.name], 0),
+        dtype=(agg.dtype[agg.name], np.intp),
         isbin=isbin,
         kwargs=finalize_kwargs,
         engine=engine,
     )  # type: ignore
 
-    if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
+    if agg.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
         if array.ndim > 1:
             # default fill_value is -1; we can't unravel that;
             # so replace -1 with 0; unravel; then replace 0 with -1
@@ -988,7 +979,7 @@ def _reduce_blockwise(
             idx = np.unravel_index(idx, array.shape)[-1]
             idx[mask] = -1
             results["intermediates"][0] = idx
-    elif reduction.name in ["nanvar", "nanstd"]:
+    elif agg.name in ["nanvar", "nanstd"]:
         # Fix npg bug where all-NaN rows are 0 instead of NaN
         value, counts = results["intermediates"]
         mask = counts <= 0
@@ -1002,25 +993,24 @@ def _reduce_blockwise(
     # apply it to groups that don't exist along a particular axis (for e.g.)
     # since these count as a group that is absent. thoo!
     # TODO: the "count" bit is a hack to make tests pass.
-    if len(axis) < by.ndim and min_count is None and reduction.name != "count":
-        min_count = 1
+    if len(axis) < by.ndim and agg.min_count is None and agg.name != "count":
+        agg.min_count = 1
 
     if fill_value is None:
-        if reduction.name in ["any", "all"]:
+        if agg.name in ["any", "all"]:
             fill_value = False
-        elif "arg" not in reduction.name:
+        elif "arg" not in agg.name:
             fill_value = xrdtypes.NA
 
     result = _finalize_results(
         results,
-        reduction,
+        agg,
         axis,
         expected_groups,
         # This fill_value applies to members of expected_groups not seen in groups
         # or when the min_count threshold is not satisfied
         # Use xarray's dtypes.NA to match type promotion rules
         fill_value=fill_value,
-        min_count=min_count,
     )
     return result
 
@@ -1034,14 +1024,13 @@ def groupby_agg(
     split_out: int = 1,
     fill_value: Any = None,
     method: str = "map-reduce",
-    min_count: int | None = None,
     isbin: bool = False,
     reindex: bool = False,
     engine: str = "numpy",
-    finalize_kwargs: Mapping | None = None,
 ) -> tuple[DaskArray, np.ndarray | DaskArray]:
 
     import dask.array
+    from dask.array.core import slices_from_chunks
     from dask.highlevelgraph import HighLevelGraph
 
     # I think _tree_reduce expects this
@@ -1049,6 +1038,11 @@ def groupby_agg(
     assert all(ax >= 0 for ax in axis)
 
     if method == "blockwise" and (split_out > 1 or not isinstance(by, np.ndarray)):
+        raise NotImplementedError
+
+    if split_out > 1 and expected_groups is None:
+        # This could be implemented using the "hash_split" strategy
+        # from dask.dataframe
         raise NotImplementedError
 
     # these are negative axis indices useful for concatenating the intermediates
@@ -1123,13 +1117,8 @@ def groupby_agg(
     # that might pay off later.
 
     if method == "blockwise":
-        blockwise_method = partial(
-            _reduce_blockwise,
-            reduction=agg,
-            fill_value=fill_value,
-            min_count=min_count,
-            finalize_kwargs=finalize_kwargs,
-        )
+        #  use the "non dask" code path
+        blockwise_method = partial(_reduce_blockwise, agg=agg, fill_value=fill_value)
     else:
         # choose `chunk_reduce` or `chunk_argreduce`
         blockwise_method = partial(
@@ -1164,15 +1153,9 @@ def groupby_agg(
     )
 
     if split_out > 1:
-        if expected_groups is None:
-            # This could be implemented using the "hash_split" strategy
-            # from dask.dataframe
-            raise NotImplementedError
-
         intermediate, group_chunks = split_blocks(
             applied, split_out, expected_groups, split_name=f"{name}-split-{token}"
         )
-        expected_agg = None
     else:
         intermediate = applied
         # from this point on, we just work with bin indexes when binning
@@ -1181,15 +1164,6 @@ def groupby_agg(
         if expected_groups is None:
             expected_groups = _get_expected_groups(by_input, raise_if_dask=False)
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
-        expected_agg = expected_groups
-
-    agg_kwargs = dict(
-        neg_axis=neg_axis,
-        fill_value=fill_value,
-        min_count=min_count,
-        engine=engine,
-        finalize_kwargs=finalize_kwargs,
-    )
 
     if method == "map-reduce":
         # reduced is really a dict mapping reduction name to array
@@ -1201,8 +1175,10 @@ def groupby_agg(
             aggregate=partial(
                 _npg_aggregate,
                 agg=agg,
-                expected_groups=expected_agg,
-                **agg_kwargs,
+                expected_groups=None if split_out > 1 else expected_groups,
+                neg_axis=neg_axis,
+                fill_value=fill_value,
+                engine=engine,
             ),
             combine=partial(_npg_combine, agg=agg, neg_axis=neg_axis, engine=engine),
             name=f"{name}-reduce",
@@ -1214,11 +1190,9 @@ def groupby_agg(
         output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + (group_chunks,)
     elif method == "blockwise":
         reduced = intermediate
-        # Here  one input chunk → one output chunka
+        # Here one input chunk → one output chunka
         # find number of groups in each chunk, this is needed for output chunks
         # along the reduced axis
-        from dask.array.core import slices_from_chunks
-
         slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
         if expected_groups is None:
             groups_in_block = tuple(np.unique(by_input[slc]) for slc in slices)
@@ -1233,9 +1207,6 @@ def groupby_agg(
         output_chunks = reduced.chunks[: -(len(axis))] + (ngroups_per_block,)
     else:
         raise ValueError(f"Unknown method={method}.")
-
-    def _getitem(d, key1, key2):
-        return d[key1][key2]
 
     # extract results from the dict
     result: dict = {}
@@ -1277,11 +1248,8 @@ def groupby_agg(
                 inchunk = ochunk[:-1] + np.unravel_index(ochunk[-1], nblocks)
         else:
             inchunk = ochunk[:-1] + (0,) * len(axis) + (ochunk[-1],) * int(split_out > 1)
-        layer[(agg_name, *ochunk)] = (
-            operator.getitem,
-            (reduced.name, *inchunk),
-            agg.name,
-        )
+        layer[(agg_name, *ochunk)] = (operator.getitem, (reduced.name, *inchunk), agg.name)
+
     result = dask.array.Array(
         HighLevelGraph.from_collections(agg_name, layer, dependencies=[reduced]),
         agg_name,
@@ -1297,26 +1265,26 @@ def _initialize_aggregation(func: str | Aggregation, array_dtype, fill_value) ->
         try:
             # TODO: need better interface
             # we set dtype, fillvalue on reduction later. so deepcopy now
-            reduction = copy.deepcopy(getattr(aggregations, func))
+            agg = copy.deepcopy(getattr(aggregations, func))
         except AttributeError:
             raise NotImplementedError(f"Reduction {func!r} not implemented yet")
     else:
         # TODO: test that func is a valid Aggregation
-        reduction = copy.deepcopy(func)
-        func = reduction.name
+        agg = copy.deepcopy(func)
+        func = agg.name
 
-    reduction.dtype[func] = _normalize_dtype(reduction.dtype[func], array_dtype, fill_value)
-    reduction.dtype["intermediate"] = [
-        _normalize_dtype(dtype, array_dtype) for dtype in reduction.dtype["intermediate"]
+    agg.dtype[func] = _normalize_dtype(agg.dtype[func], array_dtype, fill_value)
+    agg.dtype["intermediate"] = [
+        _normalize_dtype(dtype, array_dtype) for dtype in agg.dtype["intermediate"]
     ]
 
     # Replace sentinel fill values according to dtype
-    reduction.fill_value["intermediate"] = tuple(
+    agg.fill_value["intermediate"] = tuple(
         _get_fill_value(dt, fv)
-        for dt, fv in zip(reduction.dtype["intermediate"], reduction.fill_value["intermediate"])
+        for dt, fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
     )
-    reduction.fill_value[func] = _get_fill_value(reduction.dtype[func], reduction.fill_value[func])
-    return reduction
+    agg.fill_value[func] = _get_fill_value(agg.dtype[func], agg.fill_value[func])
+    return agg
 
 
 def groupby_reduce(
@@ -1420,7 +1388,6 @@ def groupby_reduce(
     See Also
     --------
     xarray.xarray_reduce
-
     """
 
     if engine == "flox" and isinstance(func, str) and "arg" in func:
@@ -1467,43 +1434,36 @@ def groupby_reduce(
         array = _move_reduce_dims_to_end(array, axis)
         axis = tuple(array.ndim + np.arange(-len(axis), 0))
 
-    reduction = _initialize_aggregation(func, array.dtype, fill_value)
-
-    if min_count is not None:
-        # Let this pass so that xarray can keep return np.nan for bins with
-        # no observations. The restriction of min_count to nansum, nanprod
-        # seems to be an Xarray limitation so there's no reason we need to copy it.
+    if min_count is not None and func in ["nansum", "nanprod"] and fill_value is None:
         # nansum, nanprod have fill_value=0, 1
         # overwrite than when min_count is set
-        if func in ["nansum", "nanprod"] and fill_value is None:
-            fill_value = np.nan
+        fill_value = np.nan
 
-    kwargs = dict(
-        axis=axis,
-        fill_value=fill_value,
-        min_count=min_count,
-        isbin=isbin,
-        engine=engine,
-        finalize_kwargs=finalize_kwargs,
-    )
+    agg = _initialize_aggregation(func, array.dtype, fill_value)
+    agg.min_count = min_count
+    if finalize_kwargs is not None:
+        assert isinstance(finalize_kwargs, dict)
+        agg.finalize_kwargs = finalize_kwargs
+
+    kwargs = dict(axis=axis, fill_value=fill_value, isbin=isbin, engine=engine)
 
     if not is_duck_dask_array(array) and not is_duck_dask_array(by):
-        results = _reduce_blockwise(array, by, reduction, expected_groups=expected_groups, **kwargs)
+        results = _reduce_blockwise(array, by, agg, expected_groups=expected_groups, **kwargs)
         groups = (results["groups"],)
-        result = results[reduction.name]
+        result = results[agg.name]
 
     else:
-        if reduction.chunk is None:
+        if agg.chunk is None:
             raise NotImplementedError(f"{func} not implemented for dask arrays")
 
         # we need to explicitly track counts so that we can mask at the end
-        if fill_value is not None or min_count is not None:
-            reduction.chunk += ("nanlen",)
-            reduction.combine += ("sum",)
-            reduction.fill_value["intermediate"] += (0,)
-            reduction.dtype["intermediate"] += (np.intp,)
+        if fill_value is not None or agg.min_count is not None:
+            agg.chunk += ("nanlen",)
+            agg.combine += ("sum",)
+            agg.fill_value["intermediate"] += (0,)
+            agg.dtype["intermediate"] += (np.intp,)
 
-        partial_agg = partial(groupby_agg, agg=reduction, split_out=split_out, **kwargs)
+        partial_agg = partial(groupby_agg, agg=agg, split_out=split_out, **kwargs)
 
         if method in ["split-reduce", "cohorts"]:
             cohorts = find_group_cohorts(
@@ -1543,17 +1503,12 @@ def groupby_reduce(
             groups = (np.hstack(groups_),)
             result = np.concatenate(results, axis=-1)
         else:
-            if method == "blockwise":
-                if by.ndim == 1:
-                    array = rechunk_for_blockwise(array, axis=-1, labels=by)
+            if method == "blockwise" and by.ndim == 1:
+                array = rechunk_for_blockwise(array, axis=-1, labels=by)
 
             # TODO: test with mixed array kinds (numpy array + dask by)
-            result, *groups = partial_agg(
-                array,
-                by,
-                expected_groups=expected_groups,
-                method=method,
-            )
+            result, *groups = partial_agg(array, by, expected_groups=expected_groups, method=method)
+
         if sort and method != "map-reduce":
             assert len(groups) == 1
             sorted_idx = np.argsort(groups[0])
