@@ -929,6 +929,102 @@ def split_blocks(applied, split_out, expected_groups, split_name):
     return intermediate, group_chunks
 
 
+def _reduce_blockwise(
+    array,
+    by,
+    reduction,
+    *,
+    axis,
+    expected_groups,
+    min_count,
+    fill_value,
+    isbin,
+    engine,
+    finalize_kwargs,
+):
+    """
+    Blockwise groupby reduction that produces the final result. This code path is
+    also used for non-dask array aggregations.
+    """
+
+    # for pure numpy grouping, we just use npg directly and avoid "finalizing"
+    # (agg.finalize = None). We still need to do the reindexing step in finalize
+    # so that everything matches the dask version.
+    reduction.finalize = None
+    # xarray's count is npg's nanlen
+    func: tuple[str] = (reduction.numpy, "nanlen")
+    if finalize_kwargs is None:
+        finalize_kwargs = {}
+    if isinstance(finalize_kwargs, Mapping):
+        finalize_kwargs = (finalize_kwargs,)
+    finalize_kwargs = finalize_kwargs + ({},) + ({},)
+
+    results = chunk_reduce(
+        array,
+        by,
+        func=func,
+        axis=axis,
+        expected_groups=expected_groups if isbin else None,
+        # This fill_value should only apply to groups that only contain NaN observations
+        # BUT there is funkiness when axis is a subset of all possible values
+        # (see below)
+        fill_value=(reduction.fill_value[reduction.name], 0),
+        dtype=(reduction.dtype[reduction.name], np.intp),
+        isbin=isbin,
+        kwargs=finalize_kwargs,
+        engine=engine,
+    )  # type: ignore
+
+    if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
+        if array.ndim > 1:
+            # default fill_value is -1; we can't unravel that;
+            # so replace -1 with 0; unravel; then replace 0 with -1
+            # UGH!
+            idx = results["intermediates"][0]
+            mask = idx == -1
+            idx[mask] = 0
+            # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
+            # will return wrong indices
+            idx = np.unravel_index(idx, array.shape)[-1]
+            idx[mask] = -1
+            results["intermediates"][0] = idx
+    elif reduction.name in ["nanvar", "nanstd"]:
+        # Fix npg bug where all-NaN rows are 0 instead of NaN
+        value, counts = results["intermediates"]
+        mask = counts <= 0
+        value[mask] = np.nan
+        results["intermediates"][0] = value
+
+    if isbin:
+        expected_groups = np.arange(len(expected_groups) - 1)
+
+    # When axis is a subset of possible values; then npg will
+    # apply it to groups that don't exist along a particular axis (for e.g.)
+    # since these count as a group that is absent. thoo!
+    # TODO: the "count" bit is a hack to make tests pass.
+    if len(axis) < by.ndim and min_count is None and reduction.name != "count":
+        min_count = 1
+
+    if fill_value is None:
+        if reduction.name in ["any", "all"]:
+            fill_value = False
+        elif "arg" not in reduction.name:
+            fill_value = xrdtypes.NA
+
+    result = _finalize_results(
+        results,
+        reduction,
+        axis,
+        expected_groups,
+        # This fill_value applies to members of expected_groups not seen in groups
+        # or when the min_count threshold is not satisfied
+        # Use xarray's dtypes.NA to match type promotion rules
+        fill_value=fill_value,
+        min_count=min_count,
+    )
+    return result
+
+
 def groupby_agg(
     array: DaskArray,
     by: DaskArray | np.ndarray,
@@ -951,6 +1047,9 @@ def groupby_agg(
     # I think _tree_reduce expects this
     assert isinstance(axis, Sequence)
     assert all(ax >= 0 for ax in axis)
+
+    if method == "blockwise" and (split_out > 1 or not isinstance(by, np.ndarray)):
+        raise NotImplementedError
 
     # these are negative axis indices useful for concatenating the intermediates
     neg_axis = tuple(range(-len(axis), 0))
@@ -1023,19 +1122,33 @@ def groupby_agg(
     # things work and we have cool "features" (discovering groups at compute-time + lower intermediate memory usage)
     # that might pay off later.
 
+    if method == "blockwise":
+        blockwise_method = partial(
+            _reduce_blockwise,
+            reduction=agg,
+            fill_value=fill_value,
+            min_count=min_count,
+            finalize_kwargs=finalize_kwargs,
+        )
+    else:
+        # choose `chunk_reduce` or `chunk_argreduce`
+        blockwise_method = partial(
+            _get_chunk_reduction(agg.reduction_type),
+            func=agg.chunk,
+            fill_value=agg.fill_value["intermediate"],
+            dtype=agg.dtype["intermediate"],
+            reindex=reindex or (split_out > 1),
+        )
+
     # apply reduction on chunk
     applied = dask.array.blockwise(
         partial(
-            _get_chunk_reduction(agg.reduction_type),
-            func=agg.chunk,  # type: ignore
+            blockwise_method,
             axis=axis,
             # with the current implementation we want reindexing at the blockwise step
             # only reindex to groups present at combine stage
             expected_groups=expected_groups if reindex or split_out > 1 or isbin else None,
-            fill_value=agg.fill_value["intermediate"],
-            dtype=agg.dtype["intermediate"],
             isbin=isbin,
-            reindex=reindex or (split_out > 1),
             engine=engine,
         ),
         inds,
@@ -1100,31 +1213,8 @@ def groupby_agg(
         )
         output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + (group_chunks,)
     elif method == "blockwise":
-        # Blockwise apply the aggregation step so that one input chunk → one output chunk
-        # TODO: We could combine this with the chunk reduction and do everything in one task.
-        #       This would also optimize the single block along reduced-axis case.
-        if split_out > 1 or not isinstance(by_input, np.ndarray):
-            raise NotImplementedError
-
-        reduced = dask.array.blockwise(
-            partial(
-                _npg_aggregate,
-                agg=agg,
-                expected_groups=None,
-                **agg_kwargs,
-                axis=axis,
-                keepdims=True,
-            ),
-            inds,
-            intermediate,
-            inds,
-            concatenate=False,
-            dtype=array.dtype,
-            meta=array._meta,
-            align_arrays=False,
-            name=f"{name}-blockwise-{token}",
-        )
-
+        reduced = intermediate
+        # Here  one input chunk → one output chunka
         # find number of groups in each chunk, this is needed for output chunks
         # along the reduced axis
         from dask.array.core import slices_from_chunks
@@ -1388,84 +1478,20 @@ def groupby_reduce(
         if func in ["nansum", "nanprod"] and fill_value is None:
             fill_value = np.nan
 
+    kwargs = dict(
+        axis=axis,
+        fill_value=fill_value,
+        min_count=min_count,
+        isbin=isbin,
+        engine=engine,
+        finalize_kwargs=finalize_kwargs,
+    )
+
     if not is_duck_dask_array(array) and not is_duck_dask_array(by):
-        # for pure numpy grouping, we just use npg directly and avoid "finalizing"
-        # (agg.finalize = None). We still need to do the reindexing step in finalize
-        # so that everything matches the dask version.
-        reduction.finalize = None
-        # xarray's count is npg's nanlen
-        func: tuple[str] = (reduction.numpy, "nanlen")
-        if finalize_kwargs is None:
-            finalize_kwargs = {}
-        if isinstance(finalize_kwargs, Mapping):
-            finalize_kwargs = (finalize_kwargs,)
-        finalize_kwargs = finalize_kwargs + ({},) + ({},)
+        results = _reduce_blockwise(array, by, reduction, expected_groups=expected_groups, **kwargs)
+        groups = (results["groups"],)
+        result = results[reduction.name]
 
-        results = chunk_reduce(
-            array,
-            by,
-            func=func,
-            axis=axis,
-            expected_groups=expected_groups if isbin else None,
-            # This fill_value should only apply to groups that only contain NaN observations
-            # BUT there is funkiness when axis is a subset of all possible values
-            # (see below)
-            fill_value=(reduction.fill_value[reduction.name], 0),
-            dtype=(reduction.dtype[reduction.name], np.intp),
-            isbin=isbin,
-            kwargs=finalize_kwargs,
-            engine=engine,
-        )  # type: ignore
-
-        if reduction.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
-            if array.ndim > 1:
-                # default fill_value is -1; we can't unravel that;
-                # so replace -1 with 0; unravel; then replace 0 with -1
-                # UGH!
-                idx = results["intermediates"][0]
-                mask = idx == -1
-                idx[mask] = 0
-                # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
-                # will return wrong indices
-                idx = np.unravel_index(idx, array.shape)[-1]
-                idx[mask] = -1
-                results["intermediates"][0] = idx
-        elif reduction.name in ["nanvar", "nanstd"]:
-            # Fix npg bug where all-NaN rows are 0 instead of NaN
-            value, counts = results["intermediates"]
-            mask = counts <= 0
-            value[mask] = np.nan
-            results["intermediates"][0] = value
-
-        if isbin:
-            expected_groups = np.arange(len(expected_groups) - 1)
-
-        # When axis is a subset of possible values; then npg will
-        # apply it to groups that don't exist along a particular axis (for e.g.)
-        # since these count as a group that is absent. thoo!
-        # TODO: the "count" bit is a hack to make tests pass.
-        if len(axis) < by.ndim and min_count is None and reduction.name != "count":
-            min_count = 1
-
-        if fill_value is None:
-            if reduction.name in ["any", "all"]:
-                fill_value = False
-            elif "arg" not in reduction.name:
-                fill_value = xrdtypes.NA
-
-        result = _finalize_results(
-            results,
-            reduction,
-            axis,
-            expected_groups,
-            # This fill_value applies to members of expected_groups not seen in groups
-            # or when the min_count threshold is not satisfied
-            # Use xarray's dtypes.NA to match type promotion rules
-            fill_value=fill_value,
-            min_count=min_count,
-        )
-        groups = (result["groups"],)
-        result = result[reduction.name]
     else:
         if func in ["first", "last"]:
             raise NotImplementedError("first, last not implemented for dask arrays")
@@ -1477,17 +1503,7 @@ def groupby_reduce(
             reduction.fill_value["intermediate"] += (0,)
             reduction.dtype["intermediate"] += (np.intp,)
 
-        partial_agg = partial(
-            groupby_agg,
-            agg=reduction,
-            axis=axis,
-            split_out=split_out,
-            fill_value=fill_value,
-            min_count=min_count,
-            isbin=isbin,
-            engine=engine,
-            finalize_kwargs=finalize_kwargs,
-        )
+        partial_agg = partial(groupby_agg, agg=reduction, split_out=split_out, **kwargs)
 
         if method in ["split-reduce", "cohorts"]:
             cohorts = find_group_cohorts(
