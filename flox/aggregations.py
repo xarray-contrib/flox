@@ -103,6 +103,9 @@ class Aggregation:
         self.dtype[name] = final_dtype
         self.dtype["intermediate"] = self._normalize_dtype_fill_value(dtypes, "dtype")
 
+        self.finalize_kwargs = {}
+        self.min_count = None
+
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
         if len(value) == 1 and len(value) < len(self.chunk):
