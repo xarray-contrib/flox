@@ -322,8 +322,8 @@ nanargmin = Aggregation(
     final_dtype=np.intp,
 )
 
-first = Aggregation("first", chunk="first", combine="first", fill_value=0)
-last = Aggregation("last", chunk="last", combine="last", fill_value=0)
+first = Aggregation("first", chunk=None, combine=None, fill_value=0)
+last = Aggregation("last", chunk=None, combine=None, fill_value=0)
 nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=np.nan)
 nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=np.nan)
 
