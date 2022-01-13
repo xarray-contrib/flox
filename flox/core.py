@@ -1493,8 +1493,8 @@ def groupby_reduce(
         result = results[reduction.name]
 
     else:
-        if func in ["first", "last"]:
-            raise NotImplementedError("first, last not implemented for dask arrays")
+        if reduction.chunk is None:
+            raise NotImplementedError(f"{func} not implemented for dask arrays")
 
         # we need to explicitly track counts so that we can mask at the end
         if fill_value is not None or min_count is not None:
