@@ -473,12 +473,9 @@ def chunk_argreduce(
     if not np.isnan(results["groups"]).all():
         # will not work for empty groups...
         # glorious
-        # TODO: npg bug
-        results["intermediates"][1] = results["intermediates"][1].astype(int)
-        newidx = np.broadcast_to(idx, array.shape)[
-            np.unravel_index(results["intermediates"][1], array.shape)
-        ]
-        results["intermediates"][1] = newidx
+        idx = np.broadcast_to(idx, array.shape)
+        newidx = np.unravel_index(results["intermediates"][1], array.shape)
+        results["intermediates"][1] = idx[newidx]
 
     if reindex and expected_groups is not None:
         results["intermediates"][1] = reindex_(
@@ -745,7 +742,11 @@ def _npg_aggregate(
     engine: str = "numpy",
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
-    results = _npg_combine(x_chunk, agg, axis, keepdims, neg_axis, engine)
+    if isinstance(x_chunk, dict):
+        # Only one block at final step; skip one extra groupby-reduce
+        results = x_chunk
+    else:
+        results = _npg_combine(x_chunk, agg, axis, keepdims, neg_axis, engine)
     return _finalize_results(results, agg, axis, expected_groups, fill_value)
 
 
@@ -800,9 +801,6 @@ def _npg_combine(
     """Combine intermediates step of tree reduction."""
     from dask.base import flatten
     from dask.utils import deepmap
-
-    if not isinstance(x_chunk, list):
-        x_chunk = [x_chunk]
 
     if len(axis) != 1:
         # when there's only a single axis of reduction, we can just concatenate later,
@@ -1429,7 +1427,7 @@ def groupby_reduce(
                 "Please provide ``expected_groups`` when not reducing along all axes."
             )
 
-    if isinstance(axis, Sequence) and len(axis) < by.ndim:
+    if len(axis) < by.ndim:
         by = _move_reduce_dims_to_end(by, -array.ndim + np.array(axis) + by.ndim)
         array = _move_reduce_dims_to_end(array, axis)
         axis = tuple(array.ndim + np.arange(-len(axis), 0))
