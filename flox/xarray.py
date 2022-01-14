@@ -305,12 +305,6 @@ def xarray_reduce(
                 axis=-1,
             )
             result = reindexed.reshape(result.shape[:-1] + group_shape)
-        else:
-            # TODO: migrate this to core.groupby_reduce
-            # index out NaN or NaT groups; these should be last
-            if np.any(isnull(groups)):
-                result = result[..., :-1]
-                groups = groups[:-1]
 
         return result
 
