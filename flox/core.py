@@ -687,37 +687,29 @@ def _finalize_results(
     """
     squeezed = _squeeze_results(results, axis)
 
+    if agg.min_count is not None:
+        counts = squeezed["intermediates"][-1]
+        squeezed["intermediates"] = squeezed["intermediates"][:-1]
+
     # finalize step
     finalized: dict[str, DaskArray | np.ndarray] = {}
     if agg.finalize is None:
-        if agg.min_count is not None:
-            counts = squeezed["intermediates"][-1]
-            squeezed["intermediates"] = squeezed["intermediates"][:-1]
         finalized[agg.name] = squeezed["intermediates"][0]
-        if agg.min_count is not None and np.any(counts < agg.min_count):
+    else:
+        finalized[agg.name] = agg.finalize(*squeezed["intermediates"], **agg.finalize_kwargs)
+
+    if agg.min_count is not None:
+        count_mask = counts < agg.min_count
+        if count_mask.any():
+            # For one count_mask.any() prevents promoting bool to dtype(fill_value) unless
+            # necessary
             if fill_value is None:
                 raise ValueError("Filling is required but fill_value is None.")
             # This allows us to match xarray's type promotion rules
             if fill_value is xrdtypes.NA:
                 new_dtype, fill_value = xrdtypes.maybe_promote(finalized[agg.name].dtype)
                 finalized[agg.name] = finalized[agg.name].astype(new_dtype)
-            finalized[agg.name] = np.where(counts >= agg.min_count, finalized[agg.name], fill_value)
-    else:
-        if fill_value is not None:
-            counts = squeezed["intermediates"][-1]
-            squeezed["intermediates"] = squeezed["intermediates"][:-1]
-        # This is needed for the dask pathway.
-        # Because we use intermediate fill_value since a group could be
-        # absent in one block, but present in another block
-        if agg.min_count is None:
-            agg.min_count = 1
-        finalized[agg.name] = agg.finalize(*squeezed["intermediates"], **agg.finalize_kwargs)
-        if fill_value is not None:
-            count_mask = counts < agg.min_count
-            if count_mask.any():
-                # For one this check prevents promoting bool to dtype(fill_value) unless
-                # necessary
-                finalized[agg.name] = np.where(count_mask, fill_value, finalized[agg.name])
+            finalized[agg.name] = np.where(count_mask, fill_value, finalized[agg.name])
 
     # Final reindexing has to be here to be lazy
     if expected_groups is not None:
@@ -738,7 +730,7 @@ def _npg_aggregate(
     axis: Sequence,
     keepdims,
     neg_axis: Sequence,
-    fill_value: Any = None,
+    fill_value: Any,
     engine: str = "numpy",
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
@@ -1454,12 +1446,20 @@ def groupby_reduce(
         if agg.chunk is None:
             raise NotImplementedError(f"{func} not implemented for dask arrays")
 
-        # we need to explicitly track counts so that we can mask at the end
-        if fill_value is not None or agg.min_count is not None:
-            agg.chunk += ("nanlen",)
-            agg.combine += ("sum",)
-            agg.fill_value["intermediate"] += (0,)
-            agg.dtype["intermediate"] += (np.intp,)
+        if agg.min_count is None:
+            # This is needed for the dask pathway.
+            # Because we use intermediate fill_value since a group could be
+            # absent in one block, but present in another block
+            agg.min_count = 1
+
+        # we always need  some fill_value (see above) so choose the default if needed
+        if kwargs["fill_value"] is None:
+            kwargs["fill_value"] = agg.fill_value[agg.name]
+
+        agg.chunk += ("nanlen",)
+        agg.combine += ("sum",)
+        agg.fill_value["intermediate"] += (0,)
+        agg.dtype["intermediate"] += (np.intp,)
 
         partial_agg = partial(groupby_agg, agg=agg, split_out=split_out, **kwargs)
 
