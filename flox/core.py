@@ -75,6 +75,10 @@ def _get_chunk_reduction(reduction_type: str) -> Callable:
         raise ValueError(f"Unknown reduction type: {reduction_type}")
 
 
+def is_nanlen(reduction: str | Callable) -> bool:
+    return isinstance(reduction, str) and reduction == "nanlen"
+
+
 def _move_reduce_dims_to_end(arr: np.ndarray, axis: Sequence) -> np.ndarray:
     """Transpose `arr` by moving `axis` to the end."""
     axis = tuple(axis)
@@ -605,10 +609,17 @@ def chunk_reduce(
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
 
+    # we commonly have func=(..., "nanlen", "nanlen") when
+    # counts are needed for the final result as well as for masking
+    # optimize that out.
+    previous_reduction = None
     for reduction, fv, kw, dt in zip(func, fill_value, kwargs, dtype):
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
         else:
+            if is_nanlen(reduction) and is_nanlen(previous_reduction):
+                result = results["intermediates"][-1]
+
             if callable(reduction):
                 # passing a custom reduction for npg to apply per-group is really slow!
                 # So this `reduction` has to do the groupby-aggregation
