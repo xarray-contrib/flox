@@ -501,6 +501,7 @@ def chunk_reduce(
     isbin: bool = False,
     engine: str = "numpy",
     kwargs=None,
+    return_array: bool = False,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -577,6 +578,8 @@ def chunk_reduce(
         (by,), axis, expected_groups=(expected_groups,), isbin=(isbin,)
     )
     groups = groups[0]
+    if isbin:
+        expected_groups = groups
 
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by.ndim] + (np.prod(array.shape[-by.ndim :]),)
@@ -650,8 +653,9 @@ def chunk_reduce(
                 result = result[..., :-1]
             if props.offset_group:
                 result = result.reshape(*final_array_shape[:-1], ngroups)
-            if reindex and expected_groups is not None:
-                result = reindex_(result, groups, expected_groups, fill_value=fv)
+            if reindex:
+                if not isbin:
+                    result = reindex_(result, groups, expected_groups, fill_value=fv)
             else:
                 result = result[..., sortidx]
             result = result.reshape(final_array_shape)
@@ -660,7 +664,11 @@ def chunk_reduce(
         # This happens when to_group is broadcasted, and we reduce along the broadcast
         # dimension
         results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
-    return results
+    if return_array:
+        assert len(results["intermediates"]) == 1
+        return np.expand_dims(results["intermediates"][0], axis=-2)
+    else:
+        return results
 
 
 def _squeeze_results(results: IntermediateDict, axis: Sequence) -> IntermediateDict:
@@ -689,6 +697,7 @@ def _finalize_results(
     axis: Sequence[int],
     expected_groups: Sequence | np.ndarray | None,
     fill_value: Any,
+    squeeze: bool = True,
 ):
     """Finalize results by
     1. Squeezing out dummy dimensions
@@ -696,8 +705,11 @@ def _finalize_results(
     3. Mask using counts and fill with user-provided fill_value.
     4. reindex to expected_groups
     """
-    squeezed = _squeeze_results(results, axis)
 
+    if squeeze:
+        squeezed = _squeeze_results(results, axis)
+    else:
+        squeezed = results
     if agg.min_count is not None:
         counts = squeezed["intermediates"][-1]
         squeezed["intermediates"] = squeezed["intermediates"][:-1]
@@ -711,16 +723,17 @@ def _finalize_results(
 
     if agg.min_count is not None:
         count_mask = counts < agg.min_count
-        if count_mask.any():
-            # For one count_mask.any() prevents promoting bool to dtype(fill_value) unless
-            # necessary
-            if fill_value is None:
-                raise ValueError("Filling is required but fill_value is None.")
-            # This allows us to match xarray's type promotion rules
-            if fill_value is xrdtypes.NA:
-                new_dtype, fill_value = xrdtypes.maybe_promote(finalized[agg.name].dtype)
-                finalized[agg.name] = finalized[agg.name].astype(new_dtype)
-            finalized[agg.name] = np.where(count_mask, fill_value, finalized[agg.name])
+        # if count_mask.any():
+        # For one count_mask.any() prevents promoting bool to dtype(fill_value) unless
+        # necessary
+        if fill_value is None:
+            raise ValueError("Filling is required but fill_value is None.")
+        # This allows us to match xarray's type promotion rules
+        # import IPython; IPython.core.debugger.set_trace()
+        if fill_value is xrdtypes.NA:
+            new_dtype, fill_value = xrdtypes.maybe_promote(finalized[agg.name].dtype)
+            finalized[agg.name] = finalized[agg.name].astype(new_dtype)
+        finalized[agg.name] = np.where(count_mask, fill_value, finalized[agg.name])
 
     # Final reindexing has to be here to be lazy
     if expected_groups is not None:
@@ -1014,6 +1027,107 @@ def _reduce_blockwise(
         fill_value=fill_value,
     )
     return result
+
+
+def groupby_agg_reindex(
+    array: DaskArray,
+    by: DaskArray | np.ndarray,
+    agg: Aggregation,
+    expected_groups: Sequence | np.ndarray,
+    axis: Sequence = None,
+    split_out: int = 1,
+    fill_value: Any = None,
+    method: str = "map-reduce",
+    isbin: bool = False,
+    reindex: bool = False,
+    engine: str = "numpy",
+):
+
+    import dask.array
+
+    assert isinstance(axis, Sequence)
+    assert all(ax >= 0 for ax in axis)
+
+    if method == "blockwise" and (split_out > 1 or not isinstance(by, np.ndarray)):
+        raise NotImplementedError
+
+    if split_out > 1 and expected_groups is None:
+        # This could be implemented using the "hash_split" strategy
+        # from dask.dataframe
+        raise NotImplementedError
+
+    inds = tuple(range(array.ndim))
+    name = f"groupby_{agg.name}"
+    token = dask.base.tokenize(array, by, agg, expected_groups, axis, split_out)
+
+    if expected_groups is None and (reindex or split_out > 1):
+        expected_groups = _get_expected_groups(by)
+
+    if not is_duck_dask_array(by):
+        # chunk numpy arrays like the input array
+        # This removes an extra rechunk-merge layer that would be
+        # added otherwise
+        by = dask.array.from_array(by, chunks=tuple(array.chunks[ax] for ax in range(-by.ndim, 0)))
+
+    assert agg.reduction_type == "reduce"
+
+    if method == "blockwise":
+        raise NotImplementedError
+        #  use the "non dask" code path
+        # blockwise_method = partial(_reduce_blockwise, agg=agg, fill_value=fill_value)
+
+    reduced = []
+    for chunk, combine, fv, dtype in zip(
+        agg.chunk, agg.combine, agg.fill_value["intermediate"], agg.dtype["intermediate"]
+    ):
+        if not isinstance(combine, str):
+            raise NotImplementedError
+
+        outinds = inds + (-1,)
+        nout = len(expected_groups)
+
+        # apply reduction on chunk
+        applied = dask.array.blockwise(
+            partial(
+                _get_chunk_reduction(agg.reduction_type),
+                func=chunk,
+                reindex=True,
+                return_array=True,
+                dtype=(dtype,),
+                fill_value=(fv,),
+                axis=axis,
+                # with the current implementation we want reindexing at the blockwise step
+                # only reindex to groups present at combine stage
+                expected_groups=expected_groups,
+                isbin=isbin,
+                engine=engine,
+            ),
+            outinds,
+            array,
+            inds,
+            by,
+            inds[-by.ndim :],
+            adjust_chunks={ax: (lambda _: 1) for ax in axis},
+            new_axes={-1: nout - 1 if isbin else nout},
+            concatenate=False,
+            meta=np.array((), dtype=dtype),
+            token=f"{name}-chunk-{token}",
+        )
+        reduced.append(operator.methodcaller(combine, axis=axis)(applied))
+
+    if isbin:
+        expected_groups = np.arange(len(expected_groups) - 1)
+
+    result = _finalize_results(
+        {"groups": np.asarray(expected_groups), "intermediates": reduced},
+        agg=agg,
+        axis=axis,
+        expected_groups=expected_groups,
+        fill_value=fill_value,
+        squeeze=False,
+    )
+
+    return (result[agg.name], result["groups"])
 
 
 def groupby_agg(
@@ -1472,7 +1586,11 @@ def groupby_reduce(
         agg.fill_value["intermediate"] += (0,)
         agg.dtype["intermediate"] += (np.intp,)
 
-        partial_agg = partial(groupby_agg, agg=agg, split_out=split_out, **kwargs)
+        if expected_groups is None or "arg" in agg.name or split_out > 1:
+            dask_agg = groupby_agg
+        else:
+            dask_agg = groupby_agg_reindex
+        partial_agg = partial(dask_agg, agg=agg, split_out=split_out, **kwargs)
 
         if method in ["split-reduce", "cohorts"]:
             cohorts = find_group_cohorts(
