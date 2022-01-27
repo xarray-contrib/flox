@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping, Sequence, Union
 import numpy as np
 import numpy_groupies as npg
 import pandas as pd
+import toolz as tlz
 
 from . import aggregations, xrdtypes
 from .aggregations import Aggregation, _atleast_1d, _get_fill_value, generic_aggregate
@@ -23,6 +24,19 @@ if TYPE_CHECKING:
 IntermediateDict = Dict[Union[str, Callable], Any]
 FinalResultsDict = Dict[str, Union["DaskArray", np.ndarray]]
 FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
+
+# This dummy axis is inserted using np.expand_dims
+# and then reduced over during the combine stage by
+# _simple_combine.
+DUMMY_AXIS = -2
+
+
+def _is_arg_reduction(func: str | Aggregation) -> bool:
+    if isinstance(func, str) and "arg" in func:
+        return True
+    if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
+        return True
+    return False
 
 
 def _prepare_for_flox(group_idx, array):
@@ -154,7 +168,6 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
         Iterable of cohorts
     """
     import dask
-    import toolz as tlz
 
     if method == "split-reduce":
         return np.unique(labels).reshape(-1, 1).tolist()
@@ -734,8 +747,9 @@ def _finalize_results(
     return finalized
 
 
-def _npg_aggregate(
+def _aggregate(
     x_chunk,
+    combine: Callable,
     agg: Aggregation,
     expected_groups: Sequence | np.ndarray | None,
     axis: Sequence,
@@ -745,15 +759,44 @@ def _npg_aggregate(
     engine: str = "numpy",
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
-    if isinstance(x_chunk, dict):
-        # Only one block at final step; skip one extra groupby-reduce
-        results = x_chunk
-    else:
-        results = _npg_combine(x_chunk, agg, axis, keepdims, neg_axis, engine)
+    results = combine(x_chunk, agg, axis, keepdims, neg_axis, engine, is_aggregate=True)
     return _finalize_results(results, agg, axis, expected_groups, fill_value)
 
 
-def _conc2(x_chunk, key1, key2=slice(None), axis=None) -> np.ndarray:
+def _expand_dims(results: IntermediateDict):
+    # import IPython; IPython.core.debugger.set_trace()
+    results["intermediates"] = tuple(
+        np.expand_dims(array, DUMMY_AXIS) for array in results["intermediates"]
+    )
+    return results
+
+
+def _simple_combine(
+    x_chunk,
+    agg: Aggregation,
+    axis: Sequence,
+    keepdims: bool,
+    neg_axis: Sequence,
+    engine: str,
+    is_aggregate: bool = False,
+):
+    from dask.array.core import deepfirst
+
+    results = {"groups": deepfirst(x_chunk)["groups"]}
+    results["intermediates"] = []
+    for idx, combine in enumerate(agg.combine):
+        array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis)
+        print(array.shape)
+        assert array.ndim >= 2
+        result = getattr(np, combine)(array, axis=axis, keepdims=True)
+        if is_aggregate:
+            # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
+            result = result.squeeze(axis=DUMMY_AXIS)
+        results["intermediates"].append(result)
+    return results
+
+
+def _conc2(x_chunk, key1, key2=slice(None), axis=None, insert_dim: bool = False) -> np.ndarray:
     """copied from dask.array.reductions.mean_combine"""
     from dask.array.core import _concatenate2
     from dask.utils import deepmap
@@ -800,10 +843,15 @@ def _npg_combine(
     keepdims: bool,
     neg_axis: Sequence,
     engine: str,
+    is_aggregate: bool = False,
 ) -> IntermediateDict:
     """Combine intermediates step of tree reduction."""
     from dask.base import flatten
     from dask.utils import deepmap
+
+    if isinstance(x_chunk, dict):
+        # Only one block at final step; skip one extra groupby
+        return x_chunk
 
     if len(axis) != 1:
         # when there's only a single axis of reduction, we can just concatenate later,
@@ -922,17 +970,7 @@ def split_blocks(applied, split_out, expected_groups, split_name):
     return intermediate, group_chunks
 
 
-def _reduce_blockwise(
-    array,
-    by,
-    agg,
-    *,
-    axis,
-    expected_groups,
-    fill_value,
-    isbin,
-    engine,
-):
+def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, isbin, engine):
     """
     Blockwise groupby reduction that produces the final result. This code path is
     also used for non-dask array aggregations.
@@ -1117,6 +1155,9 @@ def groupby_agg(
     # things work and we have cool "features" (discovering groups at compute-time + lower intermediate memory usage)
     # that might pay off later.
 
+    do_simple_combine = (
+        method != "blockwise" and reindex and not _is_arg_reduction(agg) and split_out == 1
+    )
     if method == "blockwise":
         #  use the "non dask" code path
         blockwise_method = partial(_reduce_blockwise, agg=agg, fill_value=fill_value)
@@ -1129,6 +1170,8 @@ def groupby_agg(
             dtype=agg.dtype["intermediate"],
             reindex=reindex or (split_out > 1),
         )
+        if do_simple_combine:
+            blockwise_method = tlz.compose(_expand_dims, blockwise_method)
 
     # apply reduction on chunk
     applied = dask.array.blockwise(
@@ -1167,6 +1210,8 @@ def groupby_agg(
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
 
     if method == "map-reduce":
+        combine = _simple_combine if do_simple_combine else _npg_combine
+
         # reduced is really a dict mapping reduction name to array
         # and "groups" to an array of group labels
         # Note: it does not make sense to interpret axis relative to
@@ -1174,14 +1219,15 @@ def groupby_agg(
         reduced = dask.array.reductions._tree_reduce(
             intermediate,
             aggregate=partial(
-                _npg_aggregate,
+                _aggregate,
+                combine=combine,
                 agg=agg,
                 expected_groups=None if split_out > 1 else expected_groups,
                 neg_axis=neg_axis,
                 fill_value=fill_value,
                 engine=engine,
             ),
-            combine=partial(_npg_combine, agg=agg, neg_axis=neg_axis, engine=engine),
+            combine=partial(combine, agg=agg, neg_axis=neg_axis, engine=engine),
             name=f"{name}-reduce",
             dtype=array.dtype,
             axis=axis,
@@ -1302,6 +1348,7 @@ def groupby_reduce(
     split_out: int = 1,
     method: str = "map-reduce",
     engine: str = "flox",
+    reindex: bool = None,
     finalize_kwargs: Mapping | None = None,
 ) -> tuple[DaskArray, np.ndarray | DaskArray]:
     """
@@ -1391,11 +1438,26 @@ def groupby_reduce(
     xarray.xarray_reduce
     """
 
-    if engine == "flox" and isinstance(func, str) and "arg" in func:
-        raise NotImplementedError(
-            "argreductions not supported for engine='flox' yet."
-            "Try engine='numpy' or engine='numba' instead."
-        )
+    if _is_arg_reduction(func):
+        if engine == "flox":
+            raise NotImplementedError(
+                "argreductions not supported for engine='flox' yet."
+                "Try engine='numpy' or engine='numba' instead."
+            )
+        if reindex is True:
+            raise NotImplementedError
+
+    if method == "blockwise" and reindex is True:
+        raise NotImplementedError
+
+    if method == "blockwise" or _is_arg_reduction(func):
+        reindex = False
+
+    if reindex is None and expected_groups is not None:
+        reindex = True
+
+    if method in ["split-reduce", "cohorts"] and reindex is False:
+        raise NotImplementedError
 
     if not is_duck_array(by):
         by = np.asarray(by)
@@ -1516,7 +1578,9 @@ def groupby_reduce(
                 array = rechunk_for_blockwise(array, axis=-1, labels=by)
 
             # TODO: test with mixed array kinds (numpy array + dask by)
-            result, *groups = partial_agg(array, by, expected_groups=expected_groups, method=method)
+            result, *groups = partial_agg(
+                array, by, expected_groups=expected_groups, reindex=reindex, method=method
+            )
 
         if sort and method != "map-reduce":
             assert len(groups) == 1

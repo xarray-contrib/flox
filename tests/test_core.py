@@ -244,6 +244,7 @@ def test_numpy_reduce_nd_md():
 
 
 @requires_dask
+@pytest.mark.parametrize("reindex", [None, False, True])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("add_nan", [False, True])
 @pytest.mark.parametrize("dtype", (float,))
@@ -257,7 +258,7 @@ def test_numpy_reduce_nd_md():
         ((10, 12), (3, 3), 3),  # form 3
     ],
 )
-def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtype, engine):
+def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtype, engine, reindex):
     """Tests groupby_reduce with dask arrays against groupby_reduce with numpy arrays"""
 
     rng = np.random.default_rng(12345)
@@ -267,7 +268,7 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     if func in ["first", "last"]:
         pytest.skip()
 
-    if "arg" in func and engine == "flox":
+    if "arg" in func and (engine == "flox" or reindex):
         pytest.skip()
 
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
