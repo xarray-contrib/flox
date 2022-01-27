@@ -32,7 +32,7 @@ DUMMY_AXIS = -2
 
 
 def _is_arg_reduction(func: str | Aggregation) -> bool:
-    if isinstance(func, str) and "arg" in func:
+    if isinstance(func, str) and func in ["argmin", "argmax", "nanargmax", "nanargmin"]:
         return True
     if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
         return True
@@ -758,17 +758,14 @@ def _aggregate(
     expected_groups: Sequence | np.ndarray | None,
     axis: Sequence,
     keepdims,
-    neg_axis: Sequence,
     fill_value: Any,
-    engine: str = "numpy",
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
-    results = combine(x_chunk, agg, axis, keepdims, neg_axis, engine, is_aggregate=True)
+    results = combine(x_chunk, agg, axis, keepdims, is_aggregate=True)
     return _finalize_results(results, agg, axis, expected_groups, fill_value)
 
 
-def _expand_dims(results: IntermediateDict):
-    # import IPython; IPython.core.debugger.set_trace()
+def _expand_dims(results: IntermediateDict) -> IntermediateDict:
     results["intermediates"] = tuple(
         np.expand_dims(array, DUMMY_AXIS) for array in results["intermediates"]
     )
@@ -776,21 +773,14 @@ def _expand_dims(results: IntermediateDict):
 
 
 def _simple_combine(
-    x_chunk,
-    agg: Aggregation,
-    axis: Sequence,
-    keepdims: bool,
-    neg_axis: Sequence,
-    engine: str,
-    is_aggregate: bool = False,
-):
+    x_chunk, agg: Aggregation, axis: Sequence, keepdims: bool, is_aggregate: bool = False
+) -> IntermediateDict:
     from dask.array.core import deepfirst
 
     results = {"groups": deepfirst(x_chunk)["groups"]}
     results["intermediates"] = []
     for idx, combine in enumerate(agg.combine):
         array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis)
-        print(array.shape)
         assert array.ndim >= 2
         result = getattr(np, combine)(array, axis=axis, keepdims=True)
         if is_aggregate:
@@ -800,7 +790,7 @@ def _simple_combine(
     return results
 
 
-def _conc2(x_chunk, key1, key2=slice(None), axis=None, insert_dim: bool = False) -> np.ndarray:
+def _conc2(x_chunk, key1, key2=slice(None), axis=None) -> np.ndarray:
     """copied from dask.array.reductions.mean_combine"""
     from dask.array.core import _concatenate2
     from dask.utils import deepmap
@@ -1009,7 +999,7 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, isbi
         engine=engine,
     )  # type: ignore
 
-    if agg.name in ["argmin", "argmax", "nanargmax", "nanargmin"]:
+    if _is_arg_reduction(agg):
         if array.ndim > 1:
             # default fill_value is -1; we can't unravel that;
             # so replace -1 with 0; unravel; then replace 0 with -1
@@ -1214,7 +1204,11 @@ def groupby_agg(
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
 
     if method == "map-reduce":
-        combine = _simple_combine if do_simple_combine else _npg_combine
+        combine = (
+            _simple_combine
+            if do_simple_combine
+            else partial(_npg_combine, engine=engine, neg_axis=neg_axis)
+        )
 
         # reduced is really a dict mapping reduction name to array
         # and "groups" to an array of group labels
@@ -1227,11 +1221,9 @@ def groupby_agg(
                 combine=combine,
                 agg=agg,
                 expected_groups=None if split_out > 1 else expected_groups,
-                neg_axis=neg_axis,
                 fill_value=fill_value,
-                engine=engine,
             ),
-            combine=partial(combine, agg=agg, neg_axis=neg_axis, engine=engine),
+            combine=partial(combine, agg=agg),
             name=f"{name}-reduce",
             dtype=array.dtype,
             axis=axis,
