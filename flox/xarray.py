@@ -64,6 +64,7 @@ def xarray_reduce(
     keep_attrs: bool = True,
     skipna: bool | None = None,
     min_count: int | None = None,
+    reindex: bool | None = None,
     **finalize_kwargs,
 ):
     """GroupBy reduce operations on xarray objects using numpy-groupies
@@ -349,6 +350,7 @@ def xarray_reduce(
             "min_count": min_count,
             "skipna": skipna,
             "engine": engine,
+            "reindex": reindex,
             # The following mess exists because for multiple `by`s I factorize eagerly
             # here before passing it on; this means I have to handle the
             # "binning by single by variable" case explicitly where the factorization

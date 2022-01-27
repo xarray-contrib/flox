@@ -24,10 +24,11 @@ except ValueError:
     pass
 
 
+@pytest.mark.parametrize("reindex", [None, False, True])
 @pytest.mark.parametrize("min_count", [None, 1, 3])
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("skipna", [True, False])
-def test_xarray_reduce(skipna, add_nan, min_count, engine):
+def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
     arr = np.ones((4, 12))
 
     if add_nan:
@@ -47,7 +48,7 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine):
 
     expected = da.groupby("labels").sum(skipna=skipna, min_count=min_count)
     actual = xarray_reduce(
-        da, "labels", func="sum", skipna=skipna, min_count=min_count, engine=engine
+        da, "labels", func="sum", skipna=skipna, min_count=min_count, engine=engine, reindex=reindex
     )
     assert_equal(expected, actual)
 
@@ -55,7 +56,13 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine):
     da["labels2"][0] = np.nan
     expected = da.groupby("labels2").sum(skipna=skipna, min_count=min_count)
     actual = xarray_reduce(
-        da, "labels2", func="sum", skipna=skipna, min_count=min_count, engine=engine
+        da,
+        "labels2",
+        func="sum",
+        skipna=skipna,
+        min_count=min_count,
+        engine=engine,
+        reindex=reindex,
     )
     assert_equal(expected, actual)
 

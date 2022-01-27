@@ -1360,7 +1360,7 @@ def groupby_reduce(
     split_out: int = 1,
     method: str = "map-reduce",
     engine: str = "flox",
-    reindex: bool = None,
+    reindex: bool | None = None,
     finalize_kwargs: Mapping | None = None,
 ) -> tuple[DaskArray, np.ndarray | DaskArray]:
     """
