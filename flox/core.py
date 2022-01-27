@@ -1029,22 +1029,16 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, isbi
     if len(axis) < by.ndim and agg.min_count is None and agg.name != "count":
         agg.min_count = 1
 
+    # This fill_value applies to members of expected_groups not seen in groups
+    # or when the min_count threshold is not satisfied
+    # Use xarray's dtypes.NA to match type promotion rules
     if fill_value is None:
         if agg.name in ["any", "all"]:
             fill_value = False
-        elif "arg" not in agg.name:
+        elif not _is_arg_reduction(agg):
             fill_value = xrdtypes.NA
 
-    result = _finalize_results(
-        results,
-        agg,
-        axis,
-        expected_groups,
-        # This fill_value applies to members of expected_groups not seen in groups
-        # or when the min_count threshold is not satisfied
-        # Use xarray's dtypes.NA to match type promotion rules
-        fill_value=fill_value,
-    )
+    result = _finalize_results(results, agg, axis, expected_groups, fill_value=fill_value)
     return result
 
 
@@ -1077,9 +1071,6 @@ def groupby_agg(
         # This could be implemented using the "hash_split" strategy
         # from dask.dataframe
         raise NotImplementedError
-
-    # these are negative axis indices useful for concatenating the intermediates
-    neg_axis = tuple(range(-len(axis), 0))
 
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
@@ -1153,7 +1144,7 @@ def groupby_agg(
         method != "blockwise" and reindex and not _is_arg_reduction(agg) and split_out == 1
     )
     if method == "blockwise":
-        #  use the "non dask" code path
+        #  use the "non dask" code path, but applied blockwise
         blockwise_method = partial(_reduce_blockwise, agg=agg, fill_value=fill_value)
     else:
         # choose `chunk_reduce` or `chunk_argreduce`
@@ -1164,6 +1155,9 @@ def groupby_agg(
             dtype=agg.dtype["intermediate"],
             reindex=reindex or (split_out > 1),
         )
+        # if it make sense, we tree-reduce the reduction, NOT the groupby-reduction
+        # for a speed boost. This is what xhistogram does (effectively), as well as
+        # various other dask reductions
         if do_simple_combine:
             blockwise_method = tlz.compose(_expand_dims, blockwise_method)
 
@@ -1204,6 +1198,9 @@ def groupby_agg(
         group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
 
     if method == "map-reduce":
+        # these are negative axis indices useful for concatenating the intermediates
+        neg_axis = tuple(range(-len(axis), 0))
+
         combine = (
             _simple_combine
             if do_simple_combine
@@ -1438,6 +1435,12 @@ def groupby_reduce(
             Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
+    reindex : bool, optional
+        Whether to "reindex" the blockwise results to `expected_groups` (possibly automatically detected).
+        If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
+        and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
+        boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
+        original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
     finalize_kwargs : dict, optional
         Kwargs passed to finalize the reduction such as ``ddof`` for var, std.
 

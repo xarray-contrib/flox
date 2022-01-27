@@ -144,6 +144,12 @@ def xarray_reduce(
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
         array's dtype.
+    reindex : bool, optional
+        Whether to "reindex" the blockwise results to `expected_groups` (possibly automatically detected).
+        If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
+        and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
+        boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
+        original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
     **finalize_kwargs :
         kwargs passed to the finalize function, like ``ddof`` for var, std.
 
