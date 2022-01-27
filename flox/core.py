@@ -590,6 +590,9 @@ def chunk_reduce(
         (by,), axis, expected_groups=(expected_groups,), isbin=(isbin,)
     )
     groups = groups[0]
+    # TODO: why?
+    if isbin:
+        expected_groups = groups
 
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by.ndim] + (np.prod(array.shape[-by.ndim :]),)
@@ -663,8 +666,9 @@ def chunk_reduce(
                 result = result[..., :-1]
             if props.offset_group:
                 result = result.reshape(*final_array_shape[:-1], ngroups)
-            if reindex and expected_groups is not None:
-                result = reindex_(result, groups, expected_groups, fill_value=fv)
+            if reindex:
+                if not isbin:
+                    result = reindex_(result, groups, expected_groups, fill_value=fv)
             else:
                 result = result[..., sortidx]
             result = result.reshape(final_array_shape)
