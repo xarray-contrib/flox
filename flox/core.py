@@ -1311,6 +1311,25 @@ def groupby_agg(
     return (result, *groups)
 
 
+def _validate_reindex(reindex: bool, func, method, expected_groups) -> bool:
+    if reindex is True and _is_arg_reduction(func):
+        raise NotImplementedError
+
+    if method == "blockwise" and reindex is True:
+        raise NotImplementedError
+
+    if method == "blockwise" or _is_arg_reduction(func):
+        reindex = False
+
+    if reindex is None and expected_groups is not None:
+        reindex = True
+
+    if method in ["split-reduce", "cohorts"] and reindex is False:
+        raise NotImplementedError
+
+    return reindex
+
+
 def _initialize_aggregation(func: str | Aggregation, array_dtype, fill_value) -> Aggregation:
     if not isinstance(func, Aggregation):
         try:
@@ -1442,26 +1461,12 @@ def groupby_reduce(
     xarray.xarray_reduce
     """
 
-    if _is_arg_reduction(func):
-        if engine == "flox":
-            raise NotImplementedError(
-                "argreductions not supported for engine='flox' yet."
-                "Try engine='numpy' or engine='numba' instead."
-            )
-        if reindex is True:
-            raise NotImplementedError
-
-    if method == "blockwise" and reindex is True:
-        raise NotImplementedError
-
-    if method == "blockwise" or _is_arg_reduction(func):
-        reindex = False
-
-    if reindex is None and expected_groups is not None:
-        reindex = True
-
-    if method in ["split-reduce", "cohorts"] and reindex is False:
-        raise NotImplementedError
+    if engine == "flox" and _is_arg_reduction(func):
+        raise NotImplementedError(
+            "argreductions not supported for engine='flox' yet."
+            "Try engine='numpy' or engine='numba' instead."
+        )
+    reindex = _validate_reindex(reindex, func, method, expected_groups)
 
     if not is_duck_array(by):
         by = np.asarray(by)
