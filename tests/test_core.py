@@ -277,7 +277,9 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
         labels[:3] = np.nan  # entire block is NaN when group_chunks=3
         labels[-2:] = np.nan
 
-    kwargs = dict(func=func, expected_groups=[0, 1, 2], fill_value=123)
+    kwargs = dict(
+        func=func, expected_groups=[0, 1, 2], fill_value=False if func in ["all", "any"] else 123
+    )
 
     expected, _ = groupby_reduce(array.compute(), labels, engine="numpy", **kwargs)
     actual, _ = groupby_reduce(array.compute(), labels, engine=engine, **kwargs)
