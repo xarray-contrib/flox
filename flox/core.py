@@ -12,8 +12,13 @@ import numpy_groupies as npg
 import pandas as pd
 import toolz as tlz
 
-from . import aggregations, xrdtypes
-from .aggregations import Aggregation, _atleast_1d, _get_fill_value, generic_aggregate
+from . import xrdtypes
+from .aggregations import (
+    Aggregation,
+    _atleast_1d,
+    _initialize_aggregation,
+    generic_aggregate,
+)
 from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
@@ -60,24 +65,6 @@ def _get_expected_groups(by, raise_if_dask=True) -> np.ndarray | None:
         return None
     flatby = by.ravel()
     return np.unique(flatby[~isnull(flatby)])
-
-
-def _normalize_dtype(dtype, array_dtype, fill_value=None):
-    if dtype is None:
-        if fill_value is not None and np.isnan(fill_value):
-            dtype = np.floating
-        else:
-            dtype = array_dtype
-    elif dtype is np.floating:
-        # mean, std, var always result in floating
-        # but we preserve the array's dtype if it is floating
-        if array_dtype.kind in "fcmM":
-            dtype = array_dtype
-        else:
-            dtype = np.dtype("float64")
-    elif not isinstance(dtype, np.dtype):
-        dtype = np.dtype(dtype)
-    return dtype
 
 
 def _get_chunk_reduction(reduction_type: str) -> Callable:
@@ -805,17 +792,6 @@ def _conc2(x_chunk, key1, key2=slice(None), axis=None) -> np.ndarray:
     # return concatenate3(mapped)
 
 
-def _assert_by_is_aligned(shape, by):
-    if shape[-by.ndim :] != by.shape:
-        raise ValueError(
-            "`array` and `by` arrays must be aligned "
-            "i.e. array.shape[-by.ndim :] == by.shape. "
-            "for every array in `by`."
-            f"Received array of shape {shape} but "
-            f"`by` has shape {by.shape}."
-        )
-
-
 def reindex_intermediates(x, agg, unique_groups):
     new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
     newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
@@ -1319,31 +1295,15 @@ def _validate_reindex(reindex: bool, func, method, expected_groups) -> bool:
     return reindex
 
 
-def _initialize_aggregation(func: str | Aggregation, array_dtype, fill_value) -> Aggregation:
-    if not isinstance(func, Aggregation):
-        try:
-            # TODO: need better interface
-            # we set dtype, fillvalue on reduction later. so deepcopy now
-            agg = copy.deepcopy(getattr(aggregations, func))
-        except AttributeError:
-            raise NotImplementedError(f"Reduction {func!r} not implemented yet")
-    else:
-        # TODO: test that func is a valid Aggregation
-        agg = copy.deepcopy(func)
-        func = agg.name
-
-    agg.dtype[func] = _normalize_dtype(agg.dtype[func], array_dtype, fill_value)
-    agg.dtype["intermediate"] = [
-        _normalize_dtype(dtype, array_dtype) for dtype in agg.dtype["intermediate"]
-    ]
-
-    # Replace sentinel fill values according to dtype
-    agg.fill_value["intermediate"] = tuple(
-        _get_fill_value(dt, fv)
-        for dt, fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
-    )
-    agg.fill_value[func] = _get_fill_value(agg.dtype[func], agg.fill_value[func])
-    return agg
+def _assert_by_is_aligned(shape, by):
+    if shape[-by.ndim :] != by.shape:
+        raise ValueError(
+            "`array` and `by` arrays must be aligned "
+            "i.e. array.shape[-by.ndim :] == by.shape. "
+            "for every array in `by`."
+            f"Received array of shape {shape} but "
+            f"`by` has shape {by.shape}."
+        )
 
 
 def groupby_reduce(

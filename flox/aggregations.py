@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import copy
 from functools import partial
 
 import numpy as np
@@ -33,6 +36,24 @@ def generic_aggregate(
     return method(
         group_idx, array, axis=axis, size=size, fill_value=fill_value, dtype=dtype, **kwargs
     )
+
+
+def _normalize_dtype(dtype, array_dtype, fill_value=None):
+    if dtype is None:
+        if fill_value is not None and np.isnan(fill_value):
+            dtype = np.floating
+        else:
+            dtype = array_dtype
+    elif dtype is np.floating:
+        # mean, std, var always result in floating
+        # but we preserve the array's dtype if it is floating
+        if array_dtype.kind in "fcmM":
+            dtype = array_dtype
+        else:
+            dtype = np.dtype("float64")
+    elif not isinstance(dtype, np.dtype):
+        dtype = np.dtype(dtype)
+    return dtype
 
 
 def _get_fill_value(dtype, fill_value):
@@ -154,7 +175,7 @@ count = Aggregation(
 
 # note that the fill values are the result of np.func([np.nan, np.nan])
 # final_fill_value is used for groups that don't exist. This is usually np.nan
-sum = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
+sum_ = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
 nansum = Aggregation("nansum", chunk="nansum", combine="sum", fill_value=0)
 prod = Aggregation("prod", chunk="prod", combine="prod", fill_value=1, final_fill_value=1)
 nanprod = Aggregation(
@@ -238,9 +259,9 @@ nanstd = Aggregation(
 )
 
 
-min = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF)
+min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF)
 nanmin = Aggregation("nanmin", chunk="nanmin", combine="min", fill_value=dtypes.INF)
-max = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF)
+max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF)
 nanmax = Aggregation("nanmax", chunk="nanmax", combine="max", fill_value=dtypes.NINF)
 
 
@@ -330,7 +351,7 @@ last = Aggregation("last", chunk=None, combine=None, fill_value=0)
 nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=np.nan)
 nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=np.nan)
 
-all = Aggregation(
+all_ = Aggregation(
     "all",
     chunk="all",
     combine="all",
@@ -339,7 +360,7 @@ all = Aggregation(
     dtypes=bool,
     final_dtype=bool,
 )
-any = Aggregation(
+any_ = Aggregation(
     "any",
     chunk="any",
     combine="any",
@@ -353,3 +374,60 @@ any = Aggregation(
 # And the dask version is really hard!
 # median = Aggregation("median", chunk=None, combine=None, fill_value=None)
 # nanmedian = Aggregation("nanmedian", chunk=None, combine=None, fill_value=None)
+
+aggregations = {
+    "any": any_,
+    "all": all_,
+    "count": count,
+    "sum": sum_,
+    "nansum": nansum,
+    "prod": prod,
+    "nanprod": nanprod,
+    "mean": mean,
+    "nanmean": nanmean,
+    "var": var,
+    "nanvar": nanvar,
+    "std": std,
+    "nanstd": nanstd,
+    "max": max_,
+    "nanmax": nanmax,
+    "min": min_,
+    "nanmin": nanmin,
+    "argmax": argmax,
+    "nanargmax": nanargmax,
+    "argmin": argmin,
+    "nanargmin": nanargmin,
+    "first": first,
+    "nanfirst": nanfirst,
+    "last": last,
+    "nanlast": nanlast,
+}
+
+
+def _initialize_aggregation(func: str | Aggregation, array_dtype, fill_value) -> Aggregation:
+    if not isinstance(func, Aggregation):
+        try:
+            # TODO: need better interface
+            # we set dtype, fillvalue on reduction later. so deepcopy now
+            agg = copy.deepcopy(aggregations[func])
+        except KeyError:
+            raise NotImplementedError(f"Reduction {func!r} not implemented yet")
+    elif isinstance(func, Aggregation):
+        # TODO: test that func is a valid Aggregation
+        agg = copy.deepcopy(func)
+        func = agg.name
+    else:
+        raise ValueError("Bad type for func. Expected str or Aggregation")
+
+    agg.dtype[func] = _normalize_dtype(agg.dtype[func], array_dtype, fill_value)
+    agg.dtype["intermediate"] = [
+        _normalize_dtype(dtype, array_dtype) for dtype in agg.dtype["intermediate"]
+    ]
+
+    # Replace sentinel fill values according to dtype
+    agg.fill_value["intermediate"] = tuple(
+        _get_fill_value(dt, fv)
+        for dt, fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
+    )
+    agg.fill_value[func] = _get_fill_value(agg.dtype[func], agg.fill_value[func])
+    return agg
