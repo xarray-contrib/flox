@@ -806,7 +806,7 @@ def listify_groups(x):
     return list(np.atleast_1d(x["groups"].squeeze()))
 
 
-def _npg_combine(
+def _grouped_combine(
     x_chunk,
     agg: Aggregation,
     axis: Sequence,
@@ -1018,7 +1018,7 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, isbi
     return result
 
 
-def groupby_agg(
+def dask_groupby_agg(
     array: DaskArray,
     by: DaskArray | np.ndarray,
     agg: Aggregation,
@@ -1180,7 +1180,7 @@ def groupby_agg(
         combine = (
             _simple_combine
             if do_simple_combine
-            else partial(_npg_combine, engine=engine, neg_axis=neg_axis)
+            else partial(_grouped_combine, engine=engine, neg_axis=neg_axis)
         )
 
         # reduced is really a dict mapping reduction name to array
@@ -1498,7 +1498,7 @@ def groupby_reduce(
         agg.fill_value["intermediate"] += (0,)
         agg.dtype["intermediate"] += (np.intp,)
 
-        partial_agg = partial(groupby_agg, agg=agg, split_out=split_out, **kwargs)
+        partial_agg = partial(dask_groupby_agg, agg=agg, split_out=split_out, **kwargs)
 
         if method in ["split-reduce", "cohorts"]:
             cohorts = find_group_cohorts(
