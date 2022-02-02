@@ -63,7 +63,7 @@ def sum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, dty
 
     return sum(
         group_idx,
-        array ** 2,
+        array**2,
         axis=axis,
         size=size,
         fill_value=fill_value,

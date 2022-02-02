@@ -207,7 +207,7 @@ nanmean = Aggregation(
 
 # TODO: fix this for complex numbers
 def _var_finalize(sumsq, sum_, count, ddof=0):
-    result = (sumsq - (sum_ ** 2 / count)) / (count - ddof)
+    result = (sumsq - (sum_**2 / count)) / (count - ddof)
     result[count <= ddof] = np.nan
     return result
 

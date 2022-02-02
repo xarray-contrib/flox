@@ -8,7 +8,7 @@ def sum_of_squares(
 
     return npg.aggregate_numpy.aggregate(
         group_idx,
-        array ** 2,
+        array**2,
         axis=axis,
         func=func,
         size=size,
