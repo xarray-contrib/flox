@@ -9,8 +9,7 @@ def nansum_of_squares(
         array**2,
         group_idx,
         axis=axis,
-        func=func,
-        # size=size,
+        num_labels=size,
         # fill_value=fill_value,
         # dtype=dtype,
     )
@@ -20,12 +19,11 @@ def nansum(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None)
     # npg takes out NaNs before calling np.bincount
     # This means that all NaN groups are equivalent to absent groups
     # This behaviour does not work for xarray
-
     return group_nansum(
         array,
         group_idx,
         axis=axis,
-        # size=size,
+        num_labels=size,
         # fill_value=fill_value,
         # dtype=dtype,
     )
@@ -40,7 +38,7 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
         array,
         group_idx,
         axis=axis,
-        # size=size,
+        num_labels=size,
         # fill_value=fill_value,
         # dtype=dtype,
     )
