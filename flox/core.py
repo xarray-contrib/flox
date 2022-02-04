@@ -1067,54 +1067,21 @@ def dask_groupby_agg(
         by = dask.array.from_array(by, chunks=tuple(array.chunks[ax] for ax in range(-by.ndim, 0)))
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
-    # preprocess the array
+    # preprocess the array: for argreductions, this zips the index together with the array block
     if agg.preprocess:
         array = agg.preprocess(array, axis=axis)
 
-    # Some notes on the approach here:
     # 1. We first apply the groupby-reduction blockwise to generate "intermediates"
     # 2. These intermediate results are combined to generate the final result using a
     #    "map-reduce" or "tree reduction" approach.
-    #
-    # The code below is a complicated implementation of the above strategy for a few reasons
-    # (below). The easier way would be to pass `expected_groups` and `reindex=True` in the
-    # blockwise call, and only return a numpy array from chunk_*reduce .
-    # This would ensure that all intermediate results have the same shape
-    # along the group axis. We can then simply call the appropriate reduction on the intermediate
-    # array(e.g. .sum, .max) to combine the intermediate results using the tree-reduction approach.
-    # This is xhistogram's current approach where the specified `bins` are called `expected_groups` here.
-    #
-    # So why not the simpler approach?
-    # 1. I did not understand the problem well enough at the outset. Also xhistogram's approach was
-    #    signficantly cleaned up *after* I implemented the more complicated version.
-    # 2. I was overly influenced by the dask.dataframe implementation.
-    #
-    # That said, there are a few advantages to the more complicated approach:
-    # 1. Support for unknown groups when grouping by a dask array.
-    #    Since we don't need `expected_groups` we can discover them at compute time. I don't know a practical
-    #    application for this; but it appears to be useful for dask.dataframe. A lot of the complications really
-    #    result from this "design goal". But see the next point.
-    #
-    # 2. Lower memory usage for intermediates:
-    #    By only accumulating results for bins that exist in a chunk, the intermediates are smaller.
-    #    This is particularly important where only a small number of groups are present in a block
-    #    relative to total number of groups (mostly in "time" reductions) AND if there are only a small
-    #    number of elements per group in a chunk. For e.g., for groupby("time.month") of monthly mean data
-    #    where .chunks["time"] = (1,1,...); each block would immediately be expanded to 12X the original size.
-    #    This is bad, but can now be avoided by using `method="cohorts"`. Before implementing "cohorts",
-    #    the current "complex" implementation seemed like the only way out.
-    #
-    # 3. Supports argmax, argmin.
-    #    I'm not sure the "simple" implementation can be adapted for argreductions, but again this might be a niche
-    #    feature.
-    #
-    # 4. Support for custom aggregations
-    #    This approach is more flexible (which is why we can support argreductions) but again seems like a niche
-    #    feature.
-    #
-    # We could delete a significant amount of code by switching to the "simpler" implementation but at this point
-    # things work and we have cool "features" (discovering groups at compute-time + lower intermediate memory usage)
-    # that might pay off later.
+    #    There are two ways:
+    #    a. "_simple_combine": Where it makes sense, we tree-reduce the reduction,
+    #        NOT the groupby-reduction for a speed boost. This is what xhistogram does (effectively),
+    #        It requires that all blocks contain all groups after the initial blockwise step (1) i.e.
+    #        reindex=True, and we must know expected_groups
+    #    b. "_grouped_combine": A more general solution where we tree-reduce the groupby reduction.
+    #       This allows us to discover groups at compute time, support argreductions, lower intermediate
+    #       memory usage (but method="cohorts" would also work in some cases)
 
     do_simple_combine = (
         method != "blockwise" and reindex and not _is_arg_reduction(agg) and split_out == 1
@@ -1131,10 +1098,8 @@ def dask_groupby_agg(
             dtype=agg.dtype["intermediate"],
             reindex=reindex or (split_out > 1),
         )
-        # if it make sense, we tree-reduce the reduction, NOT the groupby-reduction
-        # for a speed boost. This is what xhistogram does (effectively), as well as
-        # various other dask reductions
         if do_simple_combine:
+            # Add a dummy dimension that then gets reduced over
             blockwise_method = tlz.compose(_expand_dims, blockwise_method)
 
     # apply reduction on chunk
@@ -1142,8 +1107,6 @@ def dask_groupby_agg(
         partial(
             blockwise_method,
             axis=axis,
-            # with the current implementation we want reindexing at the blockwise step
-            # only reindex to groups present at combine stage
             expected_groups=expected_groups if reindex or split_out > 1 or isbin else None,
             isbin=isbin,
             engine=engine,
@@ -1400,7 +1363,7 @@ def groupby_reduce(
         If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
         and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
-        original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
+        original block size. Avoid that by using method="cohorts". By default, it is turned off for argreductions.
     finalize_kwargs : dict, optional
         Kwargs passed to finalize the reduction such as ``ddof`` for var, std.
 
