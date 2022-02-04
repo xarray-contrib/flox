@@ -1,3 +1,4 @@
+import numpy as np
 from numbagg.grouped import group_nanmean, group_nansum
 
 
@@ -16,9 +17,6 @@ def nansum_of_squares(
 
 
 def nansum(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
-    # npg takes out NaNs before calling np.bincount
-    # This means that all NaN groups are equivalent to absent groups
-    # This behaviour does not work for xarray
     return group_nansum(
         array,
         group_idx,
@@ -30,12 +28,19 @@ def nansum(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None)
 
 
 def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
-    # npg takes out NaNs before calling np.bincount
-    # This means that all NaN groups are equivalent to absent groups
-    # This behaviour does not work for xarray
-
     return group_nanmean(
         array,
+        group_idx,
+        axis=axis,
+        num_labels=size,
+        # fill_value=fill_value,
+        # dtype=dtype,
+    )
+
+
+def nanlen(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+    return group_nansum(
+        (~np.isnan(array)).astype(int),
         group_idx,
         axis=axis,
         num_labels=size,
@@ -49,10 +54,6 @@ mean = nanmean
 sum_of_squares = nansum_of_squares
 
 # def nanprod(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
-#     # npg takes out NaNs before calling np.bincount
-#     # This means that all NaN groups are equivalent to absent groups
-#     # This behaviour does not work for xarray
-
 #     return npg.aggregate_numpy.aggregate(
 #         group_idx,
 #         np.where(np.isnan(array), 1, array),
