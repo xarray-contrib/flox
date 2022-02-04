@@ -2,11 +2,15 @@ import numpy as np
 import numpy_groupies as npg
 
 
+def _get_aggregate(engine):
+    return npg.aggregate_numpy if engine == "numpy" else npg.aggregate_numba
+
+
 def sum_of_squares(
-    group_idx, array, *, axis=-1, func="sum", size=None, fill_value=None, dtype=None
+    group_idx, array, engine, *, axis=-1, func="sum", size=None, fill_value=None, dtype=None
 ):
 
-    return npg.aggregate_numpy.aggregate(
+    return _get_aggregate(engine).aggregate(
         group_idx,
         array**2,
         axis=axis,
@@ -17,12 +21,12 @@ def sum_of_squares(
     )
 
 
-def nansum(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+def nansum(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
     # npg takes out NaNs before calling np.bincount
     # This means that all NaN groups are equivalent to absent groups
     # This behaviour does not work for xarray
 
-    return npg.aggregate_numpy.aggregate(
+    return _get_aggregate(engine).aggregate(
         group_idx,
         np.where(np.isnan(array), 0, array),
         axis=axis,
@@ -33,12 +37,12 @@ def nansum(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None)
     )
 
 
-def nanprod(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+def nanprod(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
     # npg takes out NaNs before calling np.bincount
     # This means that all NaN groups are equivalent to absent groups
     # This behaviour does not work for xarray
 
-    return npg.aggregate_numpy.aggregate(
+    return _get_aggregate(engine).aggregate(
         group_idx,
         np.where(np.isnan(array), 1, array),
         axis=axis,
@@ -49,7 +53,14 @@ def nanprod(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     )
 
 
-def nansum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+def nansum_of_squares(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
     return sum_of_squares(
-        group_idx, array, func="nansum", size=size, fill_value=fill_value, axis=axis, dtype=dtype
+        group_idx,
+        array,
+        engine=engine,
+        func="nansum",
+        size=size,
+        fill_value=fill_value,
+        axis=axis,
+        dtype=dtype,
     )

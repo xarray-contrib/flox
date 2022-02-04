@@ -10,24 +10,29 @@ from . import aggregate_flox, aggregate_npg, xrdtypes as dtypes, xrutils
 
 
 def generic_aggregate(
-    group_idx, array, *, engine, func, axis=-1, size=None, fill_value=None, dtype=None, **kwargs
+    group_idx,
+    array,
+    *,
+    engine: str,
+    func: str,
+    axis=-1,
+    size=None,
+    fill_value=None,
+    dtype=None,
+    **kwargs,
 ):
     if engine == "flox":
         try:
             method = getattr(aggregate_flox, func)
         except AttributeError:
             method = partial(npg.aggregate_numpy.aggregate, func=func)
-    elif engine == "numpy":
+    elif engine in ["numpy", "numba"]:
         try:
-            # TODO: fix numba here
-            method = getattr(aggregate_npg, func)
+            method_ = getattr(aggregate_npg, func)
+            method = partial(method_, engine=engine)
         except AttributeError:
-            method = partial(npg.aggregate_np, func=func)
-    elif engine == "numba":
-        try:
-            method = getattr(aggregate_npg, f"{func}")
-        except AttributeError:
-            method = partial(npg.aggregate_nb, func=func)
+            aggregate = npg.aggregate_np if engine == "numpy" else npg.aggregate_nb
+            method = partial(aggregate, func=func)
     else:
         raise ValueError(
             f"Expected engine to be one of ['flox', 'numpy', 'numba']. Received {engine} instead."
