@@ -100,4 +100,9 @@ def engine(request):
             import numba
         except ImportError:
             pytest.xfail()
+    if request.param == "numbagg":
+        try:
+            import numbagg
+        except ImportError:
+            pytest.xfail()
     return request.param

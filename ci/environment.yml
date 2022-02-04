@@ -17,3 +17,5 @@ dependencies:
   - pooch
   - toolz
   - numba
+  - pip:
+    - numbagg
