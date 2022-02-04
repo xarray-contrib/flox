@@ -13,7 +13,7 @@ class Combine:
 
     @parameterized("kind", ("cohorts", "mapreduce"))
     def time_combine(self, kind):
-        flox.core._npg_combine(
+        flox.core._grouped_combine(
             getattr(self, f"x_chunk_{kind}"),
             **self.kwargs,
             keepdims=True,
@@ -22,7 +22,7 @@ class Combine:
 
     @parameterized("kind", ("cohorts", "mapreduce"))
     def peakmem_combine(self, kind):
-        flox.core._npg_combine(
+        flox.core._grouped_combine(
             getattr(self, f"x_chunk_{kind}"),
             **self.kwargs,
             keepdims=True,
@@ -58,4 +58,4 @@ class Combine1d(Combine):
         ]
 
         self.x_chunk_cohorts = [construct_member(groups) for groups in [np.array((1, 2, 3, 4))] * 4]
-        self.kwargs = {"agg": flox.aggregations.mean, "axis": (3,), "group_ndim": 1}
+        self.kwargs = {"agg": flox.aggregations.mean, "axis": (3,), "neg_axis": (-1,)}
