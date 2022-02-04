@@ -7,7 +7,7 @@ from . import parameterized
 
 N = 1000
 funcs = ["sum", "nansum", "mean", "nanmean", "argmax", "max"]
-engines = ["flox", "numpy"]
+engines = ["flox", "numpy", "numbagg"]
 
 
 class ChunkReduce:
