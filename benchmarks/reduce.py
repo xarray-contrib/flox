@@ -20,6 +20,15 @@ class ChunkReduce:
                 npg.aggregate_numba.aggregate(
                     np.ones((100,), dtype=int), np.ones((100,), dtype=int), func=func
                 )
+        if "numbagg" in engines:
+            for func in funcs:
+                try:
+                    method = getattr(flox.aggregate_numbagg, func)
+                    method(np.ones((10,), dtype=int), np.ones((10,), dtype=int))
+                    method(np.ones((10,), dtype=int), np.ones((10, 10), dtype=int))
+                except AttributeError:
+                    pass
+
         raise NotImplementedError
 
     @parameterized("func, engine", [funcs, engines])
