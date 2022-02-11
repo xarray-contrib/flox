@@ -1081,7 +1081,7 @@ def dask_groupby_agg(
     #        reindex=True, and we must know expected_groups
     #    b. "_grouped_combine": A more general solution where we tree-reduce the groupby reduction.
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
-    #       memory usage (but method="cohorts" would also work in some cases)
+    #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
 
     do_simple_combine = (
         method != "blockwise" and reindex and not _is_arg_reduction(agg) and split_out == 1
