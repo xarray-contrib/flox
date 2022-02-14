@@ -259,7 +259,6 @@ def xarray_reduce(
             tuple(g.data for g in by),
             axis,
             expected_groups,
-            isbin,
         )
         to_group = xr.DataArray(group_idx, dims=dim, coords={d: by[0][d] for d in by[0].indexes})
     else:
@@ -307,7 +306,7 @@ def xarray_reduce(
             reindexed = reindex_(
                 result,
                 from_=groups,
-                to=np.arange(np.prod(group_shape)),
+                to=pd.Index(np.arange(np.prod(group_shape))),
                 fill_value=fill_value,
                 axis=-1,
             )

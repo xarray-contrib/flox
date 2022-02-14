@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
@@ -111,7 +112,7 @@ def test_groupby_reduce(
     elif func == "count":
         expected = np.array(expected, dtype=int)
 
-    result, _ = groupby_reduce(
+    result, groups = groupby_reduce(
         array,
         by,
         func=func,
@@ -120,6 +121,7 @@ def test_groupby_reduce(
         split_out=split_out,
         engine=engine,
     )
+    assert_equal(groups, [0, 1, 2])
     assert_equal(expected, result)
 
 
@@ -224,7 +226,7 @@ def test_numpy_reduce_nd_md():
 
     expected = aggregate(by.ravel(), array.ravel(), func="sum")
     result, groups = groupby_reduce(array, by, func="sum", fill_value=123)
-    actual = reindex_(result, groups, np.unique(by), axis=0, fill_value=0)
+    actual = reindex_(result, groups, pd.Index(np.unique(by)), axis=0, fill_value=0)
     np.testing.assert_equal(expected, actual)
 
     array = np.ones((4, 2, 12))
@@ -232,14 +234,14 @@ def test_numpy_reduce_nd_md():
 
     expected = aggregate(by.ravel(), array.reshape(4, 24), func="sum", axis=-1, fill_value=0)
     result, groups = groupby_reduce(array, by, func="sum")
-    actual = reindex_(result, groups, np.unique(by), axis=-1, fill_value=0)
+    actual = reindex_(result, groups, pd.Index(np.unique(by)), axis=-1, fill_value=0)
     assert_equal(expected, actual)
 
     array = np.ones((4, 2, 12))
     by = np.broadcast_to(np.array([labels] * 2), array.shape)
     expected = aggregate(by.ravel(), array.ravel(), func="sum", axis=-1)
     result, groups = groupby_reduce(array, by, func="sum")
-    actual = reindex_(result, groups, np.unique(by), axis=-1, fill_value=0)
+    actual = reindex_(result, groups, pd.Index(np.unique(by)), axis=-1, fill_value=0)
     assert_equal(expected, actual)
 
 
@@ -489,7 +491,7 @@ def test_reindex():
     groups = np.array(["a", "b"])
     expected_groups = ["a", "b", "c"]
     fill_value = 0
-    result = reindex_(array, groups, expected_groups, fill_value, axis=-1)
+    result = reindex_(array, groups, pd.Index(expected_groups), fill_value, axis=-1)
     assert_equal(result, np.array([1, 2, 0]))
 
 
@@ -544,7 +546,8 @@ def test_groupby_bins(chunk_labels, chunks, engine) -> None:
             engine=engine,
         )
     expected = np.array([3, 1, 0])
-    assert_equal(groups, np.array([0, 1, 2]))
+    for left, right in zip(groups, pd.IntervalIndex.from_arrays([1, 2, 4], [2, 4, 5]).to_numpy()):
+        assert left == right
     assert_equal(actual, expected)
 
 
@@ -709,7 +712,7 @@ def test_cohorts_nd_by(func, method, axis, engine):
         assert_equal(groups, [1, 30, 2, 31, 3, 40, 4])
     else:
         assert_equal(groups, [1, 2, 3, 4, 30, 31, 40])
-    reindexed = reindex_(actual, groups, sorted_groups)
+    reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
 
 
