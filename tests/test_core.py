@@ -487,13 +487,24 @@ def test_groupby_all_nan_blocks(engine):
     assert_equal(actual, expected)
 
 
-def test_reindex():
-    array = np.array([1, 2])
-    groups = np.array(["a", "b"])
-    expected_groups = ["a", "b", "c"]
+@pytest.mark.parametrize("axis", (0, 1, 2, -1))
+def test_reindex(axis):
+    shape = [2, 2, 2]
     fill_value = 0
-    result = reindex_(array, groups, pd.Index(expected_groups), fill_value, axis=-1)
-    assert_equal(result, np.array([1, 2, 0]))
+
+    array = np.broadcast_to(np.array([1, 2]), shape)
+    groups = np.array(["a", "b"])
+    expected_groups = pd.Index(["a", "b", "c"])
+    actual = reindex_(array, groups, expected_groups, fill_value=fill_value, axis=axis)
+
+    if axis < 0:
+        axis = array.ndim + axis
+    result_shape = tuple(len(expected_groups) if ax == axis else s for ax, s in enumerate(shape))
+    slicer = tuple(slice(None, s) for s in shape)
+    expected = np.full(result_shape, fill_value)
+    expected[slicer] = array
+
+    assert_equal(actual, expected)
 
 
 @pytest.mark.xfail

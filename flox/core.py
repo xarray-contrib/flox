@@ -323,10 +323,23 @@ def rechunk_for_blockwise(array, axis, labels):
         return array.rechunk({axis: newchunks})
 
 
-def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> np.ndarray:
+def reindex_multiple(array, groups, expected_groups, fill_value, promote=False):
+    for ax, (group, expect) in enumerate(zip(groups, expected_groups)):
+        array = reindex_(
+            array, group, expect, fill_value=fill_value, axis=ax - len(groups), promote=promote
+        )
+    return array
 
-    assert isinstance(to, pd.Index)
-    assert axis in (0, -1)
+
+def reindex_(
+    array: np.ndarray, from_, to, fill_value=None, axis: int = -1, promote: bool = False
+) -> np.ndarray:
+
+    if not isinstance(to, pd.Index):
+        if promote:
+            to = pd.Index(to)
+        else:
+            raise ValueError("reindex requires a pandas.Index or promote=True")
 
     if to.ndim > 1:
         raise ValueError(f"Cannot reindex to a multidimensional array: {to}")
@@ -353,15 +366,12 @@ def reindex_(array: np.ndarray, from_, to, fill_value=None, axis: int = -1) -> n
     if any(idx == -1):
         if fill_value is None:
             raise ValueError("Filling is required. fill_value cannot be None.")
-        if axis == 0:
-            loc = (idx == -1, ...)
-        else:
-            loc = (..., idx == -1)
+        indexer[axis] = idx == -1
         # This allows us to match xarray's type promotion rules
         if fill_value is xrdtypes.NA or np.isnan(fill_value):
             new_dtype, fill_value = xrdtypes.maybe_promote(reindexed.dtype)
             reindexed = reindexed.astype(new_dtype, copy=False)
-        reindexed[loc] = fill_value
+        reindexed[tuple(indexer)] = fill_value
     return reindexed
 
 
