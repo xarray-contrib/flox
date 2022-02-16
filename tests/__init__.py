@@ -92,6 +92,9 @@ def assert_equal(a, b):
     elif has_xarray and isinstance(a, xr_types) or isinstance(b, xr_types):
         xr.testing.assert_identical(a, b)
     elif has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
+        # sometimes it's nice to see values and shapes
+        # rather than being dropped into some file in dask
+        np.testing.assert_allclose(a, b)
         # does some validation of the dask graph
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
