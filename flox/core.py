@@ -400,10 +400,12 @@ def factorize_(by: tuple, axis, expected_groups: tuple[pd.Index, ...] = None):
             # this makes the reindexing logic simpler.
             if expect is None:
                 raise ValueError("Please pass bin edges in expected_groups.")
-            # idx = np.digitize(groupvar.ravel(), expect) - 1
-            idx = pd.cut(groupvar.ravel(), bins=expect, labels=False).codes.copy()
-            # same sentinel value as factorize
+            # TODO: fix for binning
             found_groups.append(expect)
+            # pd.cut with bins =  IntervalIndex[datetime64] doesn't work...
+            if groupvar.dtype.kind == "M":
+                expect = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
+            idx = pd.cut(groupvar.ravel(), bins=expect).codes.copy()
         else:
             idx, groups = pd.factorize(groupvar.ravel())
             found_groups.append(np.array(groups))
@@ -1246,13 +1248,15 @@ def _assert_by_is_aligned(shape, by):
 
 
 def _convert_expected_groups_to_index(expected_groups, isbin: bool) -> pd.Index | None:
-    if isinstance(expected_groups, pd.Index):
+    if isinstance(expected_groups, pd.IntervalIndex) or (
+        isinstance(expected_groups, pd.Index) and not isbin
+    ):
         return expected_groups
     if isbin:
         return pd.IntervalIndex.from_arrays(expected_groups[:-1], expected_groups[1:])
     elif expected_groups is not None:
         return pd.Index(expected_groups)
-    return None
+    return expected_groups
 
 
 def groupby_reduce(

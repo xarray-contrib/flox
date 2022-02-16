@@ -4,7 +4,9 @@ import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
 from flox.core import (
+    _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
+    factorize_,
     find_group_cohorts,
     groupby_reduce,
     rechunk_for_cohorts,
@@ -758,3 +760,18 @@ def test_empty_bins(func, engine):
     )
     expected = np.array([1.0, 1.0, np.nan])
     assert_equal(actual, expected)
+
+
+def test_datetime_binning():
+    time_bins = pd.date_range(start="2010-08-01", end="2010-08-15", freq="24H")
+    by = pd.date_range("2010-08-01", "2010-08-15", freq="15min")
+
+    actual = _convert_expected_groups_to_index(time_bins, isbin=True)
+    expected = pd.IntervalIndex.from_arrays(time_bins[:-1], time_bins[1:])
+    assert_equal(actual, expected)
+
+    ret = factorize_((by.to_numpy(),), axis=0, expected_groups=(actual,))
+    group_idx = ret[0]
+    expected = pd.cut(by, time_bins).codes.copy()
+    expected[0] = 14  # factorize doesn't return -1 for nans
+    assert_equal(group_idx, expected)
