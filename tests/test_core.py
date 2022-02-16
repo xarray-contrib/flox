@@ -112,7 +112,7 @@ def test_groupby_reduce(
     elif func == "count":
         expected = np.array(expected, dtype=int)
 
-    result, groups = groupby_reduce(
+    result, groups, = groupby_reduce(
         array,
         by,
         func=func,

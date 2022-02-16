@@ -73,6 +73,7 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
     # assert_equal(expected, actual)
 
 
+# TODO: sort
 def test_xarray_reduce_multiple_groupers(engine):
     arr = np.ones((4, 12))
 
@@ -85,9 +86,9 @@ def test_xarray_reduce_multiple_groupers(engine):
     ).expand_dims(z=4)
 
     expected = xr.DataArray(
-        [[4, 4], [10, 10], [8, 8], [2, 2]],
+        [[4, 4], [8, 8], [10, 10], [2, 2]],
         dims=("labels", "labels2"),
-        coords={"labels": ["a", "c", "b", "f"], "labels2": [1, 2]},
+        coords={"labels": ["a", "b", "c", "f"], "labels2": [1, 2]},
     ).expand_dims(z=4)
 
     actual = xarray_reduce(da, da.labels, da.labels2, func="count", engine=engine)
