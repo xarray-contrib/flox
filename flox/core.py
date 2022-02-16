@@ -735,14 +735,24 @@ def _expand_dims(results: IntermediateDict) -> IntermediateDict:
 def _simple_combine(
     x_chunk, agg: Aggregation, axis: Sequence, keepdims: bool, is_aggregate: bool = False
 ) -> IntermediateDict:
+    """
+    'Simple' combination of blockwise results.
+
+    1. After the blockwise groupby-reduce, all blocks contain a value for all possible groups,
+       and are of the same shape; i.e. reindex must have been True
+    2. _expand_dims was used to insert an extra axis DUMMY_AXIS
+    3. Here we concatenate along DUMMY_AXIS, and then call the combine function along
+       DUMMY_AXIS
+    4. At the final agggregate step, we squeeze out DUMMY_AXIS
+    """
     from dask.array.core import deepfirst
 
     results = {"groups": deepfirst(x_chunk)["groups"]}
     results["intermediates"] = []
     for idx, combine in enumerate(agg.combine):
-        array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis)
+        array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis[:-1] + (DUMMY_AXIS,))
         assert array.ndim >= 2
-        result = getattr(np, combine)(array, axis=axis, keepdims=True)
+        result = getattr(np, combine)(array, axis=axis[:-1] + (DUMMY_AXIS,), keepdims=True)
         if is_aggregate:
             # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
             result = result.squeeze(axis=DUMMY_AXIS)
