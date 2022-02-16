@@ -1,9 +1,12 @@
 import numpy as np
+import pandas as pd
 import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
 from flox.core import (
+    _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
+    factorize_,
     find_group_cohorts,
     groupby_reduce,
     rechunk_for_cohorts,
@@ -111,7 +114,7 @@ def test_groupby_reduce(
     elif func == "count":
         expected = np.array(expected, dtype=int)
 
-    result, _ = groupby_reduce(
+    result, groups = groupby_reduce(
         array,
         by,
         func=func,
@@ -120,6 +123,7 @@ def test_groupby_reduce(
         split_out=split_out,
         engine=engine,
     )
+    assert_equal(groups, [0, 1, 2])
     assert_equal(expected, result)
 
 
@@ -224,7 +228,7 @@ def test_numpy_reduce_nd_md():
 
     expected = aggregate(by.ravel(), array.ravel(), func="sum")
     result, groups = groupby_reduce(array, by, func="sum", fill_value=123)
-    actual = reindex_(result, groups, np.unique(by), axis=0, fill_value=0)
+    actual = reindex_(result, groups, pd.Index(np.unique(by)), axis=0, fill_value=0)
     np.testing.assert_equal(expected, actual)
 
     array = np.ones((4, 2, 12))
@@ -232,14 +236,14 @@ def test_numpy_reduce_nd_md():
 
     expected = aggregate(by.ravel(), array.reshape(4, 24), func="sum", axis=-1, fill_value=0)
     result, groups = groupby_reduce(array, by, func="sum")
-    actual = reindex_(result, groups, np.unique(by), axis=-1, fill_value=0)
+    actual = reindex_(result, groups, pd.Index(np.unique(by)), axis=-1, fill_value=0)
     assert_equal(expected, actual)
 
     array = np.ones((4, 2, 12))
     by = np.broadcast_to(np.array([labels] * 2), array.shape)
     expected = aggregate(by.ravel(), array.ravel(), func="sum", axis=-1)
     result, groups = groupby_reduce(array, by, func="sum")
-    actual = reindex_(result, groups, np.unique(by), axis=-1, fill_value=0)
+    actual = reindex_(result, groups, pd.Index(np.unique(by)), axis=-1, fill_value=0)
     assert_equal(expected, actual)
 
 
@@ -305,29 +309,30 @@ def test_numpy_reduce_axis_subset(engine):
     # TODO: add NaNs
     by = labels2d
     array = np.ones_like(by)
-    result, _ = groupby_reduce(array, by, "count", axis=1, engine=engine)
+    kwargs = dict(func="count", engine=engine)
+    result, _ = groupby_reduce(array, by, **kwargs, axis=1)
     assert_equal(result, [[2, 3], [2, 3]])
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
-    result, _ = groupby_reduce(array, by, "count", axis=1, engine=engine)
+    result, _ = groupby_reduce(array, by, **kwargs, axis=1)
     subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, "count", axis=2, engine=engine)
+    result, _ = groupby_reduce(array, by, **kwargs, axis=2)
     subarr = np.array([[2, 3], [2, 3]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, "count", axis=(1, 2), engine=engine)
+    result, _ = groupby_reduce(array, by, **kwargs, axis=(1, 2))
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, "count", axis=(2, 1), engine=engine)
+    result, _ = groupby_reduce(array, by, **kwargs, axis=(2, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by[0, ...], "count", axis=(1, 2), engine=engine)
+    result, _ = groupby_reduce(array, by[0, ...], **kwargs, axis=(1, 2))
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result, expected)
 
@@ -341,7 +346,7 @@ def test_dask_reduce_axis_subset():
         result, _ = groupby_reduce(
             da.from_array(array, chunks=(2, 3)),
             da.from_array(by, chunks=(2, 2)),
-            "count",
+            func="count",
             axis=1,
             expected_groups=[0, 2],
         )
@@ -355,7 +360,7 @@ def test_dask_reduce_axis_subset():
         result, _ = groupby_reduce(
             da.from_array(array, chunks=(1, 2, 3)),
             da.from_array(by, chunks=(2, 2, 2)),
-            "count",
+            func="count",
             axis=1,
             expected_groups=[0, 2],
             fill_value=123,
@@ -368,7 +373,7 @@ def test_dask_reduce_axis_subset():
         result, _ = groupby_reduce(
             da.from_array(array, chunks=(1, 2, 3)),
             da.from_array(by, chunks=(2, 2, 2)),
-            "count",
+            func="count",
             axis=2,
             expected_groups=[0, 2],
         )
@@ -378,7 +383,7 @@ def test_dask_reduce_axis_subset():
         groupby_reduce(
             da.from_array(array, chunks=(1, 3, 2)),
             da.from_array(by, chunks=(2, 2, 2)),
-            "count",
+            func="count",
             axis=2,
         )
 
@@ -446,7 +451,7 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, engine):
     result, _ = groupby_reduce(
         _maybe_chunk(array),
         _maybe_chunk(by),
-        "count",
+        func="count",
         expected_groups=groups,
         axis=axis,
         fill_value=0,
@@ -484,13 +489,24 @@ def test_groupby_all_nan_blocks(engine):
     assert_equal(actual, expected)
 
 
-def test_reindex():
-    array = np.array([1, 2])
-    groups = np.array(["a", "b"])
-    expected_groups = ["a", "b", "c"]
+@pytest.mark.parametrize("axis", (0, 1, 2, -1))
+def test_reindex(axis):
+    shape = [2, 2, 2]
     fill_value = 0
-    result = reindex_(array, groups, expected_groups, fill_value, axis=-1)
-    assert_equal(result, np.array([1, 2, 0]))
+
+    array = np.broadcast_to(np.array([1, 2]), shape)
+    groups = np.array(["a", "b"])
+    expected_groups = pd.Index(["a", "b", "c"])
+    actual = reindex_(array, groups, expected_groups, fill_value=fill_value, axis=axis)
+
+    if axis < 0:
+        axis = array.ndim + axis
+    result_shape = tuple(len(expected_groups) if ax == axis else s for ax, s in enumerate(shape))
+    slicer = tuple(slice(None, s) for s in shape)
+    expected = np.full(result_shape, fill_value)
+    expected[slicer] = array
+
+    assert_equal(actual, expected)
 
 
 @pytest.mark.xfail
@@ -544,7 +560,8 @@ def test_groupby_bins(chunk_labels, chunks, engine) -> None:
             engine=engine,
         )
     expected = np.array([3, 1, 0])
-    assert_equal(groups, np.array([0, 1, 2]))
+    for left, right in zip(groups, pd.IntervalIndex.from_arrays([1, 2, 4], [2, 4, 5]).to_numpy()):
+        assert left == right
     assert_equal(actual, expected)
 
 
@@ -709,7 +726,7 @@ def test_cohorts_nd_by(func, method, axis, engine):
         assert_equal(groups, [1, 30, 2, 31, 3, 40, 4])
     else:
         assert_equal(groups, [1, 2, 3, 4, 30, 31, 40])
-    reindexed = reindex_(actual, groups, sorted_groups)
+    reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
 
 
@@ -743,3 +760,18 @@ def test_empty_bins(func, engine):
     )
     expected = np.array([1.0, 1.0, np.nan])
     assert_equal(actual, expected)
+
+
+def test_datetime_binning():
+    time_bins = pd.date_range(start="2010-08-01", end="2010-08-15", freq="24H")
+    by = pd.date_range("2010-08-01", "2010-08-15", freq="15min")
+
+    actual = _convert_expected_groups_to_index(time_bins, isbin=True)
+    expected = pd.IntervalIndex.from_arrays(time_bins[:-1], time_bins[1:])
+    assert_equal(actual, expected)
+
+    ret = factorize_((by.to_numpy(),), axis=0, expected_groups=(actual,))
+    group_idx = ret[0]
+    expected = pd.cut(by, time_bins).codes.copy()
+    expected[0] = 14  # factorize doesn't return -1 for nans
+    assert_equal(group_idx, expected)

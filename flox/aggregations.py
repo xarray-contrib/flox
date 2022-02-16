@@ -58,7 +58,7 @@ def _normalize_dtype(dtype, array_dtype, fill_value=None):
             dtype = np.floating
         else:
             dtype = array_dtype
-    elif dtype is np.floating:
+    if dtype is np.floating:
         # mean, std, var always result in floating
         # but we preserve the array's dtype if it is floating
         if array_dtype.kind in "fcmM":
