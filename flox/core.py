@@ -48,6 +48,7 @@ def _prepare_for_flox(group_idx, array):
     """
     Sort the input array once to save time.
     """
+    assert array.shape[-1] == group_idx.shape[0]
     issorted = (group_idx[:-1] <= group_idx[1:]).all()
     if issorted:
         ordered_array = array
@@ -323,14 +324,6 @@ def rechunk_for_blockwise(array, axis, labels):
         return array.rechunk({axis: newchunks})
 
 
-def reindex_multiple(array, groups, expected_groups, fill_value, promote=False):
-    for ax, (group, expect) in enumerate(zip(groups, expected_groups)):
-        array = reindex_(
-            array, group, expect, fill_value=fill_value, axis=ax - len(groups), promote=promote
-        )
-    return array
-
-
 def reindex_(
     array: np.ndarray, from_, to, fill_value=None, axis: int = -1, promote: bool = False
 ) -> np.ndarray:
@@ -562,19 +555,12 @@ def chunk_reduce(
         array = _collapse_axis(array, len(axis))
         axis = -1
 
-    if by.ndim == 1:
-        # TODO: This assertion doesn't work with dask reducing across all dimensions
-        # when by.ndim == array.ndim
-        # the intermediates are 1D but axis=range(array.ndim)
-        # assert axis in (0, -1, array.ndim - 1, None)
-        axis = -1
-
     # if indices=[2,2,2], npg assumes groups are (0, 1, 2);
     # and will return a result that is bigger than necessary
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, _, ngroups, size, props = factorize_(
+    group_idx, groups, found_groups_shape, ngroups, size, props = factorize_(
         (by,), axis, expected_groups=(expected_groups,)
     )
     groups = groups[0]
@@ -584,21 +570,17 @@ def chunk_reduce(
     array = array.reshape(newshape)
 
     assert group_idx.ndim == 1
-    empty = np.all(props.nanmask) or np.prod(by.shape) == 0
+    empty = np.all(props.nanmask)
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
     if reindex and expected_groups is not None:
         # TODO: what happens with binning here?
-        results["groups"] = expected_groups.values
+        results["groups"] = expected_groups.to_numpy()
     else:
         if empty:
             results["groups"] = np.array([np.nan])
         else:
-            if (groups[:-1] <= groups[1:]).all():
-                sortidx = slice(None)
-            else:
-                sortidx = groups.argsort()
-            results["groups"] = groups[sortidx]
+            results["groups"] = np.sort(groups)
 
     # npg's argmax ensures that index of first "max" is returned assuming there
     # are many elements equal to the "max". Sorting messes this up totally.
@@ -650,13 +632,8 @@ def chunk_reduce(
             if np.any(props.nanmask):
                 # remove NaN group label which should be last
                 result = result[..., :-1]
-            if props.offset_group:
-                result = result.reshape(*final_array_shape[:-1], ngroups)
-            if reindex:
-                result = reindex_(result, groups, expected_groups, fill_value=fv)
-            else:
-                result = result[..., sortidx]
-            result = result.reshape(final_array_shape)
+            result = result.reshape(final_array_shape[:-1] + found_groups_shape)
+            result = reindex_(result, groups, results["groups"], fill_value=fv, promote=True)
         results["intermediates"].append(result)
 
     results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
@@ -913,8 +890,8 @@ def split_blocks(applied, split_out, expected_groups, split_name):
 
     chunk_tuples = tuple(itertools.product(*tuple(range(n) for n in applied.numblocks)))
     ngroups = len(expected_groups)
-    group_chunks = normalize_chunks(np.ceil(ngroups / split_out), (ngroups,))[0]
-    idx = tuple(np.cumsum((0,) + group_chunks))
+    group_chunks = normalize_chunks(np.ceil(ngroups / split_out), (ngroups,))
+    idx = tuple(np.cumsum((0,) + group_chunks[0]))
 
     # split each block into `split_out` chunks
     dsk = {}
@@ -1123,7 +1100,7 @@ def dask_groupby_agg(
         intermediate = applied
         if expected_groups is None:
             expected_groups = _get_expected_groups(by_input, raise_if_dask=False)
-        group_chunks = (len(expected_groups),) if expected_groups is not None else (np.nan,)
+        group_chunks = ((len(expected_groups),) if expected_groups is not None else (np.nan,),)
 
     if method == "map-reduce":
         # these are negative axis indices useful for concatenating the intermediates
@@ -1155,7 +1132,7 @@ def dask_groupby_agg(
             keepdims=True,
             concatenate=False,
         )
-        output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + (group_chunks,)
+        output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + group_chunks
     elif method == "blockwise":
         reduced = intermediate
         # Here one input chunk → one output chunka
@@ -1193,7 +1170,7 @@ def dask_groupby_agg(
             dask.array.Array(
                 HighLevelGraph.from_collections(groups_name, layer, dependencies=[reduced]),
                 groups_name,
-                chunks=(group_chunks,),
+                chunks=group_chunks,
                 dtype=by.dtype,
             ),
         )
