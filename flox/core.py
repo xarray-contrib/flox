@@ -1261,14 +1261,15 @@ def _validate_reindex(reindex: bool, func, method, expected_groups) -> bool:
 
 
 def _assert_by_is_aligned(shape, by):
-    if shape[-by.ndim :] != by.shape:
-        raise ValueError(
-            "`array` and `by` arrays must be aligned "
-            "i.e. array.shape[-by.ndim :] == by.shape. "
-            "for every array in `by`."
-            f"Received array of shape {shape} but "
-            f"`by` has shape {by.shape}."
-        )
+    for idx, b in enumerate(by):
+        if shape[-b.ndim :] != b.shape:
+            raise ValueError(
+                "`array` and `by` arrays must be aligned "
+                "i.e. array.shape[-by.ndim :] == by.shape. "
+                "for every array in `by`."
+                f"Received array of shape {shape} but "
+                f"array {idx} in `by` has shape {b.shape}."
+            )
 
 
 def _convert_expected_groups_to_index(expected_groups, isbin: bool) -> pd.Index | None:
@@ -1400,12 +1401,21 @@ def groupby_reduce(
         )
     reindex = _validate_reindex(reindex, func, method, expected_groups)
 
-    if not is_duck_array(by):
-        by = np.asarray(by)
+    by: tuple = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
+    by_is_dask = any(is_duck_dask_array(b) for b in by)
     if not is_duck_array(array):
         array = np.asarray(array)
+    if isinstance(isbin, bool):
+        isbin = (isbin,) * len(by)
+    if expected_groups is None:
+        expected_groups = (None,) * len(by)
 
     _assert_by_is_aligned(array.shape, by)
+
+    if len(by) == 1 and not isinstance(expected_groups, tuple):
+        expected_groups = (np.asarray(expected_groups),)
+    elif len(expected_groups) != len(by):
+        raise ValueError("len(expected_groups) != len(by)")
 
     # We convert to pd.Index since that lets us know if we are binning or not
     # (pd.IntervalIndex or not)
@@ -1424,8 +1434,9 @@ def groupby_reduce(
         )
 
     # TODO: make sure expected_groups is unique
-    if len(axis) == 1 and by.ndim > 1 and expected_groups is None:
-        if not is_duck_dask_array(by):
+    if len(axis) == 1 and by_ndim > 1 and expected_groups[0] is None:
+        # TODO: hack
+        if not by_is_dask:
             expected_groups = _get_expected_groups(by, sort)
         else:
             # When we reduce along all axes, we are guaranteed to see all
