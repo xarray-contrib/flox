@@ -308,8 +308,8 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs)
-    assert_equal(groups, [0, 2, 1])
-    assert_equal(expected, actual[..., [0, 2, 1]])
+    assert_equal(groups, [0, 1, 2])
+    assert_equal(expected, actual)
 
 
 def test_numpy_reduce_axis_subset(engine):

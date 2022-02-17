@@ -385,7 +385,7 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     return offset, size
 
 
-def factorize_(by: tuple, axis, expected_groups: tuple[pd.Index, ...] = None):
+def factorize_(by: tuple, axis, expected_groups: tuple[pd.Index, ...] = None, reindex=False):
     if not isinstance(by, tuple):
         raise ValueError(f"Expected `by` to be a tuple. Received {type(by)} instead")
 
@@ -407,7 +407,13 @@ def factorize_(by: tuple, axis, expected_groups: tuple[pd.Index, ...] = None):
                 expect = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
             idx = pd.cut(groupvar.ravel(), bins=expect).codes.copy()
         else:
-            idx, groups = pd.factorize(groupvar.ravel())
+            if expect is not None and reindex:
+                groups = expect
+                idx = np.searchsorted(expect, groupvar.ravel())
+                # TODO: optimize?
+                idx[np.isnan(groupvar.ravel())] = -1
+            else:
+                idx, groups = pd.factorize(groupvar.ravel())
             found_groups.append(np.array(groups))
         factorized.append(idx)
 
@@ -420,7 +426,7 @@ def factorize_(by: tuple, axis, expected_groups: tuple[pd.Index, ...] = None):
 
     if np.isscalar(axis) and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
-        # this is OK because for 3D by and axos=(1,2),
+        # this is OK because for 3D by and axis=(1,2),
         # we collapse to a 2D by and axis=-1
         offset_group = True
         group_idx, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
@@ -565,7 +571,7 @@ def chunk_reduce(
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
     group_idx, groups, found_groups_shape, ngroups, size, props = factorize_(
-        (by,), axis, expected_groups=(expected_groups,)
+        (by,), axis, expected_groups=(expected_groups,), reindex=reindex
     )
     groups = groups[0]
 
@@ -1420,6 +1426,9 @@ def groupby_reduce(
 
     kwargs = dict(axis=axis, fill_value=fill_value, engine=engine)
 
+    if expected_groups is not None:
+        expected_groups = expected_groups.sort_values()
+
     if not is_duck_dask_array(array) and not is_duck_dask_array(by):
         results = _reduce_blockwise(array, by, agg, expected_groups=expected_groups, **kwargs)
         groups = (results["groups"],)
@@ -1435,7 +1444,7 @@ def groupby_reduce(
             # absent in one block, but present in another block
             agg.min_count = 1
 
-        # we always need  some fill_value (see above) so choose the default if needed
+        # we always need some fill_value (see above) so choose the default if needed
         if kwargs["fill_value"] is None:
             kwargs["fill_value"] = agg.fill_value[agg.name]
 
