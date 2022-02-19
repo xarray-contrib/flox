@@ -420,6 +420,8 @@ def factorize_(by: tuple, axis, expected_groups: tuple[pd.Index, ...] = None):
 
     if np.isscalar(axis) and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
+        # this is OK because for 3D by and axos=(1,2),
+        # we collapse to a 2D by and axis=-1
         offset_group = True
         group_idx, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
         group_idx = group_idx.ravel()

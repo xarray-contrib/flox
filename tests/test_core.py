@@ -246,6 +246,13 @@ def test_numpy_reduce_nd_md():
     actual = reindex_(result, groups, pd.Index(np.unique(by)), axis=-1, fill_value=0)
     assert_equal(expected, actual)
 
+    array = np.ones((2, 3, 4))
+    by = np.ones((2, 3, 4))
+
+    actual, _ = groupby_reduce(array, by, axis=(1, 2), func="sum")
+    expected = np.sum(array, axis=(1, 2), keepdims=True).squeeze(2)
+    assert_equal(actual, expected)
+
 
 @requires_dask
 @pytest.mark.parametrize("reindex", [None, False, True])
