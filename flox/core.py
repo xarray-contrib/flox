@@ -608,30 +608,17 @@ def chunk_reduce(
             if is_nanlen(reduction) and is_nanlen(previous_reduction):
                 result = results["intermediates"][-1]
 
+            # fill_value here is necessary when reducing with "offset" groups
+            kwargs = dict(size=size, dtype=dt, fill_value=fv)
+            kwargs.update(kw)
+
             if callable(reduction):
                 # passing a custom reduction for npg to apply per-group is really slow!
                 # So this `reduction` has to do the groupby-aggregation
-                result = reduction(
-                    group_idx,
-                    array,
-                    size=size,
-                    # important when reducing with "offset" groups
-                    fill_value=fv,
-                    dtype=dt,
-                    **kw,
-                )
+                result = reduction(group_idx, array, **kwargs)
             else:
                 result = generic_aggregate(
-                    group_idx,
-                    array,
-                    axis=-1,
-                    engine=engine,
-                    func=reduction,
-                    size=size,
-                    # important when reducing with "offset" groups
-                    fill_value=fv,
-                    dtype=dt,
-                    **kw,
+                    group_idx, array, axis=-1, engine=engine, func=reduction, **kwargs
                 ).astype(dt, copy=False)
             if np.any(props.nanmask):
                 # remove NaN group label which should be last
