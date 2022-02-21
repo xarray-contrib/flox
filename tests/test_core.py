@@ -307,7 +307,13 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
 
     kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
-        actual, groups = groupby_reduce(array, by, engine=engine, **kwargs)
+        actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=False)
+    assert_equal(groups, [0, 2, 1])
+    assert_equal(expected, actual[..., [0, 2, 1]])
+
+    kwargs["expected_groups"] = [0, 2, 1]
+    with raise_if_dask_computes():
+        actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=True)
     assert_equal(groups, [0, 1, 2])
     assert_equal(expected, actual)
 
@@ -722,17 +728,18 @@ def test_cohorts_nd_by(func, method, axis, engine):
         pytest.xfail()
 
     kwargs = dict(func=func, engine=engine, method=method, axis=axis, fill_value=fill_value)
-    actual, _ = groupby_reduce(array, by, **kwargs)
+    actual, groups = groupby_reduce(array, by, **kwargs)
     expected, sorted_groups = groupby_reduce(array.compute(), by, **kwargs)
+    assert_equal(groups, sorted_groups)
     assert_equal(actual, expected)
 
     actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
     if method == "cohorts":
         assert_equal(groups, [4, 3, 40, 2, 31, 1, 30])
+    elif method in ("split-reduce", "map-reduce"):
+        assert_equal(groups, [1, 30, 2, 31, 3, 4, 40])
     elif method == "blockwise":
         assert_equal(groups, [1, 30, 2, 31, 3, 40, 4])
-    else:
-        assert_equal(groups, [1, 2, 3, 4, 30, 31, 40])
     reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
 
