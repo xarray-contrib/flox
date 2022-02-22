@@ -1498,7 +1498,6 @@ def groupby_reduce(
 
     # TODO: make sure expected_groups is unique
     if len(axis) == 1 and by.ndim > 1 and expected_groups is None:
-        # TODO: hack
         if not by_is_dask:
             expected_groups = _get_expected_groups(by, sort)
         else:
