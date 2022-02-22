@@ -100,16 +100,26 @@ def test_xarray_reduce_multiple_groupers(engine):
     actual = xarray_reduce(da, "labels", "labels2", func="count", engine=engine)
     xr.testing.assert_identical(expected, actual)
 
-    if has_dask:
-        with raise_if_dask_computes():
-            actual = xarray_reduce(
-                da.chunk({"x": 2, "z": 1}), da.labels, da.labels2, func="count", engine=engine
-            )
-        xr.testing.assert_identical(expected, actual)
+    if not has_dask:
+        return
 
-        with pytest.raises(NotImplementedError):
-            xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
-    # xr.testing.assert_identical(expected, actual)
+    with raise_if_dask_computes():
+        actual = xarray_reduce(
+            da.chunk({"x": 2, "z": 1}), da.labels, da.labels2, func="count", engine=engine
+        )
+    xr.testing.assert_identical(expected, actual)
+
+    with pytest.raises(NotImplementedError):
+        xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
+
+    actual = xarray_reduce(
+        da.chunk({"x": 2, "z": 1}),
+        "labels",
+        "labels2",
+        func="count",
+        expected_groups=(expected.labels.data, expected.labels2.data),
+    )
+    xr.testing.assert_identical(expected, actual)
 
 
 @requires_dask

@@ -1302,7 +1302,7 @@ def _convert_expected_groups_to_index(
 
 
 def _lazy_factorize_wrapper(*by, **kwargs):
-    group_idx, _ = factorize_(by, **kwargs)
+    group_idx, *rest = factorize_(by, **kwargs)
     return group_idx
 
 
@@ -1322,6 +1322,7 @@ def _factorize_multiple(by, expected_groups, by_is_dask):
             **kwargs,
         )
         found_groups = tuple(None if is_duck_dask_array(b) else np.unique(b) for b in by)
+        grp_shape = tuple(len(e) for e in expected_groups)
     else:
         group_idx, found_groups, grp_shape = factorize_(by, **kwargs)
 

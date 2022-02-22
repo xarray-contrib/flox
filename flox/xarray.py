@@ -201,10 +201,6 @@ def xarray_reduce(
 
     by: tuple[DataArray] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
-    # TODO: delete
-    if len(by) > 1 and any(is_duck_dask_array(by_.data) for by_ in by):
-        raise NotImplementedError("Grouping by multiple variables will compute dask variables.")
-
     grouper_dims = tuple(itertools.chain(*tuple(g.dims for g in by)))
 
     if isinstance(obj, xr.DataArray):
@@ -268,12 +264,13 @@ def xarray_reduce(
                 "Please provide expected_groups if not grouping by a numpy-backed DataArray"
             )
         if not isbin_:
-            uniques = np.unique(b.data)
-            nans = isnull(uniques)
-            if nans.any():
-                uniques = uniques[~nans]
-            expected_groups[idx] = uniques
-            group_shape[idx] = len(uniques)
+            if expect is None:
+                uniques = np.unique(b.data)
+                nans = isnull(uniques)
+                if nans.any():
+                    uniques = uniques[~nans]
+                expected_groups[idx] = uniques
+            group_shape[idx] = len(expected_groups[idx])
         else:
             if isinstance(expect, int):
                 raise NotImplementedError(
