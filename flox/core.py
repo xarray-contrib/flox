@@ -66,9 +66,7 @@ def _get_expected_groups(by, sort, raise_if_dask=True) -> pd.Index | None:
         return None
     flatby = by.ravel()
     expected = pd.unique(flatby[~isnull(flatby)])
-    if sort:
-        expected = np.sort(expected)
-    return _convert_expected_groups_to_index((expected,), isbin=(False,))[0]
+    return _convert_expected_groups_to_index((expected,), isbin=(False,), sort=sort)[0]
 
 
 def _get_chunk_reduction(reduction_type: str) -> Callable:
@@ -1280,15 +1278,21 @@ def _assert_by_is_aligned(shape, by):
             )
 
 
-def _convert_expected_groups_to_index(expected_groups: tuple, isbin: bool) -> pd.Index | None:
+def _convert_expected_groups_to_index(
+    expected_groups: tuple, isbin: bool, sort: bool
+) -> pd.Index | None:
     out = []
     for ex, isbin_ in zip(expected_groups, isbin):
         if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin):
-            out.append(expected_groups)
+            if sort:
+                ex = ex.sort_values()
+            out.append(ex)
         elif ex is not None:
             if isbin_:
                 out.append(pd.IntervalIndex.from_arrays(ex[:-1], ex[1:]))
             else:
+                if sort:
+                    ex = np.sort(ex)
                 out.append(pd.Index(ex))
         else:
             assert ex is None
@@ -1465,9 +1469,7 @@ def groupby_reduce(
 
     # We convert to pd.Index since that lets us know if we are binning or not
     # (pd.IntervalIndex or not)
-    expected_groups = _convert_expected_groups_to_index(expected_groups, isbin)
-    if expected_groups is not None and sort:
-        expected_groups = expected_groups.sort_values()
+    expected_groups = _convert_expected_groups_to_index(expected_groups, isbin, sort)
 
     # when grouping by multiple variables, we factorize early.
     # TODO: could restrict this to dask-only
