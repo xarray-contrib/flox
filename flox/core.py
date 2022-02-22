@@ -376,6 +376,7 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     Copied from xhistogram &
     https://stackoverflow.com/questions/46256279/bin-elements-per-row-vectorized-2d-bincount-for-numpy
     """
+    assert labels.ndim > 1
     offset: np.ndarray = (
         labels + np.arange(np.prod(labels.shape[:-1])).reshape((*labels.shape[:-1], -1)) * ngroups
     )
@@ -455,7 +456,7 @@ def factorize_(
         # this is OK because for 3D by and axis=(1,2),
         # we collapse to a 2D by and axis=-1
         offset_group = True
-        group_idx, size = offset_labels(group_idx, ngroups)
+        group_idx, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
         group_idx = group_idx.ravel()
     else:
         size = ngroups
