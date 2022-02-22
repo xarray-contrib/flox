@@ -780,7 +780,7 @@ def test_datetime_binning():
     time_bins = pd.date_range(start="2010-08-01", end="2010-08-15", freq="24H")
     by = pd.date_range("2010-08-01", "2010-08-15", freq="15min")
 
-    (actual,) = _convert_expected_groups_to_index((time_bins,), isbin=(True,))
+    (actual,) = _convert_expected_groups_to_index((time_bins,), isbin=(True,), sort=False)
     expected = pd.IntervalIndex.from_arrays(time_bins[:-1], time_bins[1:])
     assert_equal(actual, expected)
 
