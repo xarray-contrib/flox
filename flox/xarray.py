@@ -9,11 +9,12 @@ import xarray as xr
 
 from .aggregations import Aggregation, _atleast_1d
 from .core import (
+    _convert_expected_groups_to_index,
+    _get_expected_groups,
     groupby_reduce,
     rechunk_for_blockwise as rechunk_array_for_blockwise,
     rechunk_for_cohorts as rechunk_array_for_cohorts,
 )
-from .xrutils import is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
     from xarray import DataArray, Dataset, Resample
@@ -258,30 +259,24 @@ def xarray_reduce(
 
     group_shape = [None] * len(by)
     expected_groups = list(expected_groups)
-    for idx, (b, expect, isbin_) in enumerate(zip(by, expected_groups, isbin)):
-        if expect is None and is_duck_dask_array(b.data):
-            raise NotImplementedError(
-                "Please provide expected_groups if not grouping by a numpy-backed DataArray"
-            )
-        if not isbin_:
-            if expect is None:
-                uniques = np.unique(b.data)
-                nans = isnull(uniques)
-                if nans.any():
-                    uniques = uniques[~nans]
-                expected_groups[idx] = uniques
-            group_shape[idx] = len(expected_groups[idx])
-        else:
-            if isinstance(expect, int):
-                raise NotImplementedError(
-                    "flox does not support binning into an integer number of bins yet."
-                )
-                #    factorized, bins = pd.cut(by[0], bins=expected_groups[0], retbins=True)
-                group_shape[idx] = expect
-            else:
-                # nbins - 1 elements since expect provides the bin edges
-                group_shape[idx] = len(expect) - 1
 
+    # Set expected_groups and convert to index since we need coords, sizes
+    # for output xarray objects
+    for idx, (b, expect, isbin_) in enumerate(zip(by, expected_groups, isbin)):
+        if isbin_ and isinstance(expect, int):
+            raise NotImplementedError(
+                "flox does not support binning into an integer number of bins yet."
+            )
+        if expect is None:
+            if isbin_:
+                raise ValueError(
+                    f"Please provided bin edges for group variable {idx} "
+                    f"named {group_names[idx]} in expected_groups."
+                )
+            expected_groups[idx] = _get_expected_groups(b.data, sort=sort, raise_if_dask=True)
+
+    expected_groups = _convert_expected_groups_to_index(expected_groups, isbin, sort=sort)
+    group_shape = tuple(len(e) for e in expected_groups)
     group_sizes = dict(zip(group_names, group_shape))
 
     def wrapper(array, *by, func, skipna, **kwargs):
@@ -347,11 +342,10 @@ def xarray_reduce(
         if all(d not in ds[var].dims for d in dim):
             actual[var] = ds[var]
 
-    for name, expect, isbin_ in zip(group_names, expected_groups, isbin):
-        # Can't remove this till I figure out how to return groups from wrapper
-        # without broadcasting
-        if isbin_:
-            expect = [pd.Interval(left, right) for left, right in zip(expect[:-1], expect[1:])]
+    for name, expect in zip(group_names, expected_groups):
+        # Can't remove this till xarray handles IntervalIndex
+        if isinstance(expect, pd.IntervalIndex):
+            expect = expect.to_numpy()
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         actual[name] = expect

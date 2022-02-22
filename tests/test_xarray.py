@@ -109,7 +109,7 @@ def test_xarray_reduce_multiple_groupers(engine):
         )
     xr.testing.assert_identical(expected, actual)
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError):
         xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
 
     actual = xarray_reduce(
@@ -176,7 +176,7 @@ def test_xarray_reduce_errors():
         xarray_reduce(da, by, func="mean", dim="foo")
 
     if has_dask:
-        with pytest.raises(NotImplementedError, match="provide expected_groups"):
+        with pytest.raises(ValueError, match="provide expected_groups"):
             xarray_reduce(da, by.chunk(), func="mean")
 
 

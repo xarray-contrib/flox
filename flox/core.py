@@ -59,10 +59,10 @@ def _prepare_for_flox(group_idx, array):
     return group_idx, ordered_array
 
 
-def _get_expected_groups(by, sort, raise_if_dask=True) -> pd.Index | None:
+def _get_expected_groups(by, sort, *, raise_if_dask=True) -> pd.Index | None:
     if is_duck_dask_array(by):
         if raise_if_dask:
-            raise ValueError("Please provide `expected_groups`.")
+            raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
         return None
     flatby = by.ravel()
     expected = pd.unique(flatby[~isnull(flatby)])
@@ -1321,7 +1321,7 @@ def _factorize_multiple(by, expected_groups, by_is_dask):
             meta=np.array((), dtype=np.int64),
             **kwargs,
         )
-        found_groups = tuple(None if is_duck_dask_array(b) else np.unique(b) for b in by)
+        found_groups = tuple(None if is_duck_dask_array(b) else pd.unique(b) for b in by)
         grp_shape = tuple(len(e) for e in expected_groups)
     else:
         group_idx, found_groups, grp_shape = factorize_(by, **kwargs)
