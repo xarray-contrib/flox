@@ -127,10 +127,7 @@ def test_groupby_reduce(
     assert_equal(expected, result)
 
 
-@pytest.mark.parametrize("size", ((12,), (12, 5)))
-@pytest.mark.parametrize("func", ALL_FUNCS)
-def test_groupby_reduce_all(size, func, engine):
-
+def gen_array_by(size, func):
     by = np.ones(size[-1])
     rng = np.random.default_rng(12345)
     array = rng.random(size)
@@ -138,9 +135,72 @@ def test_groupby_reduce_all(size, func, engine):
         array[[1, 4, 5], ...] = np.nan
     elif "nanarg" in func and len(size) > 1:
         array[[1, 4, 5], 1] = np.nan
-
     if func in ["any", "all"]:
         array = array > 0.5
+    return array, by
+
+
+@pytest.mark.parametrize("size", ((12,), (12, 5)))
+@pytest.mark.parametrize("func", ALL_FUNCS)
+def test_groupby_reduce_all(size, func, engine):
+    array, by = gen_array_by(size, func)
+
+    finalize_kwargs = tuple({})
+    if "var" in func or "std" in func:
+        finalize_kwargs = finalize_kwargs + ({"ddof": 1}, {"ddof": 0})
+
+    for kwargs in finalize_kwargs:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            expected = getattr(np, func)(array, axis=-1, keepdims=True, **kwargs)
+
+        actual, _ = groupby_reduce(array, by, func=func, engine=engine, finalize_kwargs=kwargs)
+        if "arg" in func:
+            assert actual.dtype.kind == "i"
+        assert_equal(actual, expected)
+
+
+@requires_dask
+@pytest.mark.parametrize("size", ((12,), (12, 5)))
+@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("method", ["map-reduce", "cohorts", "split-reduce"])
+def test_groupby_reduce_all_dask(size, method, func, engine):
+    array, by = gen_array_by(size, func)
+
+    finalize_kwargs = tuple({})
+    if "var" in func or "std" in func:
+        finalize_kwargs = finalize_kwargs + ({"ddof": 1}, {"ddof": 0})
+
+    for kwargs in finalize_kwargs:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            expected = getattr(np, func)(array, axis=-1, keepdims=True, **kwargs)
+
+        actual, _ = groupby_reduce(
+            da.from_array(array, chunks=3),
+            by,
+            func=func,
+            method=method,
+            engine=engine,
+            finalize_kwargs=kwargs,
+        )
+
+        if "arg" in func:
+            assert actual.dtype.kind == "i"
+        assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("chunks", [None, 3, 4])
+@pytest.mark.parametrize("nby", [2, 3])
+@pytest.mark.parametrize("size", ((12,), (12, 5)))
+@pytest.mark.parametrize("func", ALL_FUNCS)
+def test_groupby_reduce_all_multiple_groupers(nby, size, chunks, func, engine):
+    if chunks is not None and not has_dask:
+        pytest.skip()
+
+    array, by = gen_array_by(size, func)
+    if chunks:
+        array = dask.array.from_array(array, chunks=chunks)
+    by = (by,) * nby
+    by = tuple(b + idx for idx, b in enumerate(by))
 
     finalize_kwargs = tuple({})
     if "var" in func or "std" in func:
@@ -149,27 +209,17 @@ def test_groupby_reduce_all(size, func, engine):
     for kwargs in finalize_kwargs:
         with np.errstate(invalid="ignore", divide="ignore"):
             expected = getattr(np, func)(array, axis=-1, **kwargs)
-        expected = np.expand_dims(expected, -1)
-
-        actual, _ = groupby_reduce(array, by, func=func, engine=engine, finalize_kwargs=kwargs)
+        for _ in range(nby):
+            expected = np.expand_dims(expected, -1)
+        actual, *groups = groupby_reduce(
+            array, *by, func=func, engine=engine, finalize_kwargs=kwargs
+        )
+        expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
+        for actual_group, expect in zip(groups, expected_groups):
+            assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
         assert_equal(actual, expected)
-
-        if not has_dask:
-            continue
-        for method in ["map-reduce", "cohorts", "split-reduce"]:
-            actual, _ = groupby_reduce(
-                da.from_array(array, chunks=3),
-                by,
-                func=func,
-                method=method,
-                engine=engine,
-                finalize_kwargs=kwargs,
-            )
-            if "arg" in func:
-                assert actual.dtype.kind == "i"
-            assert_equal(actual, expected)
 
 
 @requires_dask

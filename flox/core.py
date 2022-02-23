@@ -1327,7 +1327,7 @@ def _factorize_multiple(by, expected_groups, by_is_dask):
         group_idx, found_groups, grp_shape = factorize_(by, **kwargs)
 
     final_groups = tuple(
-        pd.Index(found) if expect is None else expect
+        found if expect is None else expect.to_numpy()
         for found, expect in zip(found_groups, expected_groups)
     )
 
@@ -1480,8 +1480,6 @@ def groupby_reduce(
             by, expected_groups, by_is_dask=by_is_dask
         )
         expected_groups = (pd.RangeIndex(np.prod(grp_shape)),)
-    else:
-        final_groups = expected_groups
 
     assert len(by) == 1
     by = by[0]
