@@ -182,7 +182,7 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     # We always drop NaN; np.unique also considers every NaN to be different so
     # it's really important we get rid of them.
     raveled = labels.ravel()
-    unique_labels = np.unique(raveled[~np.isnan(raveled)])
+    unique_labels = np.unique(raveled[~isnull(raveled)])
     # these are chunks where a label is present
     label_chunks = {lab: tuple(np.unique(which_chunk[raveled == lab])) for lab in unique_labels}
     # These invert the label_chunks mapping so we know which labels occur together.
@@ -363,7 +363,7 @@ def reindex_(
             raise ValueError("Filling is required. fill_value cannot be None.")
         indexer[axis] = idx == -1
         # This allows us to match xarray's type promotion rules
-        if fill_value is xrdtypes.NA or np.isnan(fill_value):
+        if fill_value is xrdtypes.NA or isnull(fill_value):
             new_dtype, fill_value = xrdtypes.maybe_promote(reindexed.dtype)
             reindexed = reindexed.astype(new_dtype, copy=False)
         reindexed[tuple(indexer)] = fill_value
@@ -425,7 +425,7 @@ def factorize_(
                 else:
                     sorter = None
                 idx = np.searchsorted(expect, groupvar.ravel(), sorter=sorter)
-                mask = np.isnan(groupvar.ravel())
+                mask = isnull(groupvar.ravel())
                 # TODO: optimize?
                 idx[mask] = -1
                 if not sort:
@@ -501,7 +501,7 @@ def chunk_argreduce(
         engine=engine,
         sort=sort,
     )
-    if not np.isnan(results["groups"]).all():
+    if not isnull(results["groups"]).all():
         # will not work for empty groups...
         # glorious
         idx = np.broadcast_to(idx, array.shape)
@@ -833,7 +833,7 @@ def _grouped_combine(
         # reindexing is unnecessary
         # I bet we can minimize the amount of reindexing for mD reductions too, but it's complicated
         unique_groups = np.unique(tuple(flatten(deepmap(listify_groups, x_chunk))))
-        unique_groups = unique_groups[~np.isnan(unique_groups)]
+        unique_groups = unique_groups[~isnull(unique_groups)]
         if len(unique_groups) == 0:
             unique_groups = [np.nan]
 
