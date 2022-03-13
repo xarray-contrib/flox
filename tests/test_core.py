@@ -1,3 +1,5 @@
+from functools import reduce
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -140,80 +142,43 @@ def gen_array_by(size, func):
     return array, by
 
 
-@pytest.mark.parametrize("size", ((12,), (12, 5)))
-@pytest.mark.parametrize("func", ALL_FUNCS)
-def test_groupby_reduce_all(size, func, engine):
-    array, by = gen_array_by(size, func)
-
-    finalize_kwargs = tuple({})
-    if "var" in func or "std" in func:
-        finalize_kwargs = finalize_kwargs + ({"ddof": 1}, {"ddof": 0})
-
-    for kwargs in finalize_kwargs:
-        with np.errstate(invalid="ignore", divide="ignore"):
-            expected = getattr(np, func)(array, axis=-1, keepdims=True, **kwargs)
-
-        actual, _ = groupby_reduce(array, by, func=func, engine=engine, finalize_kwargs=kwargs)
-        if "arg" in func:
-            assert actual.dtype.kind == "i"
-        assert_equal(actual, expected)
-
-
-@requires_dask
-@pytest.mark.parametrize("size", ((12,), (12, 5)))
-@pytest.mark.parametrize("func", ALL_FUNCS)
-@pytest.mark.parametrize("method", ["map-reduce", "cohorts", "split-reduce"])
-def test_groupby_reduce_all_dask(size, method, func, engine):
-    array, by = gen_array_by(size, func)
-
-    finalize_kwargs = tuple({})
-    if "var" in func or "std" in func:
-        finalize_kwargs = finalize_kwargs + ({"ddof": 1}, {"ddof": 0})
-
-    for kwargs in finalize_kwargs:
-        with np.errstate(invalid="ignore", divide="ignore"):
-            expected = getattr(np, func)(array, axis=-1, keepdims=True, **kwargs)
-
-        actual, _ = groupby_reduce(
-            da.from_array(array, chunks=3),
-            by,
-            func=func,
-            method=method,
-            engine=engine,
-            finalize_kwargs=kwargs,
-        )
-
-        if "arg" in func:
-            assert actual.dtype.kind == "i"
-        assert_equal(actual, expected)
-
-
 @pytest.mark.parametrize("chunks", [None, 3, 4])
-@pytest.mark.parametrize("nby", [2, 3])
+@pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("size", ((12,), (12, 5)))
+@pytest.mark.parametrize("add_nan_by", [True])
 @pytest.mark.parametrize("func", ALL_FUNCS)
-def test_groupby_reduce_all_multiple_groupers(nby, size, chunks, func, engine):
+def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if chunks is not None and not has_dask:
+        pytest.skip()
+    if "arg" in func and engine == "flox":
         pytest.skip()
 
     array, by = gen_array_by(size, func)
     if chunks:
         array = dask.array.from_array(array, chunks=chunks)
     by = (by,) * nby
-    by = tuple(b + idx for idx, b in enumerate(by))
+    by = [b + idx for idx, b in enumerate(by)]
+    if add_nan_by:
+        for idx in range(nby):
+            by[idx][2 * idx : 2 * idx + 2] = np.nan
+    by = tuple(by)
+    nanmask = reduce(np.logical_or, (np.isnan(b) for b in by))
 
-    finalize_kwargs = tuple({})
+    finalize_kwargs = [{}]
     if "var" in func or "std" in func:
-        finalize_kwargs = finalize_kwargs + ({"ddof": 1}, {"ddof": 0})
+        finalize_kwargs = finalize_kwargs + [{"ddof": 1}, {"ddof": 0}]
 
     for kwargs in finalize_kwargs:
         with np.errstate(invalid="ignore", divide="ignore"):
-            expected = getattr(np, func)(array, axis=-1, **kwargs)
+            expected = getattr(np, func)(array[..., ~nanmask], axis=-1, **kwargs)
+
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
         actual, *groups = groupby_reduce(
             array, *by, func=func, engine=engine, finalize_kwargs=kwargs
         )
+        assert actual.ndim == (array.ndim + nby - 1)
+        assert expected.ndim == (array.ndim + nby - 1)
         expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
         for actual_group, expect in zip(groups, expected_groups):
             assert_equal(actual_group, expect)

@@ -4,7 +4,7 @@ import copy
 import itertools
 import operator
 from collections import namedtuple
-from functools import partial
+from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping, Sequence, Union
 
 import numpy as np
@@ -417,7 +417,7 @@ def factorize_(
                 raise ValueError("Please pass bin edges in expected_groups.")
             # TODO: fix for binning
             found_groups.append(expect)
-            # pd.cut with bins =  IntervalIndex[datetime64] doesn't work...
+            # pd.cut with bins = IntervalIndex[datetime64] doesn't work...
             if groupvar.dtype.kind == "M":
                 expect = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
             idx = pd.cut(groupvar.ravel(), bins=expect).codes.copy()
@@ -444,7 +444,9 @@ def factorize_(
     grp_shape = tuple(len(grp) for grp in found_groups)
     ngroups = np.prod(grp_shape)
     if len(by) > 1:
-        group_idx = np.ravel_multi_index(factorized, grp_shape).reshape(by[0].shape)
+        group_idx = np.ravel_multi_index(factorized, grp_shape, mode="wrap").reshape(by[0].shape)
+        nan_by_mask = reduce(np.logical_or, [np.isnan(b) for b in by])
+        group_idx[nan_by_mask] = -1
     else:
         group_idx = factorized[0]
 
