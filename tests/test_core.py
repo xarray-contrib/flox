@@ -144,7 +144,7 @@ def gen_array_by(size, func):
 
 @pytest.mark.parametrize("chunks", [None, 3, 4])
 @pytest.mark.parametrize("nby", [1, 2, 3])
-@pytest.mark.parametrize("size", ((12,), (12, 5)))
+@pytest.mark.parametrize("size", ((12,), (12, 8)))
 @pytest.mark.parametrize("add_nan_by", [True])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
@@ -171,9 +171,9 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     for kwargs in finalize_kwargs:
         with np.errstate(invalid="ignore", divide="ignore"):
             expected = getattr(np, func)(array[..., ~nanmask], axis=-1, **kwargs)
-
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
+
         actual, *groups = groupby_reduce(
             array, *by, func=func, engine=engine, finalize_kwargs=kwargs
         )

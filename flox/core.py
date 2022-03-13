@@ -445,7 +445,7 @@ def factorize_(
     ngroups = np.prod(grp_shape)
     if len(by) > 1:
         group_idx = np.ravel_multi_index(factorized, grp_shape, mode="wrap").reshape(by[0].shape)
-        nan_by_mask = reduce(np.logical_or, [np.isnan(b) for b in by])
+        nan_by_mask = reduce(np.logical_or, [isnull(b) for b in by])
         group_idx[nan_by_mask] = -1
     else:
         group_idx = factorized[0]
