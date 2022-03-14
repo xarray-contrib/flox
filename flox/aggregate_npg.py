@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 import numpy_groupies as npg
 
@@ -64,3 +66,23 @@ def nansum_of_squares(group_idx, array, engine, *, axis=-1, size=None, fill_valu
         axis=axis,
         dtype=dtype,
     )
+
+
+def _len(group_idx, array, engine, *, func, axis=-1, size=None, fill_value=None, dtype=None):
+    result = _get_aggregate(engine).aggregate(
+        group_idx,
+        array,
+        axis=axis,
+        func=func,
+        size=size,
+        fill_value=0,
+        dtype=np.int64,
+    )
+    if fill_value is not None:
+        result = result.astype(np.array([fill_value]).dtype)
+        result[result == 0] = fill_value
+    return result
+
+
+len = partial(_len, func="len")
+nanlen = partial(_len, func="nanlen")
