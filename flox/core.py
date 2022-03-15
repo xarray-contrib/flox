@@ -1317,7 +1317,7 @@ def _factorize_multiple(by, expected_groups, by_is_dask):
     )
 
     if any(grp is None for grp in final_groups):
-        raise
+        raise ValueError("Please provide expected_groups when grouping by a dask array.")
     return (group_idx,), final_groups, grp_shape
 
 
