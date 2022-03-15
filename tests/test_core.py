@@ -145,7 +145,7 @@ def gen_array_by(size, func):
 @pytest.mark.parametrize("chunks", [None, 3, 4])
 @pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("size", ((12,), (12, 8)))
-@pytest.mark.parametrize("add_nan_by", [True])
+@pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if chunks is not None and not has_dask:
@@ -160,23 +160,29 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     by = [b + idx for idx, b in enumerate(by)]
     if add_nan_by:
         for idx in range(nby):
-            by[idx][2 * idx : 2 * idx + 2] = np.nan
+            by[idx][2 * idx : 2 * idx + 3] = np.nan
     by = tuple(by)
     nanmask = reduce(np.logical_or, (np.isnan(b) for b in by))
 
     finalize_kwargs = [{}]
     if "var" in func or "std" in func:
         finalize_kwargs = finalize_kwargs + [{"ddof": 1}, {"ddof": 0}]
+        fill_value = np.nan
+    else:
+        fill_value = None
 
     for kwargs in finalize_kwargs:
+        flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
         with np.errstate(invalid="ignore", divide="ignore"):
-            expected = getattr(np, func)(array[..., ~nanmask], axis=-1, **kwargs)
+            if "arg" in func and add_nan_by:
+                array[..., nanmask] = np.nan
+                expected = getattr(np, "nan" + func)(array, axis=-1, **kwargs)
+            else:
+                expected = getattr(np, func)(array[..., ~nanmask], axis=-1, **kwargs)
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
 
-        actual, *groups = groupby_reduce(
-            array, *by, func=func, engine=engine, finalize_kwargs=kwargs
-        )
+        actual, *groups = groupby_reduce(array, by, **flox_kwargs)
         assert actual.ndim == (array.ndim + nby - 1)
         assert expected.ndim == (array.ndim + nby - 1)
         expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
@@ -185,6 +191,16 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         if "arg" in func:
             assert actual.dtype.kind == "i"
         assert_equal(actual, expected)
+
+        if not has_dask:
+            continue
+        for method in ["map-reduce", "cohorts", "split-reduce"]:
+            if "arg" in func and method != "map-reduce":
+                continue
+            actual, _ = groupby_reduce(array, by, method=method, **flox_kwargs)
+            if "arg" in func:
+                assert actual.dtype.kind == "i"
+            assert_equal(actual, expected)
 
 
 @requires_dask
@@ -337,7 +353,7 @@ def test_numpy_reduce_axis_subset(engine):
     # TODO: add NaNs
     by = labels2d
     array = np.ones_like(by)
-    kwargs = dict(func="count", engine=engine)
+    kwargs = dict(func="count", engine=engine, fill_value=0)
     result, _ = groupby_reduce(array, by, **kwargs, axis=1)
     assert_equal(result, [[2, 3], [2, 3]])
 
@@ -658,12 +674,15 @@ def test_rechunk_for_cohorts(chunk_at, expected):
     assert rechunked.chunks == expected
 
 
+@pytest.mark.parametrize("chunks", [None, 3])
 @pytest.mark.parametrize("fill_value", [123, np.nan])
 @pytest.mark.parametrize("func", ALL_FUNCS)
-def test_fill_value_behaviour(func, fill_value, engine):
+def test_fill_value_behaviour(func, chunks, fill_value, engine):
     # fill_value = np.nan tests promotion of int counts to float
     # This is used by xarray
     if func in ["all", "any"] or "arg" in func:
+        pytest.skip()
+    if chunks is not None and not has_dask:
         pytest.skip()
 
     if func == "count":
@@ -677,12 +696,12 @@ def test_fill_value_behaviour(func, fill_value, engine):
 
     by = np.array([1, 2, 3, 1, 2, 3])
     array = np.array([np.nan, 1, 1, np.nan, 1, 1])
+    if chunks:
+        array = dask.array.from_array(array, chunks)
     actual, _ = groupby_reduce(
         array, by, func=func, engine=engine, fill_value=fill_value, expected_groups=[0, 1, 2, 3]
     )
-    expected = np.array(
-        [fill_value, npfunc([np.nan, np.nan]), npfunc([1.0, 1.0]), npfunc([1.0, 1.0])]
-    )
+    expected = np.array([fill_value, fill_value, npfunc([1.0, 1.0]), npfunc([1.0, 1.0])])
     assert_equal(actual, expected)
 
 
@@ -760,9 +779,7 @@ def test_cohorts_nd_by(func, method, axis, engine):
 
 
 @pytest.mark.parametrize("func", ["sum", "count"])
-@pytest.mark.parametrize(
-    "fill_value, expected", ((None, np.floating), (0, np.integer), (np.nan, np.floating))
-)
+@pytest.mark.parametrize("fill_value, expected", ((0, np.integer), (np.nan, np.floating)))
 def test_dtype_promotion(func, fill_value, expected, engine):
     array = np.array([1, 1])
     by = [0, 1]

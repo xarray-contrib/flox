@@ -162,7 +162,7 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     labels = np.asarray(labels)
 
     if method == "split-reduce":
-        return pd.unique(labels.ravel()).reshape(-1, 1).tolist()
+        return _get_expected_groups(labels, sort=False).values.reshape(-1, 1).tolist()
 
     # Build an array with the shape of labels, but where every element is the "chunk number"
     # 1. First subset the array appropriately
@@ -180,7 +180,7 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     # We always drop NaN; np.unique also considers every NaN to be different so
     # it's really important we get rid of them.
     raveled = labels.ravel()
-    unique_labels = np.unique(raveled[~np.isnan(raveled)])
+    unique_labels = np.unique(raveled[~isnull(raveled)])
     # these are chunks where a label is present
     label_chunks = {lab: tuple(np.unique(which_chunk[raveled == lab])) for lab in unique_labels}
     # These invert the label_chunks mapping so we know which labels occur together.
@@ -361,7 +361,7 @@ def reindex_(
             raise ValueError("Filling is required. fill_value cannot be None.")
         indexer[axis] = idx == -1
         # This allows us to match xarray's type promotion rules
-        if fill_value is xrdtypes.NA or np.isnan(fill_value):
+        if fill_value is xrdtypes.NA or isnull(fill_value):
             new_dtype, fill_value = xrdtypes.maybe_promote(reindexed.dtype)
             reindexed = reindexed.astype(new_dtype, copy=False)
         reindexed[tuple(indexer)] = fill_value
@@ -429,7 +429,7 @@ def factorize_(
                 else:
                     sorter = None
                 idx = np.searchsorted(expect, groupvar.ravel(), sorter=sorter)
-                mask = np.isnan(groupvar.ravel())
+                mask = isnull(groupvar.ravel())
                 # TODO: optimize?
                 idx[mask] = -1
                 if not sort:
@@ -510,7 +510,7 @@ def chunk_argreduce(
         engine=engine,
         sort=sort,
     )
-    if not np.isnan(results["groups"]).all():
+    if not isnull(results["groups"]).all():
         # will not work for empty groups...
         # glorious
         idx = np.broadcast_to(idx, array.shape)
@@ -639,6 +639,8 @@ def chunk_reduce(
     # counts are needed for the final result as well as for masking
     # optimize that out.
     previous_reduction = None
+    for param in (fill_value, kwargs, dtype):
+        assert len(param) >= len(func)
     for reduction, fv, kw, dt in zip(func, fill_value, kwargs, dtype):
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
@@ -842,7 +844,7 @@ def _grouped_combine(
         # reindexing is unnecessary
         # I bet we can minimize the amount of reindexing for mD reductions too, but it's complicated
         unique_groups = np.unique(tuple(flatten(deepmap(listify_groups, x_chunk))))
-        unique_groups = unique_groups[~np.isnan(unique_groups)]
+        unique_groups = unique_groups[~isnull(unique_groups)]
         if len(unique_groups) == 0:
             unique_groups = [np.nan]
 
@@ -962,13 +964,10 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engi
     Blockwise groupby reduction that produces the final result. This code path is
     also used for non-dask array aggregations.
     """
-
     # for pure numpy grouping, we just use npg directly and avoid "finalizing"
     # (agg.finalize = None). We still need to do the reindexing step in finalize
     # so that everything matches the dask version.
     agg.finalize = None
-    # xarray's count is npg's nanlen
-    func: tuple[str] = (agg.numpy, "nanlen")
 
     assert agg.finalize_kwargs is not None
     finalize_kwargs = agg.finalize_kwargs
@@ -979,14 +978,14 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engi
     results = chunk_reduce(
         array,
         by,
-        func=func,
+        func=agg.numpy,
         axis=axis,
         expected_groups=expected_groups,
         # This fill_value should only apply to groups that only contain NaN observations
         # BUT there is funkiness when axis is a subset of all possible values
         # (see below)
-        fill_value=(agg.fill_value[agg.name], 0),
-        dtype=(agg.dtype[agg.name], np.intp),
+        fill_value=agg.fill_value["numpy"],
+        dtype=agg.dtype["numpy"],
         kwargs=finalize_kwargs,
         engine=engine,
         sort=sort,
@@ -998,35 +997,19 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engi
             # so replace -1 with 0; unravel; then replace 0 with -1
             # UGH!
             idx = results["intermediates"][0]
-            mask = idx == -1
+            mask = idx == agg.fill_value["numpy"][0]
             idx[mask] = 0
             # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
             # will return wrong indices
             idx = np.unravel_index(idx, array.shape)[-1]
-            idx[mask] = -1
+            idx[mask] = agg.fill_value["numpy"][0]
             results["intermediates"][0] = idx
     elif agg.name in ["nanvar", "nanstd"]:
-        # Fix npg bug where all-NaN rows are 0 instead of NaN
+        # TODO: Fix npg bug where all-NaN rows are 0 instead of NaN
         value, counts = results["intermediates"]
         mask = counts <= 0
         value[mask] = np.nan
         results["intermediates"][0] = value
-
-    # When axis is a subset of possible values; then npg will
-    # apply it to groups that don't exist along a particular axis (for e.g.)
-    # since these count as a group that is absent. thoo!
-    # TODO: the "count" bit is a hack to make tests pass.
-    if len(axis) < by.ndim and agg.min_count is None and agg.name != "count":
-        agg.min_count = 1
-
-    # This fill_value applies to members of expected_groups not seen in groups
-    # or when the min_count threshold is not satisfied
-    # Use xarray's dtypes.NA to match type promotion rules
-    if fill_value is None:
-        if agg.name in ["any", "all"]:
-            fill_value = False
-        elif not _is_arg_reduction(agg):
-            fill_value = xrdtypes.NA
 
     result = _finalize_results(results, agg, axis, expected_groups, fill_value=fill_value)
     return result
@@ -1519,20 +1502,33 @@ def groupby_reduce(
         array = _move_reduce_dims_to_end(array, axis)
         axis = tuple(array.ndim + np.arange(-len(axis), 0))
 
+    has_dask = is_duck_dask_array(array) or is_duck_dask_array(by)
+
+    # When axis is a subset of possible values; then npg will
+    # apply it to groups that don't exist along a particular axis (for e.g.)
+    # since these count as a group that is absent. thoo!
+    # fill_value applies to all-NaN groups as well as labels in expected_groups that are not found.
+    #     The only way to do this consistently is mask out using min_count
+    #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
+    if min_count is None:
+        if (
+            len(axis) < by.ndim
+            or fill_value is not None
+            # TODO: Fix npg bug where all-NaN rows are 0 instead of NaN
+            or (not has_dask and isinstance(func, str) and func in ["nanvar", "nanstd"])
+        ):
+            min_count = 1
+
+    # TODO: set in xarray?
     if min_count is not None and func in ["nansum", "nanprod"] and fill_value is None:
         # nansum, nanprod have fill_value=0, 1
         # overwrite than when min_count is set
         fill_value = np.nan
 
-    agg = _initialize_aggregation(func, array.dtype, fill_value)
-    agg.min_count = min_count
-    if finalize_kwargs is not None:
-        assert isinstance(finalize_kwargs, dict)
-        agg.finalize_kwargs = finalize_kwargs
-
     kwargs = dict(axis=axis, fill_value=fill_value, engine=engine, sort=sort)
+    agg = _initialize_aggregation(func, array.dtype, fill_value, min_count, finalize_kwargs)
 
-    if not is_duck_dask_array(array) and not is_duck_dask_array(by):
+    if not has_dask:
         results = _reduce_blockwise(array, by, agg, expected_groups=expected_groups, **kwargs)
         groups = (results["groups"],)
         result = results[agg.name]
@@ -1541,20 +1537,9 @@ def groupby_reduce(
         if agg.chunk is None:
             raise NotImplementedError(f"{func} not implemented for dask arrays")
 
-        if agg.min_count is None:
-            # This is needed for the dask pathway.
-            # Because we use intermediate fill_value since a group could be
-            # absent in one block, but present in another block
-            agg.min_count = 1
-
         # we always need some fill_value (see above) so choose the default if needed
         if kwargs["fill_value"] is None:
             kwargs["fill_value"] = agg.fill_value[agg.name]
-
-        agg.chunk += ("nanlen",)
-        agg.combine += ("sum",)
-        agg.fill_value["intermediate"] += (0,)
-        agg.dtype["intermediate"] += (np.intp,)
 
         partial_agg = partial(dask_groupby_agg, agg=agg, split_out=split_out, **kwargs)
 
