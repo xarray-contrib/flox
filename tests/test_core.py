@@ -182,7 +182,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
 
-        actual, *groups = groupby_reduce(array, by, **flox_kwargs)
+        actual, *groups = groupby_reduce(array, *by, **flox_kwargs)
         assert actual.ndim == (array.ndim + nby - 1)
         assert expected.ndim == (array.ndim + nby - 1)
         expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
@@ -197,7 +197,9 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         for method in ["map-reduce", "cohorts", "split-reduce"]:
             if "arg" in func and method != "map-reduce":
                 continue
-            actual, _ = groupby_reduce(array, by, method=method, **flox_kwargs)
+            actual, *groups = groupby_reduce(array, *by, method=method, **flox_kwargs)
+            for actual_group, expect in zip(groups, expected_groups):
+                assert_equal(actual_group, expect)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
             assert_equal(actual, expected)

@@ -1602,6 +1602,9 @@ def groupby_reduce(
             groups = (groups[0][sorted_idx],)
 
     if nby > 1:
+        # nan group labels are factorized to -1, and preserved
+        # now we get rid of them
+        nanmask = groups[0] == -1
         groups = final_groups
-        result = result.reshape(result.shape[:-1] + grp_shape)
+        result = result[..., ~nanmask].reshape(result.shape[:-1] + grp_shape)
     return (result, *groups)
