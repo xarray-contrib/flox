@@ -116,7 +116,7 @@ def test_groupby_reduce(
     elif func == "count":
         expected = np.array(expected, dtype=int)
 
-    result, groups = groupby_reduce(
+    result, groups, = groupby_reduce(
         array,
         by,
         func=func,
@@ -143,7 +143,7 @@ def gen_array_by(size, func):
 
 
 @pytest.mark.parametrize("chunks", [None, 3, 4])
-@pytest.mark.parametrize("nby", [1])
+@pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("size", ((12,), (12, 8)))
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
@@ -163,7 +163,6 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             by[idx][2 * idx : 2 * idx + 3] = np.nan
     by = tuple(by)
     nanmask = reduce(np.logical_or, (np.isnan(b) for b in by))
-    by = by[0]
 
     finalize_kwargs = [{}]
     if "var" in func or "std" in func:
@@ -183,7 +182,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
 
-        actual, *groups = groupby_reduce(array, by, **flox_kwargs)
+        actual, *groups = groupby_reduce(array, *by, **flox_kwargs)
         assert actual.ndim == (array.ndim + nby - 1)
         assert expected.ndim == (array.ndim + nby - 1)
         expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
@@ -198,7 +197,9 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         for method in ["map-reduce", "cohorts", "split-reduce"]:
             if "arg" in func and method != "map-reduce":
                 continue
-            actual, _ = groupby_reduce(array, by, method=method, **flox_kwargs)
+            actual, *groups = groupby_reduce(array, *by, method=method, **flox_kwargs)
+            for actual_group, expect in zip(groups, expected_groups):
+                assert_equal(actual_group, expect)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
             assert_equal(actual, expected)
@@ -813,7 +814,7 @@ def test_datetime_binning():
     time_bins = pd.date_range(start="2010-08-01", end="2010-08-15", freq="24H")
     by = pd.date_range("2010-08-01", "2010-08-15", freq="15min")
 
-    actual = _convert_expected_groups_to_index(time_bins, isbin=True)
+    (actual,) = _convert_expected_groups_to_index((time_bins,), isbin=(True,), sort=False)
     expected = pd.IntervalIndex.from_arrays(time_bins[:-1], time_bins[1:])
     assert_equal(actual, expected)
 
