@@ -144,7 +144,7 @@ def gen_array_by(size, func):
 
 @pytest.mark.parametrize("chunks", [None, 3, 4])
 @pytest.mark.parametrize("nby", [1, 2, 3])
-@pytest.mark.parametrize("size", ((12,), (12, 8)))
+@pytest.mark.parametrize("size", ((12,), (12, 9)))
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
