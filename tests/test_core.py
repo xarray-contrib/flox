@@ -143,10 +143,10 @@ def gen_array_by(size, func):
 
 
 @pytest.mark.parametrize("chunks", [None, 3, 4])
-@pytest.mark.parametrize("nby", [1, 2, 3])
-@pytest.mark.parametrize("size", ((12,), (12, 9)))
+@pytest.mark.parametrize("nby", [2])
+@pytest.mark.parametrize("size", ((12,), ))
 @pytest.mark.parametrize("add_nan_by", [True, False])
-@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("func", ("sum",))
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if chunks is not None and not has_dask:
         pytest.skip()

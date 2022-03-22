@@ -420,35 +420,33 @@ def factorize_(
 
     factorized = []
     found_groups = []
+    # import ipdb; ipdb.set_trace()
     for groupvar, expect in zip(by, expected_groups):
-        if isinstance(expect, pd.IntervalIndex):
-            # when binning we change expected groups to integers marking the interval
-            # this makes the reindexing logic simpler.
-            if expect is None:
-                raise ValueError("Please pass bin edges in expected_groups.")
-            # TODO: fix for binning
+        if expect is not None and reindex:
             found_groups.append(expect)
+        if isinstance(expect, pd.IntervalIndex):
             # pd.cut with bins = IntervalIndex[datetime64] doesn't work...
             if groupvar.dtype.kind == "M":
                 expect = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
-            idx = pd.cut(groupvar.ravel(), bins=expect).codes.copy()
-        else:
-            if expect is not None and reindex:
-                groups = expect
-                if not sort:
-                    sorter = np.argsort(expect)
-                else:
-                    sorter = None
-                idx = np.searchsorted(expect, groupvar.ravel(), sorter=sorter)
-                mask = isnull(groupvar.ravel()) | (idx == len(expect))
-                # TODO: optimize?
-                idx[mask] = -1
-                if not sort:
-                    idx = sorter[idx]
-                    idx[mask] = -1
             else:
-                idx, groups = pd.factorize(groupvar.ravel(), sort=sort)
-
+                expect = np.concatenate([expect.left, [expect.right[-1]]])
+            # idx = pd.cut(groupvar.ravel(), bins=expect).codes.copy()
+        if expect is not None and reindex:
+            if not sort:
+                sorter = np.argsort(expect)
+            else:
+                sorter = None
+            idx = np.searchsorted(expect, groupvar.ravel(), sorter=sorter)
+            # TODO: optimize?
+            # searchsorted using ngroups + 1 as the nan_sentinel, which is what
+            # we eventually want...
+            mask = isnull(groupvar.ravel()) | (idx == len(expect))
+            idx[mask] = -1
+            if not sort:
+                idx = sorter[idx]
+                idx[mask] = -1
+        else:
+            idx, groups = pd.factorize(groupvar.ravel(), sort=sort)
             found_groups.append(np.array(groups))
         factorized.append(idx)
 
@@ -462,6 +460,7 @@ def factorize_(
         group_idx = factorized[0]
 
     if fastpath:
+        group_idx[group_idx == -1] = ngroups
         return group_idx, found_groups, grp_shape
 
     if np.isscalar(axis) and groupvar.ndim > 1:
@@ -480,7 +479,7 @@ def factorize_(
     # note we cannot simply remove the NaN locations;
     # that would mess up argmax, argmin
     nan_sentinel = size if offset_group else ngroups
-    nanmask = group_idx == -1
+    nanmask = (group_idx == -1) | (group_idx == ngroups)
     if nanmask.any():
         # bump it up so there's a place to assign values to the nan_sentinel index
         size += 1
@@ -1316,6 +1315,7 @@ def _factorize_multiple(by, expected_groups, by_is_dask):
         axis=None,  # always None, we offset later if necessary.
         fastpath=True,
     )
+    # import ipdb; ipdb.set_trace()
     if by_is_dask:
         import dask.array
 
@@ -1625,7 +1625,7 @@ def groupby_reduce(
     if nby > 1:
         # nan group labels are factorized to -1, and preserved
         # now we get rid of them
-        nanmask = groups[0] == -1
+        nanmask = (groups[0] == -1) #| (groups[0] == np.max(expected_groups))
         groups = final_groups
         result = result[..., ~nanmask].reshape(result.shape[:-1] + grp_shape)
     return (result, *groups)
