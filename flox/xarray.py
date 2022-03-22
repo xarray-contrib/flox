@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 from typing import TYPE_CHECKING, Hashable, Iterable, Sequence
 
 import numpy as np
@@ -192,7 +191,7 @@ def xarray_reduce(
     if not sort:
         raise NotImplementedError
 
-    # eventually  drop the variables we are grouping by
+    # eventually drop the variables we are grouping by
     maybe_drop = [b for b in by if isinstance(b, str)]
     unindexed_dims = tuple(
         b
@@ -202,7 +201,11 @@ def xarray_reduce(
 
     by: tuple[DataArray] = tuple(obj[g] if isinstance(g, str) else g for g in by)  # type: ignore
 
-    grouper_dims = tuple(itertools.chain(*tuple(g.dims for g in by)))
+    grouper_dims = []
+    for g in by:
+        for d in g.dims:
+            if d not in grouper_dims:
+                grouper_dims.append(d)
 
     if isinstance(obj, xr.DataArray):
         ds = obj._to_temp_dataset()
@@ -210,10 +213,15 @@ def xarray_reduce(
         ds = obj
 
     ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
+
     if dim is Ellipsis:
         dim = tuple(obj.dims)
         if by[0].name in ds.dims and not isbin[0]:
             dim = tuple(d for d in dim if d != by[0].name)
+    elif dim is not None:
+        dim = _atleast_1d(dim)
+    else:
+        dim = tuple()
 
     # TODO: do this for specific reductions only
     bad_dtypes = tuple(
@@ -225,15 +233,11 @@ def xarray_reduce(
     # in the case where dim is Ellipsis, and by.ndim < obj.ndim
     # then we also broadcast `by` to all `obj.dims`
     # TODO: avoid this broadcasting
-    exclude_dims = set(ds.dims) - set(grouper_dims)
-    if dim is not None:
-        exclude_dims -= set(dim)
+    exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim)
     ds, *by = xr.broadcast(ds, *by, exclude=exclude_dims)
 
-    if dim is None:
+    if not dim:
         dim = tuple(by[0].dims)
-    else:
-        dim = _atleast_1d(dim)
 
     if any(d not in grouper_dims and d not in obj.dims for d in dim):
         raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
