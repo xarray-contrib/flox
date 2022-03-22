@@ -429,7 +429,7 @@ def factorize_(
                 else:
                     sorter = None
                 idx = np.searchsorted(expect, groupvar.ravel(), sorter=sorter)
-                mask = isnull(groupvar.ravel())
+                mask = isnull(groupvar.ravel()) | (idx == len(expect))
                 # TODO: optimize?
                 idx[mask] = -1
                 if not sort:
@@ -959,7 +959,7 @@ def split_blocks(applied, split_out, expected_groups, split_name):
     return intermediate, group_chunks
 
 
-def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engine, sort):
+def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engine, sort, reindex):
     """
     Blockwise groupby reduction that produces the final result. This code path is
     also used for non-dask array aggregations.
@@ -989,6 +989,7 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engi
         kwargs=finalize_kwargs,
         engine=engine,
         sort=sort,
+        reindex=reindex,
     )  # type: ignore
 
     if _is_arg_reduction(agg):
@@ -1085,7 +1086,9 @@ def dask_groupby_agg(
     )
     if method == "blockwise":
         #  use the "non dask" code path, but applied blockwise
-        blockwise_method = partial(_reduce_blockwise, agg=agg, fill_value=fill_value)
+        blockwise_method = partial(
+            _reduce_blockwise, agg=agg, fill_value=fill_value, reindex=reindex
+        )
     else:
         # choose `chunk_reduce` or `chunk_argreduce`
         blockwise_method = partial(
@@ -1529,7 +1532,9 @@ def groupby_reduce(
     agg = _initialize_aggregation(func, array.dtype, fill_value, min_count, finalize_kwargs)
 
     if not has_dask:
-        results = _reduce_blockwise(array, by, agg, expected_groups=expected_groups, **kwargs)
+        results = _reduce_blockwise(
+            array, by, agg, expected_groups=expected_groups, reindex=reindex, **kwargs
+        )
         groups = (results["groups"],)
         result = results[agg.name]
 
