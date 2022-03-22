@@ -696,6 +696,7 @@ def _finalize_results(
     axis: Sequence[int],
     expected_groups: pd.Index | None,
     fill_value: Any,
+    reindex: bool,
 ):
     """Finalize results by
     1. Squeezing out dummy dimensions
@@ -730,7 +731,7 @@ def _finalize_results(
             finalized[agg.name] = np.where(count_mask, fill_value, finalized[agg.name])
 
     # Final reindexing has to be here to be lazy
-    if expected_groups is not None:
+    if not reindex and expected_groups is not None:
         finalized[agg.name] = reindex_(
             finalized[agg.name], squeezed["groups"], expected_groups, fill_value=fill_value
         )
@@ -749,10 +750,11 @@ def _aggregate(
     axis: Sequence,
     keepdims,
     fill_value: Any,
+    reindex: bool,
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
     results = combine(x_chunk, agg, axis, keepdims, is_aggregate=True)
-    return _finalize_results(results, agg, axis, expected_groups, fill_value)
+    return _finalize_results(results, agg, axis, expected_groups, fill_value, reindex)
 
 
 def _expand_dims(results: IntermediateDict) -> IntermediateDict:
@@ -1012,7 +1014,9 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engi
         value[mask] = np.nan
         results["intermediates"][0] = value
 
-    result = _finalize_results(results, agg, axis, expected_groups, fill_value=fill_value)
+    result = _finalize_results(
+        results, agg, axis, expected_groups, fill_value=fill_value, reindex=reindex
+    )
     return result
 
 
@@ -1155,6 +1159,7 @@ def dask_groupby_agg(
                 agg=agg,
                 expected_groups=None if split_out > 1 else expected_groups,
                 fill_value=fill_value,
+                reindex=reindex,
             ),
             combine=partial(combine, agg=agg),
             name=f"{name}-reduce",
