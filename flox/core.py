@@ -217,7 +217,9 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
         return chunks_cohorts.values()
 
 
-def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None):
+def rechunk_for_cohorts(
+    array, axis, labels, force_new_chunk_at, chunksize=None, ignore_old_chunks=False, debug=False
+):
     """
     Rechunks array so that each new chunk contains groups that always occur together.
 
@@ -257,6 +259,9 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
     force_new_chunk_at = _atleast_1d(force_new_chunk_at)
     oldchunks = array.chunks[axis]
     oldbreaks = np.insert(np.cumsum(oldchunks), 0, 0)
+    if debug:
+        labels_at_breaks = labels[oldbreaks[:-1]]
+        print(labels_at_breaks[:40])
 
     isbreak = np.isin(labels, force_new_chunk_at)
     if not np.any(isbreak):
@@ -276,13 +281,19 @@ def rechunk_for_cohorts(array, axis, labels, force_new_chunk_at, chunksize=None)
         else:
             next_break_is_close = False
 
-        if idx in oldbreaks or (counter >= chunksize and not next_break_is_close):
+        if (not ignore_old_chunks and idx in oldbreaks) or (
+            counter >= chunksize and not next_break_is_close
+        ):
             divisions.append(idx)
             counter = 1
             continue
         counter += 1
 
     divisions.append(len(labels))
+    if debug:
+        labels_at_breaks = labels[divisions[:-1]]
+        print(labels_at_breaks[:40])
+
     newchunks = tuple(np.diff(divisions))
     assert sum(newchunks) == len(labels)
 

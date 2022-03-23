@@ -393,6 +393,8 @@ def rechunk_for_cohorts(
     labels: DataArray,
     force_new_chunk_at,
     chunksize: int | None = None,
+    ignore_old_chunks: bool = False,
+    debug: bool = False,
 ):
     """
     Rechunks array so that each new chunk contains groups that always occur together.
@@ -428,6 +430,8 @@ def rechunk_for_cohorts(
         labels,
         force_new_chunk_at=force_new_chunk_at,
         chunksize=chunksize,
+        ignore_old_chunks=ignore_old_chunks,
+        debug=debug,
     )
 
 
