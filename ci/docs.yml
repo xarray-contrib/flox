@@ -13,5 +13,7 @@ dependencies:
   - myst-nb
   - sphinx
   - furo
+  - ipykernel
+  - jupyter
   - pip:
     - git+https://github.com/dcherian/flox
