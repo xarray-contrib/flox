@@ -16,6 +16,9 @@ import os
 import sys
 
 import flox
+import flox.aggregations
+import flox.visualize
+import flox.xarray
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -29,7 +32,6 @@ sys.path.insert(0, parent)
 
 # -- General configuration -----------------------------------------------------
 extensions = [
-    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.viewcode",
     "sphinx.ext.autosummary",
@@ -37,6 +39,7 @@ extensions = [
     "sphinx.ext.extlinks",
     "numpydoc",
     "sphinx.ext.napoleon",
+    "myst_nb",
 ]
 
 extlinks = {
@@ -45,7 +48,7 @@ extlinks = {
 }
 
 templates_path = ["_templates"]
-source_suffix = [".rst", ".md"]
+source_suffix = [".rst"]
 master_doc = "index"
 language = "en"
 

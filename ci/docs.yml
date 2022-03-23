@@ -8,7 +8,9 @@ dependencies:
   - numpydoc
   - numpy_groupies
   - toolz
+  - matplotlib-base
   - myst-parser
+  - myst-nb
   - sphinx
   - furo
   - pip:
