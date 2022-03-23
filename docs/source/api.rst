@@ -40,5 +40,5 @@ Aggregation Objects
     :toctree: generated/
 
     aggregations.Aggregation
-    aggregations.sum
+    aggregations.sum_
     aggregations.nansum
