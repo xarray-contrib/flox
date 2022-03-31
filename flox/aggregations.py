@@ -90,9 +90,9 @@ class Aggregation:
         self,
         name,
         *,
+        numpy=None,
         chunk,
         combine,
-        numpy=None,
         preprocess=None,
         aggregate=None,
         finalize=None,
@@ -102,6 +102,46 @@ class Aggregation:
         final_dtype=None,
         reduction_type="reduce",
     ):
+        """
+        Blueprint for computing grouped aggregations.
+
+        See aggregations.py for examples on how to specify reductions.
+
+        Attributes
+        ----------
+        name : str
+            Name of reduction.
+        numpy : str or callable, optional
+            Reduction function applied to numpy inputs. This function should
+            compute the grouped reduction and must have a specific signature.
+            If string, these must be "native" reductions implemented by the backend
+            engines (numpy_groupies, flox, numbagg). If None, will be set to ``name``.
+        chunk : str or tuple of str or callable or tuple of callable
+            For dask inputs only. Either a single function or a list of
+            functions to be applied blockwise on the input dask array.
+        combine : str or tuple of str or callbe or tuple of callable
+            For dask inputs only. Functions applied when combining intermediate
+            results from the blockwise stage (see ``chunk``).
+        finalize : callable
+            For dask inputs only. Function that combines intermediate results to compute
+            final result.
+        preprocess : callable
+            For dask inputs only. Preprocess inputs before ``chunk`` stage.
+        reduction_type : {"reduce", "argreduce"}
+            Type of reduction.
+        fill_value : number or tuple(number), optional
+            Value to use when a group has no members. If single value will be converted
+            to tuple of same length as chunk. If appropriate, provide a different fill_value
+            per reduction in ``chunk`` as a tuple.
+        final_fill_value : optional
+            fill_value for final result.
+        dtypes : DType or tuple(DType), optional
+            dtypes for intermediate results. If single value, will be converted to a tuple
+            of same length as chunk. If appropriate, provide a different fill_value
+            per reduction in ``chunk`` as a tuple.
+        final_dtype : DType, optional
+            DType for output. By default, uses dtype of array being reduced.
+        """
         self.name = name
         # preprocess before blockwise
         self.preprocess = preprocess
@@ -129,6 +169,7 @@ class Aggregation:
         self.dtype[name] = final_dtype
         self.dtype["intermediate"] = self._normalize_dtype_fill_value(dtypes, "dtype")
 
+        # The following are set by _initialize_aggregation
         self.finalize_kwargs = {}
         self.min_count = None
 
