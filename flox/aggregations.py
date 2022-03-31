@@ -116,12 +116,14 @@ class Aggregation:
             compute the grouped reduction and must have a specific signature.
             If string, these must be "native" reductions implemented by the backend
             engines (numpy_groupies, flox, numbagg). If None, will be set to ``name``.
-        chunk : str or tuple of str or callable or tuple of callable
+        chunk : None or str or tuple of str or callable or tuple of callable
             For dask inputs only. Either a single function or a list of
-            functions to be applied blockwise on the input dask array.
-        combine : str or tuple of str or callbe or tuple of callable
+            functions to be applied blockwise on the input dask array. If None, will raise
+            an error for dask inputs.
+        combine : None or str or tuple of str or callbe or tuple of callable
             For dask inputs only. Functions applied when combining intermediate
-            results from the blockwise stage (see ``chunk``).
+            results from the blockwise stage (see ``chunk``). If None, will raise an error
+            for dask inputs.
         finalize : callable
             For dask inputs only. Function that combines intermediate results to compute
             final result.
