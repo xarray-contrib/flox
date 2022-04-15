@@ -1625,7 +1625,7 @@ def groupby_reduce(
     if nby > 1:
         # nan group labels are factorized to -1, and preserved
         # now we get rid of them
-        nanmask = (groups[0] == -1) #| (groups[0] == np.max(expected_groups))
+        nanmask = groups[0] == -1  # | (groups[0] == np.max(expected_groups))
         groups = final_groups
         result = result[..., ~nanmask].reshape(result.shape[:-1] + grp_shape)
     return (result, *groups)
