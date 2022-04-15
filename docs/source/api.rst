@@ -39,6 +39,6 @@ Aggregation Objects
 .. autosummary::
     :toctree: generated/
 
-    aggregations.Aggregation
-    aggregations.sum
+    Aggregation
+    aggregations.sum_
     aggregations.nansum

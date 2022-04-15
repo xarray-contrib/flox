@@ -99,9 +99,9 @@ class Aggregation:
         self,
         name,
         *,
+        numpy=None,
         chunk,
         combine,
-        numpy=None,
         preprocess=None,
         aggregate=None,
         finalize=None,
@@ -111,12 +111,54 @@ class Aggregation:
         final_dtype=None,
         reduction_type="reduce",
     ):
+        """
+        Blueprint for computing grouped aggregations.
+
+        See aggregations.py for examples on how to specify reductions.
+
+        Attributes
+        ----------
+        name : str
+            Name of reduction.
+        numpy : str or callable, optional
+            Reduction function applied to numpy inputs. This function should
+            compute the grouped reduction and must have a specific signature.
+            If string, these must be "native" reductions implemented by the backend
+            engines (numpy_groupies, flox, numbagg). If None, will be set to ``name``.
+        chunk : None or str or tuple of str or callable or tuple of callable
+            For dask inputs only. Either a single function or a list of
+            functions to be applied blockwise on the input dask array. If None, will raise
+            an error for dask inputs.
+        combine : None or str or tuple of str or callbe or tuple of callable
+            For dask inputs only. Functions applied when combining intermediate
+            results from the blockwise stage (see ``chunk``). If None, will raise an error
+            for dask inputs.
+        finalize : callable
+            For dask inputs only. Function that combines intermediate results to compute
+            final result.
+        preprocess : callable
+            For dask inputs only. Preprocess inputs before ``chunk`` stage.
+        reduction_type : {"reduce", "argreduce"}
+            Type of reduction.
+        fill_value : number or tuple(number), optional
+            Value to use when a group has no members. If single value will be converted
+            to tuple of same length as chunk. If appropriate, provide a different fill_value
+            per reduction in ``chunk`` as a tuple.
+        final_fill_value : optional
+            fill_value for final result.
+        dtypes : DType or tuple(DType), optional
+            dtypes for intermediate results. If single value, will be converted to a tuple
+            of same length as chunk. If appropriate, provide a different fill_value
+            per reduction in ``chunk`` as a tuple.
+        final_dtype : DType, optional
+            DType for output. By default, uses dtype of array being reduced.
+        """
         self.name = name
         # preprocess before blockwise
         self.preprocess = preprocess
         # Use "chunk_reduce" or "chunk_argreduce"
         self.reduction_type = reduction_type
-        self.numpy = numpy if numpy else self.name
+        self.numpy = (numpy,) if numpy else (self.name,)
         # initialize blockwise reduction
         self.chunk = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
@@ -138,6 +180,7 @@ class Aggregation:
         self.dtype[name] = final_dtype
         self.dtype["intermediate"] = self._normalize_dtype_fill_value(dtypes, "dtype")
 
+        # The following are set by _initialize_aggregation
         self.finalize_kwargs = {}
         self.min_count = None
 
@@ -172,6 +215,7 @@ class Aggregation:
                 f"combine: {self.combine}",
                 f"aggregate: {self.aggregate}",
                 f"finalize: {self.finalize}",
+                f"min_count: {self.min_count}",
             )
         )
 
@@ -274,9 +318,9 @@ nanstd = Aggregation(
 
 
 min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF)
-nanmin = Aggregation("nanmin", chunk="nanmin", combine="min", fill_value=dtypes.INF)
+nanmin = Aggregation("nanmin", chunk="nanmin", combine="nanmin", fill_value=np.nan)
 max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF)
-nanmax = Aggregation("nanmax", chunk="nanmax", combine="max", fill_value=dtypes.NINF)
+nanmax = Aggregation("nanmax", chunk="nanmax", combine="nanmax", fill_value=np.nan)
 
 
 def argreduce_preprocess(array, axis):
@@ -418,7 +462,13 @@ aggregations = {
 }
 
 
-def _initialize_aggregation(func: str | Aggregation, array_dtype, fill_value) -> Aggregation:
+def _initialize_aggregation(
+    func: str | Aggregation,
+    array_dtype,
+    fill_value,
+    min_count: int,
+    finalize_kwargs,
+) -> Aggregation:
     if not isinstance(func, Aggregation):
         try:
             # TODO: need better interface
@@ -434,6 +484,7 @@ def _initialize_aggregation(func: str | Aggregation, array_dtype, fill_value) ->
         raise ValueError("Bad type for func. Expected str or Aggregation")
 
     agg.dtype[func] = _normalize_dtype(agg.dtype[func], array_dtype, fill_value)
+    agg.dtype["numpy"] = (agg.dtype[func],)
     agg.dtype["intermediate"] = [
         _normalize_dtype(dtype, array_dtype) for dtype in agg.dtype["intermediate"]
     ]
@@ -444,4 +495,27 @@ def _initialize_aggregation(func: str | Aggregation, array_dtype, fill_value) ->
         for dt, fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
     )
     agg.fill_value[func] = _get_fill_value(agg.dtype[func], agg.fill_value[func])
+
+    fv = fill_value if fill_value is not None else agg.fill_value[agg.name]
+    agg.fill_value["numpy"] = (fv,)
+
+    if finalize_kwargs is not None:
+        assert isinstance(finalize_kwargs, dict)
+        agg.finalize_kwargs = finalize_kwargs
+
+    # This is needed for the dask pathway.
+    # Because we use intermediate fill_value since a group could be
+    # absent in one block, but present in another block
+    # We set it for numpy to get nansum, nanprod tests to pass
+    # where the identity element is 0, 1
+    if min_count is not None:
+        agg.min_count = min_count
+        agg.chunk += ("nanlen",)
+        agg.numpy += ("nanlen",)
+        agg.combine += ("sum",)
+        agg.fill_value["intermediate"] += (0,)
+        agg.fill_value["numpy"] += (0,)
+        agg.dtype["intermediate"] += (np.intp,)
+        agg.dtype["numpy"] += (np.intp,)
+
     return agg

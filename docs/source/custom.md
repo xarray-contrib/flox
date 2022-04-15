@@ -4,6 +4,8 @@
 It also allows you to specify a custom Aggregation (again inspired by dask.dataframe),
 though this might not be fully functional at the moment. See `aggregations.py` for examples.
 
+See the ["Custom Aggregations"](user-stories/custom-aggregations.ipynb) user story for a more user-friendly example.
+
 ```python
     mean = Aggregation(
         # name used for dask tasks

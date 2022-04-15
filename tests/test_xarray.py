@@ -73,42 +73,100 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
     # assert_equal(expected, actual)
 
 
-def test_xarray_reduce_multiple_groupers(engine):
-    arr = np.ones((4, 12))
+# TODO: sort
+@pytest.mark.parametrize("pass_expected_groups", [True, False])
+@pytest.mark.parametrize("chunk", (True, False))
+def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
+    if not has_dask and chunk:
+        pytest.skip()
 
+    if chunk and pass_expected_groups is False:
+        pytest.skip()
+
+    arr = np.ones((4, 12))
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
-    labels = np.array(labels)
     labels2 = np.array([1, 2, 2, 1])
 
     da = xr.DataArray(
         arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels": ("y", labels)}
     ).expand_dims(z=4)
 
+    if chunk:
+        da = da.chunk({"x": 2, "z": 1})
+
     expected = xr.DataArray(
-        [[4, 4], [10, 10], [8, 8], [2, 2]],
+        [[4, 4], [8, 8], [10, 10], [2, 2]],
         dims=("labels", "labels2"),
-        coords={"labels": ["a", "c", "b", "f"], "labels2": [1, 2]},
+        coords={"labels": ["a", "b", "c", "f"], "labels2": [1, 2]},
     ).expand_dims(z=4)
 
-    actual = xarray_reduce(da, da.labels, da.labels2, func="count", engine=engine)
+    kwargs = dict(func="count", engine=engine)
+    if pass_expected_groups:
+        kwargs["expected_groups"] = (expected.labels.data, expected.labels2.data)
+
+    with raise_if_dask_computes():
+        actual = xarray_reduce(da, da.labels, da.labels2, **kwargs)
     xr.testing.assert_identical(expected, actual)
 
-    actual = xarray_reduce(da, "labels", da.labels2, func="count", engine=engine)
+    with raise_if_dask_computes():
+        actual = xarray_reduce(da, "labels", da.labels2, **kwargs)
     xr.testing.assert_identical(expected, actual)
 
-    actual = xarray_reduce(da, "labels", "labels2", func="count", engine=engine)
+    with raise_if_dask_computes():
+        actual = xarray_reduce(da, "labels", "labels2", **kwargs)
     xr.testing.assert_identical(expected, actual)
 
-    if has_dask:
-        with raise_if_dask_computes():
-            actual = xarray_reduce(
-                da.chunk({"x": 2, "z": 1}), da.labels, da.labels2, func="count", engine=engine
-            )
-        xr.testing.assert_identical(expected, actual)
+    if pass_expected_groups:
+        kwargs["expected_groups"] = (expected.labels2.data, expected.labels.data)
+    with raise_if_dask_computes():
+        actual = xarray_reduce(da, "labels2", "labels", **kwargs)
+    xr.testing.assert_identical(expected.transpose("z", "labels2", "labels"), actual)
 
-        with pytest.raises(NotImplementedError):
-            xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
-    # xr.testing.assert_identical(expected, actual)
+
+@pytest.mark.parametrize("pass_expected_groups", [True, False])
+@pytest.mark.parametrize("chunk", (True, False))
+def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
+    if not has_dask and chunk:
+        pytest.skip()
+
+    if chunk and pass_expected_groups is False:
+        pytest.skip()
+
+    arr = np.ones((2, 12))
+    labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
+
+    da = xr.DataArray(
+        arr, dims=("x", "y"), coords={"labels2": ("y", labels), "labels": ("y", labels)}
+    ).expand_dims(z=4)
+
+    if chunk:
+        da = da.chunk({"x": 2, "z": 1})
+
+    expected = xr.DataArray(
+        [[2, 0, 0, 0], [0, 4, 0, 0], [0, 0, 5, 0], [0, 0, 0, 1]],
+        dims=("labels", "labels2"),
+        coords={
+            "labels": ["a", "b", "c", "f"],
+            "labels2": ["a", "b", "c", "f"],
+        },
+    ).expand_dims(z=4, x=2)
+
+    kwargs = dict(func="count", engine=engine)
+    if pass_expected_groups:
+        kwargs["expected_groups"] = (expected.labels.data, expected.labels.data)
+
+    with raise_if_dask_computes():
+        actual = xarray_reduce(da, "labels", "labels2", **kwargs)
+    xr.testing.assert_identical(expected, actual)
+
+
+@requires_dask
+def test_dask_groupers_error():
+    da = xr.DataArray(
+        [1.0, 2.0], dims="x", coords={"labels": ("x", [1, 2]), "labels2": ("x", [1, 2])}
+    )
+    with pytest.raises(ValueError):
+        xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
 
 
 @requires_dask
@@ -165,7 +223,7 @@ def test_xarray_reduce_errors():
         xarray_reduce(da, by, func="mean", dim="foo")
 
     if has_dask:
-        with pytest.raises(NotImplementedError, match="provide expected_groups"):
+        with pytest.raises(ValueError, match="provide expected_groups"):
             xarray_reduce(da, by.chunk(), func="mean")
 
 

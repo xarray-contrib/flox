@@ -8,8 +8,12 @@ dependencies:
   - numpydoc
   - numpy_groupies
   - toolz
+  - matplotlib-base
   - myst-parser
+  - myst-nb
   - sphinx
   - furo
+  - ipykernel
+  - jupyter
   - pip:
     - git+https://github.com/dcherian/flox
