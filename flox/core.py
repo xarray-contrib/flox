@@ -1005,20 +1005,6 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engi
         reindex=reindex,
     )  # type: ignore
 
-    if _is_arg_reduction(agg):
-        if array.ndim > 1:
-            # default fill_value is -1; we can't unravel that;
-            # so replace -1 with 0; unravel; then replace 0 with -1
-            # UGH!
-            idx = results["intermediates"][0]
-            mask = idx == agg.fill_value["numpy"][0]
-            idx[mask] = 0
-            # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
-            # will return wrong indices
-            idx = np.unravel_index(idx, array.shape)[-1]
-            idx[mask] = agg.fill_value["numpy"][0]
-            results["intermediates"][0] = idx
-
     result = _finalize_results(
         results, agg, axis, expected_groups, fill_value=fill_value, reindex=reindex
     )
