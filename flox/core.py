@@ -522,16 +522,21 @@ def chunk_argreduce(
         sort=sort,
     )
     if not isnull(results["groups"]).all():
-        # will not work for empty groups...
-        # glorious
         idx = np.broadcast_to(idx, array.shape)
+
+        # array, by get flattened to 1D before passing to npg
+        # so the indexes need to be unraveled
         newidx = np.unravel_index(results["intermediates"][1], array.shape)
+
+        # Now index into the actual "global" indexes `idx`
         results["intermediates"][1] = idx[newidx]
 
     if reindex and expected_groups is not None:
         results["intermediates"][1] = reindex_(
             results["intermediates"][1], results["groups"].squeeze(), expected_groups, fill_value=0
         )
+
+    assert results["intermediates"][0].shape == results["intermediates"][1].shape
 
     return results
 
@@ -880,7 +885,8 @@ def _grouped_combine(
             _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis) for idx in (0, 1)
         )
 
-        # for a single chunk along axis, we don't want to run the argreduction twice
+        # for a single element along axis, we don't want to run the argreduction twice
+        # This happens when we are reducing along an axis with a single chunk.
         avoid_reduction = array_idx[0].shape[axis[0]] == 1
         if avoid_reduction:
             results = {"groups": groups, "intermediates": list(array_idx)}
@@ -1014,6 +1020,9 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engi
         sort=sort,
         reindex=reindex,
     )  # type: ignore
+
+    if _is_arg_reduction(agg):
+        results["intermediates"][0] = np.unravel_index(results["intermediates"][0], array.shape)[-1]
 
     result = _finalize_results(
         results, agg, axis, expected_groups, fill_value=fill_value, reindex=reindex
