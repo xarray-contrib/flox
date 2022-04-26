@@ -142,7 +142,7 @@ def gen_array_by(size, func):
     return array, by
 
 
-@pytest.mark.parametrize("chunks", [None, 3, 4])
+@pytest.mark.parametrize("chunks", [None, -1, 3, 4])
 @pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("size", ((12,), (12, 9)))
 @pytest.mark.parametrize("add_nan_by", [True, False])

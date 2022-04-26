@@ -879,34 +879,44 @@ def _grouped_combine(
         array_idx = tuple(
             _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis) for idx in (0, 1)
         )
-        results = chunk_argreduce(
-            array_idx,
-            groups,
-            func=agg.combine[slicer],  # count gets treated specially next
-            axis=axis,
-            expected_groups=None,
-            fill_value=agg.fill_value["intermediate"][slicer],
-            dtype=agg.dtype["intermediate"][slicer],
-            engine=engine,
-            sort=sort,
-        )
+
+        # for a single chunk along axis, we don't want to run the argreduction twice
+        avoid_reduction = array_idx[0].shape[axis[0]] == 1
+        if avoid_reduction:
+            results = {"groups": groups, "intermediates": list(array_idx)}
+        else:
+            results = chunk_argreduce(
+                array_idx,
+                groups,
+                func=agg.combine[slicer],  # count gets treated specially next
+                axis=axis,
+                expected_groups=None,
+                fill_value=agg.fill_value["intermediate"][slicer],
+                dtype=agg.dtype["intermediate"][slicer],
+                engine=engine,
+                sort=sort,
+            )
 
         if agg.chunk[-1] == "nanlen":
             counts = _conc2(x_chunk, key1="intermediates", key2=2, axis=axis)
-            # sum the counts
-            results["intermediates"].append(
-                chunk_reduce(
-                    counts,
-                    groups,
-                    func="sum",
-                    axis=axis,
-                    expected_groups=None,
-                    fill_value=(0,),
-                    dtype=(np.intp,),
-                    engine=engine,
-                    sort=sort,
-                )["intermediates"][0]
-            )
+
+            if avoid_reduction:
+                results["intermediates"].append(counts)
+            else:
+                # sum the counts
+                results["intermediates"].append(
+                    chunk_reduce(
+                        counts,
+                        groups,
+                        func="sum",
+                        axis=axis,
+                        expected_groups=None,
+                        fill_value=(0,),
+                        dtype=(np.intp,),
+                        engine=engine,
+                        sort=sort,
+                    )["intermediates"][0]
+                )
 
     elif agg.reduction_type == "reduce":
         # Here we reduce the intermediates individually
