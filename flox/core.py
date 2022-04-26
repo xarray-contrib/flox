@@ -1018,12 +1018,6 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engi
             idx = np.unravel_index(idx, array.shape)[-1]
             idx[mask] = agg.fill_value["numpy"][0]
             results["intermediates"][0] = idx
-    elif agg.name in ["nanvar", "nanstd"]:
-        # TODO: Fix npg bug where all-NaN rows are 0 instead of NaN
-        value, counts = results["intermediates"]
-        mask = counts <= 0
-        value[mask] = np.nan
-        results["intermediates"][0] = value
 
     result = _finalize_results(
         results, agg, axis, expected_groups, fill_value=fill_value, reindex=reindex
@@ -1530,12 +1524,7 @@ def groupby_reduce(
     #     The only way to do this consistently is mask out using min_count
     #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
     if min_count is None:
-        if (
-            len(axis) < by.ndim
-            or fill_value is not None
-            # TODO: Fix npg bug where all-NaN rows are 0 instead of NaN
-            or (not has_dask and isinstance(func, str) and func in ["nanvar", "nanstd"])
-        ):
+        if len(axis) < by.ndim or fill_value is not None:
             min_count = 1
 
     # TODO: set in xarray?
