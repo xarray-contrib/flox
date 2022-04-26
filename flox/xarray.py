@@ -223,11 +223,6 @@ def xarray_reduce(
     else:
         dim = tuple()
 
-    # TODO: do this for specific reductions only
-    bad_dtypes = tuple(
-        k for k in ds.variables if k not in ds.dims and ds[k].dtype.kind in ("S", "U")
-    )
-
     # broadcast all variables against each other along all dimensions in `by` variables
     # don't exclude `dim` because it need not be a dimension in any of the `by` variables!
     # in the case where dim is Ellipsis, and by.ndim < obj.ndim
@@ -303,8 +298,6 @@ def xarray_reduce(
     if isinstance(obj, xr.Dataset):
         # broadcasting means the group dim gets added to ds, so we check the original obj
         for k, v in obj.data_vars.items():
-            if k in bad_dtypes:
-                continue
             is_missing_dim = not (any(d in v.dims for d in dim))
             if is_missing_dim:
                 missing_dim[k] = v
@@ -314,7 +307,7 @@ def xarray_reduce(
 
     actual = xr.apply_ufunc(
         wrapper,
-        ds.drop_vars(tuple(missing_dim) + bad_dtypes).transpose(..., *grouper_dims),
+        ds.drop_vars(tuple(missing_dim)).transpose(..., *grouper_dims),
         *by,
         input_core_dims=input_core_dims,
         # for xarray's test_groupby_duplicate_coordinate_labels
