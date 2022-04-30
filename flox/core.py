@@ -509,6 +509,7 @@ def chunk_argreduce(
     dask.array.reductions.argtopk
     """
     array, idx = array_plus_idx
+    by = np.broadcast_to(by, array.shape)
 
     results = chunk_reduce(
         array,
