@@ -1449,10 +1449,10 @@ def groupby_reduce(
     xarray.xarray_reduce
     """
 
-    if engine in ["flox", "numba"] and _is_arg_reduction(func):
+    if engine == "flox" and _is_arg_reduction(func):
         raise NotImplementedError(
-            "argreductions not supported for engine='flox' or engine='numba' yet."
-            "Try engine='numpy' instead."
+            "argreductions not supported for engine='flox' yet."
+            "Try engine='numpy' or engine='numba' instead."
         )
     reindex = _validate_reindex(reindex, func, method, expected_groups)
 
