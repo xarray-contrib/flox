@@ -12,7 +12,7 @@ dependencies:
   - dask-core
   - numpydoc
   - pre-commit
-  - numpy_groupies
+  - numpy_groupies>=0.9.15
   - pooch
   - toolz
   - numba

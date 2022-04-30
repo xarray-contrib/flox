@@ -509,6 +509,7 @@ def chunk_argreduce(
     dask.array.reductions.argtopk
     """
     array, idx = array_plus_idx
+    by = np.broadcast_to(by, array.shape)
 
     results = chunk_reduce(
         array,
@@ -522,16 +523,21 @@ def chunk_argreduce(
         sort=sort,
     )
     if not isnull(results["groups"]).all():
-        # will not work for empty groups...
-        # glorious
         idx = np.broadcast_to(idx, array.shape)
+
+        # array, by get flattened to 1D before passing to npg
+        # so the indexes need to be unraveled
         newidx = np.unravel_index(results["intermediates"][1], array.shape)
+
+        # Now index into the actual "global" indexes `idx`
         results["intermediates"][1] = idx[newidx]
 
     if reindex and expected_groups is not None:
         results["intermediates"][1] = reindex_(
             results["intermediates"][1], results["groups"].squeeze(), expected_groups, fill_value=0
         )
+
+    assert results["intermediates"][0].shape == results["intermediates"][1].shape
 
     return results
 
@@ -879,34 +885,45 @@ def _grouped_combine(
         array_idx = tuple(
             _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis) for idx in (0, 1)
         )
-        results = chunk_argreduce(
-            array_idx,
-            groups,
-            func=agg.combine[slicer],  # count gets treated specially next
-            axis=axis,
-            expected_groups=None,
-            fill_value=agg.fill_value["intermediate"][slicer],
-            dtype=agg.dtype["intermediate"][slicer],
-            engine=engine,
-            sort=sort,
-        )
+
+        # for a single element along axis, we don't want to run the argreduction twice
+        # This happens when we are reducing along an axis with a single chunk.
+        avoid_reduction = array_idx[0].shape[axis[0]] == 1
+        if avoid_reduction:
+            results = {"groups": groups, "intermediates": list(array_idx)}
+        else:
+            results = chunk_argreduce(
+                array_idx,
+                groups,
+                func=agg.combine[slicer],  # count gets treated specially next
+                axis=axis,
+                expected_groups=None,
+                fill_value=agg.fill_value["intermediate"][slicer],
+                dtype=agg.dtype["intermediate"][slicer],
+                engine=engine,
+                sort=sort,
+            )
 
         if agg.chunk[-1] == "nanlen":
             counts = _conc2(x_chunk, key1="intermediates", key2=2, axis=axis)
-            # sum the counts
-            results["intermediates"].append(
-                chunk_reduce(
-                    counts,
-                    groups,
-                    func="sum",
-                    axis=axis,
-                    expected_groups=None,
-                    fill_value=(0,),
-                    dtype=(np.intp,),
-                    engine=engine,
-                    sort=sort,
-                )["intermediates"][0]
-            )
+
+            if avoid_reduction:
+                results["intermediates"].append(counts)
+            else:
+                # sum the counts
+                results["intermediates"].append(
+                    chunk_reduce(
+                        counts,
+                        groups,
+                        func="sum",
+                        axis=axis,
+                        expected_groups=None,
+                        fill_value=(0,),
+                        dtype=(np.intp,),
+                        engine=engine,
+                        sort=sort,
+                    )["intermediates"][0]
+                )
 
     elif agg.reduction_type == "reduce":
         # Here we reduce the intermediates individually
@@ -1006,24 +1023,7 @@ def _reduce_blockwise(array, by, agg, *, axis, expected_groups, fill_value, engi
     )  # type: ignore
 
     if _is_arg_reduction(agg):
-        if array.ndim > 1:
-            # default fill_value is -1; we can't unravel that;
-            # so replace -1 with 0; unravel; then replace 0 with -1
-            # UGH!
-            idx = results["intermediates"][0]
-            mask = idx == agg.fill_value["numpy"][0]
-            idx[mask] = 0
-            # Fix npg bug where argmax with nD array, 1D group_idx, axis=-1
-            # will return wrong indices
-            idx = np.unravel_index(idx, array.shape)[-1]
-            idx[mask] = agg.fill_value["numpy"][0]
-            results["intermediates"][0] = idx
-    elif agg.name in ["nanvar", "nanstd"]:
-        # TODO: Fix npg bug where all-NaN rows are 0 instead of NaN
-        value, counts = results["intermediates"]
-        mask = counts <= 0
-        value[mask] = np.nan
-        results["intermediates"][0] = value
+        results["intermediates"][0] = np.unravel_index(results["intermediates"][0], array.shape)[-1]
 
     result = _finalize_results(
         results, agg, axis, expected_groups, fill_value=fill_value, reindex=reindex
@@ -1530,12 +1530,7 @@ def groupby_reduce(
     #     The only way to do this consistently is mask out using min_count
     #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
     if min_count is None:
-        if (
-            len(axis) < by.ndim
-            or fill_value is not None
-            # TODO: Fix npg bug where all-NaN rows are 0 instead of NaN
-            or (not has_dask and isinstance(func, str) and func in ["nanvar", "nanstd"])
-        ):
+        if len(axis) < by.ndim or fill_value is not None:
             min_count = 1
 
     # TODO: set in xarray?
