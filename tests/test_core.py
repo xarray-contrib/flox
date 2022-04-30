@@ -150,7 +150,7 @@ def gen_array_by(size, func):
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if chunks is not None and not has_dask:
         pytest.skip()
-    if "arg" in func and engine == "flox":
+    if "arg" in func and engine in ["flox", "numba"]:
         pytest.skip()
 
     array, by = gen_array_by(size, func)
@@ -312,7 +312,7 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     if func in ["first", "last"]:
         pytest.skip()
 
-    if "arg" in func and (engine == "flox" or reindex):
+    if "arg" in func and (engine in ["flox", "numba"] or reindex):
         pytest.skip()
 
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
@@ -440,7 +440,7 @@ def test_dask_reduce_axis_subset():
     "axis", [None, (0, 1, 2), (0, 1), (0, 2), (1, 2), 0, 1, 2, (0,), (1,), (2,)]
 )
 def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
-    if "arg" in func and engine == "flox":
+    if "arg" in func and engine in ["flox", "numba"]:
         pytest.skip()
 
     if not isinstance(axis, int) and "arg" in func and (axis is None or len(axis) > 1):
@@ -752,7 +752,7 @@ def test_cohorts_nd_by(func, method, axis, engine):
     by[0, 4] = 31
     array = np.broadcast_to(array, (2, 3) + array.shape)
 
-    if "arg" in func and (axis is None or engine == "flox"):
+    if "arg" in func and (axis is None or engine in ["flox", "numba"]):
         pytest.skip()
 
     if func in ["any", "all"]:
