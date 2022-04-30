@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest"]
-        python-version: ["3.7", "3.8", "3.9"]
+        python-version: ["3.8", "3.10"]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -74,28 +74,3 @@ jobs:
           env_vars: RUNNER_OS,PYTHON_VERSION
           name: codecov-umbrella
           fail_ci_if_error: false
-
-  # docs-build:
-  #   name: Documentation build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-  #     - name: set up Python 3.8
-  #       uses: actions/setup-python@v2
-  #       with:
-  #           python-version: 3.8
-
-  #     - name: Install package
-  #       run: |
-  #         python -m pip install --upgrade pip
-  #         python -m pip install -e .
-
-  #     - name: Install documentation dependencies
-  #       run: |
-  #         python -m pip install -r docs/requirements-docs.txt
-
-  #     - name: Build docs
-  #       run: |
-  #         cd docs
-  #         make html
