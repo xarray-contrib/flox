@@ -1459,6 +1459,10 @@ def groupby_reduce(
     by: tuple = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(by)
     by_is_dask = any(is_duck_dask_array(b) for b in by)
+
+    if method in ["split-reduce", "cohorts"] and by_is_dask:
+        raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
+
     if not is_duck_array(array):
         array = np.asarray(array)
     if isinstance(isbin, bool):
@@ -1477,9 +1481,11 @@ def groupby_reduce(
     # (pd.IntervalIndex or not)
     expected_groups = _convert_expected_groups_to_index(expected_groups, isbin, sort)
 
-    # when grouping by multiple variables, we factorize early.
     # TODO: could restrict this to dask-only
-    if nby > 1:
+    factorize_early = (nby > 1) or (
+        any(isbin) and method in ["split-reduce", "cohorts"] and is_duck_dask_array(array)
+    )
+    if factorize_early:
         by, final_groups, grp_shape = _factorize_multiple(
             by, expected_groups, by_is_dask=by_is_dask
         )
@@ -1497,6 +1503,7 @@ def groupby_reduce(
     if method in ["blockwise", "cohorts", "split-reduce"] and len(axis) != by.ndim:
         raise NotImplementedError(
             "Must reduce along all dimensions of `by` when method != 'map-reduce'."
+            f"Received method={method!r}"
         )
 
     # TODO: make sure expected_groups is unique
@@ -1617,10 +1624,12 @@ def groupby_reduce(
             result = result[..., sorted_idx]
             groups = (groups[0][sorted_idx],)
 
-    if nby > 1:
+    if factorize_early:
         # nan group labels are factorized to -1, and preserved
-        # now we get rid of them
-        nanmask = groups[0] == -1
+        # now we get rid of them by reindexing
+        # This also handles bins with no data
+        result = reindex_(
+            result, from_=groups[0], to=expected_groups, fill_value=fill_value
+        ).reshape(result.shape[:-1] + grp_shape)
         groups = final_groups
-        result = result[..., ~nanmask].reshape(result.shape[:-1] + grp_shape)
     return (result, *groups)
