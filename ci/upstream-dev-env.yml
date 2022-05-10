@@ -8,6 +8,10 @@ dependencies:
   - pooch
   - toolz
   - numba
+  - pytest
+  - pytest-cov
+  - pytest-xdist
+  - pip
   - pip:
     - git+https://github.com/pydata/xarray
     - git+https://github.com/pandas-dev/pandas
