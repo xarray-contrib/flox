@@ -582,11 +582,15 @@ def test_npg_nanarg_bug(func):
     assert_equal(actual, expected)
 
 
+@pytest.mark.parametrize("method", ["split-reduce", "cohorts", "map-reduce"])
 @pytest.mark.parametrize("chunk_labels", [False, True])
 @pytest.mark.parametrize("chunks", ((), (1,), (2,)))
-def test_groupby_bins(chunk_labels, chunks, engine) -> None:
+def test_groupby_bins(chunk_labels, chunks, engine, method) -> None:
     array = [1, 1, 1, 1, 1, 1]
     labels = [0.2, 1.5, 1.9, 2, 3, 20]
+
+    if method in ["split-reduce", "cohorts"] and chunk_labels:
+        pytest.xfail()
 
     if chunks:
         if not has_dask:
@@ -604,6 +608,7 @@ def test_groupby_bins(chunk_labels, chunks, engine) -> None:
             isbin=True,
             fill_value=0,
             engine=engine,
+            method=method,
         )
     expected = np.array([3, 1, 0])
     for left, right in zip(groups, pd.IntervalIndex.from_arrays([1, 2, 4], [2, 4, 5]).to_numpy()):
