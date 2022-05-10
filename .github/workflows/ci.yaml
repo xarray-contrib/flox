@@ -74,3 +74,26 @@ jobs:
           env_vars: RUNNER_OS,PYTHON_VERSION
           name: codecov-umbrella
           fail_ci_if_error: false
+
+  upstream-dev:
+    name: upstream-dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          channels: conda-forge
+          mamba-version: "*"
+          activate-environment: flox-tests
+          auto-update-conda: false
+          python-version: 3.10
+      - name: Set up conda environment
+        shell: bash -l {0}
+        run: |
+          mamba env update -f ci/upstream-dev-env.yml
+          python -m pip install -e .
+          conda list
+      - name: Run Tests
+        shell: bash -l {0}
+        run: |
+          pytest -n 2
