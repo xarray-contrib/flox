@@ -60,7 +60,7 @@ author = "Deepak Cherian"
 
 # Myst_nb options
 nb_execution_excludepatterns = ["climatology-hourly"]
-
+nb_execution_raise_on_error = True
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
