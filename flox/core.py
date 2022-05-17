@@ -1583,6 +1583,10 @@ def groupby_reduce(
                     array_subset = np.take(array_subset, idxr, axis=ax)
                 numblocks = np.prod([len(array_subset.chunks[ax]) for ax in axis])
 
+                # First deep copy becasue we might be doping blockwise,
+                # which sets agg.finalize=None, then map-reduce (GH102)
+                agg = copy.deepcopy(agg)
+
                 # get final result for these groups
                 r, *g = partial_agg(
                     array_subset,
