@@ -400,3 +400,16 @@ def test_cache():
 
     xarray_reduce(ds, "labels", func="mean", method="blockwise")
     assert len(cache.data) == 2
+
+
+@pytest.mark.parametrize("use_cftime", [True, False])
+def test_datetime_array_reduce(use_cftime):
+
+    time = xr.DataArray(
+        xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
+        dims=("time",),
+        name="time",
+    )
+    expected = time.resample(time="YS").count()  # fails
+    actual = resample_reduce(time.resample(time="YS"), func="count", engine="flox")
+    assert_equal(expected, actual)

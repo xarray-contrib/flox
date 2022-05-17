@@ -2,6 +2,8 @@ from functools import partial
 
 import numpy as np
 
+from .xrutils import isnull
+
 
 def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None):
     """
@@ -36,7 +38,7 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
 
 
 def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
-    result = func(group_idx, np.where(np.isnan(array), fillna, array), *args, **kwargs)
+    result = func(group_idx, np.where(isnull(array), fillna, array), *args, **kwargs)
     # np.nanmax([np.nan, np.nan]) = np.nan
     # To recover this behaviour, we need to search for the fillna value
     # (either np.inf or -np.inf), and replace with NaN
@@ -74,7 +76,7 @@ def sum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, dty
 def nansum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     return sum_of_squares(
         group_idx,
-        np.where(np.isnan(array), 0, array),
+        np.where(isnull(array), 0, array),
         size=size,
         fill_value=fill_value,
         axis=axis,
@@ -83,7 +85,7 @@ def nansum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, 
 
 
 def nanlen(group_idx, array, *args, **kwargs):
-    return sum(group_idx, (~np.isnan(array)).astype(int), *args, **kwargs)
+    return sum(group_idx, (~isnull(array)).astype(int), *args, **kwargs)
 
 
 def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
