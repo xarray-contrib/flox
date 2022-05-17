@@ -321,6 +321,9 @@ def test_multi_index_groupby_sum(engine):
     actual = xarray_reduce(stacked, "space", dim="z", func="sum", engine=engine)
     assert_equal(expected, actual.unstack("space"))
 
+    actual = xarray_reduce(stacked.foo, "space", dim="z", func="sum", engine=engine)
+    assert_equal(expected.foo, actual.unstack("space"))
+
     ds = xr.Dataset(
         dict(a=(("z",), np.ones(10))),
         coords=dict(b=(("z"), np.arange(2).repeat(5)), c=(("z"), np.arange(5).repeat(2))),

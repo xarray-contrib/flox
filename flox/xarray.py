@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Hashable, Iterable, Sequence
 import numpy as np
 import pandas as pd
 import xarray as xr
+from packaging.version import Version
 
 from .aggregations import Aggregation, _atleast_1d
 from .core import (
@@ -351,6 +352,8 @@ def xarray_reduce(
             levelnames = ds.indexes[name].names
             expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
             actual[name] = expect
+            if Version(xr.__version__) > Version("2022.03.0"):
+                actual = actual.set_coords(levelnames)
         else:
             actual[name] = expect
 
@@ -363,7 +366,8 @@ def xarray_reduce(
                 template = obj
             else:
                 template = obj[var]
-            actual[var] = _restore_dim_order(actual[var], template, by[0])
+            if actual[var].ndim > 1:
+                actual[var] = _restore_dim_order(actual[var], template, by[0])
 
     if missing_dim:
         for k, v in missing_dim.items():
