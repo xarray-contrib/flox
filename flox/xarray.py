@@ -345,12 +345,15 @@ def xarray_reduce(
             expect = expect.to_numpy()
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
-        actual[name] = expect
-
-    # if grouping by multi-indexed variable, then restore it
-    for name, index in ds.indexes.items():
-        if name in actual.indexes and isinstance(index, pd.MultiIndex):
-            actual[name] = index
+        # When grouping by MultiIndex, expect is an pd.Index wrapping
+        # an object array of tuples
+        if name in ds.indexes and isinstance(ds.indexes[name], pd.MultiIndex):
+            levelnames = ds.indexes[name].names
+            expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
+            actual[name] = expect
+            actual = actual.set_coords(levelnames)
+        else:
+            actual[name] = expect
 
     if unindexed_dims:
         actual = actual.drop_vars(unindexed_dims)
@@ -370,9 +373,9 @@ def xarray_reduce(
             }
             # The expand_dims is for backward compat with xarray's questionable behaviour
             if missing_group_dims:
-                actual[k] = v.expand_dims(missing_group_dims)
+                actual[k] = v.expand_dims(missing_group_dims).variable
             else:
-                actual[k] = v
+                actual[k] = v.variable
 
     if isinstance(obj, xr.DataArray):
         return obj._from_temp_dataset(actual)

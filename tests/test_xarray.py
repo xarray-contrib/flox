@@ -321,6 +321,14 @@ def test_multi_index_groupby_sum(engine):
     actual = xarray_reduce(stacked, "space", dim="z", func="sum", engine=engine)
     assert_equal(expected, actual.unstack("space"))
 
+    ds = xr.Dataset(
+        dict(a=(("z",), np.ones(10))),
+        coords=dict(b=(("z"), np.arange(2).repeat(5)), c=(("z"), np.arange(5).repeat(2))),
+    ).set_index(bc=["b", "c"])
+    expected = ds.groupby("bc").sum()
+    actual = xarray_reduce(ds, "bc", func="sum")
+    assert_equal(expected, actual)
+
 
 @pytest.mark.parametrize("chunks", (None, 2))
 def test_xarray_groupby_bins(chunks, engine):
