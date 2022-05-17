@@ -351,7 +351,6 @@ def xarray_reduce(
             levelnames = ds.indexes[name].names
             expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
             actual[name] = expect
-            actual = actual.set_coords(levelnames)
         else:
             actual[name] = expect
 
