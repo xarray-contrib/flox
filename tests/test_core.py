@@ -830,6 +830,17 @@ def test_datetime_binning():
     assert_equal(group_idx, expected)
 
 
+@pytest.mark.parametrize("func", ALL_FUNCS)
+def test_bool_reductions(func, engine):
+    if "arg" in func and engine == "flox":
+        pytest.skip()
+    groups = np.array([1, 1, 1])
+    data = np.array([True, True, False])
+    expected = np.expand_dims(getattr(np, func)(data), -1)
+    actual, _ = groupby_reduce(data, groups, func=func, engine=engine)
+    assert_equal(expected, actual)
+
+
 @requires_dask
 def test_map_reduce_blockwise_mixed():
     t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()

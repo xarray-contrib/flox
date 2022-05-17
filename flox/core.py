@@ -1465,6 +1465,8 @@ def groupby_reduce(
 
     if not is_duck_array(array):
         array = np.asarray(array)
+    array = array.astype(int) if np.issubdtype(array.dtype, bool) else array
+
     if isinstance(isbin, bool):
         isbin = (isbin,) * len(by)
     if expected_groups is None:
