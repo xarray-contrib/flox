@@ -828,3 +828,14 @@ def test_datetime_binning():
     expected = pd.cut(by, time_bins).codes.copy()
     expected[0] = 14  # factorize doesn't return -1 for nans
     assert_equal(group_idx, expected)
+
+
+@pytest.mark.parametrize("func", ALL_FUNCS)
+def test_bool_reductions(func, engine):
+    if "arg" in func and engine == "flox":
+        pytest.skip()
+    groups = np.array([1, 1, 1])
+    data = np.array([True, True, False])
+    expected = np.expand_dims(getattr(np, func)(data), -1)
+    actual, _ = groupby_reduce(data, groups, func=func, engine=engine)
+    assert_equal(expected, actual)

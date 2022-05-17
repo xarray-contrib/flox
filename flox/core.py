@@ -1460,6 +1460,8 @@ def groupby_reduce(
     nby = len(by)
     by_is_dask = any(is_duck_dask_array(b) for b in by)
 
+    array = array.astype(int) if np.issubdtype(array.dtype, bool) else array
+
     if method in ["split-reduce", "cohorts"] and by_is_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
 
