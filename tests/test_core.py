@@ -838,6 +838,7 @@ def test_bool_reductions(func, engine):
     data = np.array([True, True, False])
     expected = np.expand_dims(getattr(np, func)(data), -1)
     actual, _ = groupby_reduce(data, groups, func=func, engine=engine)
+    assert_equal(expected, actual)
 
 
 @requires_dask
