@@ -828,3 +828,17 @@ def test_datetime_binning():
     expected = pd.cut(by, time_bins).codes.copy()
     expected[0] = 14  # factorize doesn't return -1 for nans
     assert_equal(group_idx, expected)
+
+
+@requires_dask
+def test_map_reduce_blockwise_mixed():
+    t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()
+    data = t.dt.dayofyear
+    actual = groupby_reduce(
+        dask.array.from_array(data.values, chunks=365),
+        t.dt.month,
+        func="mean",
+        method="split-reduce",
+    )
+    expected = groupby_reduce(data, t.dt.month, func="mean")
+    assert_equal(expected, actual)
