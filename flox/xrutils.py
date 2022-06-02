@@ -7,7 +7,6 @@ from typing import Any, Iterable
 
 import numpy as np
 import pandas as pd
-from xarray.core.duck_array_ops import _datetime_nanmin
 
 try:
     import cftime
@@ -151,6 +150,8 @@ def datetime_to_numeric(array, offset=None, datetime_unit=None, dtype=float):
     """
     # TODO: make this function dask-compatible?
     # Set offset to minimum if not given
+    from xarray.core.duck_array_ops import _datetime_nanmin
+
     if offset is None:
         if array.dtype.kind in "Mm":
             offset = _datetime_nanmin(array)

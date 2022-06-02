@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from packaging.version import Version
+from xarray.core.duck_array_ops import _datetime_nanmin
 
 from .aggregations import Aggregation, _atleast_1d
 from .core import (
@@ -15,12 +16,7 @@ from .core import (
     rechunk_for_blockwise as rechunk_array_for_blockwise,
     rechunk_for_cohorts as rechunk_array_for_cohorts,
 )
-from .xrutils import (
-    _contains_cftime_datetimes,
-    _datetime_nanmin,
-    _to_pytimedelta,
-    datetime_to_numeric,
-)
+from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
     from xarray import DataArray, Dataset, Resample
