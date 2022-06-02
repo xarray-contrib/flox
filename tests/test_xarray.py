@@ -414,13 +414,14 @@ def test_cache():
 
 
 @pytest.mark.parametrize("use_cftime", [True, False])
-def test_datetime_array_reduce(use_cftime):
+@pytest.mark.parametrize("func", ["count", "mean"])
+def test_datetime_array_reduce(use_cftime, func):
 
     time = xr.DataArray(
         xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
         dims=("time",),
         name="time",
     )
-    expected = time.resample(time="YS").count()  # fails
-    actual = resample_reduce(time.resample(time="YS"), func="count", engine="flox")
+    expected = getattr(time.resample(time="YS"), func)()
+    actual = resample_reduce(time.resample(time="YS"), func=func, engine="flox")
     assert_equal(expected, actual)
