@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from packaging.version import Version
+from xarray.core.duck_array_ops import _datetime_nanmin
 
 from .aggregations import Aggregation, _atleast_1d
 from .core import (
@@ -15,6 +16,7 @@ from .core import (
     rechunk_for_blockwise as rechunk_array_for_blockwise,
     rechunk_for_cohorts as rechunk_array_for_cohorts,
 )
+from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
     from xarray import DataArray, Dataset, Resample
@@ -289,7 +291,27 @@ def xarray_reduce(
             if "nan" not in func and func not in ["all", "any", "count"]:
                 func = f"nan{func}"
 
+        requires_numeric = func not in ["count", "any", "all"]
+        if requires_numeric:
+            is_npdatetime = array.dtype.kind in "Mm"
+            is_cftime = _contains_cftime_datetimes(array)
+            if is_npdatetime:
+                offset = _datetime_nanmin(array)
+                # xarray always uses np.datetime64[ns] for np.datetime64 data
+                dtype = "timedelta64[ns]"
+                array = datetime_to_numeric(array, offset)
+            elif _contains_cftime_datetimes(array):
+                offset = min(array)
+                array = datetime_to_numeric(array, offset, datetime_unit="us")
+
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
+
+        if requires_numeric:
+            if is_npdatetime:
+                return result.astype(dtype) + offset
+            elif is_cftime:
+                return _to_pytimedelta(result, unit="us") + offset
+
         return result
 
     # These data variables do not have any of the core dimension,
