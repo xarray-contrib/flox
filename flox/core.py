@@ -162,7 +162,7 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     labels = np.asarray(labels)
 
     if method == "split-reduce":
-        return _get_expected_groups(labels, sort=False).values.reshape(-1, 1).tolist()
+        return list(_get_expected_groups(labels, sort=False).to_numpy().reshape(-1, 1))
 
     # Build an array with the shape of labels, but where every element is the "chunk number"
     # 1. First subset the array appropriately
@@ -1225,7 +1225,7 @@ def dask_groupby_agg(
         if method == "map-reduce":
             if expected_groups is None:
                 expected_groups = _get_expected_groups(by_input, sort=sort)
-            groups = (expected_groups.values,)
+            groups = (expected_groups.to_numpy(),)
         else:
             groups = (np.concatenate(groups_in_block),)
 
