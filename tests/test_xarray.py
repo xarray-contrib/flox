@@ -188,6 +188,11 @@ def test_xarray_reduce_single_grouper(engine):
     actual = xarray_reduce(ds, ds.time.dt.month, func="mean", engine=engine)
     xr.testing.assert_allclose(actual, expected)
 
+    # reduce along other dimensions
+    expected = ds.groupby("time.month").mean(("x", "y"))
+    actual = xarray_reduce(ds, ds.time.dt.month, dim=["x", "y"], func="mean", engine=engine)
+    xr.testing.assert_allclose(actual, expected)
+
     # add data var with missing grouper dim
     ds["foo"] = ("bar", [1, 2, 3])
     expected = ds.groupby("time.month").mean()

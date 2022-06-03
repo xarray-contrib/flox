@@ -241,7 +241,7 @@ def xarray_reduce(
         raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
 
     dims_not_in_groupers = tuple(d for d in dim if d not in grouper_dims)
-    if dims_not_in_groupers == dim and not any(isbin):
+    if dims_not_in_groupers == tuple(dim) and not any(isbin):
         # reducing along a dimension along which groups do not vary
         # This is really just a normal reduction.
         # This is not right when binning so we exclude.
