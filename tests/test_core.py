@@ -853,3 +853,19 @@ def test_map_reduce_blockwise_mixed():
     )
     expected = groupby_reduce(data, t.dt.month, func="mean")
     assert_equal(expected, actual)
+
+
+@requires_dask
+@pytest.mark.parametrize("method", ["blockwise", "split-reduce", "map-reduce", "cohorts"])
+def test_group_by_datetime(engine, method):
+    t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()
+    data = t.dt.dayofyear
+    actual, _ = groupby_reduce(
+        dask.array.from_array(data.values, chunks=365),
+        t,
+        func="mean",
+        method=method,
+        engine=engine,
+    )
+    expected = data.to_numpy().astype(float)
+    assert_equal(expected, actual)
