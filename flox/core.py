@@ -462,7 +462,7 @@ def factorize_(
         group_idx = factorized[0]
 
     if fastpath:
-        return group_idx, found_groups, grp_shape
+        return group_idx.reshape(by[0].shape), found_groups, grp_shape
 
     if np.isscalar(axis) and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
