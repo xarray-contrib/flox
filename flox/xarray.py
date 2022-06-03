@@ -62,7 +62,7 @@ def xarray_reduce(
     fill_value=None,
     method: str = "map-reduce",
     engine: str = "flox",
-    keep_attrs: bool = True,
+    keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
     reindex: bool | None = None,
@@ -180,6 +180,10 @@ def xarray_reduce(
     for b in by:
         if isinstance(b, xr.DataArray) and b.name is None:
             raise ValueError("Cannot group by unnamed DataArrays.")
+
+    # TODO: move to GroupBy._flox_reduce
+    if keep_attrs is None:
+        keep_attrs = True
 
     if isinstance(isbin, bool):
         isbin = (isbin,) * len(by)
