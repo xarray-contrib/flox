@@ -1548,12 +1548,12 @@ def groupby_reduce(
         # overwrite than when min_count is set
         fill_value = np.nan
 
-    kwargs = dict(axis=axis, fill_value=fill_value, engine=engine, sort=sort)
+    kwargs = dict(axis=axis, fill_value=fill_value, engine=engine)
     agg = _initialize_aggregation(func, array.dtype, fill_value, min_count, finalize_kwargs)
 
     if not has_dask:
         results = _reduce_blockwise(
-            array, by, agg, expected_groups=expected_groups, reindex=reindex, **kwargs
+            array, by, agg, expected_groups=expected_groups, reindex=reindex, sort=sort, **kwargs
         )
         groups = (results["groups"],)
         result = results[agg.name]
