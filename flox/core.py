@@ -1566,7 +1566,7 @@ def groupby_reduce(
         if kwargs["fill_value"] is None:
             kwargs["fill_value"] = agg.fill_value[agg.name]
 
-        partial_agg = partial(dask_groupby_agg, agg=agg, split_out=split_out, **kwargs)
+        partial_agg = partial(dask_groupby_agg, split_out=split_out, **kwargs)
 
         if method in ["split-reduce", "cohorts"]:
             cohorts = find_group_cohorts(
@@ -1585,15 +1585,14 @@ def groupby_reduce(
                     array_subset = np.take(array_subset, idxr, axis=ax)
                 numblocks = np.prod([len(array_subset.chunks[ax]) for ax in axis])
 
-                # First deep copy becasue we might be doping blockwise,
-                # which sets agg.finalize=None, then map-reduce (GH102)
-                agg = copy.deepcopy(agg)
-
                 # get final result for these groups
                 r, *g = partial_agg(
                     array_subset,
                     by[np.ix_(*indexer)],
                     expected_groups=pd.Index(cohort),
+                    # First deep copy becasue we might be doping blockwise,
+                    # which sets agg.finalize=None, then map-reduce (GH102)
+                    agg=copy.deepcopy(agg),
                     # reindex to expected_groups at the blockwise step.
                     # this approach avoids replacing non-cohort members with
                     # np.nan or some other sentinel value, and preserves dtypes
@@ -1619,6 +1618,7 @@ def groupby_reduce(
                 array,
                 by,
                 expected_groups=None if method == "blockwise" else expected_groups,
+                agg=agg,
                 reindex=reindex,
                 method=method,
                 sort=sort,
