@@ -451,3 +451,37 @@ def test_groupby_bins_indexed_coordinate():
         method="split-reduce",
     )
     xr.testing.assert_allclose(expected, actual)
+
+
+@pytest.mark.parametrize("chunk", (True, False))
+def test_mixed_grouping(chunk):
+    if not has_dask and chunk:
+        pytest.skip()
+    # regression test for https://github.com/dcherian/flox/pull/111
+    sa = 10
+    sb = 13
+    sc = 3
+
+    x = xr.Dataset(
+        {
+            "v0": xr.DataArray(
+                ((np.arange(sa * sb * sc) / sa) % 1).reshape((sa, sb, sc)),
+                dims=("a", "b", "c"),
+            ),
+            "v1": xr.DataArray((np.arange(sa * sb) % 3).reshape(sa, sb), dims=("a", "b")),
+        }
+    )
+    if chunk:
+        x["v0"] = x["v0"].chunk({"a": 5})
+
+    r = xarray_reduce(
+        x["v0"],
+        x["v1"],
+        x["v0"],
+        expected_groups=(np.arange(6), np.linspace(0, 1, num=5)),
+        isbin=[False, True],
+        func="count",
+        dim="b",
+        fill_value=0,
+    )
+    assert (r.sel(v1=[3, 4, 5]) == 0).all().data

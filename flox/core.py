@@ -1310,11 +1310,12 @@ def _lazy_factorize_wrapper(*by, **kwargs):
     return group_idx
 
 
-def _factorize_multiple(by, expected_groups, by_is_dask):
+def _factorize_multiple(by, expected_groups, by_is_dask, reindex):
     kwargs = dict(
         expected_groups=expected_groups,
         axis=None,  # always None, we offset later if necessary.
         fastpath=True,
+        reindex=reindex,
     )
     if by_is_dask:
         import dask.array
@@ -1325,7 +1326,9 @@ def _factorize_multiple(by, expected_groups, by_is_dask):
             meta=np.array((), dtype=np.int64),
             **kwargs,
         )
-        found_groups = tuple(None if is_duck_dask_array(b) else pd.unique(b) for b in by)
+        found_groups = tuple(
+            None if is_duck_dask_array(b) else pd.unique(np.array(b).reshape(-1)) for b in by
+        )
         grp_shape = tuple(len(e) for e in expected_groups)
     else:
         group_idx, found_groups, grp_shape = factorize_(by, **kwargs)
@@ -1489,7 +1492,7 @@ def groupby_reduce(
     )
     if factorize_early:
         by, final_groups, grp_shape = _factorize_multiple(
-            by, expected_groups, by_is_dask=by_is_dask
+            by, expected_groups, by_is_dask=by_is_dask, reindex=reindex
         )
         expected_groups = (pd.RangeIndex(np.prod(grp_shape)),)
 
