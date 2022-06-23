@@ -1327,13 +1327,10 @@ def _factorize_multiple(by, expected_groups, by_is_dask):
         )
         found_groups = tuple(None if is_duck_dask_array(b) else pd.unique(b) for b in by)
         grp_shape = tuple(len(e) for e in expected_groups)
+        final_groups = tuple(expect.to_numpy() for expect in expected_groups)
     else:
         group_idx, found_groups, grp_shape = factorize_(by, **kwargs)
-
-    final_groups = tuple(
-        found if expect is None else expect.to_numpy()
-        for found, expect in zip(found_groups, expected_groups)
-    )
+        final_groups = found_groups
 
     if any(grp is None for grp in final_groups):
         raise ValueError("Please provide expected_groups when grouping by a dask array.")
