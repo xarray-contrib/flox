@@ -452,6 +452,7 @@ def test_groupby_bins_indexed_coordinate():
     )
     xr.testing.assert_allclose(expected, actual)
 
+
 @pytest.mark.parametrize("chunk", (True, False))
 def test_mixed_grouping(chunk):
     if not has_dask and chunk:
@@ -471,7 +472,7 @@ def test_mixed_grouping(chunk):
         }
     )
     if chunk:
-        x['v0']=x['v0'].chunk({'a':5})
+        x["v0"] = x["v0"].chunk({"a": 5})
 
     r = xarray_reduce(
         x["v0"],
