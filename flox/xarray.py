@@ -310,13 +310,22 @@ def xarray_reduce(
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
 
-        expected_groups = kwargs['expected_groups']
-        fill_value = kwargs['fill_value']
-        ind=[np.where(expected.isin(group))[0] for group,expected in zip(groups,expected_groups)]
-        target_shape = result.shape[:-len(expected_groups)]+tuple(len(e) for e in expected_groups)
-        target=np.full(target_shape,fill_value,dtype=result.dtype)
-        target[(...,*np.ix_(*ind),)]=result
-        result=target
+        expected_groups = kwargs["expected_groups"]
+        fill_value = kwargs["fill_value"]
+        ind = [
+            np.where(expected.isin(group))[0] for group, expected in zip(groups, expected_groups)
+        ]
+        target_shape = result.shape[: -len(expected_groups)] + tuple(
+            len(e) for e in expected_groups
+        )
+        target = np.full(target_shape, fill_value, dtype=result.dtype)
+        target[
+            (
+                ...,
+                *np.ix_(*ind),
+            )
+        ] = result
+        result = target
 
         if requires_numeric:
             if is_npdatetime:
