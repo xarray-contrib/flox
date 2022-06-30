@@ -888,3 +888,20 @@ def test_group_by_datetime(engine, method):
     )
     expected = np.broadcast_to(expected, (2, 3, expected.shape[-1]))
     assert_equal(expected, actual)
+
+
+def test_factorize_values_outside_bins():
+
+    vals = factorize_(
+        (np.arange(10).reshape(5, 2), np.arange(10).reshape(5, 2)),
+        axis=(0, 1),
+        expected_groups=(
+            pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
+            pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
+        ),
+        reindex=True,
+        fastpath=True,
+    )
+    actual = vals[0]
+    expected = np.array([[-1, -1], [-1, 0], [6, 12], [18, 24], [-1, -1]])
+    assert_equal(expected, actual)
