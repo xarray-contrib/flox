@@ -1327,7 +1327,7 @@ def _factorize_multiple(by, expected_groups, by_is_dask, reindex):
             **kwargs,
         )
         found_groups = tuple(
-            None if is_duck_dask_array(b) else pd.unique(np.array(b).reshape(-1)) for b in by
+            None if is_duck_dask_array(b) else pd.unique(b.reshape(-1)) for b in by
         )
         grp_shape = tuple(len(e) for e in expected_groups)
     else:
