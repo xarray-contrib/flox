@@ -421,6 +421,7 @@ def factorize_(
     factorized = []
     found_groups = []
     for groupvar, expect in zip(by, expected_groups):
+        flat = groupvar.ravel()
         if isinstance(expect, pd.IntervalIndex):
             # when binning we change expected groups to integers marking the interval
             # this makes the reindexing logic simpler.
@@ -432,21 +433,19 @@ def factorize_(
             if groupvar.dtype.kind == "M":
                 expect = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
             # code is -1 for values outside the bounds of all intervals
-            idx = pd.cut(groupvar.ravel(), bins=expect).codes.copy()
+            idx = pd.cut(flat, bins=expect).codes.copy()
         else:
             if expect is not None and reindex:
-                groups = expect
+                sorter = np.argsort(expect)
+                groups = expect[(sorter,)] if sort else expect
+                idx = np.searchsorted(expect, flat, sorter=sorter)
+                mask = ~np.isin(flat, expect) | isnull(flat) | (idx == len(expect))
                 if not sort:
-                    sorter = np.argsort(expect)
-                else:
-                    sorter = None
-                idx = np.searchsorted(expect, groupvar.ravel(), sorter=sorter)
-                mask = isnull(groupvar.ravel()) | (idx == len(expect))
-                # TODO: optimize?
+                    # idx is the index in to the sorted array.
+                    # if we didn't want sorting, unsort it back
+                    idx[(idx == len(expect),)] = -1
+                    idx = sorter[(idx,)]
                 idx[mask] = -1
-                if not sort:
-                    idx = sorter[idx]
-                    idx[mask] = -1
             else:
                 idx, groups = pd.factorize(groupvar.ravel(), sort=sort)
 

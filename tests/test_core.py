@@ -905,3 +905,62 @@ def test_factorize_values_outside_bins():
     actual = vals[0]
     expected = np.array([[-1, -1], [-1, 0], [6, 12], [18, 24], [-1, -1]])
     assert_equal(expected, actual)
+
+
+def test_multiple_groupers():
+    actual, *_ = groupby_reduce(
+        np.ones((5, 2)),
+        np.arange(10).reshape(5, 2),
+        np.arange(10).reshape(5, 2),
+        axis=(0, 1),
+        expected_groups=(
+            pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
+            pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
+        ),
+        reindex=True,
+        func="count",
+    )
+    expected = np.eye(5, 5)
+    assert_equal(expected, actual)
+
+
+def test_factorize_reindex_sorting_strings():
+    kwargs = dict(
+        by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),
+        axis=-1,
+        expected_groups=(np.array(["El-Nino", "Neutral", "foo", "La-Nina"]),),
+    )
+
+    expected = factorize_(**kwargs, reindex=True, sort=True)[0]
+    assert_equal(expected, [0, 1, 4, 2])
+
+    expected = factorize_(**kwargs, reindex=True, sort=False)[0]
+    assert_equal(expected, [0, 3, 4, 1])
+
+    expected = factorize_(**kwargs, reindex=False, sort=False)[0]
+    assert_equal(expected, [0, 1, 2, 3])
+
+    expected = factorize_(**kwargs, reindex=False, sort=True)[0]
+    assert_equal(expected, [0, 1, 3, 2])
+
+
+def test_factorize_reindex_sorting_ints():
+    kwargs = dict(
+        by=(np.array([-10, 1, 10, 2, 3, 5]),),
+        axis=-1,
+        expected_groups=(np.array([0, 1, 2, 3, 4, 5]),),
+    )
+
+    expected = factorize_(**kwargs, reindex=True, sort=True)[0]
+    assert_equal(expected, [6, 1, 6, 2, 3, 5])
+
+    expected = factorize_(**kwargs, reindex=True, sort=False)[0]
+    assert_equal(expected, [6, 1, 6, 2, 3, 5])
+
+    kwargs["expected_groups"] = (np.arange(5, -1, -1),)
+
+    expected = factorize_(**kwargs, reindex=True, sort=True)[0]
+    assert_equal(expected, [6, 1, 6, 2, 3, 5])
+
+    expected = factorize_(**kwargs, reindex=True, sort=False)[0]
+    assert_equal(expected, [6, 4, 6, 3, 2, 0])
