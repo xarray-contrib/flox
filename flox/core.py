@@ -1480,7 +1480,10 @@ def groupby_reduce(
     if len(by) == 1 and not isinstance(expected_groups, tuple):
         expected_groups = (np.asarray(expected_groups),)
     elif len(expected_groups) != len(by):
-        raise ValueError("len(expected_groups) != len(by)")
+        raise ValueError(
+            f"Must have same number of `expected_groups` (received {len(expected_groups)}) "
+            f" and variables to group by (received {len(by)})."
+        )
 
     # We convert to pd.Index since that lets us know if we are binning or not
     # (pd.IntervalIndex or not)
