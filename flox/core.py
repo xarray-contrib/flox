@@ -431,6 +431,7 @@ def factorize_(
             # pd.cut with bins = IntervalIndex[datetime64] doesn't work...
             if groupvar.dtype.kind == "M":
                 expect = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
+            # code is -1 for values outside the bounds of all intervals
             idx = pd.cut(groupvar.ravel(), bins=expect).codes.copy()
         else:
             if expect is not None and reindex:
@@ -455,9 +456,12 @@ def factorize_(
     grp_shape = tuple(len(grp) for grp in found_groups)
     ngroups = np.prod(grp_shape)
     if len(by) > 1:
-        group_idx = np.ravel_multi_index(factorized, grp_shape, mode="wrap").reshape(by[0].shape)
-        nan_by_mask = reduce(np.logical_or, [isnull(b) for b in by])
+        group_idx = np.ravel_multi_index(factorized, grp_shape, mode="wrap")
+        # NaNs; as well as values outside the bins are coded by -1
+        # Restore these after the raveling
+        nan_by_mask = reduce(np.logical_or, [(f == -1) for f in factorized])
         group_idx[nan_by_mask] = -1
+        group_idx = group_idx.reshape(by[0].shape)
     else:
         group_idx = factorized[0]
 
