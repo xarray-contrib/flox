@@ -1568,8 +1568,11 @@ def groupby_reduce(
         result = results[agg.name]
 
     else:
-        if agg.chunk is None:
-            raise NotImplementedError(f"{func} not implemented for dask arrays")
+        if agg.chunk[0] is None and method != "blockwise":
+            raise NotImplementedError(
+                f"Aggregation {func.name!r} is only implemented for dask arrays when method='blockwise'."
+                f"\n\n Received: {func}"
+            )
 
         # we always need some fill_value (see above) so choose the default if needed
         if kwargs["fill_value"] is None:
