@@ -64,7 +64,7 @@ def _get_expected_groups(by, sort, *, raise_if_dask=True) -> pd.Index | None:
         if raise_if_dask:
             raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
         return None
-    flatby = by.ravel()
+    flatby = by.reshape(-1)
     expected = pd.unique(flatby[~isnull(flatby)])
     return _convert_expected_groups_to_index((expected,), isbin=(False,), sort=sort)[0]
 
@@ -175,11 +175,11 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     blocks = np.empty(np.prod(shape), dtype=object)
     for idx, block in enumerate(array.blocks.ravel()):
         blocks[idx] = np.full(tuple(block.shape[ax] for ax in axis), idx)
-    which_chunk = np.block(blocks.reshape(shape).tolist()).ravel()
+    which_chunk = np.block(blocks.reshape(shape).tolist()).reshape(-1)
 
     # We always drop NaN; np.unique also considers every NaN to be different so
     # it's really important we get rid of them.
-    raveled = labels.ravel()
+    raveled = labels.reshape(-1)
     unique_labels = np.unique(raveled[~isnull(raveled)])
     # these are chunks where a label is present
     label_chunks = {lab: tuple(np.unique(which_chunk[raveled == lab])) for lab in unique_labels}
@@ -421,7 +421,7 @@ def factorize_(
     factorized = []
     found_groups = []
     for groupvar, expect in zip(by, expected_groups):
-        flat = groupvar.ravel()
+        flat = groupvar.reshape(-1)
         if isinstance(expect, pd.RangeIndex):
             idx = flat
             found_groups.append(np.array(expect))
@@ -456,7 +456,7 @@ def factorize_(
                     idx = sorter[(idx,)]
                 idx[mask] = -1
             else:
-                idx, groups = pd.factorize(groupvar.ravel(), sort=sort)
+                idx, groups = pd.factorize(flat, sort=sort)
 
             found_groups.append(np.array(groups))
         factorized.append(idx)
@@ -482,7 +482,7 @@ def factorize_(
         # we collapse to a 2D by and axis=-1
         offset_group = True
         group_idx, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
-        group_idx = group_idx.ravel()
+        group_idx = group_idx.reshape(-1)
     else:
         size = ngroups
         offset_group = False
