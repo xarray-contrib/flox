@@ -631,7 +631,7 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, found_groups_shape, ngroups, size, props = factorize_(
+    group_idx, groups, found_groups_shape, _, size, props = factorize_(
         (by,), axis, expected_groups=(expected_groups,), reindex=reindex, sort=sort
     )
     groups = groups[0]
