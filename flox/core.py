@@ -422,7 +422,13 @@ def factorize_(
     found_groups = []
     for groupvar, expect in zip(by, expected_groups):
         flat = groupvar.ravel()
-        if isinstance(expect, pd.IntervalIndex):
+        if isinstance(expect, pd.RangeIndex):
+            idx = flat
+            found_groups.append(np.array(expect))
+            # TODO: fix by using masked integers
+            idx[idx > expect[-1]] = -1
+
+        elif isinstance(expect, pd.IntervalIndex):
             # when binning we change expected groups to integers marking the interval
             # this makes the reindexing logic simpler.
             if expect is None:
