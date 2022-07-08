@@ -431,15 +431,18 @@ def factorize_(
         elif isinstance(expect, pd.IntervalIndex):
             # when binning we change expected groups to integers marking the interval
             # this makes the reindexing logic simpler.
-            if expect is None:
-                raise ValueError("Please pass bin edges in expected_groups.")
-            # TODO: fix for binning
-            found_groups.append(expect)
-            # pd.cut with bins = IntervalIndex[datetime64] doesn't work...
+            # workaround for https://github.com/pandas-dev/pandas/issues/47614
+            # we create breaks and pass that to pd.cut, disallow closed="both" for now.
+            if expect.closed == "both":
+                raise NotImplementedError
             if groupvar.dtype.kind == "M":
-                expect = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
+                # pd.cut with bins = IntervalIndex[datetime64] doesn't work...
+                bins = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
+            else:
+                bins = np.concatenate([expect.left.to_numpy(), [expect.right[-1]]])
             # code is -1 for values outside the bounds of all intervals
-            idx = pd.cut(flat, bins=expect).codes.copy()
+            idx = pd.cut(flat, bins=bins, right=expect.closed_right).codes.copy()
+            found_groups.append(expect)
         else:
             if expect is not None and reindex:
                 sorter = np.argsort(expect)
