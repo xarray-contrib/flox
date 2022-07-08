@@ -447,7 +447,7 @@ def factorize_(
             if expect is not None and reindex:
                 sorter = np.argsort(expect)
                 groups = expect[(sorter,)] if sort else expect
-                idx = np.searchsorted(expect.values, flat, sorter=sorter)
+                idx = np.searchsorted(expect, flat, sorter=sorter)
                 mask = ~np.isin(flat, expect) | isnull(flat) | (idx == len(expect))
                 if not sort:
                     # idx is the index in to the sorted array.
