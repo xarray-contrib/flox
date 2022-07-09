@@ -101,6 +101,9 @@ jobs:
   xarray-groupby:
     name: xarray-groupby
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -121,9 +124,7 @@ jobs:
           python -m pip install --no-deps \
             git+https://github.com/dcherian/flox.git@${{ github.ref }}
       - name: Version info
-        shell: bash -l {0}
         run: |
-          micromamba activate xarray-tests
           conda info -a
           conda list
           python xarray/util/print_versions.py
