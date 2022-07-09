@@ -58,7 +58,7 @@ jobs:
           fail_ci_if_error: false
 
   optional-deps:
-    name: ${{ matrix.os }} ${{ matrix.env }}
+    name: ${{ matrix.env }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
