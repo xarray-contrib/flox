@@ -82,7 +82,7 @@ jobs:
       - name: Set up conda environment
         uses: mamba-org/provision-with-micromamba@v12
         with:
-          environment-file: ci/environment.yml
+          environment-file: ci/${{ matrix.env }}.yml
           environment-name: flox-tests
           cache-env: true
           extra-specs: |
