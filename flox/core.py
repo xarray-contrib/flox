@@ -64,7 +64,7 @@ def _get_expected_groups(by, sort, *, raise_if_dask=True) -> pd.Index | None:
         if raise_if_dask:
             raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
         return None
-    flatby = by.ravel()
+    flatby = by.reshape(-1)
     expected = pd.unique(flatby[~isnull(flatby)])
     return _convert_expected_groups_to_index((expected,), isbin=(False,), sort=sort)[0]
 
@@ -175,11 +175,11 @@ def find_group_cohorts(labels, chunks, merge=True, method="cohorts"):
     blocks = np.empty(np.prod(shape), dtype=object)
     for idx, block in enumerate(array.blocks.ravel()):
         blocks[idx] = np.full(tuple(block.shape[ax] for ax in axis), idx)
-    which_chunk = np.block(blocks.reshape(shape).tolist()).ravel()
+    which_chunk = np.block(blocks.reshape(shape).tolist()).reshape(-1)
 
     # We always drop NaN; np.unique also considers every NaN to be different so
     # it's really important we get rid of them.
-    raveled = labels.ravel()
+    raveled = labels.reshape(-1)
     unique_labels = np.unique(raveled[~isnull(raveled)])
     # these are chunks where a label is present
     label_chunks = {lab: tuple(np.unique(which_chunk[raveled == lab])) for lab in unique_labels}
@@ -421,19 +421,28 @@ def factorize_(
     factorized = []
     found_groups = []
     for groupvar, expect in zip(by, expected_groups):
-        flat = groupvar.ravel()
-        if isinstance(expect, pd.IntervalIndex):
+        flat = groupvar.reshape(-1)
+        if isinstance(expect, pd.RangeIndex):
+            idx = flat
+            found_groups.append(np.array(expect))
+            # TODO: fix by using masked integers
+            idx[idx > expect[-1]] = -1
+
+        elif isinstance(expect, pd.IntervalIndex):
             # when binning we change expected groups to integers marking the interval
             # this makes the reindexing logic simpler.
-            if expect is None:
-                raise ValueError("Please pass bin edges in expected_groups.")
-            # TODO: fix for binning
-            found_groups.append(expect)
-            # pd.cut with bins = IntervalIndex[datetime64] doesn't work...
+            # workaround for https://github.com/pandas-dev/pandas/issues/47614
+            # we create breaks and pass that to pd.cut, disallow closed="both" for now.
+            if expect.closed == "both":
+                raise NotImplementedError
             if groupvar.dtype.kind == "M":
-                expect = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
+                # pd.cut with bins = IntervalIndex[datetime64] doesn't work...
+                bins = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
+            else:
+                bins = np.concatenate([expect.left.to_numpy(), [expect.right[-1]]])
             # code is -1 for values outside the bounds of all intervals
-            idx = pd.cut(flat, bins=expect).codes.copy()
+            idx = pd.cut(flat, bins=bins, right=expect.closed_right).codes.copy()
+            found_groups.append(expect)
         else:
             if expect is not None and reindex:
                 sorter = np.argsort(expect)
@@ -447,7 +456,7 @@ def factorize_(
                     idx = sorter[(idx,)]
                 idx[mask] = -1
             else:
-                idx, groups = pd.factorize(groupvar.ravel(), sort=sort)
+                idx, groups = pd.factorize(flat, sort=sort)
 
             found_groups.append(np.array(groups))
         factorized.append(idx)
@@ -473,7 +482,7 @@ def factorize_(
         # we collapse to a 2D by and axis=-1
         offset_group = True
         group_idx, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
-        group_idx = group_idx.ravel()
+        group_idx = group_idx.reshape(-1)
     else:
         size = ngroups
         offset_group = False
@@ -622,7 +631,7 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, found_groups_shape, ngroups, size, props = factorize_(
+    group_idx, groups, found_groups_shape, _, size, props = factorize_(
         (by,), axis, expected_groups=(expected_groups,), reindex=reindex, sort=sort
     )
     groups = groups[0]
