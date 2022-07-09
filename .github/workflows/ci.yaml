@@ -121,6 +121,7 @@ jobs:
           python -m pip install --no-deps \
             git+https://github.com/dcherian/flox.git@${{ github.ref }}
       - name: Version info
+        shell: bash -l {0}
         run: |
           micromamba activate xarray-tests
           conda info -a
