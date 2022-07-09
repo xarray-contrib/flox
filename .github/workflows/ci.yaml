@@ -98,7 +98,7 @@ jobs:
         run: |
           pytest -n 2
 
-xarray-groupby:
+  xarray-groupby:
     name: xarray-groupby
     runs-on: ubuntu-latest
     steps:
