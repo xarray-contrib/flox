@@ -57,6 +57,47 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+  optional-deps:
+    name: ${{ matrix.os }} ${{ matrix.env }}
+    runs-on: ${{ matrix.os }}
+    needs: detect-ci-trigger
+    if: needs.detect-ci-trigger.outputs.triggered == 'false'
+    defaults:
+      run:
+        shell: bash -l {0}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest"]
+        env:
+          [
+            "no-xarray",
+            "no-dask",
+            "minimal-requirements",
+          ]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch all history for all branches and tags.
+
+      - name: Set environment variables
+        run: |
+          echo "CONDA_ENV_FILE=ci/${{ matrix.env }}.yml" >> $GITHUB_ENV
+      - name: Set up conda environment
+        uses: mamba-org/provision-with-micromamba@v12
+        with:
+          environment-file: ci/environment.yml
+          environment-name: flox-tests
+          cache-env: true
+          extra-specs: |
+            python="${{ matrix.python-version }}"
+      - name: Install flox
+        run: |
+          python -m pip install --no-deps -e .
+      - name: Run tests
+        run: |
+          python -m pytest -n auto
+
   upstream-dev:
     name: upstream-dev
     runs-on: ubuntu-latest
