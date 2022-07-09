@@ -92,6 +92,7 @@ jobs:
         with:
           environment-file: ci/requirements/environment.yml
           environment-name: xarray-tests
+          cache-env: true
           extra-specs: |
             python="3.10"
       - name: Install xarray
