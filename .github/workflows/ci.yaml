@@ -60,8 +60,6 @@ jobs:
   optional-deps:
     name: ${{ matrix.os }} ${{ matrix.env }}
     runs-on: ${{ matrix.os }}
-    needs: detect-ci-trigger
-    if: needs.detect-ci-trigger.outputs.triggered == 'false'
     defaults:
       run:
         shell: bash -l {0}
