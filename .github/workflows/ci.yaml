@@ -122,6 +122,7 @@ jobs:
             git+https://github.com/dcherian/flox.git@${{ github.ref }}
       - name: Version info
         run: |
+          conda activate xarray-tests
           conda info -a
           conda list
           python xarray/util/print_versions.py
