@@ -43,8 +43,8 @@ extensions = [
 ]
 
 extlinks = {
-    "issue": ("https://github.com/dcherian/flox/issues/%s", "GH#"),
-    "pr": ("https://github.com/dcherian/flox/pull/%s", "GH#"),
+    "issue": ("https://github.com/xarray-contrib/flox/issues/%s", "GH#"),
+    "pr": ("https://github.com/xarray-contrib/flox/pull/%s", "GH#"),
 }
 
 templates_path = ["_templates"]

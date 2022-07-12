@@ -16,4 +16,4 @@ dependencies:
   - ipykernel
   - jupyter
   - pip:
-    - git+https://github.com/dcherian/flox
+    - git+https://github.com/xarray-contrib/flox
