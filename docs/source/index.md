@@ -2,9 +2,9 @@
 
 ## Overview
 
-[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/dcherian/flox/CI?logo=github&style=flat)](https://github.com/dcherian/flox/actions)
-[![GitHub Workflow Code Style Status](https://img.shields.io/github/workflow/status/dcherian/flox/code-style?label=Code%20Style&style=flat)](https://github.com/dcherian/flox/actions)
-[![image](https://img.shields.io/codecov/c/github/dcherian/flox.svg?style=flat)](https://codecov.io/gh/dcherian/flox)
+[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/xarray-contrib/flox/CI?logo=github&style=flat)](https://github.com/xarray-contrib/flox/actions)
+[![GitHub Workflow Code Style Status](https://img.shields.io/github/workflow/status/xarray-contrib/flox/code-style?label=Code%20Style&style=flat)](https://github.com/xarray-contrib/flox/actions)
+[![image](https://img.shields.io/codecov/c/github/xarray-contrib/flox.svg?style=flat)](https://codecov.io/gh/xarray-contrib/flox)
 [![PyPI](https://img.shields.io/pypi/v/flox.svg?style=flat)](https://pypi.org/project/flox/)
 [![Conda-forge](https://img.shields.io/conda/vn/conda-forge/flox.svg?style=flat)](https://anaconda.org/conda-forge/flox)
 

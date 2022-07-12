@@ -457,7 +457,7 @@ def test_groupby_bins_indexed_coordinate():
 def test_mixed_grouping(chunk):
     if not has_dask and chunk:
         pytest.skip()
-    # regression test for https://github.com/dcherian/flox/pull/111
+    # regression test for https://github.com/xarray-contrib/flox/pull/111
     sa = 10
     sb = 13
     sc = 3
