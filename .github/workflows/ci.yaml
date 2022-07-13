@@ -10,6 +10,10 @@ on:
     - cron: "0 0 * * *" # Daily “At 00:00”
   workflow_dispatch: # allows you to trigger manually
 
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build (${{ matrix.python-version }}, ${{ matrix.os }})
@@ -21,49 +25,31 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest"]
-        python-version: ["3.7", "3.8", "3.9"]
+        python-version: ["3.8", "3.10"]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set environment variables
         run: |
-          echo "CONDA_ENV_FILE=ci/environment.yml" >> $GITHUB_ENV
           echo "PYTHON_VERSION=${{ matrix.python-version }}" >> $GITHUB_ENV
-      - name: Cache conda
-        uses: actions/cache@v2
-        with:
-          path: ~/conda_pkgs_dir
-          key:
-            ${{ runner.os }}-conda-py${{ matrix.python-version }}-${{
-            hashFiles('ci/**.yml') }}
-      - uses: conda-incubator/setup-miniconda@v2
-        with:
-          channels: conda-forge
-          channel-priority: strict
-          mamba-version: "*"
-          activate-environment: flox-tests
-          auto-update-conda: false
-          python-version: ${{ matrix.python-version }}
-          use-only-tar-bz2: true
-
-      - name: Install conda dependencies
-        run: |
-          mamba env update -f $CONDA_ENV_FILE
-
       - name: Set up conda environment
-        shell: bash -l {0}
+        uses: mamba-org/provision-with-micromamba@v12
+        with:
+          environment-file: ci/environment.yml
+          environment-name: flox-tests
+          cache-env: true
+          extra-specs: |
+            python="${{ matrix.python-version }}"
+      - name: Install flox
         run: |
           python -m pip install -e .
           conda list
-
       - name: Run Tests
-        shell: bash -l {0}
         run: |
           pytest -n auto --cov=./ --cov-report=xml
-
       - name: Upload code coverage to Codecov
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v3.1.0
         with:
           file: ./coverage.xml
           flags: unittests
@@ -71,27 +57,100 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
-  # docs-build:
-  #   name: Documentation build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v2
-  #     - name: set up Python 3.8
-  #       uses: actions/setup-python@v2
-  #       with:
-  #           python-version: 3.8
+  optional-deps:
+    name: ${{ matrix.env }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -l {0}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest"]
+        env:
+          [
+            "no-xarray",
+            "no-dask",
+            "minimal-requirements",
+          ]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch all history for all branches and tags.
+      - name: Set up conda environment
+        uses: mamba-org/provision-with-micromamba@v12
+        with:
+          environment-file: ci/${{ matrix.env }}.yml
+          environment-name: flox-tests
+          cache-env: true
+          extra-specs: |
+            python="${{ matrix.python-version }}"
+      - name: Install flox
+        run: |
+          python -m pip install --no-deps -e .
+      - name: Run tests
+        run: |
+          python -m pytest -n auto
 
-  #     - name: Install package
-  #       run: |
-  #         python -m pip install --upgrade pip
-  #         python -m pip install -e .
+  upstream-dev:
+    name: upstream-dev
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up conda environment
+        uses: mamba-org/provision-with-micromamba@v12
+        with:
+          environment-file: ci/upstream-dev-env.yml
+          environment-name: flox-tests
+          extra-specs: |
+            python="3.10"
+      - name: Run Tests
+        run: |
+          pytest -n 2
 
-  #     - name: Install documentation dependencies
-  #       run: |
-  #         python -m pip install -r docs/requirements-docs.txt
-
-  #     - name: Build docs
-  #       run: |
-  #         cd docs
-  #         make html
+  xarray-groupby:
+    name: xarray-groupby
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: 'pydata/xarray'
+          fetch-depth: 0 # Fetch all history for all branches and tags.
+      - name: Set up conda environment
+        uses: mamba-org/provision-with-micromamba@v12
+        with:
+          environment-file: ci/requirements/environment.yml
+          environment-name: xarray-tests
+          cache-env: true
+          extra-specs: |
+            python="3.10"
+      - name: Install xarray
+        run: |
+          python -m pip install --no-deps .
+      - name: Install upstream flox
+        run: |
+          python -m pip install --no-deps \
+            git+https://github.com/dcherian/flox.git@${{ github.ref }}
+      - name: Version info
+        run: |
+          conda info -a
+          conda list
+          python xarray/util/print_versions.py
+      - name: import xarray
+        run: |
+          python -c 'import xarray'
+      - name: import flox
+        run: |
+          python -c 'import flox'
+      - name: Run Tests
+        if: success()
+        id: status
+        run: |
+          set -euo pipefail
+          python -m pytest -n auto xarray/tests/test_groupby.py

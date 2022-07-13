@@ -1,4 +1,13 @@
-[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/dcherian/flox/CI?logo=github&style=flat)](https://github.com/dcherian/flox/actions)[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/dcherian/flox/main.svg)](https://results.pre-commit.ci/latest/github/dcherian/flox/main)[![image](https://img.shields.io/codecov/c/github/dcherian/flox.svg?style=flat)](https://codecov.io/gh/dcherian/flox)[![PyPI](https://img.shields.io/pypi/v/flox.svg?style=flat)](https://pypi.org/project/flox/)[![Conda-forge](https://img.shields.io/conda/vn/conda-forge/flox.svg?style=flat)](https://anaconda.org/conda-forge/flox)[![Documentation Status](https://readthedocs.org/projects/flox/badge/?version=latest)](https://flox.readthedocs.io/en/latest/?badge=latest)[![NASA-80NSSC18M0156](https://img.shields.io/badge/NASA-80NSSC18M0156-blue)](https://earthdata.nasa.gov/esds/competitive-programs/access/pangeo-ml)
+[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/xarray-contrib/flox/CI?logo=github&style=flat)](https://github.com/xarray-contrib/flox/actions)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/xarray-contrib/flox/main.svg)](https://results.pre-commit.ci/latest/github/xarray-contrib/flox/main)
+[![image](https://img.shields.io/codecov/c/github/xarray-contrib/flox.svg?style=flat)](https://codecov.io/gh/xarray-contrib/flox)
+[![Documentation Status](https://readthedocs.org/projects/flox/badge/?version=latest)](https://flox.readthedocs.io/en/latest/?badge=latest)
+
+[![PyPI](https://img.shields.io/pypi/v/flox.svg?style=flat)](https://pypi.org/project/flox/)
+[![Conda-forge](https://img.shields.io/conda/vn/conda-forge/flox.svg?style=flat)](https://anaconda.org/conda-forge/flox)
+
+[![NASA-80NSSC18M0156](https://img.shields.io/badge/NASA-80NSSC18M0156-blue)](https://earthdata.nasa.gov/esds/competitive-programs/access/pangeo-ml)
+[![NASA-80NSSC22K0345](https://img.shields.io/badge/NASA-80NSSC22K0345-blue)](https://science.nasa.gov/open-science-overview)
 
 # flox
 
@@ -16,8 +25,12 @@ about this package, from the Pangeo Showcase).
 
 ## Acknowledgements
 
-This work was funded in part by NASA-ACCESS 80NSSC18M0156 "Community tools for analysis of NASA Earth Observing System
-Data in the Cloud" (PI J. Hamman), and [NCAR's Earth System Data Science Initiative](https://ncar.github.io/esds/).
+This work was funded in part by
+1. NASA-ACCESS 80NSSC18M0156 "Community tools for analysis of NASA Earth Observing System
+Data in the Cloud" (PI J. Hamman, NCAR),
+2. NASA-OSTFL 80NSSC22K0345 "Enhancing analysis of NASA data with the open-source Python Xarray Library" (PIs Scott Henderson, University of Washington; Deepak Cherian, NCAR; Jessica Scheick, University of New Hampshire), and
+3. [NCAR's Earth System Data Science Initiative](https://ncar.github.io/esds/).
+
 It was motivated by [very](https://github.com/pangeo-data/pangeo/issues/266) [very](https://github.com/pangeo-data/pangeo/issues/271) [many](https://github.com/dask/distributed/issues/2602) [discussions](https://github.com/pydata/xarray/issues/2237) in the [Pangeo](https://pangeo.io) community.
 
 ## API

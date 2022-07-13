@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
+from flox.aggregations import Aggregation
 from flox.core import (
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
@@ -53,9 +54,9 @@ ALL_FUNCS = (
     "min",
     "nanmin",
     "argmax",
-    pytest.param("nanargmax", marks=(pytest.mark.xfail,)),
+    pytest.param("nanargmax", marks=(pytest.mark.skip,)),
     "argmin",
-    pytest.param("nanargmin", marks=(pytest.mark.xfail,)),
+    pytest.param("nanargmin", marks=(pytest.mark.skip,)),
     "any",
     "all",
     pytest.param("median", marks=(pytest.mark.skip,)),
@@ -142,7 +143,7 @@ def gen_array_by(size, func):
     return array, by
 
 
-@pytest.mark.parametrize("chunks", [None, 3, 4])
+@pytest.mark.parametrize("chunks", [None, -1, 3, 4])
 @pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("size", ((12,), (12, 9)))
 @pytest.mark.parametrize("add_nan_by", [True, False])
@@ -582,11 +583,15 @@ def test_npg_nanarg_bug(func):
     assert_equal(actual, expected)
 
 
+@pytest.mark.parametrize("method", ["split-reduce", "cohorts", "map-reduce"])
 @pytest.mark.parametrize("chunk_labels", [False, True])
 @pytest.mark.parametrize("chunks", ((), (1,), (2,)))
-def test_groupby_bins(chunk_labels, chunks, engine) -> None:
+def test_groupby_bins(chunk_labels, chunks, engine, method) -> None:
     array = [1, 1, 1, 1, 1, 1]
     labels = [0.2, 1.5, 1.9, 2, 3, 20]
+
+    if method in ["split-reduce", "cohorts"] and chunk_labels:
+        pytest.xfail()
 
     if chunks:
         if not has_dask:
@@ -604,6 +609,7 @@ def test_groupby_bins(chunk_labels, chunks, engine) -> None:
             isbin=True,
             fill_value=0,
             engine=engine,
+            method=method,
         )
     expected = np.array([3, 1, 0])
     for left, right in zip(groups, pd.IntervalIndex.from_arrays([1, 2, 4], [2, 4, 5]).to_numpy()):
@@ -823,3 +829,183 @@ def test_datetime_binning():
     expected = pd.cut(by, time_bins).codes.copy()
     expected[0] = 14  # factorize doesn't return -1 for nans
     assert_equal(group_idx, expected)
+
+
+@pytest.mark.parametrize("func", ALL_FUNCS)
+def test_bool_reductions(func, engine):
+    if "arg" in func and engine == "flox":
+        pytest.skip()
+    groups = np.array([1, 1, 1])
+    data = np.array([True, True, False])
+    expected = np.expand_dims(getattr(np, func)(data), -1)
+    actual, _ = groupby_reduce(data, groups, func=func, engine=engine)
+    assert_equal(expected, actual)
+
+
+@requires_dask
+def test_map_reduce_blockwise_mixed():
+    t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()
+    data = t.dt.dayofyear
+    actual = groupby_reduce(
+        dask.array.from_array(data.values, chunks=365),
+        t.dt.month,
+        func="mean",
+        method="split-reduce",
+    )
+    expected = groupby_reduce(data, t.dt.month, func="mean")
+    assert_equal(expected, actual)
+
+
+@requires_dask
+@pytest.mark.parametrize("method", ["split-reduce", "blockwise", "map-reduce", "cohorts"])
+def test_group_by_datetime(engine, method):
+    kwargs = dict(
+        func="mean",
+        method=method,
+        engine=engine,
+    )
+    t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()
+    data = t.dt.dayofyear
+    daskarray = dask.array.from_array(data.values, chunks=30)
+
+    actual, _ = groupby_reduce(daskarray, t, **kwargs)
+    expected = data.to_numpy().astype(float)
+    assert_equal(expected, actual)
+
+    if method == "blockwise":
+        return None
+
+    edges = pd.date_range("1999-12-31", "2000-12-31", freq="M").to_series().to_numpy()
+    actual, _ = groupby_reduce(daskarray, t.to_numpy(), isbin=True, expected_groups=edges, **kwargs)
+    expected = data.resample("M").mean().to_numpy()
+    assert_equal(expected, actual)
+
+    actual, _ = groupby_reduce(
+        np.broadcast_to(daskarray, (2, 3, daskarray.shape[-1])),
+        t.to_numpy(),
+        isbin=True,
+        expected_groups=edges,
+        **kwargs,
+    )
+    expected = np.broadcast_to(expected, (2, 3, expected.shape[-1]))
+    assert_equal(expected, actual)
+
+
+def test_factorize_values_outside_bins():
+
+    vals = factorize_(
+        (np.arange(10).reshape(5, 2), np.arange(10).reshape(5, 2)),
+        axis=(0, 1),
+        expected_groups=(
+            pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
+            pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
+        ),
+        reindex=True,
+        fastpath=True,
+    )
+    actual = vals[0]
+    expected = np.array([[-1, -1], [-1, 0], [6, 12], [18, 24], [-1, -1]])
+    assert_equal(expected, actual)
+
+
+def test_multiple_groupers():
+    actual, *_ = groupby_reduce(
+        np.ones((5, 2)),
+        np.arange(10).reshape(5, 2),
+        np.arange(10).reshape(5, 2),
+        axis=(0, 1),
+        expected_groups=(
+            pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
+            pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
+        ),
+        reindex=True,
+        func="count",
+    )
+    expected = np.eye(5, 5)
+    assert_equal(expected, actual)
+
+
+def test_factorize_reindex_sorting_strings():
+    kwargs = dict(
+        by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),
+        axis=-1,
+        expected_groups=(np.array(["El-Nino", "Neutral", "foo", "La-Nina"]),),
+    )
+
+    expected = factorize_(**kwargs, reindex=True, sort=True)[0]
+    assert_equal(expected, [0, 1, 4, 2])
+
+    expected = factorize_(**kwargs, reindex=True, sort=False)[0]
+    assert_equal(expected, [0, 3, 4, 1])
+
+    expected = factorize_(**kwargs, reindex=False, sort=False)[0]
+    assert_equal(expected, [0, 1, 2, 3])
+
+    expected = factorize_(**kwargs, reindex=False, sort=True)[0]
+    assert_equal(expected, [0, 1, 3, 2])
+
+
+def test_factorize_reindex_sorting_ints():
+    kwargs = dict(
+        by=(np.array([-10, 1, 10, 2, 3, 5]),),
+        axis=-1,
+        expected_groups=(np.array([0, 1, 2, 3, 4, 5]),),
+    )
+
+    expected = factorize_(**kwargs, reindex=True, sort=True)[0]
+    assert_equal(expected, [6, 1, 6, 2, 3, 5])
+
+    expected = factorize_(**kwargs, reindex=True, sort=False)[0]
+    assert_equal(expected, [6, 1, 6, 2, 3, 5])
+
+    kwargs["expected_groups"] = (np.arange(5, -1, -1),)
+
+    expected = factorize_(**kwargs, reindex=True, sort=True)[0]
+    assert_equal(expected, [6, 1, 6, 2, 3, 5])
+
+    expected = factorize_(**kwargs, reindex=True, sort=False)[0]
+    assert_equal(expected, [6, 4, 6, 3, 2, 0])
+
+
+@requires_dask
+def test_custom_aggregation_blockwise():
+    def grouped_median(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+        return aggregate(
+            group_idx,
+            array,
+            func=np.median,
+            axis=axis,
+            size=size,
+            fill_value=fill_value,
+            dtype=dtype,
+        )
+
+    agg_median = Aggregation(
+        name="median", numpy=grouped_median, fill_value=-1, chunk=None, combine=None
+    )
+
+    array = np.arange(100, dtype=np.float32).reshape(5, 20)
+    by = np.ones((20,))
+
+    actual, _ = groupby_reduce(array, by, func=agg_median, axis=-1)
+    expected = np.median(array, axis=-1, keepdims=True)
+    assert_equal(expected, actual)
+
+    for method in ["map-reduce", "cohorts", "split-reduce"]:
+        with pytest.raises(NotImplementedError):
+            groupby_reduce(
+                dask.array.from_array(array, chunks=(1, -1)),
+                by,
+                func=agg_median,
+                axis=-1,
+                method=method,
+            )
+
+    actual, _ = groupby_reduce(
+        dask.array.from_array(array, chunks=(1, -1)),
+        by,
+        func=agg_median,
+        axis=-1,
+        method="blockwise",
+    )
+    assert_equal(expected, actual)

@@ -13,7 +13,7 @@ dependencies:
   - pytest-xdist
   - xarray
   - pre-commit
-  - numpy_groupies
+  - numpy_groupies>=0.9.15
   - pooch
   - toolz
   - numba

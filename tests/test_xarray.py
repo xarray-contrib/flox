@@ -188,6 +188,11 @@ def test_xarray_reduce_single_grouper(engine):
     actual = xarray_reduce(ds, ds.time.dt.month, func="mean", engine=engine)
     xr.testing.assert_allclose(actual, expected)
 
+    # reduce along other dimensions
+    expected = ds.groupby("time.month").mean(("x", "y"))
+    actual = xarray_reduce(ds, ds.time.dt.month, dim=["x", "y"], func="mean", engine=engine)
+    xr.testing.assert_allclose(actual, expected)
+
     # add data var with missing grouper dim
     ds["foo"] = ("bar", [1, 2, 3])
     expected = ds.groupby("time.month").mean()
@@ -321,6 +326,17 @@ def test_multi_index_groupby_sum(engine):
     actual = xarray_reduce(stacked, "space", dim="z", func="sum", engine=engine)
     assert_equal(expected, actual.unstack("space"))
 
+    actual = xarray_reduce(stacked.foo, "space", dim="z", func="sum", engine=engine)
+    assert_equal(expected.foo, actual.unstack("space"))
+
+    ds = xr.Dataset(
+        dict(a=(("z",), np.ones(10))),
+        coords=dict(b=(("z"), np.arange(2).repeat(5)), c=(("z"), np.arange(5).repeat(2))),
+    ).set_index(bc=["b", "c"])
+    expected = ds.groupby("bc").sum()
+    actual = xarray_reduce(ds, "bc", func="sum")
+    assert_equal(expected, actual)
+
 
 @pytest.mark.parametrize("chunks", (None, 2))
 def test_xarray_groupby_bins(chunks, engine):
@@ -400,3 +416,72 @@ def test_cache():
 
     xarray_reduce(ds, "labels", func="mean", method="blockwise")
     assert len(cache.data) == 2
+
+
+@pytest.mark.parametrize("use_cftime", [True, False])
+@pytest.mark.parametrize("func", ["count", "mean"])
+def test_datetime_array_reduce(use_cftime, func):
+
+    time = xr.DataArray(
+        xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
+        dims=("time",),
+        name="time",
+    )
+    expected = getattr(time.resample(time="YS"), func)()
+    actual = resample_reduce(time.resample(time="YS"), func=func, engine="flox")
+    assert_equal(expected, actual)
+
+
+@requires_dask
+def test_groupby_bins_indexed_coordinate():
+    ds = (
+        xr.tutorial.open_dataset("air_temperature")
+        .isel(time=slice(100))
+        .chunk({"time": 20, "lat": 5})
+    )
+    bins = [40, 50, 60, 70]
+    expected = ds.groupby_bins("lat", bins=bins).mean(keep_attrs=True, dim=...)
+    actual = xarray_reduce(
+        ds,
+        ds.lat,
+        dim=ds.air.dims,
+        expected_groups=([40, 50, 60, 70],),
+        isbin=(True,),
+        func="mean",
+        method="split-reduce",
+    )
+    xr.testing.assert_allclose(expected, actual)
+
+
+@pytest.mark.parametrize("chunk", (True, False))
+def test_mixed_grouping(chunk):
+    if not has_dask and chunk:
+        pytest.skip()
+    # regression test for https://github.com/xarray-contrib/flox/pull/111
+    sa = 10
+    sb = 13
+    sc = 3
+
+    x = xr.Dataset(
+        {
+            "v0": xr.DataArray(
+                ((np.arange(sa * sb * sc) / sa) % 1).reshape((sa, sb, sc)),
+                dims=("a", "b", "c"),
+            ),
+            "v1": xr.DataArray((np.arange(sa * sb) % 3).reshape(sa, sb), dims=("a", "b")),
+        }
+    )
+    if chunk:
+        x["v0"] = x["v0"].chunk({"a": 5})
+
+    r = xarray_reduce(
+        x["v0"],
+        x["v1"],
+        x["v0"],
+        expected_groups=(np.arange(6), np.linspace(0, 1, num=5)),
+        isbin=[False, True],
+        func="count",
+        dim="b",
+        fill_value=0,
+    )
+    assert (r.sel(v1=[3, 4, 5]) == 0).all().data

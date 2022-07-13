@@ -43,8 +43,8 @@ extensions = [
 ]
 
 extlinks = {
-    "issue": ("https://github.com/dcherian/flox/issues/%s", "GH#"),
-    "pr": ("https://github.com/dcherian/flox/pull/%s", "GH#"),
+    "issue": ("https://github.com/xarray-contrib/flox/issues/%s", "GH#"),
+    "pr": ("https://github.com/xarray-contrib/flox/pull/%s", "GH#"),
 }
 
 templates_path = ["_templates"]
@@ -57,10 +57,14 @@ project = "flox"
 current_year = datetime.datetime.now().year
 copyright = f"2021-{current_year}, Deepak Cherian"
 author = "Deepak Cherian"
+
+# Myst_nb options
+nb_execution_excludepatterns = ["climatology-hourly.ipynb"]
+nb_execution_raise_on_error = True
+
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
-#
 # The short X.Y version.
 version = flox.__version__.split("+")[0]
 # The full version, including alpha/beta/rc tags.

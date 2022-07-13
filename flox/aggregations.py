@@ -9,6 +9,14 @@ import numpy_groupies as npg
 from . import aggregate_flox, aggregate_npg, xrdtypes as dtypes, xrutils
 
 
+def _is_arg_reduction(func: str | Aggregation) -> bool:
+    if isinstance(func, str) and func in ["argmin", "argmax", "nanargmax", "nanargmin"]:
+        return True
+    if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
+        return True
+    return False
+
+
 def generic_aggregate(
     group_idx,
     array,
@@ -497,7 +505,11 @@ def _initialize_aggregation(
     agg.fill_value[func] = _get_fill_value(agg.dtype[func], agg.fill_value[func])
 
     fv = fill_value if fill_value is not None else agg.fill_value[agg.name]
-    agg.fill_value["numpy"] = (fv,)
+    if _is_arg_reduction(agg):
+        # this allows us to unravel_index easily. we have to do that nearly every time.
+        agg.fill_value["numpy"] = (0,)
+    else:
+        agg.fill_value["numpy"] = (fv,)
 
     if finalize_kwargs is not None:
         assert isinstance(finalize_kwargs, dict)
