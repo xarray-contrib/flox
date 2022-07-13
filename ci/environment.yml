@@ -18,4 +18,4 @@ dependencies:
   - toolz
   - numba
   - pip:
-    - git+https://github.com/shoyer/numbagg
+    - git+https://github.com/numbagg/numbagg
