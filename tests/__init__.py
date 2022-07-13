@@ -101,11 +101,16 @@ def assert_equal(a, b):
         np.testing.assert_allclose(a, b, equal_nan=True)
 
 
-@pytest.fixture(scope="module", params=["flox", "numpy", "numba"])
+@pytest.fixture(scope="module", params=["numbagg"])
 def engine(request):
     if request.param == "numba":
         try:
             import numba
+        except ImportError:
+            pytest.xfail()
+    if request.param == "numbagg":
+        try:
+            import numbagg
         except ImportError:
             pytest.xfail()
     return request.param
