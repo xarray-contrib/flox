@@ -494,10 +494,8 @@ def test_dtype(chunk, dtype, dtype_out, engine):
     if chunk and not has_dask:
         pytest.skip()
 
-    if chunk:
-        data = dask.array.ones((4, 12), dtype=dtype, chunks=(1, -1))
-    else:
-        data = np.ones((4, 12), dtype=dtype)
+    xp = dask.array if chunk else np
+    data = xp.linspace(0, 1, 48, dtype=dtype).reshape((4, 12))
 
     arr = xr.DataArray(
         data,
@@ -507,10 +505,17 @@ def test_dtype(chunk, dtype, dtype_out, engine):
         },
         name="arr",
     )
-    actual = xarray_reduce(arr, "labels", func="mean", dtype=dtype_out)
+    kwargs = dict(func="mean", dtype=dtype_out, engine=engine)
+    actual = xarray_reduce(arr, "labels", **kwargs)
+    expected = arr.groupby("labels").mean(dtype="float64")
+
     assert actual.dtype == np.dtype("float64")
     assert actual.compute().dtype == np.dtype("float64")
+    assert_equal(expected, actual)
 
-    actual = xarray_reduce(arr.to_dataset(), "labels", func="mean", dtype=dtype_out)
+    actual = xarray_reduce(arr.to_dataset(), "labels", **kwargs)
+    expected = arr.to_dataset().groupby("labels").mean(dtype="float64")
+
     assert actual.arr.dtype == np.dtype("float64")
     assert actual.compute().arr.dtype == np.dtype("float64")
+    assert_equal(expected, actual.transpose("labels", ...))
