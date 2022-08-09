@@ -13,10 +13,12 @@ kernelspec:
 
 # Overlapping Groups
 
-Generally group-by problems involve non-overlapping groups.
+This post is motivated by the problem of computing the [Meridional Overturning Circulation](https://en.wikipedia.org/wiki/Atlantic_meridional_overturning_circulation).
+One of the steps is a binned average over latitude, over regions of the World Ocean. Commonly we want to average
+globally, as well as over the Atlantic, and the Indo-Pacific. Generally group-by problems involve non-overlapping
+groups. In this example, the "global" group overlaps with the "Indo-Pacific" and "Atlantic" groups. Below we consider a simplified version of this problem.
 
-Consider the following group of labels:
-
+Consider the following labels:
 ```{code-cell}
 import numpy as np
 import xarray as xr
