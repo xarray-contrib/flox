@@ -499,6 +499,7 @@ def test_dtype(dtype, engine):
     actual = xarray_reduce(arr, "labels", func="mean", dtype=np.float64)
     assert actual.dtype == np.dtype("float64")
 
-    actual = xarray_reduce(arr.chunk({"x": 1}), arr.labels, func="mean", dtype=np.float64)
-    assert actual.dtype == np.dtype("float64")
-    assert actual.compute().dtype == np.dtype("float64")
+    if has_dask:
+        actual = xarray_reduce(arr.chunk({"x": 1}), arr.labels, func="mean", dtype=np.float64)
+        assert actual.dtype == np.dtype("float64")
+        assert actual.compute().dtype == np.dtype("float64")
