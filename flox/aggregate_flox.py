@@ -13,7 +13,7 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
     # assumes input is sorted, which I do in core._prepare_for_flox
     aux = group_idx
 
-    flag = np.concatenate(([True], aux[1:] != aux[:-1]))
+    flag = np.concatenate((np.array([True], like=array), aux[1:] != aux[:-1]))
     uniques = aux[flag]
     (inv_idx,) = flag.nonzero()
 
@@ -25,7 +25,7 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
     if out is None:
         out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
 
-    if (len(uniques) == size) and (uniques == np.arange(size)).all():
+    if (len(uniques) == size) and (uniques == np.arange(size, like=array)).all():
         # The previous version of this if condition
         #     ((uniques[1:] - uniques[:-1]) == 1).all():
         # does not work when group_idx is [1, 2] for e.g.
