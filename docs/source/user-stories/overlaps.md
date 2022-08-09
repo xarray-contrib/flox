@@ -46,7 +46,7 @@ Now let's calculate the `sum` where `labels` is either `1` or `2`. The trick is 
 expanded = labels.expand_dims(y=2).copy()
 # Along y=0, expanded and labels are identical
 # Along y=1, assign expanded=4 where label == 1 or 2, and -1 otherwise
-expanded.loc[{"y": 1}] = xr.where(labels.isin([1, 2]) 4, -1)
+expanded.loc[{"y": 1}] = xr.where(labels.isin([1, 2]), 4, -1)
 expanded
 ```
 
