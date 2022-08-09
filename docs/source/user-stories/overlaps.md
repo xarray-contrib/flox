@@ -13,7 +13,9 @@ kernelspec:
 
 # Overlapping Groups
 
-Generally group-by problems involve non-overlapping groups. Consider the following group of labels:
+Generally group-by problems involve non-overlapping groups.
+
+Consider the following group of labels:
 
 ```{code-cell}
 import numpy as np
@@ -40,20 +42,26 @@ we get (note the reduction over `x` is implicit here):
 xarray_reduce(da, labels, func="sum")
 ```
 
-Now let's calculate the `sum` where `labels` is either `1` or `2`. The trick is to add a new dimension to `labels` of size `2` and assign a new label `4` in the appropriate locations.
+Now let's _also_ calculate the `sum` where `labels` is either `1` or `2`.
+We could easily compute this using the grouped result but here we use this simple example for illustration.
+The trick is to add a new dimension with new labels (here `4`) in the appropriate locations.
 ```{code-cell}
-# assign expanded=4 where label == 1 or 2, and -1 otherwise
+# assign 4 where label == 1 or 2, and -1 otherwise
 newlabels = xr.where(labels.isin([1, 2]), 4, -1)
 
-# alternative:
+# concatenate along a new dimension y;
+# note y is not present on da
 expanded = xr.concat([labels, newlabels], dim="y")
 expanded
 ```
 
-Now we reduce over `x` _and_ `y` (again implicitly) to get the appropriate sum under `label=4` (and `label=-1`). We can discard the value accumulated under `label=-1` later.
+Now we reduce over `x` _and_ the new dimension `y` (again implicitly) to get the appropriate sum under
+`label=4` (and `label=-1`). We can discard the value accumulated under `label=-1` later.
 ```{code-cell}
 xarray_reduce(da, expanded, func="sum")
 ```
+
+This way we compute all the reductions we need, in a single pass over the data.
 
 This technique generalizes to more complicated aggregations. The trick is to
 - generate appropriate labels
