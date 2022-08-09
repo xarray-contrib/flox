@@ -28,12 +28,12 @@ labels = xr.DataArray(
 labels
 ```
 
-These labels are non-overlapping. So when we reduce this data array over those labels
+These labels are non-overlapping. So when we reduce this data array over those labels along `x`
 ```{code-cell}
 da = xr.ones_like(labels)
 da
 ```
-we get
+we get (note the reduction over `x` is implicit here):
 
 ```{code-cell}
 xarray_reduce(da, labels, func="sum")
@@ -50,7 +50,12 @@ expanded.loc[{"y": 1}] = xr.where(labels.isin([1, 2]), 4, -1)
 expanded
 ```
 
-Now when we reduce, we get the appropriate sum under `label=4`, and can discard the rest accumulated under `label=-1`.
+Now we reduce over `x` _and_ `y` (again implicitly) to get the appropriate sum under `label=4` (and `label=-1`). We can discard the value accumulated under `label=-1` later.
 ```{code-cell}
 xarray_reduce(da, expanded, func="sum")
 ```
+
+This technique generalizes to more complicated aggregations. The trick is to
+- generate appropriate labels
+- concatenate these new labels along a new dimension (`y`) absent on the object being reduced (`da`), and
+- reduce over that new dimension in addition to any others.
