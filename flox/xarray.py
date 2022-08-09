@@ -96,8 +96,8 @@ def xarray_reduce(
     fill_value
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
-    dtype: str
-        DType for the output (DataArray only).
+    dtype: data-type, optional
+        DType for the output. Can be anything accepted by ``np.dtype``.
     method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
         Strategy for reduction of dask arrays only:
           * ``"map-reduce"``:
