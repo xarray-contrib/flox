@@ -487,9 +487,10 @@ def test_mixed_grouping(chunk):
     assert (r.sel(v1=[3, 4, 5]) == 0).all().data
 
 
+@pytest.mark.parametrize("dtype_out", [np.float64, "float64", np.dtype("float64")])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("chunk", (True, False))
-def test_dtype(chunk, dtype, engine):
+def test_dtype(chunk, dtype, dtype_out, engine):
     if chunk and not has_dask:
         pytest.skip()
 
@@ -497,6 +498,7 @@ def test_dtype(chunk, dtype, engine):
         data = dask.array.ones((4, 12), dtype=dtype, chunks=(1, -1))
     else:
         data = np.ones((4, 12), dtype=dtype)
+
     arr = xr.DataArray(
         data,
         dims=("x", "t"),
@@ -505,10 +507,10 @@ def test_dtype(chunk, dtype, engine):
         },
         name="arr",
     )
-    actual = xarray_reduce(arr, "labels", func="mean", dtype=np.float64)
+    actual = xarray_reduce(arr, "labels", func="mean", dtype=dtype_out)
     assert actual.dtype == np.dtype("float64")
     assert actual.compute().dtype == np.dtype("float64")
 
-    actual = xarray_reduce(arr.to_dataset(), "labels", func="mean", dtype=np.float64)
+    actual = xarray_reduce(arr.to_dataset(), "labels", func="mean", dtype=dtype_out)
     assert actual.arr.dtype == np.dtype("float64")
     assert actual.compute().arr.dtype == np.dtype("float64")
