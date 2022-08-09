@@ -60,6 +60,7 @@ def xarray_reduce(
     dim: Hashable = None,
     split_out: int = 1,
     fill_value=None,
+    dtype=None,
     method: str = "map-reduce",
     engine: str = "flox",
     keep_attrs: bool | None = True,
@@ -95,6 +96,8 @@ def xarray_reduce(
     fill_value
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
+    dtype: str
+        DType for the output (DataArray only).
     method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
         Strategy for reduction of dask arrays only:
           * ``"map-reduce"``:
@@ -341,7 +344,9 @@ def xarray_reduce(
         exclude_dims=set(dim),
         output_core_dims=[group_names],
         dask="allowed",
-        dask_gufunc_kwargs=dict(output_sizes=group_sizes),
+        dask_gufunc_kwargs=dict(
+            output_sizes=group_sizes, output_dtypes=[dtype] if dtype is not None else None
+        ),
         keep_attrs=keep_attrs,
         kwargs={
             "func": func,
@@ -357,6 +362,7 @@ def xarray_reduce(
             "expected_groups": tuple(expected_groups),
             "isbin": isbin,
             "finalize_kwargs": finalize_kwargs,
+            "dtype": dtype,
         },
     )
 

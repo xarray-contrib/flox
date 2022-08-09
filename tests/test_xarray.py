@@ -485,3 +485,20 @@ def test_mixed_grouping(chunk):
         fill_value=0,
     )
     assert (r.sel(v1=[3, 4, 5]) == 0).all().data
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_dtype(dtype, engine):
+    arr = xr.DataArray(
+        data=np.ones((4, 12), dtype=dtype),
+        dims=("x", "t"),
+        coords={
+            "labels": ("t", np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"]))
+        },
+    )
+    actual = xarray_reduce(arr, "labels", func="mean", dtype=np.float64)
+    assert actual.dtype == np.dtype("float64")
+
+    actual = xarray_reduce(arr.chunk({"x": 1}), arr.labels, func="mean", dtype=np.float64)
+    assert actual.dtype == np.dtype("float64")
+    assert actual.compute().dtype == np.dtype("float64")

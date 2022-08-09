@@ -1364,6 +1364,7 @@ def groupby_reduce(
     isbin: bool = False,
     axis=None,
     fill_value=None,
+    dtype=None,
     min_count: int | None = None,
     split_out: int = 1,
     method: str = "map-reduce",
@@ -1566,8 +1567,13 @@ def groupby_reduce(
         # overwrite than when min_count is set
         fill_value = np.nan
 
+    if dtype is not None and not isinstance(dtype, np.dtype):
+        dtype = np.dtype(dtype)
+
     kwargs = dict(axis=axis, fill_value=fill_value, engine=engine)
-    agg = _initialize_aggregation(func, array.dtype, fill_value, min_count, finalize_kwargs)
+    agg = _initialize_aggregation(
+        func, array.dtype if dtype is None else dtype, fill_value, min_count, finalize_kwargs
+    )
 
     if not has_dask:
         results = _reduce_blockwise(

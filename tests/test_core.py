@@ -1009,3 +1009,14 @@ def test_custom_aggregation_blockwise():
         method="blockwise",
     )
     assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_dtype(func, dtype, engine):
+    if "arg" in func or func in ["any", "all"]:
+        pytest.skip()
+    arr = np.ones((4, 12), dtype=dtype)
+    labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
+    actual, _ = groupby_reduce(arr, labels, func=func, dtype=np.float64)
+    assert actual.dtype == np.dtype("float64")
