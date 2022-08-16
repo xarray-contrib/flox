@@ -4,6 +4,7 @@ import numpy as np
 
 from .xrutils import isnull
 
+
 def _prepare_for_flox(group_idx, array):
     """
     Sort the input array once to save time.

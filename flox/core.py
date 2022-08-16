@@ -13,13 +13,13 @@ import pandas as pd
 import toolz as tlz
 
 from . import xrdtypes
+from .aggregate_flox import _prepare_for_flox
 from .aggregations import (
     Aggregation,
     _atleast_1d,
     _initialize_aggregation,
     generic_aggregate,
 )
-from .aggregate_flox import _prepare_for_flox
 from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
