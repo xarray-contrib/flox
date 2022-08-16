@@ -1353,7 +1353,7 @@ def groupby_reduce(
     min_count: int | None = None,
     split_out: int = 1,
     method: str = "map-reduce",
-    engine: str = "flox",
+    engine: str = "numpy",
     reindex: bool | None = None,
     finalize_kwargs: Mapping | None = None,
 ) -> tuple[DaskArray, np.ndarray | DaskArray]:

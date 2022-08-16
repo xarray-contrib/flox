@@ -61,7 +61,7 @@ def xarray_reduce(
     split_out: int = 1,
     fill_value=None,
     method: str = "map-reduce",
-    engine: str = "flox",
+    engine: str = "numpy",
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
