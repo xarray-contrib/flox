@@ -46,6 +46,8 @@ def generic_aggregate(
             f"Expected engine to be one of ['flox', 'numpy', 'numba']. Received {engine} instead."
         )
 
+    group_idx = np.asarray(group_idx, like=array)
+
     return method(
         group_idx, array, axis=axis, size=size, fill_value=fill_value, dtype=dtype, **kwargs
     )

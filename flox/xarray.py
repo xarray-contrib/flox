@@ -61,7 +61,7 @@ def xarray_reduce(
     split_out: int = 1,
     fill_value=None,
     method: str = "map-reduce",
-    engine: str = "flox",
+    engine: str = "numpy",
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
@@ -125,13 +125,14 @@ def xarray_reduce(
             and is identical to xarray's default strategy.
     engine : {"flox", "numpy", "numba"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
+          * ``"numpy"``:
+            Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
+            This is the default choice because it works for other array types.
           * ``"flox"``:
             Use an internal implementation where the data is sorted so that
             all members of a group occur sequentially, and then numpy.ufunc.reduceat
             is to used for the reduction. This will fall back to ``numpy_groupies.aggregate_numpy``
             for a reduction that is not yet implemented.
-          * ``"numpy"``:
-            Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
     keep_attrs : bool, optional

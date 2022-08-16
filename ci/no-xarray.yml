@@ -5,6 +5,7 @@ dependencies:
   - codecov
   - netcdf4
   - pandas
+  - numpy>=1.20
   - pip
   - pytest
   - pytest-cov

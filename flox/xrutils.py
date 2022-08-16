@@ -98,7 +98,8 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
 
 
 def isnull(data):
-    data = np.asarray(data)
+    if not is_duck_array(data):
+        data = np.asarray(data)
     scalar_type = data.dtype.type
     if issubclass(scalar_type, (np.datetime64, np.timedelta64)):
         # datetime types use NaT for null
