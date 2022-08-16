@@ -1364,7 +1364,7 @@ def groupby_reduce(
     isbin: bool = False,
     axis=None,
     fill_value=None,
-    dtype=None,
+    dtype: np.typing.DTypeLike = None,
     min_count: int | None = None,
     split_out: int = 1,
     method: str = "map-reduce",

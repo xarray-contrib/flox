@@ -60,7 +60,7 @@ def xarray_reduce(
     dim: Hashable = None,
     split_out: int = 1,
     fill_value=None,
-    dtype=None,
+    dtype: np.typing.DTypeLike = None,
     method: str = "map-reduce",
     engine: str = "flox",
     keep_attrs: bool | None = True,
