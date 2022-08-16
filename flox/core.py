@@ -13,6 +13,7 @@ import pandas as pd
 import toolz as tlz
 
 from . import xrdtypes
+from .aggregate_flox import _prepare_for_flox
 from .aggregations import (
     Aggregation,
     _atleast_1d,
@@ -42,21 +43,6 @@ def _is_arg_reduction(func: str | Aggregation) -> bool:
     if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
         return True
     return False
-
-
-def _prepare_for_flox(group_idx, array):
-    """
-    Sort the input array once to save time.
-    """
-    assert array.shape[-1] == group_idx.shape[0]
-    issorted = (group_idx[:-1] <= group_idx[1:]).all()
-    if issorted:
-        ordered_array = array
-    else:
-        perm = group_idx.argsort(kind="stable")
-        group_idx = group_idx[..., perm]
-        ordered_array = array[..., perm]
-    return group_idx, ordered_array
 
 
 def _get_expected_groups(by, sort, *, raise_if_dask=True) -> pd.Index | None:
@@ -1368,7 +1354,7 @@ def groupby_reduce(
     min_count: int | None = None,
     split_out: int = 1,
     method: str = "map-reduce",
-    engine: str = "flox",
+    engine: str = "numpy",
     reindex: bool | None = None,
     finalize_kwargs: Mapping | None = None,
 ) -> tuple[DaskArray, np.ndarray | DaskArray]:
@@ -1437,13 +1423,14 @@ def groupby_reduce(
             and is identical to xarray's default strategy.
     engine : {"flox", "numpy", "numba"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
+          * ``"numpy"``:
+            Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
+            This is the default choice because it works for most array types.
           * ``"flox"``:
             Use an internal implementation where the data is sorted so that
             all members of a group occur sequentially, and then numpy.ufunc.reduceat
             is to used for the reduction. This will fall back to ``numpy_groupies.aggregate_numpy``
             for a reduction that is not yet implemented.
-          * ``"numpy"``:
-            Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
     reindex : bool, optional

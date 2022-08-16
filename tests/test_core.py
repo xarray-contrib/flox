@@ -504,7 +504,7 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, engine):
         fill_value=0,
         engine=engine,
     )
-    assert_equal(result, np.zeros(expected_shape, dtype=np.int64))
+    assert_equal(result, np.zeros(expected_shape, dtype=np.intp))
 
     # now when subsets are NaN
     # labels = np.array([0, 0, 1, 1, 1], dtype=float)
