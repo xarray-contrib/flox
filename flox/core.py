@@ -19,6 +19,7 @@ from .aggregations import (
     _initialize_aggregation,
     generic_aggregate,
 )
+from .aggregate_flox import _prepare_for_flox
 from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
@@ -42,21 +43,6 @@ def _is_arg_reduction(func: str | Aggregation) -> bool:
     if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
         return True
     return False
-
-
-def _prepare_for_flox(group_idx, array):
-    """
-    Sort the input array once to save time.
-    """
-    assert array.shape[-1] == group_idx.shape[0]
-    issorted = (group_idx[:-1] <= group_idx[1:]).all()
-    if issorted:
-        ordered_array = array
-    else:
-        perm = group_idx.argsort(kind="stable")
-        group_idx = group_idx[..., perm]
-        ordered_array = array[..., perm]
-    return group_idx, ordered_array
 
 
 def _get_expected_groups(by, sort, *, raise_if_dask=True) -> pd.Index | None:

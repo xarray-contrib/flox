@@ -4,6 +4,20 @@ import numpy as np
 
 from .xrutils import isnull
 
+def _prepare_for_flox(group_idx, array):
+    """
+    Sort the input array once to save time.
+    """
+    assert array.shape[-1] == group_idx.shape[0]
+    issorted = (group_idx[:-1] <= group_idx[1:]).all()
+    if issorted:
+        ordered_array = array
+    else:
+        perm = group_idx.argsort(kind="stable")
+        group_idx = group_idx[..., perm]
+        ordered_array = array[..., perm]
+    return group_idx, ordered_array
+
 
 def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None):
     """
