@@ -296,7 +296,10 @@ def xarray_reduce(
             if "nan" not in func and func not in ["all", "any", "count"]:
                 func = f"nan{func}"
 
-        requires_numeric = func not in ["any", "all"]
+        # Flox's count works with non-numeric and its faster than converting.
+        requires_numeric = func not in ["count", "any", "all"] or (
+            func == "count" and engine != "flox"
+        )
         if requires_numeric:
             is_npdatetime = array.dtype.kind in "Mm"
             is_cftime = _contains_cftime_datetimes(array)
@@ -311,7 +314,8 @@ def xarray_reduce(
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
 
-        if requires_numeric and func != 'count':
+        # Output of count has an int dtype.
+        if requires_numeric and func != "count":
             if is_npdatetime:
                 return result.astype(dtype) + offset
             elif is_cftime:
