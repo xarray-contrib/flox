@@ -296,7 +296,7 @@ def xarray_reduce(
             if "nan" not in func and func not in ["all", "any", "count"]:
                 func = f"nan{func}"
 
-        requires_numeric = func not in ["count", "any", "all"]
+        requires_numeric = func not in ["any", "all"]
         if requires_numeric:
             is_npdatetime = array.dtype.kind in "Mm"
             is_cftime = _contains_cftime_datetimes(array)
@@ -311,7 +311,7 @@ def xarray_reduce(
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
 
-        if requires_numeric:
+        if requires_numeric and func != 'count':
             if is_npdatetime:
                 return result.astype(dtype) + offset
             elif is_cftime:
