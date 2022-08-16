@@ -9,14 +9,43 @@ def _get_aggregate(engine):
 
 
 def sum_of_squares(
-    group_idx, array, engine, *, axis=-1, func="sum", size=None, fill_value=None, dtype=None
+    group_idx,
+    array,
+    engine,
+    *,
+    axis=-1,
+    size=None,
+    fill_value=None,
+    dtype=None,
 ):
 
     return _get_aggregate(engine).aggregate(
         group_idx,
-        array**2,
+        array,
         axis=axis,
-        func=func,
+        func="sumofsquares",
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+
+
+def nansum_of_squares(
+    group_idx,
+    array,
+    engine,
+    *,
+    axis=-1,
+    size=None,
+    fill_value=None,
+    dtype=None,
+):
+
+    return _get_aggregate(engine).aggregate(
+        group_idx,
+        array,
+        axis=axis,
+        func="sumofsquares",
         size=size,
         fill_value=fill_value,
         dtype=dtype,
@@ -51,19 +80,6 @@ def nanprod(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dt
         func="prod",
         size=size,
         fill_value=fill_value,
-        dtype=dtype,
-    )
-
-
-def nansum_of_squares(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
-    return sum_of_squares(
-        group_idx,
-        array,
-        engine=engine,
-        func="nansum",
-        size=size,
-        fill_value=fill_value,
-        axis=axis,
         dtype=dtype,
     )
 

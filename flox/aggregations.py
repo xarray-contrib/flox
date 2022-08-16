@@ -39,7 +39,7 @@ def generic_aggregate(
             method_ = getattr(aggregate_npg, func)
             method = partial(method_, engine=engine)
         except AttributeError:
-            aggregate = npg.aggregate_np if engine == "numpy" else npg.aggregate_nb
+            aggregate = aggregate_npg._get_aggregate(engine)
             method = partial(aggregate, func=func)
     else:
         raise ValueError(
