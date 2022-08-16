@@ -43,7 +43,7 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
         # The previous version of this if condition
         #     ((uniques[1:] - uniques[:-1]) == 1).all():
         # does not work when group_idx is [1, 2] for e.g.
-        # This happens  during binning
+        # This happens during binning
         op.reduceat(array, inv_idx, axis=axis, dtype=dtype, out=out)
     else:
         out[..., uniques] = op.reduceat(array, inv_idx, axis=axis, dtype=dtype)
@@ -105,8 +105,7 @@ def nanlen(group_idx, array, *args, **kwargs):
 def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     if fill_value is None:
         fill_value = 0
-    out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
-    sum(group_idx, array, axis=axis, size=size, dtype=dtype, out=out)
+    out = sum(group_idx, array, axis=axis, size=size, dtype=dtype, fill_value=fill_value)
     out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
 
@@ -114,7 +113,6 @@ def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
 def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     if fill_value is None:
         fill_value = 0
-    out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
-    nansum(group_idx, array, size=size, axis=axis, dtype=dtype, out=out)
+    out = nansum(group_idx, array, size=size, axis=axis, dtype=dtype, fill_value=fill_value)
     out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
