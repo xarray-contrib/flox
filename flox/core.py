@@ -1420,13 +1420,14 @@ def groupby_reduce(
             and is identical to xarray's default strategy.
     engine : {"flox", "numpy", "numba"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
+          * ``"numpy"``:
+            Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
+            This is the default choice because it works for most array types.
           * ``"flox"``:
             Use an internal implementation where the data is sorted so that
             all members of a group occur sequentially, and then numpy.ufunc.reduceat
             is to used for the reduction. This will fall back to ``numpy_groupies.aggregate_numpy``
             for a reduction that is not yet implemented.
-          * ``"numpy"``:
-            Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
     reindex : bool, optional
