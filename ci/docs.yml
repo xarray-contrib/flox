@@ -5,6 +5,7 @@ dependencies:
   - dask-core
   - pip
   - xarray
+  - numpy>=1.20
   - numpydoc
   - numpy_groupies
   - toolz
