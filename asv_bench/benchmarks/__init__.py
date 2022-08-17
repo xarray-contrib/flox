@@ -6,6 +6,7 @@ def parameterized(names, params):
 
     return decorator
 
+
 def _skip_slow():
     """
     Use this function to skip slow or highly demanding tests.
