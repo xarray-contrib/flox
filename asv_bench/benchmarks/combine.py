@@ -58,4 +58,4 @@ class Combine1d(Combine):
         ]
 
         self.x_chunk_cohorts = [construct_member(groups) for groups in [np.array((1, 2, 3, 4))] * 4]
-        self.kwargs = {"agg": flox.aggregations.mean, "axis": (3,), "group_ndim": 1}
+        self.kwargs = {"agg": flox.aggregations.mean, "axis": (3,), "neg_axis": (-1,)}
