@@ -1,3 +1,6 @@
+import os
+
+
 def parameterized(names, params):
     def decorator(func):
         func.param_names = names
@@ -5,6 +8,7 @@ def parameterized(names, params):
         return func
 
     return decorator
+
 
 def _skip_slow():
     """
