@@ -13,7 +13,7 @@ class Combine:
 
     @parameterized("kind", ("cohorts", "mapreduce"))
     def time_combine(self, kind):
-        flox.core._npg_combine(
+        flox.core._grouped_combine(
             getattr(self, f"x_chunk_{kind}"),
             **self.kwargs,
             keepdims=True,
@@ -22,7 +22,7 @@ class Combine:
 
     @parameterized("kind", ("cohorts", "mapreduce"))
     def peakmem_combine(self, kind):
-        flox.core._npg_combine(
+        flox.core._grouped_combine(
             getattr(self, f"x_chunk_{kind}"),
             **self.kwargs,
             keepdims=True,
