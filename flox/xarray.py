@@ -168,10 +168,10 @@ def xarray_reduce(
 
     >>> # Create a group index:
     >>> labels = xr.DataArray(
-    >>>     [1, 2, 3, 1, 2, 3, 0, 0, 0],
-    >>>     dims="x",
-    >>>     name="label",
-    >>> )
+    ...     [1, 2, 3, 1, 2, 3, 0, 0, 0],
+    ...     dims="x",
+    ...     name="label",
+    ... )
     >>> # Create a DataArray to apply the group index on:
     >>> da = da = xr.ones_like(labels)
     >>> # Sum all values in da that matches the elements in the group index:
