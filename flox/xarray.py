@@ -57,7 +57,7 @@ def xarray_reduce(
     expected_groups=None,
     isbin: bool | Sequence[bool] = False,
     sort: bool = True,
-    dim: Hashable = None,
+    dim: str | Iterable[Hashable] | Ellipsis | None = None,
     split_out: int = 1,
     fill_value=None,
     method: str = "map-reduce",
