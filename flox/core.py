@@ -1282,11 +1282,11 @@ def _assert_by_is_aligned(shape, by):
 
 
 def _convert_expected_groups_to_index(
-    expected_groups: tuple, isbin: bool, sort: bool
+    expected_groups: tuple, isbin: Sequence[bool], sort: bool
 ) -> pd.Index | None:
     out = []
     for ex, isbin_ in zip(expected_groups, isbin):
-        if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin):
+        if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin_):
             if sort:
                 ex = ex.sort_values()
             out.append(ex)
