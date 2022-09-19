@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Hashable, Iterable, Union, Sequence
+from typing import TYPE_CHECKING, Hashable, Iterable, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -19,10 +19,11 @@ from .core import (
 from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
-    from xarray import DataArray, Dataset # TODO: Use T_DataArray, T_Dataset?
+    from xarray import DataArray, Dataset  # TODO: Use T_DataArray, T_Dataset?
     from xarray.core.resample import Resample
 
     Dims = Union[str, Iterable[Hashable], None]
+
 
 def _get_input_core_dims(group_names, dim, ds, grouper_dims):
     input_core_dims = [[], []]
@@ -284,7 +285,9 @@ def xarray_reduce(
             return result
 
     axis = tuple(range(-len(dim_tuple), 0))
-    group_names = tuple(g.name if not binned else f"{g.name}_bins" for g, binned in zip(by_broad, isbins))
+    group_names = tuple(
+        g.name if not binned else f"{g.name}_bins" for g, binned in zip(by_broad, isbins)
+    )
 
     expected_groups = list(expected_groups)
 
