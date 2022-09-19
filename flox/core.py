@@ -5,7 +5,16 @@ import itertools
 import operator
 from collections import namedtuple
 from functools import partial, reduce
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Mapping, Sequence, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Mapping,
+    Sequence,
+    Union,
+)
 
 import numpy as np
 import numpy_groupies as npg
