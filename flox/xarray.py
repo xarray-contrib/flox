@@ -19,7 +19,7 @@ from .core import (
 from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
-    from xarray import DataArray, Dataset  # TODO: Use T_DataArray, T_Dataset?
+    from xarray.core.types import T_DataArray, T_Dataset
     from xarray.core.resample import Resample
 
     Dims = Union[str, Iterable[Hashable], None]
@@ -54,8 +54,8 @@ def _restore_dim_order(result, obj, by):
 
 
 def xarray_reduce(
-    obj: Dataset | DataArray,
-    *by: DataArray | Hashable,
+    obj: T_Dataset | T_DataArray,
+    *by: T_DataArray | Hashable,
     func: str | Aggregation,
     expected_groups=None,
     isbin: bool | Sequence[bool] = False,
@@ -240,10 +240,10 @@ def xarray_reduce(
             if d not in grouper_dims:
                 grouper_dims.append(d)
 
-    if isinstance(obj, xr.DataArray):
-        ds = obj._to_temp_dataset()
-    else:
+    if isinstance(obj, xr.Dataset):
         ds = obj
+    else:
+        ds = obj._to_temp_dataset()
 
     ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
 
@@ -419,10 +419,10 @@ def xarray_reduce(
 
     if len(by_broad) == 1:
         for var in actual:
-            if isinstance(obj, xr.DataArray):
-                template = obj
-            else:
+            if isinstance(obj, xr.Dataset):
                 template = obj[var]
+            else:
+                template = obj
             if actual[var].ndim > 1:
                 actual[var] = _restore_dim_order(actual[var], template, by_broad[0])
 
@@ -444,9 +444,9 @@ def xarray_reduce(
 
 
 def rechunk_for_cohorts(
-    obj: DataArray | Dataset,
+    obj: T_DataArray | T_Dataset,
     dim: str,
-    labels: DataArray,
+    labels: T_DataArray,
     force_new_chunk_at,
     chunksize: int | None = None,
     ignore_old_chunks: bool = False,
@@ -491,7 +491,7 @@ def rechunk_for_cohorts(
     )
 
 
-def rechunk_for_blockwise(obj: DataArray | Dataset, dim: str, labels: DataArray):
+def rechunk_for_blockwise(obj: T_DataArray | T_Dataset, dim: str, labels: T_DataArray):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     embarassingly parallel group reductions.
