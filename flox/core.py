@@ -1295,7 +1295,7 @@ def _convert_expected_groups_to_index(
 ) -> tuple[pd.Index | None]:
     out = []
     for ex, isbin_ in zip(expected_groups, isbin):
-        if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin_):
+        if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin):
             if sort:
                 ex = ex.sort_values()
             out.append(ex)
