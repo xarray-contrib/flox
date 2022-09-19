@@ -19,8 +19,8 @@ from .core import (
 from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
-    from xarray.core.types import T_DataArray, T_Dataset
     from xarray.core.resample import Resample
+    from xarray.core.types import T_DataArray, T_Dataset
 
     Dims = Union[str, Iterable[Hashable], None]
 
