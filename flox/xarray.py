@@ -161,6 +161,26 @@ def xarray_reduce(
     DataArray or Dataset
         Reduced object
 
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> from flox.xarray import xarray_reduce
+
+    >>> # Create a group index:
+    >>> labels = xr.DataArray(
+    ...     [1, 2, 3, 1, 2, 3, 0, 0, 0],
+    ...     dims="x",
+    ...     name="label",
+    ... )
+    >>> # Create a DataArray to apply the group index on:
+    >>> da = da = xr.ones_like(labels)
+    >>> # Sum all values in da that matches the elements in the group index:
+    >>> xarray_reduce(da, labels, func="sum")
+    <xarray.DataArray 'label' (label: 4)>
+    array([3, 2, 2, 2])
+    Coordinates:
+      * label    (label) int64 0 1 2 3
+
     See Also
     --------
     flox.core.groupby_reduce

@@ -9,6 +9,7 @@ dependencies:
   - netcdf4
   - pandas
   - numpy>=1.20
+  - matplotlib
   - pip
   - pytest
   - pytest-cov
