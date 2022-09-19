@@ -161,6 +161,15 @@ def xarray_reduce(
     DataArray or Dataset
         Reduced object
 
+    See Also
+    --------
+    flox.core.groupby_reduce
+
+    Raises
+    ------
+    NotImplementedError
+    ValueError
+
     Examples
     --------
     >>> import xarray as xr
@@ -180,19 +189,6 @@ def xarray_reduce(
     array([3, 2, 2, 2])
     Coordinates:
       * label    (label) int64 0 1 2 3
-
-    See Also
-    --------
-    flox.core.groupby_reduce
-
-    Raises
-    ------
-    NotImplementedError
-    ValueError
-
-    Examples
-    --------
-    FIXME: Add docs.
     """
 
     if skipna is not None and isinstance(func, Aggregation):
