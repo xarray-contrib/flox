@@ -426,10 +426,14 @@ def xarray_reduce(
 
     if len(by_broad) == 1:
         for var in actual:
-            if isinstance(obj, xr.Dataset):
-                template = obj[var]
-            else:
+            # if isinstance(obj, xr.Dataset):
+            #     template = obj[var]
+            # else:
+            #     template = obj
+            if isinstance(obj, xr.DataArray):
                 template = obj
+            else:
+                template = obj[var]
             if actual[var].ndim > 1:
                 actual[var] = _restore_dim_order(actual[var], template, by_broad[0])
 
