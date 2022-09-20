@@ -275,8 +275,7 @@ def xarray_reduce(
         # reducing along a dimension along which groups do not vary
         # This is really just a normal reduction.
         # This is not right when binning so we exclude.
-        if isinstance(func, str):
-            dsfunc = func[3:] if skipna else func
+        dsfunc = func[3:] if skipna and isinstance(func, str) else func
         # TODO: skipna needs test
         result = getattr(ds_broad, dsfunc)(dim=dim_tuple, skipna=skipna)
         if isinstance(obj, xr.DataArray):
