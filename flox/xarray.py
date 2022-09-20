@@ -208,9 +208,9 @@ def xarray_reduce(
     if isinstance(isbin, bool):
         isbin = (isbin,) * len(by)
     # if isinstance(isbin, Sequence):
-        # isbins = isbin
+    # isbins = isbin
     # else:
-        # isbins = (isbin,) * len(by)
+    # isbins = (isbin,) * len(by)
     if expected_groups is None:
         expected_groups = (None,) * len(by)
     if isinstance(expected_groups, (np.ndarray, list)):  # TODO: test for list
@@ -243,9 +243,9 @@ def xarray_reduce(
     else:
         ds = obj
     # if isinstance(obj, xr.Dataset):
-        # ds = obj
+    # ds = obj
     # else:
-        # ds = obj._to_temp_dataset()
+    # ds = obj._to_temp_dataset()
 
     ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
 
