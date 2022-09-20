@@ -225,14 +225,14 @@ def xarray_reduce(
         raise NotImplementedError
 
     # eventually drop the variables we are grouping by
-    maybe_drop = [b for b in by if isinstance(b, Hashable)]
+    maybe_drop = [b for b in by if isinstance(b, str)]
     unindexed_dims = tuple(
         b
         for b, isbin_ in zip(by, isbins)
-        if isinstance(b, Hashable) and not isbin_ and b in obj.dims and b not in obj.indexes
+        if isinstance(b, str) and not isbin_ and b in obj.dims and b not in obj.indexes
     )
 
-    by_da = tuple(obj[g] if isinstance(g, Hashable) else g for g in by)
+    by_da = tuple(obj[g] if isinstance(g, str) else g for g in by)
 
     grouper_dims = []
     for g in by_da:
