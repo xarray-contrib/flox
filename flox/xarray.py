@@ -205,10 +205,12 @@ def xarray_reduce(
     if keep_attrs is None:
         keep_attrs = True
 
-    if isinstance(isbin, Sequence):
-        isbins = isbin
-    else:
-        isbins = (isbin,) * len(by)
+    if isinstance(isbin, bool):
+        isbin = (isbin,) * len(by)
+    # if isinstance(isbin, Sequence):
+        # isbins = isbin
+    # else:
+        # isbins = (isbin,) * len(by)
     if expected_groups is None:
         expected_groups = (None,) * len(by)
     if isinstance(expected_groups, (np.ndarray, list)):  # TODO: test for list
@@ -236,10 +238,14 @@ def xarray_reduce(
             if d not in grouper_dims:
                 grouper_dims.append(d)
 
-    if isinstance(obj, xr.Dataset):
-        ds = obj
-    else:
+    if isinstance(obj, xr.DataArray):
         ds = obj._to_temp_dataset()
+    else:
+        ds = obj
+    # if isinstance(obj, xr.Dataset):
+        # ds = obj
+    # else:
+        # ds = obj._to_temp_dataset()
 
     ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
 
