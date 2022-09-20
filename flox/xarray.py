@@ -275,7 +275,7 @@ def xarray_reduce(
         if isinstance(func, str):
             dsfunc = func[3:] if skipna else func
         else:
-            raise ValueError("func must be a string")
+            raise NotImplementdError("func must be a string when reducing along a dimension not present in `by`")
         # TODO: skipna needs test
         result = getattr(ds, dsfunc)(dim=dim_tuple, skipna=skipna)
         if isinstance(obj, xr.DataArray):
