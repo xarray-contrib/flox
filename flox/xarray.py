@@ -229,7 +229,7 @@ def xarray_reduce(
         if isinstance(b, Hashable) and not isbin_ and b in obj.dims and b not in obj.indexes
     )
 
-    by_da= tuple(obj[g] if isinstance(g, Hashable) else g for g in by)
+    by_da = tuple(obj[g] if isinstance(g, Hashable) else g for g in by)
 
     grouper_dims = []
     for g in by_da:
@@ -238,9 +238,9 @@ def xarray_reduce(
                 grouper_dims.append(d)
 
     if isinstance(obj, xr.Dataset):
-      ds = obj
+        ds = obj
     else:
-      ds = obj._to_temp_dataset()
+        ds = obj._to_temp_dataset()
 
     ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
 
@@ -284,7 +284,9 @@ def xarray_reduce(
             return result
 
     axis = tuple(range(-len(dim_tuple), 0))
-    group_names = tuple(g.name if not binned else f"{g.name}_bins" for g, binned in zip(by_broad, isbins))
+    group_names = tuple(
+        g.name if not binned else f"{g.name}_bins" for g, binned in zip(by_broad, isbins)
+    )
 
     expected_groups = list(expected_groups)
 
@@ -426,9 +428,7 @@ def xarray_reduce(
 
     if missing_dim:
         for k, v in missing_dim.items():
-            missing_group_dims = {
-                d: size for d, size in group_sizes.items() if d not in v.dims
-            }
+            missing_group_dims = {d: size for d, size in group_sizes.items() if d not in v.dims}
             # The expand_dims is for backward compat with xarray's questionable behaviour
             if missing_group_dims:
                 actual[k] = v.expand_dims(missing_group_dims).variable
