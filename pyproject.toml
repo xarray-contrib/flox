@@ -39,8 +39,12 @@ show_error_codes = true
 
 [[tool.mypy.overrides]]
 module=[
+    "cachey",
+    "cftime",
     "dask.*",
+    "importlib_metadata",
     "numpy_groupies",
+    "matplotlib.*",
     "pandas",
     "setuptools",
     "toolz"
