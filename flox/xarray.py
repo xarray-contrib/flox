@@ -206,7 +206,9 @@ def xarray_reduce(
         keep_attrs = True
 
     if isinstance(isbin, bool):
-        isbin = (isbin,) * len(by)
+        isbins = (isbin,) * len(by)
+    else:
+        isbins = isbin
     # if isinstance(isbin, Sequence):
     # isbins = isbin
     # else:
