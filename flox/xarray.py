@@ -287,6 +287,7 @@ def xarray_reduce(
         g.name if not binned else f"{g.name}_bins" for g, binned in zip(by_broad, isbins)
     )
 
+    group_shape = [None] * len(by)
     expected_groups = list(expected_groups)
 
     # Set expected_groups and convert to index since we need coords, sizes
