@@ -259,7 +259,7 @@ def xarray_reduce(
     # then we also broadcast `by` to all `obj.dims`
     # TODO: avoid this broadcasting
     exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim_tuple)
-    ds, *by_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)
+    ds_broad, *by_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)
 
     if not dim_tuple:
         dim_tuple = tuple(by_broad[0].dims)
@@ -275,11 +275,11 @@ def xarray_reduce(
         if isinstance(func, str):
             dsfunc = func[3:] if skipna else func
         else:
-            raise NotImplementdError(
+            raise NotImplementedError(
                 "func must be a string when reducing along a dimension not present in `by`"
             )
         # TODO: skipna needs test
-        result = getattr(ds, dsfunc)(dim=dim_tuple, skipna=skipna)
+        result = getattr(ds_broad, dsfunc)(dim=dim_tuple, skipna=skipna)
         if isinstance(obj, xr.DataArray):
             return obj._from_temp_dataset(result)
         else:
@@ -308,8 +308,11 @@ def xarray_reduce(
             expected_groups[idx] = _get_expected_groups(b_.data, sort=sort, raise_if_dask=True)
 
     expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, sort=sort)
-    # TODO: _convert_expected_groups_to_index can return None which is not good
-    # since len(None) doesn't work. Create similar function with cleaner return type?:
+    # TODO: _convert_expected_groups_to_index can return None according to the
+    # type hints which is not good since len(None) then will not work.
+    # Narrow down by adding 'if e is not None' in group_shape loop, shouldn't be
+    # necessary though since this has already been checked in a previous for loop.
+    # Create similar function with a simpler return type? Maybe use yield?:
     group_shape = tuple(len(e) for e in expected_groups if e is not None)
     group_sizes = dict(zip(group_names, group_shape))
 
@@ -361,12 +364,12 @@ def xarray_reduce(
             if is_missing_dim:
                 missing_dim[k] = v
 
-    input_core_dims = _get_input_core_dims(group_names, dim_tuple, ds, grouper_dims)
+    input_core_dims = _get_input_core_dims(group_names, dim_tuple, ds_broad, grouper_dims)
     input_core_dims += [input_core_dims[-1]] * (len(by_broad) - 1)
 
     actual = xr.apply_ufunc(
         wrapper,
-        ds.drop_vars(tuple(missing_dim)).transpose(..., *grouper_dims),
+        ds_broad.drop_vars(tuple(missing_dim)).transpose(..., *grouper_dims),
         *by_broad,
         input_core_dims=input_core_dims,
         # for xarray's test_groupby_duplicate_coordinate_labels
@@ -394,9 +397,9 @@ def xarray_reduce(
 
     # restore non-dim coord variables without the core dimension
     # TODO: shouldn't apply_ufunc handle this?
-    for var in set(ds.variables) - set(ds.dims):
-        if all(d not in ds[var].dims for d in dim_tuple):
-            actual[var] = ds[var]
+    for var in set(ds_broad.variables) - set(ds_broad.dims):
+        if all(d not in ds_broad[var].dims for d in dim_tuple):
+            actual[var] = ds_broad[var]
 
     for name, expect, by_ in zip(group_names, expected_groups, by_broad):
         # Can't remove this till xarray handles IntervalIndex
@@ -406,8 +409,8 @@ def xarray_reduce(
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
         # an object array of tuples
-        if name in ds.indexes and isinstance(ds.indexes[name], pd.MultiIndex):
-            levelnames = ds.indexes[name].names
+        if name in ds_broad.indexes and isinstance(ds_broad.indexes[name], pd.MultiIndex):
+            levelnames = ds_broad.indexes[name].names
             expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
             actual[name] = expect
             if Version(xr.__version__) > Version("2022.03.0"):
