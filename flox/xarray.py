@@ -304,7 +304,9 @@ def xarray_reduce(
             expected_groups[idx] = _get_expected_groups(b_.data, sort=sort, raise_if_dask=True)
 
     expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, sort=sort)
-    group_shape = tuple(len(e) for e in expected_groups)
+    # TODO: _convert_expected_groups_to_index can return None which is not good
+    # since len(None) doesn't work. Create similar function with cleaner return type?:
+    group_shape = tuple(len(e) for e in expected_groups if e is not None)
     group_sizes = dict(zip(group_names, group_shape))
 
     def wrapper(array, *by, func, skipna, **kwargs):
