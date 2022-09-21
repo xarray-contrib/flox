@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Hashable, Iterable, Sequence, Union
+from typing import TYPE_CHECKING, Any, Hashable, Iterable, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -286,15 +286,16 @@ def xarray_reduce(
             return result
 
     axis = tuple(range(-len(dim_tuple), 0))
-    group_names = tuple(
-        g.name if not binned else f"{g.name}_bins" for g, binned in zip(by_broad, isbins)
-    )
-
-    expected_groups = list(expected_groups)
 
     # Set expected_groups and convert to index since we need coords, sizes
     # for output xarray objects
+    expected_groups = list(expected_groups)
+    group_names: tuple[Any, ...] = ()
+    group_sizes: dict[Any, int] = {}
     for idx, (b_, expect, isbin_) in enumerate(zip(by_broad, expected_groups, isbins)):
+        group_name = b_.name if not isbin_ else f"{b_.name}_bins"
+        group_names += (group_name, )
+
         if isbin_ and isinstance(expect, int):
             raise NotImplementedError(
                 "flox does not support binning into an integer number of bins yet."
@@ -303,18 +304,20 @@ def xarray_reduce(
             if isbin_:
                 raise ValueError(
                     f"Please provided bin edges for group variable {idx} "
-                    f"named {group_names[idx]} in expected_groups."
+                    f"named {group_name} in expected_groups."
                 )
-            expected_groups[idx] = _get_expected_groups(b_.data, sort=sort, raise_if_dask=True)
+            expect_ = _get_expected_groups(b_.data, sort=sort, raise_if_dask=True)
+        else:
+            expect_ = expect
+        expect_index = _convert_expected_groups_to_index((expect_,), (isbin_,), sort=sort)[0]
 
-    expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, sort=sort)
-    # TODO: _convert_expected_groups_to_index can return None according to the
-    # type hints which is not good since len(None) then will not work.
-    # Narrow down by adding 'if e is not None' in group_shape loop, shouldn't be
-    # necessary though since this has already been checked in a previous for loop.
-    # Create similar function with a simpler return type? Maybe use yield?:
-    group_shape = tuple(len(e) for e in expected_groups if e is not None)
-    group_sizes = dict(zip(group_names, group_shape))
+        # The if-check is for type hinting mainly, it narrows down the return
+        # type of _convert_expected_groups_to_index to pure pd.Index:
+        if expect_index is not None:
+            expected_groups[idx] = expect_index
+            group_sizes[group_name] = len(expect_index)
+        else:
+            raise ValueError("expect_index cannot be None")
 
     def wrapper(array, *by, func, skipna, **kwargs):
         # Handle skipna here because I need to know dtype to make a good default choice.
