@@ -197,6 +197,7 @@ def xarray_reduce(
     if skipna is not None and isinstance(func, Aggregation):
         raise ValueError("skipna must be None when func is an Aggregation.")
 
+    nby = len(by)
     for b in by:
         if isinstance(b, xr.DataArray) and b.name is None:
             raise ValueError("Cannot group by unnamed DataArrays.")
@@ -208,12 +209,12 @@ def xarray_reduce(
     if isinstance(isbin, Sequence):
         isbins = isbin
     else:
-        isbins = (isbin,) * len(by)
+        isbins = (isbin,) * nby
 
     if expected_groups is None:
-        expected_groups = (None,) * len(by)
+        expected_groups = (None,) * nby
     if isinstance(expected_groups, (np.ndarray, list)):  # TODO: test for list
-        if len(by) == 1:
+        if nby == 1:
             expected_groups = (expected_groups,)
         else:
             raise ValueError("Needs better message.")
@@ -245,6 +246,8 @@ def xarray_reduce(
     ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
 
     if dim is Ellipsis:
+        if nby > 1:
+            raise NotImplementedError("Multiple by are not allowed when dim is Ellipsis.")
         name_ = by_da[0].name
         if name_ in ds.dims and not isbins[0]:
             dim_tuple = tuple(d for d in obj.dims if d != name_)
@@ -373,7 +376,7 @@ def xarray_reduce(
                 missing_dim[k] = v
 
     input_core_dims = _get_input_core_dims(group_names, dim_tuple, ds_broad, grouper_dims)
-    input_core_dims += [input_core_dims[-1]] * (len(by_broad) - 1)
+    input_core_dims += [input_core_dims[-1]] * (nby - 1)
 
     actual = xr.apply_ufunc(
         wrapper,
@@ -431,7 +434,7 @@ def xarray_reduce(
     if unindexed_dims:
         actual = actual.drop_vars(unindexed_dims)
 
-    if len(by_broad) == 1:
+    if nby == 1:
         for var in actual:
             if isinstance(obj, xr.Dataset):
                 template = obj[var]
