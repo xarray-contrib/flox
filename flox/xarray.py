@@ -247,7 +247,7 @@ def xarray_reduce(
     if dim is Ellipsis:
         name_ = by_da[0].name
         if name_ in ds.dims and not isbins[0]:
-            dim_tuple = tuple(d for d in dim_tuple if d != name_)
+            dim_tuple = tuple(d for d in obj.dims if d != name_)
         else:
             dim_tuple = tuple(obj.dims)
     elif dim is not None:
