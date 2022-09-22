@@ -162,6 +162,7 @@ def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
     with pytest.raises(NotImplementedError):
         xarray_reduce(da, "labels", "labels2", dim=..., **kwargs)
 
+
 @requires_dask
 def test_dask_groupers_error():
     da = xr.DataArray(
