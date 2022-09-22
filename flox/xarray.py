@@ -319,6 +319,7 @@ def xarray_reduce(
             expected_groups[idx] = expect_index
             group_sizes[group_name] = len(expect_index)
         else:
+            # This will never be reached
             raise ValueError("expect_index cannot be None")
 
     def wrapper(array, *by, func, skipna, **kwargs):
