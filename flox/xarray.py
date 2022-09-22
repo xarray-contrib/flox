@@ -261,6 +261,8 @@ def xarray_reduce(
     exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim_tuple)
     ds_broad, *by_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)
 
+    # all members of by_broad have the same dimensions
+    # so we just pull by_broad[0].dims if dim is None
     if not dim_tuple:
         dim_tuple = tuple(by_broad[0].dims)
 
