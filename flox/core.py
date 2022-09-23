@@ -414,7 +414,7 @@ def factorize_(
     by: tuple,
     axis: T_AxissOpt,  # TODO: What is axis doing in this function?
     expected_groups: tuple[pd.Index, ...] = None,
-    reindex=False,
+    reindex:bool=False,
     sort=True,
     fastpath=False,
 ):
@@ -1308,7 +1308,7 @@ def _validate_reindex(reindex: bool | None, func, method: T_Method, expected_gro
         if expected_groups is not None:
             reindex_out = True
         else:
-            raise NotImplementedError("What should happen here?")  # TODO: Check this
+            reindex_out = False # TODO: Check this
     else:
         reindex_out = reindex
     if method in ["split-reduce", "cohorts"] and reindex_out is False:
