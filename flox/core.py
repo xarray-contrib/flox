@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     T_Func = Union[str, Callable]
     T_Funcs = Union[T_Func, Sequence[T_Func]]
     T_Axis = int
-    T_Axiss = tuple[T_Axis, ...] # TODO: var name grammar?
+    T_Axiss = tuple[T_Axis, ...]  # TODO: var name grammar?
     T_AxissOpt = Union[T_Axis, T_Axiss, None]
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
@@ -136,7 +136,9 @@ def _get_optimal_chunks_for_groups(chunks, labels):
 
 
 @memoize
-def find_group_cohorts(labels, chunks, merge=True, method: T_Method="cohorts"): # TODO: reduced method?
+def find_group_cohorts(
+    labels, chunks, merge=True, method: T_Method = "cohorts"
+):  # TODO: reduced method?
     """
     Finds groups labels that occur together aka "cohorts"
 
@@ -223,7 +225,13 @@ def find_group_cohorts(labels, chunks, merge=True, method: T_Method="cohorts"): 
 
 
 def rechunk_for_cohorts(
-    array, axis: T_Axis, labels, force_new_chunk_at, chunksize=None, ignore_old_chunks=False, debug=False
+    array,
+    axis: T_Axis,
+    labels,
+    force_new_chunk_at,
+    chunksize=None,
+    ignore_old_chunks=False,
+    debug=False,
 ):
     """
     Rechunks array so that each new chunk contains groups that always occur together.
@@ -308,7 +316,7 @@ def rechunk_for_cohorts(
         return array.rechunk({axis: newchunks})
 
 
-def rechunk_for_blockwise(array, axis:T_Axis, labels):
+def rechunk_for_blockwise(array, axis: T_Axis, labels):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     embarassingly parallel group reductions.
@@ -514,7 +522,7 @@ def chunk_argreduce(
     expected_groups: pd.Index | None,
     axis: T_AxissOpt,
     fill_value: T_FillValues,
-    dtype: T_Dtypes=None,
+    dtype: T_Dtypes = None,
     reindex: bool = False,
     engine: T_Engine = "numpy",
     sort: bool = True,
@@ -564,7 +572,7 @@ def chunk_reduce(
     by: np.ndarray,
     func: T_Funcs,
     expected_groups: pd.Index | None,
-    axis: T_AxissOpt= None,
+    axis: T_AxissOpt = None,
     fill_value: T_FillValues = None,
     dtype: T_Dtypes = None,
     reindex: bool = False,
@@ -754,7 +762,7 @@ def _finalize_results(
         squeezed["intermediates"] = squeezed["intermediates"][:-1]
 
     # finalize step
-    finalized: FinalResultsDict= {}
+    finalized: FinalResultsDict = {}
     if agg.finalize is None:
         finalized[agg.name] = squeezed["intermediates"][0]
     else:
@@ -836,7 +844,7 @@ def _simple_combine(
     return results
 
 
-def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axiss=()) -> np.ndarray:
+def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axiss = ()) -> np.ndarray:
     """copied from dask.array.reductions.mean_combine"""
     from dask.array.core import _concatenate2
     from dask.utils import deepmap
@@ -1016,7 +1024,9 @@ def split_blocks(applied, split_out, expected_groups, split_name):
     return intermediate, group_chunks
 
 
-def _reduce_blockwise(array, by, agg, *, axis:T_Axiss, expected_groups, fill_value, engine: T_Engine, sort, reindex) -> FinalResultsDict:
+def _reduce_blockwise(
+    array, by, agg, *, axis: T_Axiss, expected_groups, fill_value, engine: T_Engine, sort, reindex
+) -> FinalResultsDict:
     """
     Blockwise groupby reduction that produces the final result. This code path is
     also used for non-dask array aggregations.
@@ -1188,7 +1198,6 @@ def dask_groupby_agg(
         else:
             combine = partial(_grouped_combine, engine=engine, neg_axis=neg_axis, sort=sort)
 
-
         # reduced is really a dict mapping reduction name to array
         # and "groups" to an array of group labels
         # Note: it does not make sense to interpret axis relative to
@@ -1299,7 +1308,7 @@ def _validate_reindex(reindex: bool | None, func, method: T_Method, expected_gro
         if expected_groups is not None:
             reindex_out = True
         else:
-            raise NotImplementedError("What should happen here?") # TODO: Check this
+            raise NotImplementedError("What should happen here?")  # TODO: Check this
     else:
         reindex_out = reindex
     if method in ["split-reduce", "cohorts"] and reindex_out is False:
@@ -1387,7 +1396,7 @@ def groupby_reduce(
     expected_groups: Sequence | np.ndarray | None = None,
     sort: bool = True,
     isbin: T_IsBins = False,
-    axis: T_AxissOpt=None,
+    axis: T_AxissOpt = None,
     fill_value=None,
     min_count: int | None = None,
     split_out: int = 1,
@@ -1650,7 +1659,9 @@ def groupby_reduce(
                     sort=False,
                     # if only a single block along axis, we can just work blockwise
                     # inspired by https://github.com/dask/dask/issues/8361
-                    method="blockwise" if numblocks == 1 and len(axis) == by_.ndim else "map-reduce",
+                    method="blockwise"
+                    if numblocks == 1 and len(axis) == by_.ndim
+                    else "map-reduce",
                 )
                 results.append(r)
                 groups_.append(cohort)
