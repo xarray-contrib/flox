@@ -552,15 +552,15 @@ def chunk_argreduce(
 def chunk_reduce(
     array: np.ndarray,
     by: np.ndarray,
-    func: str | Callable | Sequence[str] | Sequence[Callable],
+    func: str | Callable | Sequence[str | Callable],
     expected_groups: pd.Index | None,
-    axis: int | Sequence[int] = None,
-    fill_value: Mapping[str | Callable, Any] = None,
-    dtype=None,
+    axis: int | Sequence[int] | None= None,
+    fill_value: np.typing.ArrayLike | Sequence[np.typing.ArrayLike] | None= None,
+    dtype: np.typing.DTypeLike | Sequence[np.typing.DTypeLike] | None = None,
     reindex: bool = False,
     engine: str = "numpy",
-    kwargs=None,
-    sort=True,
+    kwargs: Sequence[dict] | None =None,
+    sort:bool=True,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -590,29 +590,33 @@ def chunk_reduce(
     -------
     dict
     """
+    if isinstance(dtype, Sequence):
+        dtypes = dtype
+    else:
+        dtypes = (dtype,)
 
-    if dtype is not None:
-        assert isinstance(dtype, Sequence)
-    if fill_value is not None:
-        assert isinstance(fill_value, Sequence)
+    if isinstance(fill_value, Sequence):
+        fill_values = fill_value
+    else:
+        fill_values = (fill_value,)
 
-    if isinstance(func, str) or callable(func):
-        func = (func,)  # type: ignore
-
-    func: Sequence[str] | Sequence[Callable]
-
-    nax = len(axis) if isinstance(axis, Sequence) else by.ndim
-    final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
-    final_groups_shape = (1,) * (nax - 1)
-
-    if isinstance(axis, Sequence) and len(axis) == 1:
-        axis = next(iter(axis))
-
-    if not isinstance(fill_value, Sequence):
-        fill_value = (fill_value,)
+    if isinstance(func, Sequence):
+        funcs = func
+    else:
+        funcs = (func,)
 
     if kwargs is None:
-        kwargs = ({},) * len(func)
+        kwargs = ({},) * len(funcs)
+
+    if isinstance(axis, Sequence):
+        nax = len(axis)
+        if nax == 1:
+            axis = axis[0]
+    else:
+        nax = by.ndim
+
+    final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
+    final_groups_shape = (1,) * (nax - 1)
 
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
@@ -663,9 +667,9 @@ def chunk_reduce(
     # counts are needed for the final result as well as for masking
     # optimize that out.
     previous_reduction = None
-    for param in (fill_value, kwargs, dtype):
-        assert len(param) >= len(func)
-    for reduction, fv, kw, dt in zip(func, fill_value, kwargs, dtype):
+    for param in (fill_values, kwargs, dtypes):
+        assert len(param) >= len(funcs)
+    for reduction, fv, kw, dt in zip(funcs, fill_values, kwargs, dtypes):
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
         else:
