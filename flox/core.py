@@ -5,7 +5,16 @@ import itertools
 import operator
 from collections import namedtuple
 from functools import partial, reduce
-from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping, Sequence, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Mapping,
+    Sequence,
+    Union,
+)
 
 import numpy as np
 import numpy_groupies as npg
@@ -1282,8 +1291,8 @@ def _assert_by_is_aligned(shape, by):
 
 
 def _convert_expected_groups_to_index(
-    expected_groups: tuple, isbin: bool, sort: bool
-) -> pd.Index | None:
+    expected_groups: Iterable, isbin: Sequence[bool], sort: bool
+) -> tuple[pd.Index | None]:
     out = []
     for ex, isbin_ in zip(expected_groups, isbin):
         if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin):
