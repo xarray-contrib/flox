@@ -554,13 +554,13 @@ def chunk_reduce(
     by: np.ndarray,
     func: str | Callable | Sequence[str | Callable],
     expected_groups: pd.Index | None,
-    axis: int | Sequence[int] | None= None,
-    fill_value: np.typing.ArrayLike | Sequence[np.typing.ArrayLike] | None= None,
+    axis: int | Sequence[int] | None = None,
+    fill_value: np.typing.ArrayLike | Sequence[np.typing.ArrayLike] | None = None,
     dtype: np.typing.DTypeLike | Sequence[np.typing.DTypeLike] | None = None,
     reindex: bool = False,
     engine: str = "numpy",
-    kwargs: Sequence[dict] | None =None,
-    sort:bool=True,
+    kwargs: Sequence[dict] | None = None,
+    sort: bool = True,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
