@@ -101,7 +101,7 @@ def test_alignment_error():
     ],
 )
 def test_groupby_reduce(
-    array, by, expected, func, expected_groups, chunk, split_out, dtype, engine
+    engine, func, array, by, expected, expected_groups, chunk, split_out, dtype
 ):
     array = array.astype(dtype)
     if chunk:
