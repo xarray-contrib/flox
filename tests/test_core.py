@@ -126,7 +126,7 @@ def test_groupby_reduce(
         split_out=split_out,
         engine=engine,
     )
-    assert_equal(groups, [0, 1, 2])
+    assert_equal([0, 1, 2], groups)
     assert_equal(expected, result)
 
 
