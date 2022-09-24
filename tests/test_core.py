@@ -115,7 +115,7 @@ def test_groupby_reduce(
     elif func == "sum":
         expected = np.array(expected, dtype=dtype)
     elif func == "count":
-        expected = np.array(expected, dtype=int)
+        expected = np.array(expected, dtype=np.intp)
 
     result, groups, = groupby_reduce(
         array,
@@ -126,7 +126,7 @@ def test_groupby_reduce(
         split_out=split_out,
         engine=engine,
     )
-    assert_equal([0, 1, 2], groups)
+    assert_equal(np.array([0, 1, 2], dtype=np.intp), groups)
     assert_equal(expected, result)
 
 
