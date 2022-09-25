@@ -1151,13 +1151,14 @@ def dask_groupby_agg(
         )
     else:
         intermediate = applied
-        # if is_duck_dask_array(by_input):
-        #     expected_groups = None
-        #     # group_chunks = ((np.nan,),)
-        # else:
-        #     expected_groups = _get_expected_groups(by_input, sort=sort)
-        #     # group_chunks = ((len(expected_groups),),)
-        expected_groups = _get_expected_groups(by_input, sort=sort, raise_if_dask=False)
+        if expected_groups is None:
+            if is_duck_dask_array(by_input):
+                expected_groups = None
+                # group_chunks = ((np.nan,),)
+            else:
+                expected_groups = _get_expected_groups(by_input, sort=sort)
+                # group_chunks = ((len(expected_groups),),)
+            # expected_groups = _get_expected_groups(by_input, sort=sort, raise_if_dask=False)
         group_chunks = ((len(expected_groups),) if expected_groups is not None else (np.nan,),)
 
     if method == "map-reduce":
