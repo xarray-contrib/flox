@@ -1694,7 +1694,7 @@ def groupby_reduce(
         expected_groups = (pd.RangeIndex(np.prod(grp_shape)),)
 
     assert len(bys) == 1
-    by_ = by[0]
+    by_ = bys[0]
     expected_groups = expected_groups[0]
 
     if axis is None:
