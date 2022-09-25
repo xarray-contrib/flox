@@ -610,42 +610,38 @@ def chunk_reduce(
     """
 
     # if isinstance(func, Sequence):
-        # funcs = func
+    # funcs = func
     # else:
-        # funcs = (func,)
+    # funcs = (func,)
     # nfuncs = len(funcs)
 
     # if isinstance(dtype, Sequence):
-        # dtypes = dtype
+    # dtypes = dtype
     # else:
-        # dtypes = (dtype,) * nfuncs
+    # dtypes = (dtype,) * nfuncs
     # assert len(dtypes) >= nfuncs
 
     # if isinstance(fill_value, Sequence):
-        # fill_values = fill_value
+    # fill_values = fill_value
     # else:
-        # fill_values = (fill_value,) * nfuncs
+    # fill_values = (fill_value,) * nfuncs
     # assert len(fill_values) >= nfuncs
 
     # if isinstance(kwargs, Sequence):
-        # kwargss = kwargs
+    # kwargss = kwargs
     # else:
-        # kwargss = ({},) * nfuncs
+    # kwargss = ({},) * nfuncs
     # assert len(kwargss) >= nfuncs
 
     # if isinstance(axis, Sequence):
-        # nax = len(axis)
-        # if nax == 1:
-            # axis = axis[0]
+    # nax = len(axis)
+    # if nax == 1:
+    # axis = axis[0]
     # else:
-        # nax = by.ndim
+    # nax = by.ndim
 
     # final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
     # final_groups_shape = (1,) * (nax - 1)
-
-
-
-
 
     if dtype is not None:
         assert isinstance(dtype, Sequence)
@@ -669,8 +665,6 @@ def chunk_reduce(
 
     if kwargs is None:
         kwargs = ({},) * len(func)
-
-
 
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
