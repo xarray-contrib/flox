@@ -1182,10 +1182,10 @@ def dask_groupby_agg(
     else:
         intermediate = applied
         if expected_groups is None:
-            if not is_duck_dask_array(by_input):
-                expected_groups = _get_expected_groups(by_input, sort=sort)
-            else:
+            if is_duck_dask_array(by_input):
                 expected_groups = None
+            else:
+                expected_groups = _get_expected_groups(by_input, sort=sort)
         group_chunks = ((len(expected_groups),) if expected_groups is not None else (np.nan,),)
 
     if method == "map-reduce":
