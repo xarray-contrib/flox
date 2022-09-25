@@ -567,6 +567,151 @@ def chunk_argreduce(
     return results
 
 
+def chunk_reduce(
+    array: np.ndarray,
+    by: np.ndarray,
+    func: str | Callable | Sequence[str] | Sequence[Callable],
+    expected_groups: pd.Index | None,
+    axis: int | Sequence[int] = None,
+    fill_value: Mapping[str | Callable, Any] = None,
+    dtype=None,
+    reindex: bool = False,
+    engine: str = "numpy",
+    kwargs=None,
+    sort=True,
+) -> IntermediateDict:
+    """
+    Wrapper for numpy_groupies aggregate that supports nD ``array`` and
+    mD ``by``.
+
+    Core groupby reduction using numpy_groupies. Uses ``pandas.factorize`` to factorize
+    ``by``. Offsets the groups if not reducing along all dimensions of ``by``.
+    Always ravels ``by`` to 1D, flattens appropriate dimensions of array.
+
+    When dask arrays are passed to groupby_reduce, this function is called on every
+    block.
+
+    Parameters
+    ----------
+    array : numpy.ndarray
+        Array of values to reduced
+    by : numpy.ndarray
+        Array to group by.
+    func : str or Callable or Sequence[str] or Sequence[Callable]
+        Name of reduction or function, passed to numpy_groupies.
+        Supports multiple reductions.
+    axis : (optional) int or Sequence[int]
+        If None, reduce along all dimensions of array.
+        Else reduce along specified axes.
+
+    Returns
+    -------
+    dict
+    """
+
+    if dtype is not None:
+        assert isinstance(dtype, Sequence)
+    if fill_value is not None:
+        assert isinstance(fill_value, Sequence)
+
+    if isinstance(func, str) or callable(func):
+        func = (func,)  # type: ignore
+
+    func: Sequence[str] | Sequence[Callable]
+
+    nax = len(axis) if isinstance(axis, Sequence) else by.ndim
+    final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
+    final_groups_shape = (1,) * (nax - 1)
+
+    if isinstance(axis, Sequence) and len(axis) == 1:
+        axis = next(iter(axis))
+
+    if not isinstance(fill_value, Sequence):
+        fill_value = (fill_value,)
+
+    if kwargs is None:
+        kwargs = ({},) * len(func)
+
+    # when axis is a tuple
+    # collapse and move reduction dimensions to the end
+    if isinstance(axis, Sequence) and len(axis) < by.ndim:
+        by = _collapse_axis(by, len(axis))
+        array = _collapse_axis(array, len(axis))
+        axis = -1
+
+    # if indices=[2,2,2], npg assumes groups are (0, 1, 2);
+    # and will return a result that is bigger than necessary
+    # avoid by factorizing again so indices=[2,2,2] is changed to
+    # indices=[0,0,0]. This is necessary when combining block results
+    # factorize can handle strings etc unlike digitize
+    group_idx, groups, found_groups_shape, _, size, props = factorize_(
+        (by,), axis, expected_groups=(expected_groups,), reindex=reindex, sort=sort
+    )
+    groups = groups[0]
+
+    # always reshape to 1D along group dimensions
+    newshape = array.shape[: array.ndim - by.ndim] + (np.prod(array.shape[-by.ndim :]),)
+    array = array.reshape(newshape)
+
+    assert group_idx.ndim == 1
+    empty = np.all(props.nanmask)
+
+    results: IntermediateDict = {"groups": [], "intermediates": []}
+    if reindex and expected_groups is not None:
+        # TODO: what happens with binning here?
+        results["groups"] = expected_groups.to_numpy()
+    else:
+        if empty:
+            results["groups"] = np.array([np.nan])
+        else:
+            results["groups"] = groups
+
+    # npg's argmax ensures that index of first "max" is returned assuming there
+    # are many elements equal to the "max". Sorting messes this up totally.
+    # so we skip this for argreductions
+    if engine == "flox":
+        # is_arg_reduction = any("arg" in f for f in func if isinstance(f, str))
+        # if not is_arg_reduction:
+        group_idx, array = _prepare_for_flox(group_idx, array)
+
+    final_array_shape += results["groups"].shape
+    final_groups_shape += results["groups"].shape
+
+    # we commonly have func=(..., "nanlen", "nanlen") when
+    # counts are needed for the final result as well as for masking
+    # optimize that out.
+    previous_reduction = None
+    for param in (fill_value, kwargs, dtype):
+        assert len(param) >= len(func)
+    for reduction, fv, kw, dt in zip(func, fill_value, kwargs, dtype):
+        if empty:
+            result = np.full(shape=final_array_shape, fill_value=fv)
+        else:
+            if is_nanlen(reduction) and is_nanlen(previous_reduction):
+                result = results["intermediates"][-1]
+
+            # fill_value here is necessary when reducing with "offset" groups
+            kwargs = dict(size=size, dtype=dt, fill_value=fv)
+            kwargs.update(kw)
+
+            if callable(reduction):
+                # passing a custom reduction for npg to apply per-group is really slow!
+                # So this `reduction` has to do the groupby-aggregation
+                result = reduction(group_idx, array, **kwargs)
+            else:
+                result = generic_aggregate(
+                    group_idx, array, axis=-1, engine=engine, func=reduction, **kwargs
+                ).astype(dt, copy=False)
+            if np.any(props.nanmask):
+                # remove NaN group label which should be last
+                result = result[..., :-1]
+            result = result.reshape(final_array_shape[:-1] + found_groups_shape)
+        results["intermediates"].append(result)
+
+    results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
+    return results
+
+
 def chunk_reduce2(
     array: np.ndarray,
     by: np.ndarray,
