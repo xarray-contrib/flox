@@ -1356,13 +1356,13 @@ def groupby_reduce(
     func: str | Aggregation,
     expected_groups: Sequence | np.ndarray | None = None,
     sort: bool = True,
-    isbin: bool = False,
-    axis=None,
+    isbin: T_IsBins = False,
+    axis: T_AxissOpt = None,
     fill_value=None,
     min_count: int | None = None,
     split_out: int = 1,
-    method: str = "map-reduce",
-    engine: str = "numpy",
+    method: T_Method = "map-reduce",
+    engine: T_Engine = "numpy",
     reindex: bool | None = None,
     finalize_kwargs: Mapping | None = None,
 ) -> tuple[DaskArray, np.ndarray | DaskArray]:
@@ -1467,9 +1467,9 @@ def groupby_reduce(
         )
     reindex = _validate_reindex(reindex, func, method, expected_groups)
 
-    by: tuple = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
-    nby = len(by)
-    by_is_dask = any(is_duck_dask_array(b) for b in by)
+    bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
+    nby = len(bys)
+    by_is_dask = any(is_duck_dask_array(b) for b in bys)
 
     if method in ["split-reduce", "cohorts"] and by_is_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
@@ -1478,54 +1478,56 @@ def groupby_reduce(
         array = np.asarray(array)
     array = array.astype(int) if np.issubdtype(array.dtype, bool) else array
 
-    if isinstance(isbin, bool):
-        isbin = (isbin,) * len(by)
+    if isinstance(isbin, Sequence):
+        isbins = isbin
+    else:
+        isbins = (isbin,) * nby
     if expected_groups is None:
-        expected_groups = (None,) * len(by)
+        expected_groups = (None,) * nby
 
-    _assert_by_is_aligned(array.shape, by)
+    _assert_by_is_aligned(array.shape, bys)
 
-    if len(by) == 1 and not isinstance(expected_groups, tuple):
+    if nby == 1 and not isinstance(expected_groups, tuple):
         expected_groups = (np.asarray(expected_groups),)
-    elif len(expected_groups) != len(by):
+    elif len(expected_groups) != nby:
         raise ValueError(
             f"Must have same number of `expected_groups` (received {len(expected_groups)}) "
-            f" and variables to group by (received {len(by)})."
+            f" and variables to group by (received {nby})."
         )
 
     # We convert to pd.Index since that lets us know if we are binning or not
     # (pd.IntervalIndex or not)
-    expected_groups = _convert_expected_groups_to_index(expected_groups, isbin, sort)
+    expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, sort)
 
     # TODO: could restrict this to dask-only
     factorize_early = (nby > 1) or (
-        any(isbin) and method in ["split-reduce", "cohorts"] and is_duck_dask_array(array)
+        any(isbins) and method in ["split-reduce", "cohorts"] and is_duck_dask_array(array)
     )
     if factorize_early:
-        by, final_groups, grp_shape = _factorize_multiple(
-            by, expected_groups, by_is_dask=by_is_dask, reindex=reindex
+        bys, final_groups, grp_shape = _factorize_multiple(
+            bys, expected_groups, by_is_dask=by_is_dask, reindex=reindex
         )
         expected_groups = (pd.RangeIndex(np.prod(grp_shape)),)
 
-    assert len(by) == 1
-    by = by[0]
+    assert len(bys) == 1
+    by_ = by[0]
     expected_groups = expected_groups[0]
 
     if axis is None:
-        axis = tuple(array.ndim + np.arange(-by.ndim, 0))
+        axis = tuple(array.ndim + np.arange(-by_.ndim, 0))
     else:
         axis = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
 
-    if method in ["blockwise", "cohorts", "split-reduce"] and len(axis) != by.ndim:
+    if method in ["blockwise", "cohorts", "split-reduce"] and len(axis) != by_.ndim:
         raise NotImplementedError(
             "Must reduce along all dimensions of `by` when method != 'map-reduce'."
             f"Received method={method!r}"
         )
 
     # TODO: make sure expected_groups is unique
-    if len(axis) == 1 and by.ndim > 1 and expected_groups is None:
+    if len(axis) == 1 and by_.ndim > 1 and expected_groups is None:
         if not by_is_dask:
-            expected_groups = _get_expected_groups(by, sort)
+            expected_groups = _get_expected_groups(by_, sort)
         else:
             # When we reduce along all axes, we are guaranteed to see all
             # groups in the final combine stage, so everything works.
@@ -1538,13 +1540,13 @@ def groupby_reduce(
                 "Please provide ``expected_groups`` when not reducing along all axes."
             )
 
-    assert len(axis) <= by.ndim
-    if len(axis) < by.ndim:
-        by = _move_reduce_dims_to_end(by, -array.ndim + np.array(axis) + by.ndim)
+    assert len(axis) <= by_.ndim
+    if len(axis) < by_.ndim:
+        by_ = _move_reduce_dims_to_end(by_, -array.ndim + np.array(axis) + by_.ndim)
         array = _move_reduce_dims_to_end(array, axis)
         axis = tuple(array.ndim + np.arange(-len(axis), 0))
 
-    has_dask = is_duck_dask_array(array) or is_duck_dask_array(by)
+    has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
 
     # When axis is a subset of possible values; then npg will
     # apply it to groups that don't exist along a particular axis (for e.g.)
@@ -1553,7 +1555,7 @@ def groupby_reduce(
     #     The only way to do this consistently is mask out using min_count
     #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
     if min_count is None:
-        if len(axis) < by.ndim or fill_value is not None:
+        if len(axis) < by_.ndim or fill_value is not None:
             min_count = 1
 
     # TODO: set in xarray?
@@ -1567,7 +1569,7 @@ def groupby_reduce(
 
     if not has_dask:
         results = _reduce_blockwise(
-            array, by, agg, expected_groups=expected_groups, reindex=reindex, sort=sort, **kwargs
+            array, by_, agg, expected_groups=expected_groups, reindex=reindex, sort=sort, **kwargs
         )
         groups = (results["groups"],)
         result = results[agg.name]
@@ -1587,7 +1589,7 @@ def groupby_reduce(
 
         if method in ["split-reduce", "cohorts"]:
             cohorts = find_group_cohorts(
-                by, [array.chunks[ax] for ax in axis], merge=True, method=method
+                by_, [array.chunks[ax] for ax in axis], merge=True, method=method
             )
 
             results = []
@@ -1595,17 +1597,17 @@ def groupby_reduce(
             for cohort in cohorts:
                 cohort = sorted(cohort)
                 # equivalent of xarray.DataArray.where(mask, drop=True)
-                mask = np.isin(by, cohort)
+                mask = np.isin(by_, cohort)
                 indexer = [np.unique(v) for v in np.nonzero(mask)]
                 array_subset = array
-                for ax, idxr in zip(range(-by.ndim, 0), indexer):
+                for ax, idxr in zip(range(-by_.ndim, 0), indexer):
                     array_subset = np.take(array_subset, idxr, axis=ax)
                 numblocks = np.prod([len(array_subset.chunks[ax]) for ax in axis])
 
                 # get final result for these groups
                 r, *g = partial_agg(
                     array_subset,
-                    by[np.ix_(*indexer)],
+                    by_[np.ix_(*indexer)],
                     expected_groups=pd.Index(cohort),
                     # First deep copy becasue we might be doping blockwise,
                     # which sets agg.finalize=None, then map-reduce (GH102)
@@ -1618,7 +1620,9 @@ def groupby_reduce(
                     sort=False,
                     # if only a single block along axis, we can just work blockwise
                     # inspired by https://github.com/dask/dask/issues/8361
-                    method="blockwise" if numblocks == 1 and len(axis) == by.ndim else "map-reduce",
+                    method="blockwise"
+                    if numblocks == 1 and len(axis) == by_.ndim
+                    else "map-reduce",
                 )
                 results.append(r)
                 groups_.append(cohort)
@@ -1628,12 +1632,12 @@ def groupby_reduce(
             groups = (np.hstack(groups_),)
             result = np.concatenate(results, axis=-1)
         else:
-            if method == "blockwise" and by.ndim == 1:
-                array = rechunk_for_blockwise(array, axis=-1, labels=by)
+            if method == "blockwise" and by_.ndim == 1:
+                array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
             result, *groups = partial_agg(
                 array,
-                by,
+                by_,
                 expected_groups=None if method == "blockwise" else expected_groups,
                 agg=agg,
                 reindex=reindex,
