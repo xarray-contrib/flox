@@ -989,7 +989,7 @@ def _simple_combine(
     return results
 
 
-def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axiss = ()) -> np.ndarray:
+def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axiss = None) -> np.ndarray:
     """copied from dask.array.reductions.mean_combine"""
     from dask.array.core import _concatenate2
     from dask.utils import deepmap
