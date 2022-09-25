@@ -567,7 +567,7 @@ def chunk_argreduce(
     return results
 
 
-def chunk_reduce(
+def chunk_reduce2(
     array: np.ndarray,
     by: np.ndarray,
     func: T_Funcs,
@@ -609,68 +609,39 @@ def chunk_reduce(
     dict
     """
 
-    # if isinstance(func, Sequence):
-        # funcs = func
-    # else:
-        # funcs = (func,)
-    # nfuncs = len(funcs)
+    if isinstance(func, Sequence):
+        funcs = func
+    else:
+        funcs = (func,)
+    nfuncs = len(funcs)
 
-    # if isinstance(dtype, Sequence):
-        # dtypes = dtype
-    # else:
-        # dtypes = (dtype,) * nfuncs
-    # assert len(dtypes) >= nfuncs
+    if isinstance(dtype, Sequence):
+        dtypes = dtype
+    else:
+        dtypes = (dtype,) * nfuncs
+    assert len(dtypes) >= nfuncs
 
-    # if isinstance(fill_value, Sequence):
-        # fill_values = fill_value
-    # else:
-        # fill_values = (fill_value,) * nfuncs
-    # assert len(fill_values) >= nfuncs
+    if isinstance(fill_value, Sequence):
+        fill_values = fill_value
+    else:
+        fill_values = (fill_value,) * nfuncs
+    assert len(fill_values) >= nfuncs
 
-    # if isinstance(kwargs, Sequence):
-        # kwargss = kwargs
-    # else:
-        # kwargss = ({},) * nfuncs
-    # assert len(kwargss) >= nfuncs
+    if isinstance(kwargs, Sequence):
+        kwargss = kwargs
+    else:
+        kwargss = ({},) * nfuncs
+    assert len(kwargss) >= nfuncs
 
-    # if isinstance(axis, Sequence):
-        # nax = len(axis)
-        # if nax == 1:
-            # axis = axis[0]
-    # else:
-        # nax = by.ndim
+    if isinstance(axis, Sequence):
+        nax = len(axis)
+        if nax == 1:
+            axis = axis[0]
+    else:
+        nax = by.ndim
 
-    # final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
-    # final_groups_shape = (1,) * (nax - 1)
-
-
-
-
-
-    if dtype is not None:
-        assert isinstance(dtype, Sequence)
-    if fill_value is not None:
-        assert isinstance(fill_value, Sequence)
-
-    if isinstance(func, str) or callable(func):
-        func = (func,)  # type: ignore
-
-    func: Sequence[str] | Sequence[Callable]
-
-    nax = len(axis) if isinstance(axis, Sequence) else by.ndim
     final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
     final_groups_shape = (1,) * (nax - 1)
-
-    if isinstance(axis, Sequence) and len(axis) == 1:
-        axis = next(iter(axis))
-
-    if not isinstance(fill_value, Sequence):
-        fill_value = (fill_value,)
-
-    if kwargs is None:
-        kwargs = ({},) * len(func)
-
-
 
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
