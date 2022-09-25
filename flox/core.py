@@ -56,7 +56,9 @@ def _is_arg_reduction(func: str | Aggregation) -> bool:
 
 def _get_expected_groups(by, sort: bool, *, raise_if_dask=True) -> pd.Index:
     if is_duck_dask_array(by):
-        raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
+        if raise_if_dask:
+            raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
+        return None
     flatby = by.reshape(-1)
     expected = pd.unique(flatby[~isnull(flatby)])
     return _convert_expected_groups_to_index((expected,), isbin=(False,), sort=sort)[0]
