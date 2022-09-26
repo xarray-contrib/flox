@@ -609,7 +609,7 @@ def chunk_reduce(
     dict
     """
 
-    if isinstance(func, Sequence):
+    if not (isinstance(func, str) or callable(func)):
         funcs = func
     else:
         funcs = (func,)
