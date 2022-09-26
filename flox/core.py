@@ -11,6 +11,7 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    Literal,
     Mapping,
     Sequence,
     Union,
