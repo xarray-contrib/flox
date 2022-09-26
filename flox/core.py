@@ -1582,7 +1582,7 @@ def groupby_reduce(
 
     assert nax <= by_.ndim
     if nax < by_.ndim:
-        by_ = _move_reduce_dims_to_end(by_, -array.ndim + np.array(axis_) + by_.ndim)
+        by_ = _move_reduce_dims_to_end(by_, tuple(-array.ndim + ax + by_.ndim for ax in axis_))
         array = _move_reduce_dims_to_end(array, axis_)
         axis_ = tuple(array.ndim + np.arange(-nax, 0))
         nax = len(axis_)
@@ -1616,9 +1616,11 @@ def groupby_reduce(
         result = results[agg.name]
 
     else:
+        assert isinstance(array, DaskArray)  # TODO: How else to narrow that .chunk is there?
+
         if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
-                f"Aggregation {func.name!r} is only implemented for dask arrays when method='blockwise'."
+                f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"\n\n Received: {func}"
             )
 
@@ -1633,7 +1635,7 @@ def groupby_reduce(
                 by_, [array.chunks[ax] for ax in axis_], merge=True, method=method
             )
 
-            results = []
+            results_ = []
             groups_ = []
             for cohort in cohorts:
                 cohort = sorted(cohort)
@@ -1665,13 +1667,13 @@ def groupby_reduce(
                     if numblocks == 1 and nax == by_.ndim
                     else "map-reduce",
                 )
-                results.append(r)
+                results_.append(r)
                 groups_.append(cohort)
 
             # concatenate results together,
             # sort to make sure we match expected output
             groups = (np.hstack(groups_),)
-            result = np.concatenate(results, axis=-1)
+            result = np.concatenate(results_, axis=-1)
         else:
             if method == "blockwise" and by_.ndim == 1:
                 array = rechunk_for_blockwise(array, axis=-1, labels=by_)
