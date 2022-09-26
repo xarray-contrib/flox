@@ -1553,12 +1553,12 @@ def groupby_reduce(
     expected_groups = expected_groups[0]
 
     if axis is None:
-        axis = tuple(array.ndim + np.arange(-by_.ndim, 0))
+        axis_ = tuple(array.ndim + np.arange(-by_.ndim, 0))
     else:
-        axis = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
-    nax = len(axis)
+        axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
+    nax = len(axis_)
 
-    if method in ["blockwise", "cohorts", "split-reduce"] and len(axis) != by_.ndim:
+    if method in ["blockwise", "cohorts", "split-reduce"] and nax != by_.ndim:
         raise NotImplementedError(
             "Must reduce along all dimensions of `by` when method != 'map-reduce'."
             f"Received method={method!r}"
@@ -1582,10 +1582,10 @@ def groupby_reduce(
 
     assert nax <= by_.ndim
     if nax < by_.ndim:
-        by_ = _move_reduce_dims_to_end(by_, -array.ndim + np.array(axis) + by_.ndim)
-        array = _move_reduce_dims_to_end(array, axis)
-        axis = tuple(array.ndim + np.arange(-nax, 0))
-        nax = len(axis)
+        by_ = _move_reduce_dims_to_end(by_, -array.ndim + np.array(axis_) + by_.ndim)
+        array = _move_reduce_dims_to_end(array, axis_)
+        axis_ = tuple(array.ndim + np.arange(-nax, 0))
+        nax = len(axis_)
 
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
 
@@ -1605,7 +1605,7 @@ def groupby_reduce(
         # overwrite than when min_count is set
         fill_value = np.nan
 
-    kwargs = dict(axis=axis, fill_value=fill_value, engine=engine)
+    kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
     agg = _initialize_aggregation(func, array.dtype, fill_value, min_count, finalize_kwargs)
 
     if not has_dask:
@@ -1630,7 +1630,7 @@ def groupby_reduce(
 
         if method in ["split-reduce", "cohorts"]:
             cohorts = find_group_cohorts(
-                by_, [array.chunks[ax] for ax in axis], merge=True, method=method
+                by_, [array.chunks[ax] for ax in axis_], merge=True, method=method
             )
 
             results = []
@@ -1643,7 +1643,7 @@ def groupby_reduce(
                 array_subset = array
                 for ax, idxr in zip(range(-by_.ndim, 0), indexer):
                     array_subset = np.take(array_subset, idxr, axis=ax)
-                numblocks = np.prod([len(array_subset.chunks[ax]) for ax in axis])
+                numblocks = np.prod([len(array_subset.chunks[ax]) for ax in axis_])
 
                 # get final result for these groups
                 r, *g = partial_agg(
@@ -1662,7 +1662,7 @@ def groupby_reduce(
                     # if only a single block along axis, we can just work blockwise
                     # inspired by https://github.com/dask/dask/issues/8361
                     method="blockwise"
-                    if numblocks == 1 and len(axis) == by_.ndim
+                    if numblocks == 1 and nax == by_.ndim
                     else "map-reduce",
                 )
                 results.append(r)
