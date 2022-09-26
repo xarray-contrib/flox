@@ -1663,9 +1663,7 @@ def groupby_reduce(
                     sort=False,
                     # if only a single block along axis, we can just work blockwise
                     # inspired by https://github.com/dask/dask/issues/8361
-                    method="blockwise"
-                    if numblocks == 1 and nax == by_.ndim
-                    else "map-reduce",
+                    method="blockwise" if numblocks == 1 and nax == by_.ndim else "map-reduce",
                 )
                 results_.append(r)
                 groups_.append(cohort)
