@@ -1616,7 +1616,8 @@ def groupby_reduce(
         result = results[agg.name]
 
     else:
-        assert isinstance(array, DaskArray)  # TODO: How else to narrow that .chunk is there?
+        if TYPE_CHECKING:
+            assert isinstance(array, DaskArray)  # TODO: How else to narrow that .chunk is there?
 
         if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
@@ -1676,7 +1677,7 @@ def groupby_reduce(
             if method == "blockwise" and by_.ndim == 1:
                 array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
-            result, (groups,) = partial_agg(
+            result, *groups = partial_agg(
                 array,
                 by_,
                 expected_groups=None if method == "blockwise" else expected_groups,
