@@ -1556,6 +1556,7 @@ def groupby_reduce(
         axis = tuple(array.ndim + np.arange(-by_.ndim, 0))
     else:
         axis = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
+    nax = len(axis)
 
     if method in ["blockwise", "cohorts", "split-reduce"] and len(axis) != by_.ndim:
         raise NotImplementedError(
@@ -1564,7 +1565,7 @@ def groupby_reduce(
         )
 
     # TODO: make sure expected_groups is unique
-    if len(axis) == 1 and by_.ndim > 1 and expected_groups is None:
+    if nax == 1 and by_.ndim > 1 and expected_groups is None:
         if not by_is_dask:
             expected_groups = _get_expected_groups(by_, sort)
         else:
@@ -1579,11 +1580,12 @@ def groupby_reduce(
                 "Please provide ``expected_groups`` when not reducing along all axes."
             )
 
-    assert len(axis) <= by_.ndim
-    if len(axis) < by_.ndim:
+    assert nax <= by_.ndim
+    if nax < by_.ndim:
         by_ = _move_reduce_dims_to_end(by_, -array.ndim + np.array(axis) + by_.ndim)
         array = _move_reduce_dims_to_end(array, axis)
-        axis = tuple(array.ndim + np.arange(-len(axis), 0))
+        axis = tuple(array.ndim + np.arange(-nax, 0))
+        nax = len(axis)
 
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
 
@@ -1594,7 +1596,7 @@ def groupby_reduce(
     #     The only way to do this consistently is mask out using min_count
     #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
     if min_count is None:
-        if len(axis) < by_.ndim or fill_value is not None:
+        if nax < by_.ndim or fill_value is not None:
             min_count = 1
 
     # TODO: set in xarray?
