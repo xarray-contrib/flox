@@ -35,6 +35,17 @@ from .xrutils import is_duck_array, is_duck_dask_array, isnull
 if TYPE_CHECKING:
     import dask.array.Array as DaskArray
 
+    T_Func = Union[str, Callable]
+    T_Funcs = Union[T_Func, Sequence[T_Func]]
+    T_Axis = int
+    T_Axiss = tuple[T_Axis, ...]  # TODO: var name grammar?
+    T_AxissOpt = Union[T_Axis, T_Axiss, None]
+    T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
+    T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
+    T_Engine = Literal["flox", "numpy", "numba"]
+    T_Method = Literal["map-reduce", "blockwise", "cohorts", "split-reduce"]
+    T_IsBins = Union[bool | Sequence[bool]]
+
 
 IntermediateDict = Dict[Union[str, Callable], Any]
 FinalResultsDict = Dict[str, Union["DaskArray", np.ndarray]]
