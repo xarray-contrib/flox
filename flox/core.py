@@ -1308,7 +1308,7 @@ def _validate_reindex(reindex: bool | None, func, method: T_Method, expected_gro
         if expected_groups is not None:
             reindex_out = True
         else:
-            reindex_out = None  # TODO: Check this
+            reindex_out = False  # TODO: Check this
     else:
         reindex_out = reindex
     if method in ["split-reduce", "cohorts"] and reindex_out is False:
