@@ -1676,7 +1676,7 @@ def groupby_reduce(
             if method == "blockwise" and by_.ndim == 1:
                 array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
-            result, *groups = partial_agg(
+            result, (groups,) = partial_agg(
                 array,
                 by_,
                 expected_groups=None if method == "blockwise" else expected_groups,
