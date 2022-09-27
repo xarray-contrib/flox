@@ -66,7 +66,7 @@ def _is_arg_reduction(func: str | Aggregation) -> bool:
     return False
 
 
-def _get_expected_groups(by, sort) -> pd.Index:
+def _get_expected_groups(by, sort: bool) -> pd.Index:
     if is_duck_dask_array(by):
         raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
     flatby = by.reshape(-1)
