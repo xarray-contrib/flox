@@ -619,19 +619,19 @@ def chunk_reduce(
         dtypes = dtype
     else:
         dtypes = (dtype,) * nfuncs
-    assert len(dtypes) == nfuncs
+    assert len(dtypes) >= nfuncs
 
     if isinstance(fill_value, Sequence):
         fill_values = fill_value
     else:
         fill_values = (fill_value,) * nfuncs
-    assert len(fill_values) == nfuncs
+    assert len(fill_values) >= nfuncs
 
     if isinstance(kwargs, Sequence):
         kwargss = kwargs
     else:
         kwargss = ({},) * nfuncs
-    assert len(kwargss) == nfuncs
+    assert len(kwargss) >= nfuncs
 
     if isinstance(axis, Sequence):
         nax = len(axis)
