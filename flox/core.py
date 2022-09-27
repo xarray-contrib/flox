@@ -1080,7 +1080,7 @@ def dask_groupby_agg(
     reindex: bool = False,
     engine: T_Engine = "numpy",
     sort: bool = True,
-) -> tuple[DaskArray, np.ndarray | DaskArray]:
+) -> tuple[DaskArray, tuple[np.ndarray | DaskArray, ]]:
 
     import dask.array
     from dask.array.core import slices_from_chunks
@@ -1235,7 +1235,7 @@ def dask_groupby_agg(
             groups_in_block = tuple(
                 np.intersect1d(by_input[slc], expected_groups) for slc in slices
             )
-        ngroups_per_block = tuple(len(groups) for groups in groups_in_block)
+        ngroups_per_block = tuple(len(grp) for grp in groups_in_block)
         output_chunks = reduced.chunks[: -(len(axis))] + (ngroups_per_block,)
     else:
         raise ValueError(f"Unknown method={method}.")
@@ -1252,7 +1252,7 @@ def dask_groupby_agg(
             (reduced.name, *first_block),
             "groups",
         )
-        groups = (
+        groups: tuple[np.ndarray | DaskArray] = (
             dask.array.Array(
                 HighLevelGraph.from_collections(groups_name, layer, dependencies=[reduced]),
                 groups_name,
@@ -1290,7 +1290,7 @@ def dask_groupby_agg(
         dtype=agg.dtype[agg.name],
     )
 
-    return (result, *groups)
+    return (result, groups)
 
 
 def _validate_reindex(reindex: bool | None, func, method: T_Method, expected_groups) -> bool | None:
@@ -1674,7 +1674,7 @@ def groupby_reduce(
             if method == "blockwise" and by_.ndim == 1:
                 array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
-            result, *groups = partial_agg(
+            result, groups = partial_agg(
                 array,
                 by_,
                 expected_groups=None if method == "blockwise" else expected_groups,
