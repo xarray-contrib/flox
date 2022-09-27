@@ -1293,7 +1293,7 @@ def dask_groupby_agg(
     return (result, *groups)
 
 
-def _validate_reindex(reindex: bool | None, func, method: T_Method, expected_groups) -> bool:
+def _validate_reindex(reindex: bool | None, func, method: T_Method, expected_groups) -> bool | None:
     if reindex is True:
         if _is_arg_reduction(func):
             raise NotImplementedError
@@ -1303,18 +1303,15 @@ def _validate_reindex(reindex: bool | None, func, method: T_Method, expected_gro
     if method == "blockwise" or _is_arg_reduction(func):
         reindex = False
 
-    reindex_out: bool
-    if reindex is None:
-        if expected_groups is not None:
-            reindex_out = True
-        else:
-            reindex_out = False  # TODO: Check this
-    else:
-        reindex_out = reindex
-    if method in ["split-reduce", "cohorts"] and reindex_out is False:
+    if reindex is None and expected_groups is not None:
+        reindex = True
+
+    if method in ["split-reduce", "cohorts"] and reindex is False:
         raise NotImplementedError
 
-    return reindex_out
+    # TODO: Should reindex be a bool-only at this point? Would've been nice but
+    # None's are relied on after this function as well.
+    return reindex
 
 
 def _assert_by_is_aligned(shape, by):
