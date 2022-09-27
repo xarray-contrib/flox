@@ -1055,14 +1055,14 @@ def dask_groupby_agg(
     by: DaskArray | np.ndarray,
     agg: Aggregation,
     expected_groups: pd.Index | None,
-    axis: Sequence = None,
+    axis: T_Axiss = (),
     split_out: int = 1,
     fill_value: Any = None,
-    method: str = "map-reduce",
+    method: T_Method = "map-reduce",
     reindex: bool = False,
-    engine: str = "numpy",
+    engine: T_Engine = "numpy",
     sort: bool = True,
-) -> tuple[DaskArray, np.ndarray | DaskArray]:
+) -> tuple[DaskArray, tuple[np.ndarray | DaskArray]]:
 
     import dask.array
     from dask.array.core import slices_from_chunks
@@ -1164,18 +1164,21 @@ def dask_groupby_agg(
     else:
         intermediate = applied
         if expected_groups is None:
-            expected_groups = _get_expected_groups(by_input, sort=sort, raise_if_dask=False)
+            if is_duck_dask_array(by_input):
+                expected_groups = None
+            else:
+                expected_groups = _get_expected_groups(by_input, sort=sort)
         group_chunks = ((len(expected_groups),) if expected_groups is not None else (np.nan,),)
 
     if method == "map-reduce":
         # these are negative axis indices useful for concatenating the intermediates
         neg_axis = tuple(range(-len(axis), 0))
 
-        combine = (
-            _simple_combine
-            if do_simple_combine
-            else partial(_grouped_combine, engine=engine, neg_axis=neg_axis, sort=sort)
-        )
+        combine: Callable[..., IntermediateDict]
+        if do_simple_combine:
+            combine = _simple_combine
+        else:
+            combine = partial(_grouped_combine, engine=engine, neg_axis=neg_axis, sort=sort)
 
         # reduced is really a dict mapping reduction name to array
         # and "groups" to an array of group labels
@@ -1214,13 +1217,12 @@ def dask_groupby_agg(
             groups_in_block = tuple(
                 np.intersect1d(by_input[slc], expected_groups) for slc in slices
             )
-        ngroups_per_block = tuple(len(groups) for groups in groups_in_block)
+        ngroups_per_block = tuple(len(grp) for grp in groups_in_block)
         output_chunks = reduced.chunks[: -(len(axis))] + (ngroups_per_block,)
     else:
         raise ValueError(f"Unknown method={method}.")
 
     # extract results from the dict
-    result: dict = {}
     layer: dict[tuple, tuple] = {}
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
     if is_duck_dask_array(by_input) and expected_groups is None:
@@ -1232,7 +1234,7 @@ def dask_groupby_agg(
             (reduced.name, *first_block),
             "groups",
         )
-        groups = (
+        groups: tuple[np.ndarray | DaskArray] = (
             dask.array.Array(
                 HighLevelGraph.from_collections(groups_name, layer, dependencies=[reduced]),
                 groups_name,
@@ -1243,12 +1245,14 @@ def dask_groupby_agg(
     else:
         if method == "map-reduce":
             if expected_groups is None:
-                expected_groups = _get_expected_groups(by_input, sort=sort)
-            groups = (expected_groups.to_numpy(),)
+                expected_groups_ = _get_expected_groups(by_input, sort=sort)
+            else:
+                expected_groups_ = expected_groups
+            groups = (expected_groups_.to_numpy(),)
         else:
             groups = (np.concatenate(groups_in_block),)
 
-    layer: dict[tuple, tuple] = {}  # type: ignore
+    layer2: dict[tuple, tuple] = {}
     agg_name = f"{name}-{token}"
     for ochunk in itertools.product(*ochunks):
         if method == "blockwise":
@@ -1259,16 +1263,16 @@ def dask_groupby_agg(
                 inchunk = ochunk[:-1] + np.unravel_index(ochunk[-1], nblocks)
         else:
             inchunk = ochunk[:-1] + (0,) * len(axis) + (ochunk[-1],) * int(split_out > 1)
-        layer[(agg_name, *ochunk)] = (operator.getitem, (reduced.name, *inchunk), agg.name)
+        layer2[(agg_name, *ochunk)] = (operator.getitem, (reduced.name, *inchunk), agg.name)
 
     result = dask.array.Array(
-        HighLevelGraph.from_collections(agg_name, layer, dependencies=[reduced]),
+        HighLevelGraph.from_collections(agg_name, layer2, dependencies=[reduced]),
         agg_name,
         chunks=output_chunks,
         dtype=agg.dtype[agg.name],
     )
 
-    return (result, *groups)
+    return (result, groups)
 
 
 def _validate_reindex(reindex: bool, func, method, expected_groups) -> bool:
