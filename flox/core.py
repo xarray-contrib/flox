@@ -1080,7 +1080,7 @@ def dask_groupby_agg(
     reindex: bool = False,
     engine: T_Engine = "numpy",
     sort: bool = True,
-) -> tuple[DaskArray, tuple[np.ndarray | DaskArray,]]:
+) -> tuple[DaskArray, tuple[np.ndarray | DaskArray]]:
 
     import dask.array
     from dask.array.core import slices_from_chunks
