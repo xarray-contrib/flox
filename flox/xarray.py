@@ -313,7 +313,7 @@ def xarray_reduce(
                     f"Please provided bin edges for group variable {idx} "
                     f"named {group_name} in expected_groups."
                 )
-            expect_ = _get_expected_groups(b_.data, sort=sort, raise_if_dask=True)
+            expect_ = _get_expected_groups(b_.data, sort=sort)
         else:
             expect_ = expect
         expect_index = _convert_expected_groups_to_index((expect_,), (isbin_,), sort=sort)[0]
