@@ -138,9 +138,7 @@ def _get_optimal_chunks_for_groups(chunks, labels):
 
 
 @memoize
-def find_group_cohorts(
-    labels, chunks, merge=True, method: T_MethodCohorts = "cohorts"
-):
+def find_group_cohorts(labels, chunks, merge=True, method: T_MethodCohorts = "cohorts"):
     """
     Finds groups labels that occur together aka "cohorts"
 
