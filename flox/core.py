@@ -39,12 +39,13 @@ if TYPE_CHECKING:
     T_Func = Union[str, Callable]
     T_Funcs = Union[T_Func, Sequence[T_Func]]
     T_Axis = int
-    T_Axes = tuple[T_Axis, ...]  # TODO: var name grammar?
+    T_Axes = tuple[T_Axis, ...]
     T_AxissOpt = Union[T_Axis, T_Axes, None]
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
     T_Engine = Literal["flox", "numpy", "numba"]
-    T_Method = Literal["map-reduce", "blockwise", "cohorts", "split-reduce"]
+    T_MethodCohorts = Literal["cohorts", "split-reduce"]
+    T_Method = Literal["map-reduce", "blockwise", T_MethodCohorts]
     T_IsBins = Union[bool | Sequence[bool]]
 
 
@@ -137,8 +138,8 @@ def _get_optimal_chunks_for_groups(chunks, labels):
 
 @memoize
 def find_group_cohorts(
-    labels, chunks, merge=True, method: T_Method = "cohorts"
-):  # TODO: reduced method?
+    labels, chunks, merge=True, method: T_MethodCohorts = "cohorts"
+):
     """
     Finds groups labels that occur together aka "cohorts"
 
