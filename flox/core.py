@@ -39,8 +39,8 @@ if TYPE_CHECKING:
     T_Func = Union[str, Callable]
     T_Funcs = Union[T_Func, Sequence[T_Func]]
     T_Axis = int
-    T_Axiss = tuple[T_Axis, ...]  # TODO: var name grammar?
-    T_AxissOpt = Union[T_Axis, T_Axiss, None]
+    T_Axes = tuple[T_Axis, ...]  # TODO: var name grammar?
+    T_AxissOpt = Union[T_Axis, T_Axes, None]
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
     T_Engine = Literal["flox", "numpy", "numba"]
@@ -87,7 +87,7 @@ def is_nanlen(reduction: T_Func) -> bool:
     return isinstance(reduction, str) and reduction == "nanlen"
 
 
-def _move_reduce_dims_to_end(arr: np.ndarray, axis: T_Axiss) -> np.ndarray:
+def _move_reduce_dims_to_end(arr: np.ndarray, axis: T_Axes) -> np.ndarray:
     """Transpose `arr` by moving `axis` to the end."""
     axis = tuple(axis)
     order = tuple(ax for ax in np.arange(arr.ndim) if ax not in axis) + axis
@@ -721,7 +721,7 @@ def chunk_reduce(
     return results
 
 
-def _squeeze_results(results: IntermediateDict, axis: T_Axiss) -> IntermediateDict:
+def _squeeze_results(results: IntermediateDict, axis: T_Axes) -> IntermediateDict:
     # at the end we squeeze out extra dims
     groups = results["groups"]
     newresults: IntermediateDict = {"groups": [], "intermediates": []}
@@ -744,7 +744,7 @@ def _split_groups(array, j, slicer):
 def _finalize_results(
     results: IntermediateDict,
     agg: Aggregation,
-    axis: T_Axiss,
+    axis: T_Axes,
     expected_groups: pd.Index | None,
     fill_value: Any,
     reindex: bool,
@@ -798,7 +798,7 @@ def _aggregate(
     combine: Callable,
     agg: Aggregation,
     expected_groups: pd.Index | None,
-    axis: T_Axiss,
+    axis: T_Axes,
     keepdims,
     fill_value: Any,
     reindex: bool,
@@ -816,7 +816,7 @@ def _expand_dims(results: IntermediateDict) -> IntermediateDict:
 
 
 def _simple_combine(
-    x_chunk, agg: Aggregation, axis: T_Axiss, keepdims: bool, is_aggregate: bool = False
+    x_chunk, agg: Aggregation, axis: T_Axes, keepdims: bool, is_aggregate: bool = False
 ) -> IntermediateDict:
     """
     'Simple' combination of blockwise results.
@@ -844,7 +844,7 @@ def _simple_combine(
     return results
 
 
-def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axiss = None) -> np.ndarray:
+def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axes = None) -> np.ndarray:
     """copied from dask.array.reductions.mean_combine"""
     from dask.array.core import _concatenate2
     from dask.utils import deepmap
@@ -878,9 +878,9 @@ def listify_groups(x):
 def _grouped_combine(
     x_chunk,
     agg: Aggregation,
-    axis: T_Axiss,
+    axis: T_Axes,
     keepdims: bool,
-    neg_axis: T_Axiss,
+    neg_axis: T_Axes,
     engine: T_Engine,
     is_aggregate: bool = False,
     sort: bool = True,
@@ -1025,7 +1025,7 @@ def split_blocks(applied, split_out, expected_groups, split_name):
 
 
 def _reduce_blockwise(
-    array, by, agg, *, axis: T_Axiss, expected_groups, fill_value, engine: T_Engine, sort, reindex
+    array, by, agg, *, axis: T_Axes, expected_groups, fill_value, engine: T_Engine, sort, reindex
 ) -> FinalResultsDict:
     """
     Blockwise groupby reduction that produces the final result. This code path is
@@ -1073,7 +1073,7 @@ def dask_groupby_agg(
     by: DaskArray | np.ndarray,
     agg: Aggregation,
     expected_groups: pd.Index | None,
-    axis: T_Axiss = (),
+    axis: T_Axes = (),
     split_out: int = 1,
     fill_value: Any = None,
     method: T_Method = "map-reduce",
