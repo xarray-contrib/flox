@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import itertools
+import math
 import operator
 from collections import namedtuple
 from functools import partial, reduce
@@ -476,7 +477,7 @@ def factorize_(
         factorized.append(idx)
 
     grp_shape = tuple(len(grp) for grp in found_groups)
-    ngroups = np.prod(grp_shape)
+    ngroups = math.prod(grp_shape)
     if len(by) > 1:
         group_idx = np.ravel_multi_index(factorized, grp_shape, mode="wrap")
         # NaNs; as well as values outside the bins are coded by -1
