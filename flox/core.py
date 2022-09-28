@@ -413,7 +413,7 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
 
 def factorize_(
     by: tuple,
-    axis: T_AxissOpt,  # TODO: What is axis doing in this function?
+    axis: T_AxissOpt,
     expected_groups: tuple[pd.Index, ...] = None,
     reindex: bool = False,
     sort=True,
