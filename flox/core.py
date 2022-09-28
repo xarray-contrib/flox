@@ -99,7 +99,7 @@ def _move_reduce_dims_to_end(arr: np.ndarray, axis: T_Axes) -> np.ndarray:
 
 def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
     """Reshape so that the last `naxis` axes are collapsed to one axis."""
-    newshape = arr.shape[:-naxis] + (np.prod(arr.shape[-naxis:]),)
+    newshape = arr.shape[:-naxis] + (math.prod(arr.shape[-naxis:]),)
     return arr.reshape(newshape)
 
 
@@ -179,7 +179,7 @@ def find_group_cohorts(labels, chunks, merge=True, method: T_MethodCohorts = "co
 
     #  Iterate over each block and create a new block of same shape with "chunk number"
     shape = tuple(array.blocks.shape[ax] for ax in axis)
-    blocks = np.empty(np.prod(shape), dtype=object)
+    blocks = np.empty(math.prod(shape), dtype=object)
     for idx, block in enumerate(array.blocks.ravel()):
         blocks[idx] = np.full(tuple(block.shape[ax] for ax in axis), idx)
     which_chunk = np.block(blocks.reshape(shape).tolist()).reshape(-1)
@@ -402,11 +402,11 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     """
     assert labels.ndim > 1
     offset: np.ndarray = (
-        labels + np.arange(np.prod(labels.shape[:-1])).reshape((*labels.shape[:-1], -1)) * ngroups
+        labels + np.arange(math.prod(labels.shape[:-1])).reshape((*labels.shape[:-1], -1)) * ngroups
     )
     # -1 indicates NaNs. preserve these otherwise we aggregate in the wrong groups!
     offset[labels == -1] = -1
-    size: int = np.prod(labels.shape[:-1]) * ngroups  # type: ignore
+    size: int = math.prod(labels.shape[:-1]) * ngroups  # type: ignore
     return offset, size
 
 
@@ -661,7 +661,7 @@ def chunk_reduce(
     groups = groups[0]
 
     # always reshape to 1D along group dimensions
-    newshape = array.shape[: array.ndim - by.ndim] + (np.prod(array.shape[-by.ndim :]),)
+    newshape = array.shape[: array.ndim - by.ndim] + (math.prod(array.shape[-by.ndim :]),)
     array = array.reshape(newshape)
 
     assert group_idx.ndim == 1
@@ -1543,7 +1543,7 @@ def groupby_reduce(
         bys, final_groups, grp_shape = _factorize_multiple(
             bys, expected_groups, by_is_dask=by_is_dask, reindex=reindex
         )
-        expected_groups = (pd.RangeIndex(np.prod(grp_shape)),)
+        expected_groups = (pd.RangeIndex(math.prod(grp_shape)),)
 
     assert len(bys) == 1
     by_ = bys[0]
@@ -1645,7 +1645,7 @@ def groupby_reduce(
                 array_subset = array
                 for ax, idxr in zip(range(-by_.ndim, 0), indexer):
                     array_subset = np.take(array_subset, idxr, axis=ax)
-                numblocks = np.prod([len(array_subset.chunks[ax]) for ax in axis_])
+                numblocks = math.prod([len(array_subset.chunks[ax]) for ax in axis_])
 
                 # get final result for these groups
                 r, *g = partial_agg(
