@@ -1614,7 +1614,9 @@ def groupby_reduce(
 
     else:
         if TYPE_CHECKING:
-            assert isinstance(array, DaskArray)  # TODO: How else to narrow that array.chunks is there?
+            assert isinstance(
+                array, DaskArray
+            )  # TODO: How else to narrow that array.chunks is there?
 
         if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
