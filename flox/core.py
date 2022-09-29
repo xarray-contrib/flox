@@ -1552,6 +1552,7 @@ def groupby_reduce(
     if axis is None:
         axis_ = tuple(array.ndim + np.arange(-by_.ndim, 0))
     else:
+        # TODO: How come this function doesn't exist according to mypy?
         axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
     nax = len(axis_)
 
@@ -1614,9 +1615,10 @@ def groupby_reduce(
 
     else:
         if TYPE_CHECKING:
+            # TODO: How else to narrow that array.chunks is there?
             assert isinstance(
                 array, DaskArray
-            )  # TODO: How else to narrow that array.chunks is there?
+            )
 
         if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
