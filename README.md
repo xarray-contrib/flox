@@ -16,7 +16,7 @@ It was motivated by
 
 1.  Dask Dataframe GroupBy
     [blogpost](https://blog.dask.org/2019/10/08/df-groupby)
-2.  numpy_groupies in Xarray
+2.  [numpy_groupies](https://github.com/ml31415/numpy-groupies) in Xarray
     [issue](https://github.com/pydata/xarray/issues/4473)
 
 (See a
