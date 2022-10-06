@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     T_Funcs = Union[T_Func, Sequence[T_Func]]
     T_Axis = int
     T_Axes = tuple[T_Axis, ...]
-    T_AxissOpt = Union[T_Axis, T_Axes, None]
+    T_AxesOpt = Union[T_Axis, T_Axes, None]
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
     T_Engine = Literal["flox", "numpy", "numba"]
@@ -412,7 +412,7 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
 
 def factorize_(
     by: tuple,
-    axis: T_AxissOpt,
+    axis: T_AxesOpt,
     expected_groups: tuple[pd.Index, ...] = None,
     reindex: bool = False,
     sort=True,
@@ -520,7 +520,7 @@ def chunk_argreduce(
     by: np.ndarray,
     func: T_Funcs,
     expected_groups: pd.Index | None,
-    axis: T_AxissOpt,
+    axis: T_AxesOpt,
     fill_value: T_FillValues,
     dtype: T_Dtypes = None,
     reindex: bool = False,
@@ -572,7 +572,7 @@ def chunk_reduce(
     by: np.ndarray,
     func: T_Funcs,
     expected_groups: pd.Index | None,
-    axis: T_AxissOpt = None,
+    axis: T_AxesOpt = None,
     fill_value: T_FillValues = None,
     dtype: T_Dtypes = None,
     reindex: bool = False,
@@ -1393,7 +1393,7 @@ def groupby_reduce(
     expected_groups: Sequence | np.ndarray | None = None,
     sort: bool = True,
     isbin: T_IsBins = False,
-    axis: T_AxissOpt = None,
+    axis: T_AxesOpt = None,
     fill_value=None,
     min_count: int | None = None,
     split_out: int = 1,
