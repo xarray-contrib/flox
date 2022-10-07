@@ -776,9 +776,9 @@ def test_cohorts_nd_by(func, method, axis, engine):
     assert_equal(actual, expected)
 
     actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
-    if method == "cohorts":
+    if method in ("split-reduce", "cohorts"):
         assert_equal(groups, [4, 3, 40, 2, 31, 1, 30])
-    elif method in ("split-reduce", "map-reduce"):
+    elif method == "map-reduce":
         assert_equal(groups, [1, 30, 2, 31, 3, 4, 40])
     elif method == "blockwise":
         assert_equal(groups, [1, 30, 2, 31, 3, 40, 4])
