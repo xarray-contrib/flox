@@ -1287,11 +1287,11 @@ def dask_groupby_agg(
                     expected_groups_ = _get_expected_groups(by_input, sort=sort)
                 else:
                     expected_groups_ = expected_groups
-            groups = (expected_groups_.to_numpy(),)
+                groups = (expected_groups_.to_numpy(),)
 
         elif method in ["cohorts", "split-reduce"]:
             chunks_cohorts = find_group_cohorts(
-                by, [array.chunks[ax] for ax in axis], merge=True, method=method
+                by_input, [array.chunks[ax] for ax in axis], merge=True, method=method
             )
             reduced_ = []
             groups_ = []
