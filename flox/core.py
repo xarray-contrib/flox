@@ -1068,6 +1068,30 @@ def _reduce_blockwise(
     return result
 
 
+def _extract_unknown_groups(reduced, groups_token, group_chunks, dtype):
+    import dask.array
+    from dask.highlevelgraph import HighLevelGraph
+
+    layer: dict[tuple, tuple] = {}
+    # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
+    first_block = reduced.ndim * (0,)
+    layer[(groups_token, *first_block)] = (
+        operator.getitem,
+        (reduced.name, *first_block),
+        "groups",
+    )
+    groups: tuple[np.ndarray | DaskArray] = (
+        dask.array.Array(
+            HighLevelGraph.from_collections(groups_token, layer, dependencies=[reduced]),
+            groups_token,
+            chunks=group_chunks,
+            meta=np.array([], dtype=dtype),
+        ),
+    )
+
+    return groups
+
+
 def dask_groupby_agg(
     array: DaskArray,
     by: DaskArray | np.ndarray,
@@ -1189,13 +1213,12 @@ def dask_groupby_agg(
         group_chunks = ((len(expected_groups),) if expected_groups is not None else (np.nan,),)
 
     if method == "map-reduce":
-        # these are negative axis indices useful for concatenating the intermediates
-        neg_axis = tuple(range(-len(axis), 0))
-
         combine: Callable[..., IntermediateDict]
         if do_simple_combine:
             combine = _simple_combine
         else:
+            # these are negative axis indices useful for concatenating the intermediates
+            neg_axis = tuple(range(-len(axis), 0))
             combine = partial(_grouped_combine, engine=engine, neg_axis=neg_axis, sort=sort)
 
         # reduced is really a dict mapping reduction name to array
@@ -1219,10 +1242,24 @@ def dask_groupby_agg(
             keepdims=True,
             concatenate=False,
         )
-        output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + group_chunks
+
+        if is_duck_dask_array(by_input) and expected_groups is None:
+            groups = _extract_unknown_groups(
+                reduced,
+                groups_token=f"groups-{name}-{token}",
+                group_chunks=group_chunks,
+                dtype=by.dtype,
+            )
+        else:
+            if expected_groups is None:
+                expected_groups_ = _get_expected_groups(by_input, sort=sort)
+            else:
+                expected_groups_ = expected_groups
+            groups = (expected_groups_.to_numpy(),)
+
     elif method == "blockwise":
         reduced = intermediate
-        # Here one input chunk → one output chunka
+        # Here one input chunk → one output chunks
         # find number of groups in each chunk, this is needed for output chunks
         # along the reduced axis
         slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
@@ -1235,41 +1272,17 @@ def dask_groupby_agg(
             groups_in_block = tuple(
                 np.intersect1d(by_input[slc], expected_groups) for slc in slices
             )
+        groups = (np.concatenate(groups_in_block),)
+
         ngroups_per_block = tuple(len(grp) for grp in groups_in_block)
-        output_chunks = reduced.chunks[: -(len(axis))] + (ngroups_per_block,)
+        group_chunks = (ngroups_per_block,)
+
     else:
         raise ValueError(f"Unknown method={method}.")
 
     # extract results from the dict
-    layer: dict[tuple, tuple] = {}
+    output_chunks = reduced.chunks[: -(len(axis) + int(split_out > 1))] + group_chunks
     ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
-    if is_duck_dask_array(by_input) and expected_groups is None:
-        groups_name = f"groups-{name}-{token}"
-        # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
-        first_block = len(ochunks) * (0,)
-        layer[(groups_name, *first_block)] = (
-            operator.getitem,
-            (reduced.name, *first_block),
-            "groups",
-        )
-        groups: tuple[np.ndarray | DaskArray] = (
-            dask.array.Array(
-                HighLevelGraph.from_collections(groups_name, layer, dependencies=[reduced]),
-                groups_name,
-                chunks=group_chunks,
-                dtype=by.dtype,
-            ),
-        )
-    else:
-        if method == "map-reduce":
-            if expected_groups is None:
-                expected_groups_ = _get_expected_groups(by_input, sort=sort)
-            else:
-                expected_groups_ = expected_groups
-            groups = (expected_groups_.to_numpy(),)
-        else:
-            groups = (np.concatenate(groups_in_block),)
-
     layer2: dict[tuple, tuple] = {}
     agg_name = f"{name}-{token}"
     for ochunk in itertools.product(*ochunks):
@@ -1624,6 +1637,7 @@ def groupby_reduce(
                 f"\n\n Received: {func}"
             )
 
+        # TODO: just do this in dask_groupby_agg
         # we always need some fill_value (see above) so choose the default if needed
         if kwargs["fill_value"] is None:
             kwargs["fill_value"] = agg.fill_value[agg.name]
