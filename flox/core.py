@@ -1219,7 +1219,7 @@ def dask_groupby_agg(
         if do_simple_combine:
             combine = _simple_combine
         else:
-            combine = partial(_grouped_combine, engine=engine, axis=axis, sort=sort)
+            combine = partial(_grouped_combine, engine=engine, sort=sort)
 
         # reduced is really a dict mapping reduction name to array
         # and "groups" to an array of group labels
