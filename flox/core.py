@@ -1359,12 +1359,11 @@ def dask_groupby_agg(
                 nblocks = tuple(len(array.chunks[ax]) for ax in axis)
                 inchunk = ochunk[:-1] + np.unravel_index(ochunk[-1], nblocks)
         else:
-            inchunk = (
-                ochunk[:-1]
-                + (0,) * (len(axis) - 1)
-                + (ochunk[-1],)  # always 0 for map-reduce, something else for cohorts, split-reduce
-                + (ochunk[-1],) * int((split_out > 1))
-            )
+            inchunk = ochunk[:-1] + (0,) * (len(axis) - 1)
+            if split_out > 1:
+                inchunk = inchunk + (0,)
+            inchunk = inchunk + (ochunk[-1],)
+
         layer2[(agg_name, *ochunk)] = (operator.getitem, (reduced.name, *inchunk), agg.name)
 
     result = dask.array.Array(
