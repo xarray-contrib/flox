@@ -1070,7 +1070,7 @@ def _reduce_blockwise(
     return result
 
 
-def _extract_unknown_groups(reduced, groups_token, group_chunks, dtype) -> tuple[DaskArray]:
+def _extract_unknown_groups(reduced, group_chunks, dtype) -> tuple[DaskArray]:
     import dask.array
     from dask.highlevelgraph import HighLevelGraph
 
