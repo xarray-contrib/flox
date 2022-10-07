@@ -1070,19 +1070,19 @@ def _reduce_blockwise(
     return result
 
 
-def _extract_unknown_groups(reduced, groups_token, group_chunks, dtype):
+def _extract_unknown_groups(reduced, groups_token, group_chunks, dtype) -> tuple[DaskArray]:
     import dask.array
     from dask.highlevelgraph import HighLevelGraph
 
     layer: dict[tuple, tuple] = {}
-    # we've used keepdims=True, so _tree_reduce preserves some dummy dimensions
+    groups_token = f"group-{reduced.name}"
     first_block = reduced.ndim * (0,)
     layer[(groups_token, *first_block)] = (
         operator.getitem,
         (reduced.name, *first_block),
         "groups",
     )
-    groups: tuple[np.ndarray | DaskArray] = (
+    groups: tuple[DaskArray] = (
         dask.array.Array(
             HighLevelGraph.from_collections(groups_token, layer, dependencies=[reduced]),
             groups_token,
@@ -1244,12 +1244,7 @@ def dask_groupby_agg(
         )
 
         if is_duck_dask_array(by_input) and expected_groups is None:
-            groups = _extract_unknown_groups(
-                reduced,
-                groups_token=f"groups-{name}-{token}",
-                group_chunks=group_chunks,
-                dtype=by.dtype,
-            )
+            groups = _extract_unknown_groups(reduced, group_chunks=group_chunks, dtype=by.dtype)
         else:
             if expected_groups is None:
                 expected_groups_ = _get_expected_groups(by_input, sort=sort)
