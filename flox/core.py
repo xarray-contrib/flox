@@ -1321,7 +1321,6 @@ def dask_groupby_agg(
             reduced = dask.array.concatenate(reduced_, axis=-1)
             groups = (np.concatenate(groups_),)
             group_chunks = (tuple(len(cohort) for cohort in groups_),)
-            # compute_blocks(reduced)
 
     elif method == "blockwise":
         reduced = intermediate
