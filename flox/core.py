@@ -1484,7 +1484,8 @@ def groupby_reduce(
 
     if not is_duck_array(array):
         array = np.asarray(array)
-    array = array.astype(int) if np.issubdtype(array.dtype, bool) else array
+    is_bool_array = np.issubdtype(array.dtype, bool)
+    array = array.astype(int) if is_bool_array else array
 
     if isinstance(isbin, bool):
         isbin = (isbin,) * len(by)
@@ -1664,6 +1665,6 @@ def groupby_reduce(
         ).reshape(result.shape[:-1] + grp_shape)
         groups = final_groups
 
-    if _is_minmax_reduction(func) and np.issubdtype(array.dtype, bool):
+    if _is_minmax_reduction(func) and is_bool_array:
         result = result.astype(bool)
     return (result, *groups)
