@@ -37,8 +37,12 @@ from .xrutils import is_duck_array, is_duck_dask_array, isnull
 if TYPE_CHECKING:
     import dask.array.Array as DaskArray
 
+    T_ExpectedGroups = Union[Sequence, np.ndarray]
+    T_ExpectedGroupsOpt = Union[T_ExpectedGroups, None]
+    T_ExpectedGroupsIndex = tuple[pd.Index | None, ...]
     T_Func = Union[str, Callable]
     T_Funcs = Union[T_Func, Sequence[T_Func]]
+    T_Func2 = Union[str, Aggregation]
     T_Axis = int
     T_Axes = tuple[T_Axis, ...]
     T_AxesOpt = Union[T_Axis, T_Axes, None]
@@ -60,7 +64,7 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 DUMMY_AXIS = -2
 
 
-def _is_arg_reduction(func: str | Aggregation) -> bool:
+def _is_arg_reduction(func: T_Func2) -> bool:
     if isinstance(func, str) and func in ["argmin", "argmax", "nanargmax", "nanargmin"]:
         return True
     if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
@@ -68,7 +72,7 @@ def _is_arg_reduction(func: str | Aggregation) -> bool:
     return False
 
 
-def _is_minmax_reduction(func: str | Aggregation) -> bool:
+def _is_minmax_reduction(func: T_Func2) -> bool:
     return not _is_arg_reduction(func) and (
         isinstance(func, str) and ("max" in func or "min" in func)
     )
@@ -1033,7 +1037,16 @@ def split_blocks(applied, split_out, expected_groups, split_name):
 
 
 def _reduce_blockwise(
-    array, by, agg, *, axis: T_Axes, expected_groups, fill_value, engine: T_Engine, sort, reindex
+    array,
+    by,
+    agg: Aggregation,
+    *,
+    axis: T_Axes,
+    expected_groups,
+    fill_value,
+    engine: T_Engine,
+    sort,
+    reindex,
 ) -> FinalResultsDict:
     """
     Blockwise groupby reduction that produces the final result. This code path is
@@ -1341,8 +1354,8 @@ def _assert_by_is_aligned(shape, by):
 
 
 def _convert_expected_groups_to_index(
-    expected_groups: Iterable, isbin: Sequence[bool], sort: bool
-) -> tuple[pd.Index | None, ...]:
+    expected_groups: T_ExpectedGroups, isbin: Sequence[bool], sort: bool
+) -> T_ExpectedGroupsIndex:
     out: list[pd.Index | None] = []
     for ex, isbin_ in zip(expected_groups, isbin):
         if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin):
@@ -1403,8 +1416,8 @@ def _factorize_multiple(by, expected_groups, by_is_dask, reindex):
 def groupby_reduce(
     array: np.ndarray | DaskArray,
     *by: np.ndarray | DaskArray,
-    func: str | Aggregation,
-    expected_groups: Sequence | np.ndarray | None = None,
+    func: T_Func2,
+    expected_groups: T_ExpectedGroupsOpt = None,
     sort: bool = True,
     isbin: T_IsBins = False,
     axis: T_AxesOpt = None,
