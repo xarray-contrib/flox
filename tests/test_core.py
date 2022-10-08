@@ -126,7 +126,9 @@ def test_groupby_reduce(
         split_out=split_out,
         engine=engine,
     )
-    assert_equal(groups, [0, 1, 2])
+    g_dtype = by.dtype if expected_groups is None else np.asarray(expected_groups).dtype
+
+    assert_equal(groups, np.array([0, 1, 2], g_dtype))
     assert_equal(expected, result)
 
 
