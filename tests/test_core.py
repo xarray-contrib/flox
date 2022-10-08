@@ -923,7 +923,7 @@ def test_multiple_groupers():
         reindex=True,
         func="count",
     )
-    expected = np.eye(5, 5)
+    expected = np.eye(5, 5, dtype=int)
     assert_equal(expected, actual)
 
 
