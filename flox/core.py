@@ -1664,6 +1664,6 @@ def groupby_reduce(
         ).reshape(result.shape[:-1] + grp_shape)
         groups = final_groups
 
-    if _is_minmax_reduction(func):
+    if _is_minmax_reduction(func) and np.issubdtype(array.dtype, bool):
         result = result.astype(bool)
     return (result, *groups)
