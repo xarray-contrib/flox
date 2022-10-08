@@ -65,7 +65,7 @@ ALL_FUNCS = (
 )
 
 if TYPE_CHECKING:
-    from flox.core import T_Engine, T_Func2, T_ExpectedGroupsOpt
+    from flox.core import T_Engine, T_ExpectedGroupsOpt, T_Func2
 
 
 def test_alignment_error():
