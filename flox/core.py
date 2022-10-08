@@ -55,6 +55,12 @@ def _is_arg_reduction(func: str | Aggregation) -> bool:
     return False
 
 
+def _is_minmax_reduction(func: str | Aggregation) -> bool:
+    return not _is_arg_reduction(func) and (
+        isinstance(func, str) and ("max" in func or "min" in func)
+    )
+
+
 def _get_expected_groups(by, sort: bool) -> pd.Index:
     if is_duck_dask_array(by):
         raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
@@ -1657,4 +1663,7 @@ def groupby_reduce(
             result, from_=groups[0], to=expected_groups, fill_value=fill_value
         ).reshape(result.shape[:-1] + grp_shape)
         groups = final_groups
+
+    if _is_minmax_reduction(func):
+        result = result.astype(bool)
     return (result, *groups)
