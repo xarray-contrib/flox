@@ -1087,17 +1087,18 @@ def subset_to_blocks(
         blkshape = array.blocks.shape
 
     unraveled = np.unravel_index(flatblocks, blkshape)
-    normalized = []
+    normalized: list[Union[int, np.ndarray, slice]] = []
     for ax, idx in enumerate(unraveled):
         i = np.unique(idx).squeeze()
         if i.ndim == 0:
-            i_ = i.item()
+            normalized.append(i.item())
         else:
             if np.array_equal(i, np.arange(blkshape[ax])):
-                i_ = slice(None)
+                normalized.append(slice(None))
             elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
-                i_ = slice(i[0], i[-1] + 1)
-        normalized.append(i_)
+                normalized.append(slice(i[0], i[-1] + 1))
+            else:
+                normalized.append(i)
     full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
 
     # has no iterables
