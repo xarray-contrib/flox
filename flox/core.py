@@ -1091,13 +1091,13 @@ def subset_to_blocks(
     for ax, idx in enumerate(unraveled):
         i = np.unique(idx).squeeze()
         if i.ndim == 0:
-            i = i.item()
+            i_ = i.item()
         else:
             if np.array_equal(i, np.arange(blkshape[ax])):
-                i = slice(None)
+                i_ = slice(None)
             elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
-                i = slice(i[0], i[-1] + 1)
-        normalized.append(i)
+                i_ = slice(i[0], i[-1] + 1)
+        normalized.append(i_)
     full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
 
     # has no iterables
