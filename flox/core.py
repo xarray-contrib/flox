@@ -1087,20 +1087,39 @@ def subset_to_blocks(
         blkshape = array.blocks.shape
 
     unraveled = np.unravel_index(flatblocks, blkshape)
-    if len(flatblocks) == 1:
-        idxr = [slice(None, None)] * (array.ndim - len(blkshape))
-        idxr = idxr + [a.item() for a in np.unravel_index(flatblocks, blkshape)]
-        return array.blocks[tuple(idxr)]
+    normalized = []
+    for ax, idx in enumerate(unraveled):
+        i = np.unique(idx).squeeze()
+        if i.ndim == 0:
+            i = i.item()
+        else:
+            if np.array_equal(i, np.arange(blkshape[ax])):
+                i = slice(None)
+            elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
+                i = slice(i[0], i[-1] + 1)
+        normalized.append(i)
+    full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
 
-    subset = array
-    for ax, inds in enumerate(unraveled):
-        inds = np.unique(inds)
-        if np.array_equal(inds, np.arange(blkshape[ax])):
+    # has no iterables
+    noiter = tuple(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
+    # has all iterables
+    alliter = {
+        ax: i if hasattr(i, "__len__") else slice(None) for ax, i in enumerate(full_normalized)
+    }
+
+    # apply everything but the iterables
+    if all(i == slice(None) for i in noiter):
+        return array
+
+    subset = array.blocks[noiter]
+
+    for ax, inds in alliter.items():
+        if isinstance(inds, slice):
             continue
-
         idxr = [slice(None, None)] * array.ndim
-        idxr[array.ndim - len(blkshape) + ax] = inds
+        idxr[ax] = inds
         subset = subset.blocks[tuple(idxr)]
+
     return subset
 
 
