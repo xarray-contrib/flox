@@ -19,6 +19,8 @@ from .core import (
 from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
+    from .core import T_Engine, T_Method
+
     from xarray.core.resample import Resample
     from xarray.core.types import T_DataArray, T_Dataset
 
@@ -63,8 +65,8 @@ def xarray_reduce(
     dim: Dims | ellipsis = None,
     split_out: int = 1,
     fill_value=None,
-    method: str = "map-reduce",
-    engine: str = "numpy",
+    method: T_Method = "map-reduce",
+    engine: T_Engine = "numpy",
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
