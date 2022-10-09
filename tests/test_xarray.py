@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -23,12 +27,17 @@ try:
 except ValueError:
     pass
 
+if TYPE_CHECKING:
+    from flox.core import T_Agg, T_Engine
+
 
 @pytest.mark.parametrize("reindex", [None, False, True])
 @pytest.mark.parametrize("min_count", [None, 1, 3])
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("skipna", [True, False])
-def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
+def test_xarray_reduce(
+    skipna: bool, add_nan: bool, min_count: int | None, engine: T_Engine, reindex: bool | None
+) -> None:
     arr = np.ones((4, 12))
 
     if add_nan:
@@ -76,7 +85,9 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
 # TODO: sort
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
 @pytest.mark.parametrize("chunk", (True, False))
-def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
+def test_xarray_reduce_multiple_groupers(
+    pass_expected_groups: bool, chunk: bool, engine: T_Engine
+) -> None:
     if not has_dask and chunk:
         pytest.skip()
 
@@ -100,32 +111,43 @@ def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
         coords={"labels": ["a", "b", "c", "f"], "labels2": [1, 2]},
     ).expand_dims(z=4)
 
-    kwargs = dict(func="count", engine=engine)
+    func = "count"
+    expected_groups = None
     if pass_expected_groups:
-        kwargs["expected_groups"] = (expected.labels.data, expected.labels2.data)
+        expected_groups = (expected.labels.data, expected.labels2.data)
 
     with raise_if_dask_computes():
-        actual = xarray_reduce(da, da.labels, da.labels2, **kwargs)
+        actual = xarray_reduce(
+            da, da.labels, da.labels2, func=func, expected_groups=expected_groups, engine=engine
+        )
     xr.testing.assert_identical(expected, actual)
 
     with raise_if_dask_computes():
-        actual = xarray_reduce(da, "labels", da.labels2, **kwargs)
+        actual = xarray_reduce(
+            da, "labels", da.labels2, func=func, expected_groups=expected_groups, engine=engine
+        )
     xr.testing.assert_identical(expected, actual)
 
     with raise_if_dask_computes():
-        actual = xarray_reduce(da, "labels", "labels2", **kwargs)
+        actual = xarray_reduce(
+            da, "labels", "labels2", func=func, expected_groups=expected_groups, engine=engine
+        )
     xr.testing.assert_identical(expected, actual)
 
     if pass_expected_groups:
-        kwargs["expected_groups"] = (expected.labels2.data, expected.labels.data)
+        expected_groups = (expected.labels2.data, expected.labels.data)
     with raise_if_dask_computes():
-        actual = xarray_reduce(da, "labels2", "labels", **kwargs)
+        actual = xarray_reduce(
+            da, "labels2", "labels", func=func, expected_groups=expected_groups, engine=engine
+        )
     xr.testing.assert_identical(expected.transpose("z", "labels2", "labels"), actual)
 
 
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
 @pytest.mark.parametrize("chunk", (True, False))
-def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
+def test_xarray_reduce_multiple_groupers_2(
+    pass_expected_groups: bool, chunk: bool, engine: T_Engine
+) -> None:
     if not has_dask and chunk:
         pytest.skip()
 
@@ -151,20 +173,31 @@ def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
         },
     ).expand_dims(z=4, x=2)
 
-    kwargs = dict(func="count", engine=engine)
+    func = "count"
+    expected_groups = None
     if pass_expected_groups:
-        kwargs["expected_groups"] = (expected.labels.data, expected.labels.data)
+        expected_groups = (expected.labels.data, expected.labels.data)
 
     with raise_if_dask_computes():
-        actual = xarray_reduce(da, "labels", "labels2", **kwargs)
+        actual = xarray_reduce(
+            da, "labels", "labels2", func=func, expected_groups=expected_groups, engine=engine
+        )
     xr.testing.assert_identical(expected, actual)
 
     with pytest.raises(NotImplementedError):
-        xarray_reduce(da, "labels", "labels2", dim=..., **kwargs)
+        xarray_reduce(
+            da,
+            "labels",
+            "labels2",
+            dim=...,
+            func=func,
+            expected_groups=expected_groups,
+            engine=engine,
+        )
 
 
 @requires_dask
-def test_dask_groupers_error():
+def test_dask_groupers_error() -> None:
     da = xr.DataArray(
         [1.0, 2.0], dims="x", coords={"labels": ("x", [1, 2]), "labels2": ("x", [1, 2])}
     )
@@ -173,7 +206,7 @@ def test_dask_groupers_error():
 
 
 @requires_dask
-def test_xarray_reduce_single_grouper(engine):
+def test_xarray_reduce_single_grouper(engine: T_Engine) -> None:
 
     # DataArray
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
@@ -218,7 +251,7 @@ def test_xarray_reduce_single_grouper(engine):
     xr.testing.assert_allclose(actual, expected)
 
 
-def test_xarray_reduce_errors():
+def test_xarray_reduce_errors() -> None:
 
     da = xr.DataArray(np.ones((12,)), dims="x")
     by = xr.DataArray(np.ones((12,)), dims="x")
@@ -238,7 +271,7 @@ def test_xarray_reduce_errors():
 @pytest.mark.parametrize("isdask", [True, False])
 @pytest.mark.parametrize("dataarray", [True, False])
 @pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
-def test_xarray_resample(chunklen, isdask, dataarray, engine):
+def test_xarray_resample(chunklen: int, isdask: bool, dataarray: bool, engine: T_Engine) -> None:
     if isdask:
         if not has_dask:
             pytest.skip()
@@ -256,7 +289,7 @@ def test_xarray_resample(chunklen, isdask, dataarray, engine):
 
 
 @requires_dask
-def test_xarray_resample_dataset_multiple_arrays(engine):
+def test_xarray_resample_dataset_multiple_arrays(engine: T_Engine) -> None:
     # regression test for #35
     times = pd.date_range("2000", periods=5)
     foo = xr.DataArray(range(5), dims=["time"], coords=[times], name="foo")
@@ -289,7 +322,7 @@ def test_xarray_resample_dataset_multiple_arrays(engine):
         [(10,), (10,)],
     ],
 )
-def test_rechunk_for_blockwise(inchunks, expected):
+def test_rechunk_for_blockwise(inchunks: tuple[int, ...], expected: tuple[int, ...]) -> None:
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
 
     da = xr.DataArray(dask.array.ones((10,), chunks=inchunks), dims="x", name="foo")
@@ -310,7 +343,7 @@ def test_rechunk_for_blockwise(inchunks, expected):
 # TODO: dim=None, dim=Ellipsis, groupby unindexed dim
 
 
-def test_groupby_duplicate_coordinate_labels(engine):
+def test_groupby_duplicate_coordinate_labels(engine: T_Engine) -> None:
     # fix for http://stackoverflow.com/questions/38065129
     array = xr.DataArray([1, 2, 3], [("x", [1, 1, 2])])
     expected = xr.DataArray([3, 3], [("x", [1, 2])])
@@ -318,7 +351,7 @@ def test_groupby_duplicate_coordinate_labels(engine):
     assert_equal(expected, actual)
 
 
-def test_multi_index_groupby_sum(engine):
+def test_multi_index_groupby_sum(engine: T_Engine) -> None:
     # regression test for xarray GH873
     ds = xr.Dataset(
         {"foo": (("x", "y", "z"), np.ones((3, 4, 2)))},
@@ -342,7 +375,7 @@ def test_multi_index_groupby_sum(engine):
 
 
 @pytest.mark.parametrize("chunks", (None, 2))
-def test_xarray_groupby_bins(chunks, engine):
+def test_xarray_groupby_bins(chunks, engine: T_Engine) -> None:
     array = xr.DataArray([1, 1, 1, 1, 1], dims="x")
     labels = xr.DataArray([1, 1.5, 1.9, 2, 3], dims="x", name="labels")
 
@@ -352,16 +385,17 @@ def test_xarray_groupby_bins(chunks, engine):
         array = array.chunk({"x": chunks})
         labels = labels.chunk({"x": chunks})
 
-    kwargs = dict(
-        dim="x",
-        func="count",
-        engine=engine,
-        expected_groups=np.array([1, 2, 4, 5]),
-        isbin=True,
-        fill_value=0,
-    )
     with raise_if_dask_computes():
-        actual = xarray_reduce(array, labels, **kwargs)
+        actual = xarray_reduce(
+            array,
+            labels,
+            dim="x",
+            func="count",
+            engine=engine,
+            expected_groups=np.array([1, 2, 4, 5]),
+            isbin=True,
+            fill_value=0,
+        )
     expected = xr.DataArray(
         np.array([3, 1, 0]),
         dims="labels_bins",
@@ -374,7 +408,16 @@ def test_xarray_groupby_bins(chunks, engine):
     labels = labels.expand_dims(y=2).copy()
     labels.data[-1, -1] = np.nan
     with raise_if_dask_computes():
-        actual = xarray_reduce(array, labels, **kwargs)
+        actual = xarray_reduce(
+            array,
+            labels,
+            dim="x",
+            func="count",
+            engine=engine,
+            expected_groups=np.array([1, 2, 4, 5]),
+            isbin=True,
+            fill_value=0,
+        )
     expected = xr.DataArray(
         np.array([[[3, 1, 0]] * 3, [[3, 0, 0]] * 3]),
         dims=("y", "z", "labels_bins"),
@@ -384,7 +427,7 @@ def test_xarray_groupby_bins(chunks, engine):
 
 
 @requires_dask
-def test_func_is_aggregation():
+def test_func_is_aggregation() -> None:
     from flox.aggregations import mean
 
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
@@ -400,7 +443,7 @@ def test_func_is_aggregation():
 
 
 @requires_dask
-def test_cache():
+def test_cache() -> None:
     pytest.importorskip("cachey")
 
     from flox.cache import cache
@@ -423,7 +466,7 @@ def test_cache():
 
 @pytest.mark.parametrize("use_cftime", [True, False])
 @pytest.mark.parametrize("func", ["count", "mean"])
-def test_datetime_array_reduce(use_cftime, func, engine):
+def test_datetime_array_reduce(use_cftime: bool, func: str, engine: T_Engine) -> None:
 
     time = xr.DataArray(
         xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
@@ -436,7 +479,7 @@ def test_datetime_array_reduce(use_cftime, func, engine):
 
 
 @requires_dask
-def test_groupby_bins_indexed_coordinate():
+def test_groupby_bins_indexed_coordinate() -> None:
     ds = (
         xr.tutorial.open_dataset("air_temperature")
         .isel(time=slice(100))
@@ -457,7 +500,7 @@ def test_groupby_bins_indexed_coordinate():
 
 
 @pytest.mark.parametrize("chunk", (True, False))
-def test_mixed_grouping(chunk):
+def test_mixed_grouping(chunk: bool) -> None:
     if not has_dask and chunk:
         pytest.skip()
     # regression test for https://github.com/xarray-contrib/flox/pull/111
