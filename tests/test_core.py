@@ -185,8 +185,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if "var" in func or "std" in func:
         finalize_kwargs = finalize_kwargs + [{"ddof": 1}, {"ddof": 0}]
         fill_value = np.nan
+        tolerance = {"rtol": 1e-14, "atol": 1e-16}
     else:
         fill_value = None
+        tolerance = None
 
     for kwargs in finalize_kwargs:
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
@@ -207,7 +209,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
-        assert_equal(actual, expected)
+        assert_equal(actual, expected, tolerance)
 
         if not has_dask:
             continue
@@ -216,10 +218,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 continue
             actual, *groups = groupby_reduce(array, *by, method=method, **flox_kwargs)
             for actual_group, expect in zip(groups, expected_groups):
-                assert_equal(actual_group, expect)
+                assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
-            assert_equal(actual, expected)
+            assert_equal(actual, expected, tolerance)
 
 
 @requires_dask

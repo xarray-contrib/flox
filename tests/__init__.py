@@ -80,13 +80,21 @@ def raise_if_dask_computes(max_computes=0):
     return dask.config.set(scheduler=scheduler)
 
 
-def assert_equal(a, b):
+def assert_equal(a, b, tolerance=None):
     __tracebackhide__ = True
 
     if isinstance(a, list):
         a = np.array(a)
     if isinstance(b, list):
         b = np.array(b)
+
+    if tolerance is None and (
+        np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64)
+    ):
+        tolerance = {"atol": 1e-18, "rtol": 1e-15}
+    else:
+        tolerance = {}
+
     if isinstance(a, pd_types) or isinstance(b, pd_types):
         pd.testing.assert_index_equal(a, b)
     elif has_xarray and isinstance(a, xr_types) or isinstance(b, xr_types):
@@ -94,18 +102,14 @@ def assert_equal(a, b):
     elif has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
         # sometimes it's nice to see values and shapes
         # rather than being dropped into some file in dask
-        if np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64):
-            kwargs = {"atol": 1e-18, "rtol": 1e-15}
-        else:
-            kwargs = {}
-        np.testing.assert_allclose(a, b, **kwargs)
+        np.testing.assert_allclose(a, b, **tolerance)
         # does some validation of the dask graph
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
         if a.dtype != b.dtype:
             raise AssertionError(f"a and b have different dtypes: (a: {a.dtype}, b: {b.dtype})")
 
-        np.testing.assert_allclose(a, b, equal_nan=True)
+        np.testing.assert_allclose(a, b, equal_nan=True, **tolerance)
 
 
 @pytest.fixture(scope="module", params=["flox", "numpy", "numba"])
