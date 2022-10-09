@@ -467,7 +467,7 @@ def _initialize_aggregation(
     func: str | Aggregation,
     array_dtype,
     fill_value,
-    min_count: int,
+    min_count: int | None,
     finalize_kwargs,
 ) -> Aggregation:
     if not isinstance(func, Aggregation):
