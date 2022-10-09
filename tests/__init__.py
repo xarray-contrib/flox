@@ -108,7 +108,7 @@ def assert_equal(a, b):
         np.testing.assert_allclose(a, b, equal_nan=True)
 
 
-@pytest.fixture(scope="module", params=["flox", "numpy"])
+@pytest.fixture(scope="module", params=["flox", "numpy", "numba"])
 def engine(request):
     if request.param == "numba":
         try:
