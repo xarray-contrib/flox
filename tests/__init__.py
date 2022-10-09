@@ -14,7 +14,7 @@ try:
 
     dask_array_type = da.Array
 except ImportError:
-    dask_array_type = ()
+    dask_array_type = ()  # type: ignore
 
 
 try:
@@ -22,7 +22,7 @@ try:
 
     xr_types = (xr.DataArray, xr.Dataset)
 except ImportError:
-    xr_types = ()
+    xr_types = ()  # type: ignore
 
 
 def _importorskip(modname, minversion=None):
@@ -98,6 +98,9 @@ def assert_equal(a, b):
         # does some validation of the dask graph
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
+        if a.dtype != b.dtype:
+            raise AssertionError(f"a and b have different dtypes: (a: {a.dtype}, b: {b.dtype})")
+
         np.testing.assert_allclose(a, b, equal_nan=True)
 
 
