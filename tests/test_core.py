@@ -1088,16 +1088,11 @@ def test_factorize_reindex_sorting_strings() -> None:
 
 
 def test_factorize_reindex_sorting_ints() -> None:
-    kwargs = dict(
-        by=(np.array([-10, 1, 10, 2, 3, 5]),),
-        axis=-1,
-        expected_groups=(np.array([0, 1, 2, 3, 4, 5]),),
-    )
-
+    expected_groups = (np.array([0, 1, 2, 3, 4, 5]),)
     expected = factorize_(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
         axis=-1,
-        expected_groups=(np.array([0, 1, 2, 3, 4, 5]),),
+        expected_groups=expected_groups,
         reindex=True,
         sort=True,
     )[0]
@@ -1106,18 +1101,18 @@ def test_factorize_reindex_sorting_ints() -> None:
     expected = factorize_(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
         axis=-1,
-        expected_groups=(np.array([0, 1, 2, 3, 4, 5]),),
+        expected_groups=expected_groups,
         reindex=True,
         sort=False,
     )[0]
     assert_equal(expected, [6, 1, 6, 2, 3, 5])
 
-    kwargs["expected_groups"] = (np.arange(5, -1, -1),)
+    expected_groups = (np.arange(5, -1, -1),)
 
     expected = factorize_(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
         axis=-1,
-        expected_groups=(np.array([0, 1, 2, 3, 4, 5]),),
+        expected_groups=expected_groups,
         reindex=True,
         sort=True,
     )[0]
@@ -1126,7 +1121,7 @@ def test_factorize_reindex_sorting_ints() -> None:
     expected = factorize_(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
         axis=-1,
-        expected_groups=(np.array([0, 1, 2, 3, 4, 5]),),
+        expected_groups=expected_groups,
         reindex=True,
         sort=False,
     )[0]
