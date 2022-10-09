@@ -789,6 +789,7 @@ def _finalize_results(
     else:
         finalized["groups"] = squeezed["groups"]
 
+    finalized[agg.name] = finalized[agg.name].astype(agg.dtype[agg.name], copy=False)
     return finalized
 
 

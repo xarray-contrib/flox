@@ -94,7 +94,11 @@ def assert_equal(a, b):
     elif has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
         # sometimes it's nice to see values and shapes
         # rather than being dropped into some file in dask
-        np.testing.assert_allclose(a, b)
+        if np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64):
+            kwargs = {"atol": 1e-18, "rtol": 1e-15}
+        else:
+            kwargs = {}
+        np.testing.assert_allclose(a, b, **kwargs)
         # does some validation of the dask graph
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
@@ -104,7 +108,7 @@ def assert_equal(a, b):
         np.testing.assert_allclose(a, b, equal_nan=True)
 
 
-@pytest.fixture(scope="module", params=["flox", "numpy", "numba"])
+@pytest.fixture(scope="module", params=["flox", "numpy"])
 def engine(request):
     if request.param == "numba":
         try:
