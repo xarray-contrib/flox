@@ -468,6 +468,11 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         fill_value = False
     else:
         fill_value = 123
+
+    if "var" in func or "std" in func:
+        tolerance = {"rtol": 1e-14, "atol": 1e-16}
+    else:
+        tolerance = None
     # tests against the numpy output to make sure dask compute matches
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     rng = np.random.default_rng(12345)
@@ -486,7 +491,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         kwargs.pop("engine")
         expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
         assert_equal(expected_npg, expected)
-    assert_equal(actual, expected)
+    assert_equal(actual, expected, tolerance)
 
 
 @pytest.mark.parametrize("chunks", [None, (2, 2, 3)])
