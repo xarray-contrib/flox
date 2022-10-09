@@ -55,10 +55,7 @@ def generic_aggregate(
 
 def _normalize_dtype(dtype, array_dtype, fill_value=None):
     if dtype is None:
-        if fill_value is not None and np.isnan(fill_value):
-            dtype = np.floating
-        else:
-            dtype = array_dtype
+        dtype = array_dtype
     if dtype is np.floating:
         # mean, std, var always result in floating
         # but we preserve the array's dtype if it is floating
@@ -68,6 +65,8 @@ def _normalize_dtype(dtype, array_dtype, fill_value=None):
             dtype = np.dtype("float64")
     elif not isinstance(dtype, np.dtype):
         dtype = np.dtype(dtype)
+    if fill_value is not None:
+        dtype = np.result_type(dtype, fill_value)
     return dtype
 
 
@@ -465,6 +464,7 @@ aggregations = {
 
 def _initialize_aggregation(
     func: str | Aggregation,
+    dtype,
     array_dtype,
     fill_value,
     min_count: int | None,
@@ -484,10 +484,15 @@ def _initialize_aggregation(
     else:
         raise ValueError("Bad type for func. Expected str or Aggregation")
 
-    agg.dtype[func] = _normalize_dtype(agg.dtype[func], array_dtype, fill_value)
+    # np.dtype(None) == np.dtype("float64")!!!
+    # so check for not None
+    if dtype is not None and not isinstance(dtype, np.dtype):
+        dtype = np.dtype(dtype)
+
+    agg.dtype[func] = _normalize_dtype(dtype or agg.dtype[func], array_dtype, fill_value)
     agg.dtype["numpy"] = (agg.dtype[func],)
     agg.dtype["intermediate"] = [
-        _normalize_dtype(dtype, array_dtype) for dtype in agg.dtype["intermediate"]
+        _normalize_dtype(dtype_, dtype) for dtype_ in agg.dtype["intermediate"]
     ]
 
     # Replace sentinel fill values according to dtype
