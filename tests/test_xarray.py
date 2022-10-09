@@ -517,13 +517,15 @@ def test_dtype(add_nan, chunk, dtype, dtype_out, engine):
     actual = xarray_reduce(arr, "labels", **kwargs)
     expected = arr.groupby("labels").mean(dtype="float64")
 
+    tolerance = {"rtol": 1e-15, "atol": 1e-18}
+
     assert actual.dtype == np.dtype("float64")
     assert actual.compute().dtype == np.dtype("float64")
-    xr.testing.assert_allclose(expected, actual)
+    xr.testing.assert_allclose(expected, actual, **tolerance)
 
     actual = xarray_reduce(arr.to_dataset(), "labels", **kwargs)
     expected = arr.to_dataset().groupby("labels").mean(dtype="float64")
 
     assert actual.arr.dtype == np.dtype("float64")
     assert actual.compute().arr.dtype == np.dtype("float64")
-    xr.testing.assert_allclose(expected, actual.transpose("labels", ...))
+    xr.testing.assert_allclose(expected, actual.transpose("labels", ...), **tolerance)
