@@ -491,9 +491,7 @@ def _initialize_aggregation(
 
     agg.dtype[func] = _normalize_dtype(dtype or agg.dtype[func], array_dtype, fill_value)
     agg.dtype["numpy"] = (agg.dtype[func],)
-    agg.dtype["intermediate"] = [
-        _normalize_dtype(dtype_, dtype) for dtype_ in agg.dtype["intermediate"]
-    ]
+    agg.dtype["intermediate"] = [int_dtype or dtype for int_dtype in agg.dtype["intermediate"]]
 
     # Replace sentinel fill values according to dtype
     agg.fill_value["intermediate"] = tuple(
