@@ -88,6 +88,13 @@ def assert_equal(a, b, tolerance=None):
     if isinstance(b, list):
         b = np.array(b)
 
+    if isinstance(a, pd_types) or isinstance(b, pd_types):
+        pd.testing.assert_index_equal(a, b)
+        return
+    if has_xarray and isinstance(a, xr_types) or isinstance(b, xr_types):
+        xr.testing.assert_identical(a, b)
+        return
+
     if tolerance is None and (
         np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64)
     ):
@@ -95,11 +102,7 @@ def assert_equal(a, b, tolerance=None):
     else:
         tolerance = {}
 
-    if isinstance(a, pd_types) or isinstance(b, pd_types):
-        pd.testing.assert_index_equal(a, b)
-    elif has_xarray and isinstance(a, xr_types) or isinstance(b, xr_types):
-        xr.testing.assert_identical(a, b)
-    elif has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
+    if has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
         # sometimes it's nice to see values and shapes
         # rather than being dropped into some file in dask
         np.testing.assert_allclose(a, b, **tolerance)
