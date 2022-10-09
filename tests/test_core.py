@@ -441,7 +441,6 @@ def test_numpy_reduce_axis_subset(engine: T_Engine) -> None:
     # TODO: add NaNs
     by = labels2d
     array = np.ones_like(by)
-    kwargs = dict(func="count", engine=engine, fill_value=0)
     result, _ = groupby_reduce(array, by, func="count", engine=engine, fill_value=0, axis=1)
     assert_equal(result, [[2, 3], [2, 3]])
 
@@ -1051,12 +1050,6 @@ def test_multiple_groupers() -> None:
 
 
 def test_factorize_reindex_sorting_strings() -> None:
-    kwargs = dict(
-        by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),
-        axis=-1,
-        expected_groups=(np.array(["El-Nino", "Neutral", "foo", "La-Nina"]),),
-    )
-
     expected = factorize_(
         by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),
         axis=-1,
