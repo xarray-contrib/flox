@@ -65,7 +65,7 @@ def _normalize_dtype(dtype, array_dtype, fill_value=None):
             dtype = np.dtype("float64")
     elif not isinstance(dtype, np.dtype):
         dtype = np.dtype(dtype)
-    if fill_value is not None:
+    if fill_value not in [None, dtypes.INF, dtypes.NINF, dtypes.NA]:
         dtype = np.result_type(dtype, fill_value)
     return dtype
 
@@ -492,7 +492,8 @@ def _initialize_aggregation(
     agg.dtype[func] = _normalize_dtype(dtype or agg.dtype[func], array_dtype, fill_value)
     agg.dtype["numpy"] = (agg.dtype[func],)
     agg.dtype["intermediate"] = [
-        int_dtype or agg.dtype[func] for int_dtype in agg.dtype["intermediate"]
+        _normalize_dtype(int_dtype, array_dtype, int_fv)
+        for int_dtype, int_fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
     ]
 
     # Replace sentinel fill values according to dtype
