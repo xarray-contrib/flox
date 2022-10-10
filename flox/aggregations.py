@@ -492,7 +492,7 @@ def _initialize_aggregation(
     agg.dtype[func] = _normalize_dtype(dtype or agg.dtype[func], array_dtype, fill_value)
     agg.dtype["numpy"] = (agg.dtype[func],)
     agg.dtype["intermediate"] = [
-        _normalize_dtype(int_dtype, array_dtype, int_fv)
+        _normalize_dtype(int_dtype, np.result_type(agg.dtype[func], array_dtype), int_fv)
         for int_dtype, int_fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
     ]
 
