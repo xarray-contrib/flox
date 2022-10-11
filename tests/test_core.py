@@ -633,7 +633,7 @@ def test_groupby_bins(chunk_labels, chunks, engine, method) -> None:
             engine=engine,
             method=method,
         )
-    expected = np.array([3, 1, 0])
+    expected = np.array([3, 1, 0], dtype=np.int64)
     for left, right in zip(groups, pd.IntervalIndex.from_arrays([1, 2, 4], [2, 4, 5]).to_numpy()):
         assert left == right
     assert_equal(actual, expected)
@@ -752,7 +752,7 @@ def test_dtype_preservation(dtype, func, engine):
 @requires_dask
 @pytest.mark.parametrize("method", ["split-reduce", "map-reduce", "cohorts"])
 def test_cohorts(method):
-    repeats = [4, 4, 12, 2, 3, 4]
+    repeats = np.array([4, 4, 12, 2, 3, 4], np.int32)
     labels = np.repeat(np.arange(6), repeats).astype(np.int32)
     array = dask.array.from_array(labels, chunks=(4, 8, 4, 9, 4))
 
