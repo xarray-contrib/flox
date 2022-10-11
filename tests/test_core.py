@@ -405,7 +405,7 @@ def test_numpy_reduce_axis_subset(engine):
 def test_dask_reduce_axis_subset():
 
     by = labels2d
-    array = np.ones_like(by)
+    array = np.ones_like(by, dtype=np.int64)
     with raise_if_dask_computes():
         result, _ = groupby_reduce(
             da.from_array(array, chunks=(2, 3)),
@@ -414,11 +414,11 @@ def test_dask_reduce_axis_subset():
             axis=1,
             expected_groups=[0, 2],
         )
-    assert_equal(result, [[2, 3], [2, 3]])
+    assert_equal(result, np.array([[2, 3], [2, 3]], dtype=np.int64))
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
-    subarr = np.array([[1, 1], [1, 1], [123, 2], [1, 1], [1, 1]])
+    subarr = np.array([[1, 1], [1, 1], [123, 2], [1, 1], [1, 1]], dtype=np.int64)
     expected = np.tile(subarr, (3, 1, 1))
     with raise_if_dask_computes():
         result, _ = groupby_reduce(
@@ -431,7 +431,7 @@ def test_dask_reduce_axis_subset():
         )
     assert_equal(result, expected)
 
-    subarr = np.array([[2, 3], [2, 3]])
+    subarr = np.array([[2, 3], [2, 3]], dtype=np.int64)
     expected = np.tile(subarr, (3, 1, 1))
     with raise_if_dask_computes():
         result, _ = groupby_reduce(
@@ -753,11 +753,11 @@ def test_dtype_preservation(dtype, func, engine):
 @pytest.mark.parametrize("method", ["split-reduce", "map-reduce", "cohorts"])
 def test_cohorts(method):
     repeats = [4, 4, 12, 2, 3, 4]
-    labels = np.repeat(np.arange(6), repeats)
+    labels = np.repeat(np.arange(6), repeats).astype(np.int32)
     array = dask.array.from_array(labels, chunks=(4, 8, 4, 9, 4))
 
     actual, actual_groups = groupby_reduce(array, labels, func="count", method=method)
-    assert_equal(actual_groups, np.arange(6))
+    assert_equal(actual_groups, np.arange(6, dtype=np.int32))
     assert_equal(actual, repeats)
 
 
@@ -795,9 +795,9 @@ def test_cohorts_nd_by(func, method, axis, engine):
 
     actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
     if method == "map-reduce":
-        assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=np.intp))
+        assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=by.dtype))
     else:
-        assert_equal(groups, np.array([1, 30, 2, 31, 3, 40, 4], dtype=np.intp))
+        assert_equal(groups, np.array([1, 30, 2, 31, 3, 40, 4], dtype=by.dtype))
     reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
 
@@ -969,18 +969,18 @@ def test_factorize_reindex_sorting_ints():
     )
 
     expected = factorize_(**kwargs, reindex=True, sort=True)[0]
-    assert_equal(expected, [6, 1, 6, 2, 3, 5])
+    assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.int64))
 
     expected = factorize_(**kwargs, reindex=True, sort=False)[0]
-    assert_equal(expected, [6, 1, 6, 2, 3, 5])
+    assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.int64))
 
     kwargs["expected_groups"] = (np.arange(5, -1, -1),)
 
     expected = factorize_(**kwargs, reindex=True, sort=True)[0]
-    assert_equal(expected, [6, 1, 6, 2, 3, 5])
+    assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.int64))
 
     expected = factorize_(**kwargs, reindex=True, sort=False)[0]
-    assert_equal(expected, [6, 4, 6, 3, 2, 0])
+    assert_equal(expected, np.array([6, 4, 6, 3, 2, 0], dtype=np.int64))
 
 
 @requires_dask
