@@ -360,13 +360,12 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=False)
-    assert_equal(groups, [0, 2, 1])
+    assert_equal(groups, np.array([0, 2, 1], dtype=np.intp))
     assert_equal(expected, actual[..., [0, 2, 1]])
 
-    kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=True)
-    assert_equal(groups, [0, 1, 2])
+    assert_equal(groups, np.array([0, 1, 2], np.intp))
     assert_equal(expected, actual)
 
 
@@ -796,9 +795,9 @@ def test_cohorts_nd_by(func, method, axis, engine):
 
     actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
     if method == "map-reduce":
-        assert_equal(groups, [1, 30, 2, 31, 3, 4, 40])
+        assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=np.intp))
     else:
-        assert_equal(groups, [1, 30, 2, 31, 3, 40, 4])
+        assert_equal(groups, np.array([1, 30, 2, 31, 3, 40, 4], dtype=np.intp))
     reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
 
