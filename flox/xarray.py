@@ -126,9 +126,7 @@ def xarray_reduce(
             method by first rechunking using ``rechunk_for_cohorts``
             (for 1D ``by`` only).
           * ``"split-reduce"``:
-            Break out each group into its own array and then ``"map-reduce"``.
-            This is implemented by having each group be its own cohort,
-            and is identical to xarray's default strategy.
+            Same as "cohorts" and will be removed soon.
     engine : {"flox", "numpy", "numba"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
