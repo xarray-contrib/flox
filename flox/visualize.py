@@ -136,10 +136,10 @@ def visualize_cohorts_2d(by, array, method="cohorts"):
     print("finding cohorts...")
     before_merged = find_group_cohorts(
         by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=False, method=method
-    )
+    ).values()
     merged = find_group_cohorts(
         by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=True, method=method
-    )
+    ).values()
     print("finished cohorts...")
 
     xticks = np.cumsum(array.chunks[-1])

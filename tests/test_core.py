@@ -185,8 +185,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if "var" in func or "std" in func:
         finalize_kwargs = finalize_kwargs + [{"ddof": 1}, {"ddof": 0}]
         fill_value = np.nan
+        tolerance = {"rtol": 1e-14, "atol": 1e-16}
     else:
         fill_value = None
+        tolerance = None
 
     for kwargs in finalize_kwargs:
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
@@ -207,7 +209,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
-        assert_equal(actual, expected)
+        assert_equal(actual, expected, tolerance)
 
         if not has_dask:
             continue
@@ -216,10 +218,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 continue
             actual, *groups = groupby_reduce(array, *by, method=method, **flox_kwargs)
             for actual_group, expect in zip(groups, expected_groups):
-                assert_equal(actual_group, expect)
+                assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
-            assert_equal(actual, expected)
+            assert_equal(actual, expected, tolerance)
 
 
 @requires_dask
@@ -466,6 +468,11 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         fill_value = False
     else:
         fill_value = 123
+
+    if "var" in func or "std" in func:
+        tolerance = {"rtol": 1e-14, "atol": 1e-16}
+    else:
+        tolerance = None
     # tests against the numpy output to make sure dask compute matches
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     rng = np.random.default_rng(12345)
@@ -484,7 +491,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         kwargs.pop("engine")
         expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
         assert_equal(expected_npg, expected)
-    assert_equal(actual, expected)
+    assert_equal(actual, expected, tolerance)
 
 
 @pytest.mark.parametrize("chunks", [None, (2, 2, 3)])
@@ -662,11 +669,11 @@ def test_rechunk_for_blockwise(inchunks, expected):
         [[[1, 2, 3, 4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), True],
         [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), False],
         [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), False],
-        [[[3], [2], [1], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), True],
+        [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), True],
         [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), True],
         [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), False],
         [
-            [[2, 3, 4, 1], [5], [0]],
+            [[0], [1, 2, 3, 4], [5]],
             np.repeat(np.arange(6), [4, 4, 12, 2, 3, 4]),
             (4, 8, 4, 9, 4),
             True,
@@ -674,11 +681,7 @@ def test_rechunk_for_blockwise(inchunks, expected):
     ],
 )
 def test_find_group_cohorts(expected, labels, chunks, merge):
-    actual = list(find_group_cohorts(labels, (chunks,), merge, method="cohorts"))
-    assert actual == expected, (actual, expected)
-
-    actual = find_group_cohorts(labels, (chunks,), merge, method="split-reduce")
-    expected = [[label] for label in np.unique(labels)]
+    actual = list(find_group_cohorts(labels, (chunks,), merge).values())
     assert actual == expected, (actual, expected)
 
 
@@ -792,11 +795,9 @@ def test_cohorts_nd_by(func, method, axis, engine):
     assert_equal(actual, expected)
 
     actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
-    if method == "cohorts":
-        assert_equal(groups, [4, 3, 40, 2, 31, 1, 30])
-    elif method in ("split-reduce", "map-reduce"):
+    if method == "map-reduce":
         assert_equal(groups, [1, 30, 2, 31, 3, 4, 40])
-    elif method == "blockwise":
+    else:
         assert_equal(groups, [1, 30, 2, 31, 3, 40, 4])
     reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
@@ -1025,3 +1026,14 @@ def test_custom_aggregation_blockwise():
         method="blockwise",
     )
     assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_dtype(func, dtype, engine):
+    if "arg" in func or func in ["any", "all"]:
+        pytest.skip()
+    arr = np.ones((4, 12), dtype=dtype)
+    labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
+    actual, _ = groupby_reduce(arr, labels, func=func, dtype=np.float64)
+    assert actual.dtype == np.dtype("float64")
