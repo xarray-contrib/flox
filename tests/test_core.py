@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from functools import reduce
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -63,6 +66,9 @@ ALL_FUNCS = (
     pytest.param("nanmedian", marks=(pytest.mark.skip,)),
 )
 
+if TYPE_CHECKING:
+    from flox.core import T_Engine, T_ExpectedGroupsOpt, T_Func2
+
 
 def test_alignment_error():
     da = np.ones((12,))
@@ -101,8 +107,16 @@ def test_alignment_error():
     ],
 )
 def test_groupby_reduce(
-    array, by, expected, func, expected_groups, chunk, split_out, dtype, engine
-):
+    engine: T_Engine,
+    func: T_Func2,
+    array: np.ndarray,
+    by: np.ndarray,
+    expected: list[float],
+    expected_groups: T_ExpectedGroupsOpt,
+    chunk: bool,
+    split_out: int,
+    dtype: np.typing.DTypeLike,
+) -> None:
     array = array.astype(dtype)
     if chunk:
         if not has_dask or expected_groups is None:
@@ -110,12 +124,12 @@ def test_groupby_reduce(
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
         by = da.from_array(by, chunks=(3,) if by.ndim == 1 else (1, 3))
 
-    if "mean" in func:
-        expected = np.array(expected, dtype=float)
+    if func == "mean" or func == "nanmean":
+        expected_result = np.array(expected, dtype=float)
     elif func == "sum":
-        expected = np.array(expected, dtype=dtype)
+        expected_result = np.array(expected, dtype=dtype)
     elif func == "count":
-        expected = np.array(expected, dtype=int)
+        expected_result = np.array(expected, dtype=int)
 
     result, groups, = groupby_reduce(
         array,
@@ -126,8 +140,10 @@ def test_groupby_reduce(
         split_out=split_out,
         engine=engine,
     )
-    assert_equal(groups, [0, 1, 2])
-    assert_equal(expected, result)
+    g_dtype = by.dtype if expected_groups is None else np.asarray(expected_groups).dtype
+
+    assert_equal(groups, np.array([0, 1, 2], g_dtype))
+    assert_equal(expected_result, result)
 
 
 def gen_array_by(size, func):
@@ -169,8 +185,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if "var" in func or "std" in func:
         finalize_kwargs = finalize_kwargs + [{"ddof": 1}, {"ddof": 0}]
         fill_value = np.nan
+        tolerance = {"rtol": 1e-14, "atol": 1e-16}
     else:
         fill_value = None
+        tolerance = None
 
     for kwargs in finalize_kwargs:
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
@@ -191,7 +209,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
-        assert_equal(actual, expected)
+        assert_equal(actual, expected, tolerance)
 
         if not has_dask:
             continue
@@ -200,10 +218,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 continue
             actual, *groups = groupby_reduce(array, *by, method=method, **flox_kwargs)
             for actual_group, expect in zip(groups, expected_groups):
-                assert_equal(actual_group, expect)
+                assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
-            assert_equal(actual, expected)
+            assert_equal(actual, expected, tolerance)
 
 
 @requires_dask
@@ -450,6 +468,11 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         fill_value = False
     else:
         fill_value = 123
+
+    if "var" in func or "std" in func:
+        tolerance = {"rtol": 1e-14, "atol": 1e-16}
+    else:
+        tolerance = None
     # tests against the numpy output to make sure dask compute matches
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     rng = np.random.default_rng(12345)
@@ -468,7 +491,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         kwargs.pop("engine")
         expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
         assert_equal(expected_npg, expected)
-    assert_equal(actual, expected)
+    assert_equal(actual, expected, tolerance)
 
 
 @pytest.mark.parametrize("chunks", [None, (2, 2, 3)])
@@ -837,16 +860,16 @@ def test_bool_reductions(func, engine):
 
 
 @requires_dask
-def test_map_reduce_blockwise_mixed():
+def test_map_reduce_blockwise_mixed() -> None:
     t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()
     data = t.dt.dayofyear
-    actual = groupby_reduce(
+    actual, _ = groupby_reduce(
         dask.array.from_array(data.values, chunks=365),
         t.dt.month,
         func="mean",
         method="split-reduce",
     )
-    expected = groupby_reduce(data, t.dt.month, func="mean")
+    expected, _ = groupby_reduce(data, t.dt.month, func="mean")
     assert_equal(expected, actual)
 
 
@@ -902,7 +925,7 @@ def test_factorize_values_outside_bins():
     assert_equal(expected, actual)
 
 
-def test_multiple_groupers():
+def test_multiple_groupers() -> None:
     actual, *_ = groupby_reduce(
         np.ones((5, 2)),
         np.arange(10).reshape(5, 2),
@@ -915,7 +938,7 @@ def test_multiple_groupers():
         reindex=True,
         func="count",
     )
-    expected = np.eye(5, 5)
+    expected = np.eye(5, 5, dtype=int)
     assert_equal(expected, actual)
 
 
@@ -1003,3 +1026,14 @@ def test_custom_aggregation_blockwise():
         method="blockwise",
     )
     assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_dtype(func, dtype, engine):
+    if "arg" in func or func in ["any", "all"]:
+        pytest.skip()
+    arr = np.ones((4, 12), dtype=dtype)
+    labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
+    actual, _ = groupby_reduce(arr, labels, func=func, dtype=np.float64)
+    assert actual.dtype == np.dtype("float64")

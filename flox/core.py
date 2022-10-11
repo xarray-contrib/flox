@@ -6,17 +6,7 @@ import math
 import operator
 from collections import namedtuple
 from functools import partial, reduce
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    Literal,
-    Mapping,
-    Sequence,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Mapping, Sequence, Union
 
 import numpy as np
 import numpy_groupies as npg
@@ -37,8 +27,11 @@ from .xrutils import is_duck_array, is_duck_dask_array, isnull
 if TYPE_CHECKING:
     import dask.array.Array as DaskArray
 
+    T_ExpectedGroups = Union[Sequence, np.ndarray, pd.Index]
+    T_ExpectedGroupsOpt = Union[T_ExpectedGroups, None]
     T_Func = Union[str, Callable]
     T_Funcs = Union[T_Func, Sequence[T_Func]]
+    T_Agg = Union[str, Aggregation]
     T_Axis = int
     T_Axes = tuple[T_Axis, ...]
     T_AxesOpt = Union[T_Axis, T_Axes, None]
@@ -60,12 +53,18 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 DUMMY_AXIS = -2
 
 
-def _is_arg_reduction(func: str | Aggregation) -> bool:
+def _is_arg_reduction(func: T_Agg) -> bool:
     if isinstance(func, str) and func in ["argmin", "argmax", "nanargmax", "nanargmin"]:
         return True
     if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
         return True
     return False
+
+
+def _is_minmax_reduction(func: T_Agg) -> bool:
+    return not _is_arg_reduction(func) and (
+        isinstance(func, str) and ("max" in func or "min" in func)
+    )
 
 
 def _get_expected_groups(by, sort: bool) -> pd.Index:
@@ -793,6 +792,7 @@ def _finalize_results(
     else:
         finalized["groups"] = squeezed["groups"]
 
+    finalized[agg.name] = finalized[agg.name].astype(agg.dtype[agg.name], copy=False)
     return finalized
 
 
@@ -1030,7 +1030,16 @@ def split_blocks(applied, split_out, expected_groups, split_name):
 
 
 def _reduce_blockwise(
-    array, by, agg, *, axis: T_Axes, expected_groups, fill_value, engine: T_Engine, sort, reindex
+    array,
+    by,
+    agg: Aggregation,
+    *,
+    axis: T_Axes,
+    expected_groups,
+    fill_value,
+    engine: T_Engine,
+    sort,
+    reindex,
 ) -> FinalResultsDict:
     """
     Blockwise groupby reduction that produces the final result. This code path is
@@ -1437,7 +1446,7 @@ def _assert_by_is_aligned(shape, by):
 
 
 def _convert_expected_groups_to_index(
-    expected_groups: Iterable, isbin: Sequence[bool], sort: bool
+    expected_groups: T_ExpectedGroups, isbin: Sequence[bool], sort: bool
 ) -> tuple[pd.Index | None, ...]:
     out: list[pd.Index | None] = []
     for ex, isbin_ in zip(expected_groups, isbin):
@@ -1499,12 +1508,13 @@ def _factorize_multiple(by, expected_groups, by_is_dask, reindex):
 def groupby_reduce(
     array: np.ndarray | DaskArray,
     *by: np.ndarray | DaskArray,
-    func: str | Aggregation,
-    expected_groups: Sequence | np.ndarray | None = None,
+    func: T_Agg,
+    expected_groups: T_ExpectedGroupsOpt = None,
     sort: bool = True,
     isbin: T_IsBins = False,
     axis: T_AxesOpt = None,
     fill_value=None,
+    dtype: np.typing.DTypeLike = None,
     min_count: int | None = None,
     split_out: int = 1,
     method: T_Method = "map-reduce",
@@ -1538,6 +1548,8 @@ def groupby_reduce(
         Negative integers are normalized using array.ndim
     fill_value : Any
         Value to assign when a label in ``expected_groups`` is not present.
+    dtype: data-type , optional
+        DType for the output. Can be anything that is accepted by ``np.dtype``.
     min_count : int, default: None
         The required number of valid values to perform the operation. If
         fewer than min_count non-NA values are present the result will be
@@ -1620,7 +1632,8 @@ def groupby_reduce(
 
     if not is_duck_array(array):
         array = np.asarray(array)
-    array = array.astype(int) if np.issubdtype(array.dtype, bool) else array
+    is_bool_array = np.issubdtype(array.dtype, bool)
+    array = array.astype(int) if is_bool_array else array
 
     if isinstance(isbin, Sequence):
         isbins = isbin
@@ -1712,7 +1725,7 @@ def groupby_reduce(
         fill_value = np.nan
 
     kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
-    agg = _initialize_aggregation(func, array.dtype, fill_value, min_count, finalize_kwargs)
+    agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count, finalize_kwargs)
 
     if not has_dask:
         results = _reduce_blockwise(
@@ -1768,4 +1781,7 @@ def groupby_reduce(
             result, from_=groups[0], to=expected_groups, fill_value=fill_value
         ).reshape(result.shape[:-1] + grp_shape)
         groups = final_groups
+
+    if _is_minmax_reduction(func) and is_bool_array:
+        result = result.astype(bool)
     return (result, *groups)
