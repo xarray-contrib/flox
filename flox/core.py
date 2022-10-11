@@ -1130,37 +1130,6 @@ def subset_to_blocks(
     return subset
 
 
-def reduce_cohorts(array, cohort, tree_reduce, do_simple_combine, reindex, agg, aggregate):
-    """Loop over multiple "cohorts" and apply the reduction. The loop is only
-    used for split-reduce."""
-    import dask.array
-
-    reduced = []
-    groups = []
-    for member in cohort:
-        member1d = np.atleast_1d(member)
-        if do_simple_combine:
-            # reindex so that reindex can be set to True later
-            reindexed = dask.array.map_blocks(
-                reindex_intermediates,
-                array,
-                agg=agg,
-                unique_groups=member1d,
-                meta=array._meta,
-            )
-        else:
-            reindexed = array
-
-        reduced.append(
-            tree_reduce(
-                reindexed,
-                aggregate=partial(aggregate, expected_groups=member1d, reindex=reindex),
-            )
-        )
-        groups.append(member1d)
-    return reduced, groups
-
-
 def _extract_unknown_groups(reduced, group_chunks, dtype) -> tuple[DaskArray]:
     import dask.array
     from dask.highlevelgraph import HighLevelGraph
@@ -1354,17 +1323,25 @@ def dask_groupby_agg(
             groups_ = []
             for blks, cohort in chunks_cohorts.items():
                 subset = subset_to_blocks(intermediate, blks, array.blocks.shape[-len(axis) :])
-                r, g = reduce_cohorts(
-                    subset,
-                    (cohort,) if method == "cohorts" else cohort,
-                    tree_reduce,
-                    do_simple_combine,
-                    reindex,
-                    agg,
-                    aggregate,
+                if do_simple_combine:
+                    # reindex so that reindex can be set to True later
+                    reindexed = dask.array.map_blocks(
+                        reindex_intermediates,
+                        subset,
+                        agg=agg,
+                        unique_groups=cohort,
+                        meta=subset._meta,
+                    )
+                else:
+                    reindexed = subset
+
+                reduced_.append(
+                    tree_reduce(
+                        reindexed,
+                        aggregate=partial(aggregate, expected_groups=cohort, reindex=reindex),
+                    )
                 )
-                reduced_.extend(r)
-                groups_.extend(g)
+                groups_.append(cohort)
 
             reduced = dask.array.concatenate(reduced_, axis=-1)
             groups = (np.concatenate(groups_),)
@@ -1779,7 +1756,6 @@ def groupby_reduce(
 
         if sort and method != "map-reduce":
             assert len(groups) == 1
-            assert groups[0].ndim == 1
             sorted_idx = np.argsort(groups[0])
             result = result[..., sorted_idx]
             groups = (groups[0][sorted_idx],)
