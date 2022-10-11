@@ -31,6 +31,10 @@ if TYPE_CHECKING:
     from flox.core import T_Agg, T_Engine
 
 
+tolerance64 = {"rtol": 1e-15, "atol": 1e-18}
+np.random.seed(123)
+
+
 @pytest.mark.parametrize("reindex", [None, False, True])
 @pytest.mark.parametrize("min_count", [None, 1, 3])
 @pytest.mark.parametrize("add_nan", [True, False])
@@ -531,3 +535,76 @@ def test_mixed_grouping(chunk: bool) -> None:
         fill_value=0,
     )
     assert (r.sel(v1=[3, 4, 5]) == 0).all().data
+
+
+@pytest.mark.parametrize("add_nan", [True, False])
+@pytest.mark.parametrize("dtype_out", [np.float64, "float64", np.dtype("float64")])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("chunk", (True, False))
+def test_dtype(add_nan, chunk, dtype, dtype_out, engine):
+    if chunk and not has_dask:
+        pytest.skip()
+
+    xp = dask.array if chunk else np
+    data = xp.linspace(0, 1, 48, dtype=dtype).reshape((4, 12))
+
+    if add_nan:
+        data[1, ...] = np.nan
+        data[0, [0, 2]] = np.nan
+
+    arr = xr.DataArray(
+        data,
+        dims=("x", "t"),
+        coords={
+            "labels": ("t", np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"]))
+        },
+        name="arr",
+    )
+    kwargs = dict(func="mean", dtype=dtype_out, engine=engine)
+    actual = xarray_reduce(arr, "labels", **kwargs)
+    expected = arr.groupby("labels").mean(dtype="float64")
+
+    assert actual.dtype == np.dtype("float64")
+    assert actual.compute().dtype == np.dtype("float64")
+    xr.testing.assert_allclose(expected, actual, **tolerance64)
+
+    actual = xarray_reduce(arr.to_dataset(), "labels", **kwargs)
+    expected = arr.to_dataset().groupby("labels").mean(dtype="float64")
+
+    assert actual.arr.dtype == np.dtype("float64")
+    assert actual.compute().arr.dtype == np.dtype("float64")
+    xr.testing.assert_allclose(expected, actual.transpose("labels", ...), **tolerance64)
+
+
+@pytest.mark.parametrize("chunk", [True, False])
+@pytest.mark.parametrize("use_flox", [True, False])
+def test_dtype_accumulation(use_flox, chunk):
+    if chunk and not has_dask:
+        pytest.skip()
+
+    datetimes = pd.date_range("2010-01", "2015-01", freq="6H", inclusive="left")
+    samples = 10 + np.cos(2 * np.pi * 0.001 * np.arange(len(datetimes))) * 1
+    samples += np.random.randn(len(datetimes))
+    samples = samples.astype("float32")
+
+    nan_indices = np.random.default_rng().integers(0, len(samples), size=5_000)
+    samples[nan_indices] = np.nan
+
+    da = xr.DataArray(samples, dims=("time",), coords=[datetimes])
+    if chunk:
+        da = da.chunk(time=1024)
+
+    gb = da.groupby("time.month")
+
+    with xr.set_options(use_flox=use_flox):
+        expected = gb.reduce(np.nanmean)
+        actual = gb.mean()
+        xr.testing.assert_allclose(expected, actual)
+        assert np.issubdtype(actual.dtype, np.float32)
+        assert np.issubdtype(actual.compute().dtype, np.float32)
+
+        expected = gb.reduce(np.nanmean, dtype="float64")
+        actual = gb.mean(dtype="float64")
+        assert np.issubdtype(actual.dtype, np.float64)
+        assert np.issubdtype(actual.compute().dtype, np.float64)
+        xr.testing.assert_allclose(expected, actual, **tolerance64)
