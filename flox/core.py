@@ -193,7 +193,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True, method: T_MethodCohor
     if merge:
         # First sort by number of chunks occupied by cohort
         sorted_chunks_cohorts = dict(
-            reversed(sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0])))
+            sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
         )
 
         items = tuple(sorted_chunks_cohorts.items())
@@ -216,7 +216,13 @@ def find_group_cohorts(labels, chunks, merge: bool = True, method: T_MethodCohor
                     merged_cohorts[k1].extend(v2)
                     merged_keys.append(k2)
 
-        return merged_cohorts
+        # make sure each cohort is sorted after merging
+        sorted_merged_cohorts = {k: sorted(v) for k, v in merged_cohorts.items()}
+        # sort by first label in cohort
+        # This will help when sort=True (default)
+        # and we have to resort the dask array
+        return dict(sorted(sorted_merged_cohorts.items(), key=lambda kv: kv[1][0]))
+
     else:
         return chunks_cohorts
 
@@ -1347,7 +1353,6 @@ def dask_groupby_agg(
             reduced_ = []
             groups_ = []
             for blks, cohort in chunks_cohorts.items():
-                cohort = sorted(cohort)
                 subset = subset_to_blocks(intermediate, blks, array.blocks.shape[-len(axis) :])
                 r, g = reduce_cohorts(
                     subset,

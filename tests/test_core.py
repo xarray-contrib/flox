@@ -646,11 +646,11 @@ def test_rechunk_for_blockwise(inchunks, expected):
         [[[1, 2, 3, 4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), True],
         [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), False],
         [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), False],
-        [[[3], [2], [1], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), True],
+        [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), True],
         [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), True],
         [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), False],
         [
-            [[2, 3, 4, 1], [5], [0]],
+            [[0], [1, 2, 3, 4], [5]],
             np.repeat(np.arange(6), [4, 4, 12, 2, 3, 4]),
             (4, 8, 4, 9, 4),
             True,
@@ -776,11 +776,9 @@ def test_cohorts_nd_by(func, method, axis, engine):
     assert_equal(actual, expected)
 
     actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
-    if method in ("split-reduce", "cohorts"):
-        assert_equal(groups, [4, 3, 40, 2, 31, 1, 30])
-    elif method == "map-reduce":
+    if method == "map-reduce":
         assert_equal(groups, [1, 30, 2, 31, 3, 4, 40])
-    elif method == "blockwise":
+    else:
         assert_equal(groups, [1, 30, 2, 31, 3, 40, 4])
     reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
