@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Hashable, Iterable, Sequence, Union
 
 import numpy as np
@@ -564,6 +565,11 @@ def resample_reduce(
     keep_attrs: bool = True,
     **kwargs,
 ):
+
+    warnings.warn(
+        "flox.xarray.resample_reduce is now deprecated. Please use Xarray's resample method directly.",
+        DeprecationWarning,
+    )
 
     obj = resampler._obj
     dim = resampler._group_dim
