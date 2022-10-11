@@ -1757,8 +1757,10 @@ def groupby_reduce(
         if sort and method != "map-reduce":
             assert len(groups) == 1
             sorted_idx = np.argsort(groups[0])
-            result = result[..., sorted_idx]
-            groups = (groups[0][sorted_idx],)
+            # This optimization helps specifically with resampling
+            if not (sorted_idx[1:] <= sorted_idx[:-1]).all():
+                result = result[..., sorted_idx]
+                groups = (groups[0][sorted_idx],)
 
     if factorize_early:
         # nan group labels are factorized to -1, and preserved
