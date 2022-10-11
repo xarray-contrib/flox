@@ -254,8 +254,13 @@ def test_xarray_resample(chunklen, isdask, dataarray, engine):
         ds = ds.air
 
     resampler = ds.resample(time="M")
-    actual = resample_reduce(resampler, "mean", engine=engine)
+    with pytest.warns(DeprecationWarning):
+        actual = resample_reduce(resampler, "mean", engine=engine)
     expected = resampler.mean()
+    xr.testing.assert_allclose(actual, expected)
+
+    with xr.set_options(use_flox=True):
+        actual = resampler.mean()
     xr.testing.assert_allclose(actual, expected)
 
 
