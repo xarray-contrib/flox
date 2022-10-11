@@ -45,7 +45,7 @@ def nansum_of_squares(
         group_idx,
         array,
         axis=axis,
-        func="sumofsquares",
+        func="nansumofsquares",
         size=size,
         fill_value=fill_value,
         dtype=dtype,
