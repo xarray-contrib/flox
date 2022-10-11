@@ -789,6 +789,7 @@ def _finalize_results(
     else:
         finalized["groups"] = squeezed["groups"]
 
+    finalized[agg.name] = finalized[agg.name].astype(agg.dtype[agg.name], copy=False)
     return finalized
 
 
@@ -1411,6 +1412,7 @@ def groupby_reduce(
     isbin: T_IsBins = False,
     axis: T_AxesOpt = None,
     fill_value=None,
+    dtype: np.typing.DTypeLike = None,
     min_count: int | None = None,
     split_out: int = 1,
     method: T_Method = "map-reduce",
@@ -1444,6 +1446,8 @@ def groupby_reduce(
         Negative integers are normalized using array.ndim
     fill_value : Any
         Value to assign when a label in ``expected_groups`` is not present.
+    dtype: data-type , optional
+        DType for the output. Can be anything that is accepted by ``np.dtype``.
     min_count : int, default: None
         The required number of valid values to perform the operation. If
         fewer than min_count non-NA values are present the result will be
@@ -1621,7 +1625,7 @@ def groupby_reduce(
         fill_value = np.nan
 
     kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
-    agg = _initialize_aggregation(func, array.dtype, fill_value, min_count, finalize_kwargs)
+    agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count, finalize_kwargs)
 
     if not has_dask:
         results = _reduce_blockwise(

@@ -185,8 +185,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if "var" in func or "std" in func:
         finalize_kwargs = finalize_kwargs + [{"ddof": 1}, {"ddof": 0}]
         fill_value = np.nan
+        tolerance = {"rtol": 1e-14, "atol": 1e-16}
     else:
         fill_value = None
+        tolerance = None
 
     for kwargs in finalize_kwargs:
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
@@ -207,7 +209,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
-        assert_equal(actual, expected)
+        assert_equal(actual, expected, tolerance)
 
         if not has_dask:
             continue
@@ -216,10 +218,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 continue
             actual, *groups = groupby_reduce(array, *by, method=method, **flox_kwargs)
             for actual_group, expect in zip(groups, expected_groups):
-                assert_equal(actual_group, expect)
+                assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
-            assert_equal(actual, expected)
+            assert_equal(actual, expected, tolerance)
 
 
 @requires_dask
@@ -466,6 +468,11 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         fill_value = False
     else:
         fill_value = 123
+
+    if "var" in func or "std" in func:
+        tolerance = {"rtol": 1e-14, "atol": 1e-16}
+    else:
+        tolerance = None
     # tests against the numpy output to make sure dask compute matches
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     rng = np.random.default_rng(12345)
@@ -484,7 +491,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         kwargs.pop("engine")
         expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
         assert_equal(expected_npg, expected)
-    assert_equal(actual, expected)
+    assert_equal(actual, expected, tolerance)
 
 
 @pytest.mark.parametrize("chunks", [None, (2, 2, 3)])
@@ -1025,3 +1032,14 @@ def test_custom_aggregation_blockwise():
         method="blockwise",
     )
     assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_dtype(func, dtype, engine):
+    if "arg" in func or func in ["any", "all"]:
+        pytest.skip()
+    arr = np.ones((4, 12), dtype=dtype)
+    labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
+    actual, _ = groupby_reduce(arr, labels, func=func, dtype=np.float64)
+    assert actual.dtype == np.dtype("float64")
