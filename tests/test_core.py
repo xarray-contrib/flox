@@ -253,7 +253,7 @@ def test_groupby_reduce_count():
     array = np.array([0, 0, np.nan, np.nan, np.nan, 1, 1])
     labels = np.array(["a", "b", "b", "b", "c", "c", "c"])
     result, _ = groupby_reduce(array, labels, func="count")
-    assert_equal(result, [1, 1, 2])
+    assert_equal(result, np.array([1, 1, 2], dtype=np.int64))
 
 
 def test_func_is_aggregation():
@@ -754,7 +754,7 @@ def test_dtype_preservation(dtype, func, engine):
 @requires_dask
 @pytest.mark.parametrize("method", ["split-reduce", "map-reduce", "cohorts"])
 def test_cohorts(method):
-    repeats = np.array([4, 4, 12, 2, 3, 4], np.int32)
+    repeats = np.array([4, 4, 12, 2, 3, 4], np.int64)
     labels = np.repeat(np.arange(6), repeats).astype(np.int32)
     array = dask.array.from_array(labels, chunks=(4, 8, 4, 9, 4))
 
@@ -922,7 +922,7 @@ def test_factorize_values_outside_bins():
         fastpath=True,
     )
     actual = vals[0]
-    expected = np.array([[-1, -1], [-1, 0], [6, 12], [18, 24], [-1, -1]])
+    expected = np.array([[-1, -1], [-1, 0], [6, 12], [18, 24], [-1, -1]], np.int64)
     assert_equal(expected, actual)
 
 
@@ -939,7 +939,7 @@ def test_multiple_groupers() -> None:
         reindex=True,
         func="count",
     )
-    expected = np.eye(5, 5, dtype=int)
+    expected = np.eye(5, 5, dtype=np.int64)
     assert_equal(expected, actual)
 
 
@@ -967,7 +967,7 @@ def test_factorize_reindex_sorting_ints():
     kwargs = dict(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
         axis=-1,
-        expected_groups=(np.array([0, 1, 2, 3, 4, 5]),),
+        expected_groups=(np.array([0, 1, 2, 3, 4, 5], np.int64),),
     )
 
     expected = factorize_(**kwargs, reindex=True, sort=True)[0]
