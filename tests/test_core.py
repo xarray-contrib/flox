@@ -140,7 +140,9 @@ def test_groupby_reduce(
         split_out=split_out,
         engine=engine,
     )
-    g_dtype = by.dtype if expected_groups is None else np.asarray(expected_groups).dtype
+    # we use pd.Index(expected_groups).to_numpy() which is always int64
+    # for the values in this test
+    g_dtype = by.dtype if expected_groups is None else np.int64
 
     assert_equal(groups, np.array([0, 1, 2], g_dtype))
     assert_equal(expected_result, result)
