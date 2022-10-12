@@ -47,10 +47,6 @@ jobs:
       - name: Run Tests
         run: |
           pytest -n auto --cov=./ --cov-report=xml
-      - name: Version info
-        run: |
-          conda info -a
-          conda list
       - name: Upload code coverage to Codecov
         uses: codecov/codecov-action@v3.1.1
         with:
