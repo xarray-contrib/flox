@@ -125,11 +125,11 @@ def test_groupby_reduce(
         by = da.from_array(by, chunks=(3,) if by.ndim == 1 else (1, 3))
 
     if func == "mean" or func == "nanmean":
-        expected_result = np.array(expected, dtype=float)
+        expected_result = np.array(expected, dtype=np.float64)
     elif func == "sum":
         expected_result = np.array(expected, dtype=dtype)
     elif func == "count":
-        expected_result = np.array(expected, dtype=int)
+        expected_result = np.array(expected, dtype=np.int64)
 
     result, groups, = groupby_reduce(
         array,
@@ -141,7 +141,7 @@ def test_groupby_reduce(
         engine=engine,
     )
     # we use pd.Index(expected_groups).to_numpy() which is always int64
-    # for the values in this test
+    # for the values in this tests
     g_dtype = by.dtype if expected_groups is None else np.int64
 
     assert_equal(groups, np.array([0, 1, 2], g_dtype))
@@ -772,7 +772,7 @@ def test_cohorts_nd_by(func, method, axis, engine):
     o2 = dask.array.ones((2, 3), chunks=-1)
 
     array = dask.array.block([[o, 2 * o], [3 * o2, 4 * o2]])
-    by = array.compute().astype(int)
+    by = array.compute().astype(np.int64)
     by[0, 1] = 30
     by[2, 1] = 40
     by[0, 4] = 31
@@ -797,9 +797,9 @@ def test_cohorts_nd_by(func, method, axis, engine):
 
     actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
     if method == "map-reduce":
-        assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=by.dtype))
+        assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=np.int64))
     else:
-        assert_equal(groups, np.array([1, 30, 2, 31, 3, 40, 4], dtype=by.dtype))
+        assert_equal(groups, np.array([1, 30, 2, 31, 3, 40, 4], dtype=np.int64))
     reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
 
