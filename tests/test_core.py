@@ -79,7 +79,7 @@ def test_alignment_error():
 
 
 @pytest.mark.parametrize("dtype", (float, int))
-@pytest.mark.parametrize("chunk, split_out", [(False, 1), (True, 1), (True, 2), (True, 3)])
+@pytest.mark.parametrize("chunk", [False, True])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
 @pytest.mark.parametrize(
     "func, array, by, expected",
@@ -114,7 +114,6 @@ def test_groupby_reduce(
     expected: list[float],
     expected_groups: T_ExpectedGroupsOpt,
     chunk: bool,
-    split_out: int,
     dtype: np.typing.DTypeLike,
 ) -> None:
     array = array.astype(dtype)
@@ -137,7 +136,6 @@ def test_groupby_reduce(
         func=func,
         expected_groups=expected_groups,
         fill_value=123,
-        split_out=split_out,
         engine=engine,
     )
     g_dtype = by.dtype if expected_groups is None else np.asarray(expected_groups).dtype
