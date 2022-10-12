@@ -374,32 +374,32 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
 def test_numpy_reduce_axis_subset(engine):
     # TODO: add NaNs
     by = labels2d
-    array = np.ones_like(by)
+    array = np.ones_like(by, dtype=np.int64)
     kwargs = dict(func="count", engine=engine, fill_value=0)
     result, _ = groupby_reduce(array, by, **kwargs, axis=1)
-    assert_equal(result, [[2, 3], [2, 3]])
+    assert_equal(result, np.array([[2, 3], [2, 3]], dtype=np.int64))
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
     result, _ = groupby_reduce(array, by, **kwargs, axis=1)
-    subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]])
+    subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]], dtype=np.int64)
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by, **kwargs, axis=2)
-    subarr = np.array([[2, 3], [2, 3]])
+    subarr = np.array([[2, 3], [2, 3]], dtype=np.int64)
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by, **kwargs, axis=(1, 2))
-    expected = np.array([[4, 6], [4, 6], [4, 6]])
+    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.int64)
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by, **kwargs, axis=(2, 1))
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by[0, ...], **kwargs, axis=(1, 2))
-    expected = np.array([[4, 6], [4, 6], [4, 6]])
+    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.int64)
     assert_equal(result, expected)
 
 
@@ -951,16 +951,16 @@ def test_factorize_reindex_sorting_strings():
     )
 
     expected = factorize_(**kwargs, reindex=True, sort=True)[0]
-    assert_equal(expected, [0, 1, 4, 2])
+    assert_equal(expected, np.array([0, 1, 4, 2], dtype=np.int64))
 
     expected = factorize_(**kwargs, reindex=True, sort=False)[0]
-    assert_equal(expected, [0, 3, 4, 1])
+    assert_equal(expected, np.array([0, 3, 4, 1], dtype=np.int64))
 
     expected = factorize_(**kwargs, reindex=False, sort=False)[0]
-    assert_equal(expected, [0, 1, 2, 3])
+    assert_equal(expected, np.array([0, 1, 2, 3], dtype=np.int64))
 
     expected = factorize_(**kwargs, reindex=False, sort=True)[0]
-    assert_equal(expected, [0, 1, 3, 2])
+    assert_equal(expected, np.array([0, 1, 3, 2], dtype=np.int64))
 
 
 def test_factorize_reindex_sorting_ints():
