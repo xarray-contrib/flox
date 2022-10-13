@@ -106,7 +106,7 @@ def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
 def _get_optimal_chunks_for_groups(chunks, labels):
     chunkidx = np.cumsum(chunks) - 1
     # what are the groups at chunk boundaries
-    labels_at_chunk_bounds = np.unique(labels[chunkidx])
+    labels_at_chunk_bounds = _unique(labels[chunkidx])
     # what's the last index of all groups
     last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
     # what's the last index of groups at the chunk boundaries.
@@ -134,6 +134,12 @@ def _get_optimal_chunks_for_groups(chunks, labels):
 
     assert sum(newchunks) == sum(chunks)
     return tuple(newchunks)
+
+
+def _unique(a):
+    """Much faster to use pandas unique and sort the results.
+    np.unique sorts before uniquifying and is slow."""
+    return np.sort(pd.unique(a))
 
 
 @memoize
@@ -892,7 +898,7 @@ def _grouped_combine(
         # when there's only a single axis of reduction, we can just concatenate later,
         # reindexing is unnecessary
         # I bet we can minimize the amount of reindexing for mD reductions too, but it's complicated
-        unique_groups = np.unique(tuple(flatten(deepmap(listify_groups, x_chunk))))
+        unique_groups = _unique(tuple(flatten(deepmap(listify_groups, x_chunk))))
         unique_groups = unique_groups[~isnull(unique_groups)]
         if len(unique_groups) == 0:
             unique_groups = [np.nan]
@@ -1065,7 +1071,7 @@ def subset_to_blocks(
     unraveled = np.unravel_index(flatblocks, blkshape)
     normalized: list[Union[int, np.ndarray, slice]] = []
     for ax, idx in enumerate(unraveled):
-        i = np.unique(idx).squeeze()
+        i = _unique(idx).squeeze()
         if i.ndim == 0:
             normalized.append(i.item())
         else:
@@ -1310,7 +1316,7 @@ def dask_groupby_agg(
         # along the reduced axis
         slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
         if expected_groups is None:
-            groups_in_block = tuple(np.unique(by_input[slc]) for slc in slices)
+            groups_in_block = tuple(_unique(by_input[slc]) for slc in slices)
         else:
             # For cohorts, we could be indexing a block with groups that
             # are not in the cohort (usually for nD `by`)
