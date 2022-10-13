@@ -186,14 +186,11 @@ def find_group_cohorts(labels, chunks, merge: bool = True):
         blocks[idx] = np.full(tuple(block.shape[ax] for ax in axis), idx)
     which_chunk = np.block(blocks.reshape(shape).tolist()).reshape(-1)
 
-    # We always drop NaN; np.unique also considers every NaN to be different so
-    # it's really important we get rid of them.
     raveled = labels.reshape(-1)
-    unique_labels = np.unique(raveled[~isnull(raveled)])
     # these are chunks where a label is present
-    label_chunks = {lab: tuple(np.unique(which_chunk[raveled == lab])) for lab in unique_labels}
+    label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
     # These invert the label_chunks mapping so we know which labels occur together.
-    chunks_cohorts = tlz.groupby(label_chunks.get, label_chunks.keys())
+    chunks_cohorts = tlz.groupby(lambda x: tuple(label_chunks.get(x)), label_chunks.keys())
 
     if merge:
         # First sort by number of chunks occupied by cohort
