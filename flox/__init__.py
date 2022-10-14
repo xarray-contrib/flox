@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # flake8: noqa
 """Top-level module for flox ."""
+from . import cache
 from .aggregations import Aggregation  # noqa
 from .core import groupby_reduce, rechunk_for_blockwise, rechunk_for_cohorts  # noqa
 
