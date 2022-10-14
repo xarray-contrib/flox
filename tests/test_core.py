@@ -1048,6 +1048,7 @@ def test_subset_blocks():
     assert subset.blocks.shape == (len(blockid),)
 
 
+@requires_dask
 @pytest.mark.parametrize(
     "flatblocks, expected",
     (
@@ -1071,6 +1072,7 @@ def test_normalize_block_indexing(flatblocks, expected):
     assert noiter == expected[1]
 
 
+@requires_dask
 def test_subset_block_fastpath():
     # full slice pass through
     array = dask.array.ones((5,), chunks=(1,))
