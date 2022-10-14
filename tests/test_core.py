@@ -1073,18 +1073,23 @@ def test_normalize_block_indexing(flatblocks, expected):
 
 
 @requires_dask
-def test_subset_block_fastpath():
+def test_subset_block_minimizes_layers():
     # full slice pass through
     array = dask.array.ones((5,), chunks=(1,))
     subset = subset_to_blocks(array, np.arange(5))
     assert subset.name == array.name
 
+    # another full slice pass through
     array = dask.array.ones((5, 5), chunks=1)
     subset = subset_to_blocks(array, np.arange(25))
     assert subset.name == array.name
 
     # two slices become one block layer
     subset = subset_to_blocks(array, np.arange(10))
+    assert len(subset.dask.layers) == 2
+
+    # should become two slices and one block layer
+    subset = subset_to_blocks(array, np.arange(8))
     assert len(subset.dask.layers) == 2
 
     # no overlap in range along the two dimensions

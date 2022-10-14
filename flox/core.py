@@ -1047,6 +1047,15 @@ def _reduce_blockwise(
 
 
 def _normalize_indexes(array, flatblocks, blkshape):
+    """
+    .blocks accessor can only accept one iterable at a time,
+    but can handle multiple slices.
+    To minimize tasks and layers, we normalize to produce slices
+    along as many axes as possible, and then repeatedly apply
+    any remaining iterables in a loop.
+
+    TODO: move this upstream
+    """
     unraveled = np.unravel_index(flatblocks, blkshape)
 
     normalized: list[Union[int, np.ndarray, slice]] = []
