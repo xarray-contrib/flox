@@ -1069,17 +1069,21 @@ def test_normalize_block_indexing_1d(flatblocks, expected):
 
 
 @requires_dask
+@pytest.mark.xfail
 @pytest.mark.parametrize(
     "flatblocks, expected",
     (
         ((0, 1, 2, 3, 4), [{}, (slice(None),)]),
         ((1, 2, 3), [{}, (slice(1, 4),)]),
-        ((1, 3), [{-1: (1, 3)}, (slice(None),)]),
+        # gets optimized
+        ((1, 3), [{}, ([1, 3],)]),
+        # gets optimized
+        ((0, 1, 3), [{}, ([0, 1, 3],)]),
     ),
 )
-def test_normalize_block_indexing(flatblocks, expected):
-    ndim = 1
+def test_normalize_block_indexing_2d(flatblocks, expected):
     nblocks = 5
+    ndim = 2
     array = dask.array.ones((nblocks,) * ndim, chunks=(1,) * ndim)
     alliter, noiter = _normalize_indexes(array, flatblocks, array.blocks.shape)
 
