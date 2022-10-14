@@ -21,6 +21,14 @@ class Cohorts:
     def time_graph_construct(self):
         flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis, method="cohorts")
 
+    def track_num_tasks(self):
+        result = flox.groupby_reduce(
+            self.array, self.by, func="sum", axis=self.axis, method="cohorts"
+        )[0]
+        return len(result.dask.to_dict())
+
+    track_num_tasks.unit = "tasks"
+
 
 class NWMMidwest(Cohorts):
     """2D labels, ireregular w.r.t chunk size.
