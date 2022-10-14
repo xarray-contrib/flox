@@ -45,16 +45,36 @@ class NWMMidwest(Cohorts):
         self.axis = (-2, -1)
 
 
-class ERA5(Cohorts):
+class ERA5Dataset:
     """ERA5"""
 
-    def setup(self, *args, **kwargs):
-        time = pd.Series(pd.date_range("2016-01-01", "2018-12-31 23:59", freq="H"))
-
-        self.by = time.dt.dayofyear.values
+    def __init__(self, *args, **kwargs):
+        self.time = pd.Series(pd.date_range("2016-01-01", "2018-12-31 23:59", freq="H"))
         self.axis = (-1,)
+        self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 48))
 
-        array = dask.array.random.random((721, 1440, len(time)), chunks=(-1, -1, 48))
+    def rechunk(self):
         self.array = flox.core.rechunk_for_cohorts(
-            array, -1, self.by, force_new_chunk_at=[1], chunksize=48, ignore_old_chunks=True
+            self.array, -1, self.by, force_new_chunk_at=[1], chunksize=48, ignore_old_chunks=True
         )
+
+
+class ERA5DayOfYear(ERA5Dataset, Cohorts):
+    def setup(self, *args, **kwargs):
+        super().__init__()
+        self.by = self.time.dt.dayofyear.values
+        super().rechunk()
+
+
+class Era5MonthHour(ERA5Dataset, Cohorts):
+    def setup(self, *args, **kwargs):
+        super().__init__()
+        by = (self.time.dt.month.values, self.time.dt.hour.values)
+        ret = flox.core._factorize_multiple(
+            by,
+            expected_groups=(pd.Index(np.arange(1, 13)), pd.Index(np.arange(1, 25))),
+            by_is_dask=False,
+            reindex=False,
+        )
+        self.by = ret[0][0]
+        # self.rechunk()
