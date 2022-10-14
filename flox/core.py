@@ -288,7 +288,7 @@ def rechunk_for_cohorts(
     divisions = []
     counter = 1
     for idx, lab in enumerate(labels):
-        if lab in force_new_chunk_at:
+        if lab in force_new_chunk_at or idx == 0:
             divisions.append(idx)
             counter = 1
             continue
@@ -305,6 +305,7 @@ def rechunk_for_cohorts(
             divisions.append(idx)
             counter = 1
             continue
+
         counter += 1
 
     divisions.append(len(labels))
@@ -313,6 +314,9 @@ def rechunk_for_cohorts(
         print(labels_at_breaks[:40])
 
     newchunks = tuple(np.diff(divisions))
+    if debug:
+        print(divisions[:10], newchunks[:10])
+        print(divisions[-10:], newchunks[-10:])
     assert sum(newchunks) == len(labels)
 
     if newchunks == array.chunks[axis]:
