@@ -1069,14 +1069,21 @@ def _normalize_indexes(array, flatblocks, blkshape):
             elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
                 normalized.append(slice(i[0], i[-1] + 1))
             else:
-                normalized.append(i)
+                normalized.append(list(i))
     full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
 
     # has no iterables
-    noiter = tuple(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
+    noiter = list(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
     # has all iterables
     alliter = {ax: i for ax, i in enumerate(full_normalized) if hasattr(i, "__len__")}
-    return alliter, noiter
+
+    # merge in one iterable with noiter to reduce blocks layer by 1.
+    for k, v in alliter.items():
+        if noiter[k] == slice(None):
+            noiter[k] = alliter.pop(k)
+            break
+
+    return alliter, tuple(noiter)
 
 
 def subset_to_blocks(

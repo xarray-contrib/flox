@@ -1093,8 +1093,27 @@ def test_subset_block_minimizes_layers():
     assert len(subset.dask.layers) == 2
 
     # no overlap in range along the two dimensions
-    # Add two new layers
+    # but should be optimized to a single .blocks call
+    # same column
+    subset = subset_to_blocks(array, [0, 10])
+    assert len(subset.dask.layers) == 2
+
+    # different rows and columns
+    # but optimization to slice possible
     subset = subset_to_blocks(array, [0, 7])
+    assert len(subset.dask.layers) == 2
+
+    subset = subset_to_blocks(array, [0, 7, 9])
+    assert len(subset.dask.layers) == 2
+
+    subset = subset_to_blocks(array, [0, 7, 8, 9])
+    assert len(subset.dask.layers) == 2
+
+    subset = subset_to_blocks(array, [0, 6, 12, 14])
+    assert len(subset.dask.layers) == 2
+
+    # no optimizations possible
+    subset = subset_to_blocks(array, [0, 12, 14, 19])
     assert len(subset.dask.layers) == 3
 
     # one slice, one iterable
