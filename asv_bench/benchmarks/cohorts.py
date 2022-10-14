@@ -63,10 +63,15 @@ class ERA5DayOfYear(ERA5Dataset, Cohorts):
     def setup(self, *args, **kwargs):
         super().__init__()
         self.by = self.time.dt.dayofyear.values
+
+
+class ERA5DayOfYearRechunked(ERA5DayOfYear, Cohorts):
+    def setup(self, *args, **kwargs):
+        super().setup()
         super().rechunk()
 
 
-class Era5MonthHour(ERA5Dataset, Cohorts):
+class ERA5MonthHour(ERA5Dataset, Cohorts):
     def setup(self, *args, **kwargs):
         super().__init__()
         by = (self.time.dt.month.values, self.time.dt.hour.values)
@@ -76,5 +81,11 @@ class Era5MonthHour(ERA5Dataset, Cohorts):
             by_is_dask=False,
             reindex=False,
         )
-        self.by = ret[0][0]
-        # self.rechunk()
+        # Add one so the rechunk code is simpler and makes sense
+        self.by = ret[0][0] + 1
+
+
+class ERA5MonthHourRechunked(ERA5MonthHour, Cohorts):
+    def setup(self, *args, **kwargs):
+        super().setup()
+        super().rechunk()
