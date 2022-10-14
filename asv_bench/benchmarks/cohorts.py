@@ -13,6 +13,8 @@ class Cohorts:
 
     def time_find_group_cohorts(self):
         flox.core.find_group_cohorts(self.by, self.array.chunks)
+        # The cache clear fails dependably in CI
+        # Not sure why
         try:
             flox.cache.cache.clear()
         except AttributeError:
