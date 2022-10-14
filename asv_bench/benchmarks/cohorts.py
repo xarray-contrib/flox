@@ -13,7 +13,10 @@ class Cohorts:
 
     def time_find_group_cohorts(self):
         flox.core.find_group_cohorts(self.by, self.array.chunks)
-        flox.cache.cache.clear()
+        try:
+            flox.cache.cache.clear()
+        except AttributeError:
+            pass
 
     def time_graph_construct(self):
         flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis, method="cohorts")
