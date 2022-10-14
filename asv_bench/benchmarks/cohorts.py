@@ -29,6 +29,13 @@ class Cohorts:
         )[0]
         return len(result.dask.to_dict())
 
+    def track_num_tasks_optimized(self):
+        result = flox.groupby_reduce(
+            self.array, self.by, func="sum", axis=self.axis, method="cohorts"
+        )[0]
+        (opt,) = dask.optimize(result)
+        return len(opt.dask.to_dict())
+
     track_num_tasks.unit = "tasks"
 
 
