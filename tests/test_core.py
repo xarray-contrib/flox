@@ -1052,6 +1052,26 @@ def test_subset_blocks():
 @pytest.mark.parametrize(
     "flatblocks, expected",
     (
+        ((0, 1, 2, 3, 4), (slice(None),)),
+        ((1, 2, 3), (slice(1, 4),)),
+        # gets optimized
+        ((1, 3), ([1, 3],)),
+        # gets optimized
+        ((0, 1, 3), ([0, 1, 3],)),
+    ),
+)
+def test_normalize_block_indexing_1d(flatblocks, expected):
+    nblocks = 5
+    array = dask.array.ones((nblocks,), chunks=(1,))
+    alliter, noiter = _normalize_indexes(array, flatblocks, array.blocks.shape)
+    assert alliter == {}
+    assert noiter == expected
+
+
+@requires_dask
+@pytest.mark.parametrize(
+    "flatblocks, expected",
+    (
         ((0, 1, 2, 3, 4), [{}, (slice(None),)]),
         ((1, 2, 3), [{}, (slice(1, 4),)]),
         ((1, 3), [{-1: (1, 3)}, (slice(None),)]),
