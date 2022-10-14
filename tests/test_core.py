@@ -12,11 +12,13 @@ from flox.aggregations import Aggregation
 from flox.core import (
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
+    _normalize_indexes,
     factorize_,
     find_group_cohorts,
     groupby_reduce,
     rechunk_for_cohorts,
     reindex_,
+    subset_to_blocks,
 )
 
 from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
@@ -1035,3 +1037,33 @@ def test_dtype(func, dtype, engine):
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
     actual, _ = groupby_reduce(arr, labels, func=func, dtype=np.float64)
     assert actual.dtype == np.dtype("float64")
+
+
+@requires_dask
+def test_subset_blocks():
+    array = dask.array.random.random((120,), chunks=(4,))
+
+    blockid = (0, 3, 6, 9, 12, 15, 18, 21, 24, 27)
+    subset = subset_to_blocks(array, blockid)
+    assert subset.blocks.shape == (len(blockid),)
+
+
+@pytest.mark.parametrize(
+    "flatblocks, expected",
+    (
+        ((0, 1, 2, 3, 4), [{}, (slice(None),)]),
+        ((1, 2, 3), [{}, (slice(1, 4),)]),
+        ((1, 3), [{-1: (1, 3)}, tuple()]),
+    ),
+)
+def test_normalize_block_indexing(flatblocks, expected):
+    ndim = 1
+    nblocks = 5
+    array = dask.array.ones((nblocks,) * ndim, chunks=(1,) * ndim)
+    alliter, noiter = _normalize_indexes(array, flatblocks, array.blocks.shape)
+
+    if expected[0]:
+        expected[0] = {ndim - 1: v for k, v in expected[0].items() if k == -1}
+
+    assert alliter == expected[0]
+    assert noiter == expected[1]

@@ -1046,6 +1046,30 @@ def _reduce_blockwise(
     return result
 
 
+def _normalize_indexes(array, flatblocks, blkshape):
+    unraveled = np.unravel_index(flatblocks, blkshape)
+
+    normalized: list[Union[int, np.ndarray, slice]] = []
+    for ax, idx in enumerate(unraveled):
+        i = _unique(idx).squeeze()
+        if i.ndim == 0:
+            normalized.append(i.item())
+        else:
+            if np.array_equal(i, np.arange(blkshape[ax])):
+                normalized.append(slice(None))
+            elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
+                normalized.append(slice(i[0], i[-1] + 1))
+            else:
+                normalized.append(i)
+    full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
+
+    # has no iterables
+    noiter = tuple(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
+    # has all iterables
+    alliter = {ax: i for ax, i in enumerate(full_normalized) if hasattr(i, "__len__")}
+    return alliter, noiter
+
+
 def subset_to_blocks(
     array: DaskArray, flatblocks: Sequence[int], blkshape: tuple[int] | None = None
 ) -> DaskArray:
@@ -1065,33 +1089,13 @@ def subset_to_blocks(
     if blkshape is None:
         blkshape = array.blocks.shape
 
-    unraveled = np.unravel_index(flatblocks, blkshape)
-    normalized: list[Union[int, np.ndarray, slice]] = []
-    for ax, idx in enumerate(unraveled):
-        i = _unique(idx).squeeze()
-        if i.ndim == 0:
-            normalized.append(i.item())
-        else:
-            if np.array_equal(i, np.arange(blkshape[ax])):
-                normalized.append(slice(None))
-            elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
-                normalized.append(slice(i[0], i[-1] + 1))
-            else:
-                normalized.append(i)
-    full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
-
-    # has no iterables
-    noiter = tuple(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
-    # has all iterables
-    alliter = {
-        ax: i if hasattr(i, "__len__") else slice(None) for ax, i in enumerate(full_normalized)
-    }
+    alliter, noiter = _normalize_indexes(array, flatblocks, blkshape)
 
     # apply everything but the iterables
-    if all(i == slice(None) for i in noiter):
-        return array
-
-    subset = array.blocks[noiter]
+    if not all(i == slice(None) for i in noiter):
+        subset = array.blocks[noiter]
+    else:
+        subset = array
 
     for ax, inds in alliter.items():
         if isinstance(inds, slice):
