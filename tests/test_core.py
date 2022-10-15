@@ -1069,16 +1069,19 @@ def test_normalize_block_indexing_1d(flatblocks, expected):
 
 
 @requires_dask
-@pytest.mark.xfail
 @pytest.mark.parametrize(
     "flatblocks, expected",
     (
-        ((0, 1, 2, 3, 4), [{}, (slice(None),)]),
-        ((1, 2, 3), [{}, (slice(1, 4),)]),
+        ((0, 1, 2, 3, 4), [{}, (0, slice(None))]),
+        ((1, 2, 3), [{}, (0, slice(1, 4))]),
         # gets optimized
-        ((1, 3), [{}, ([1, 3],)]),
+        ((1, 3), [{}, (0, [1, 3])]),
         # gets optimized
-        ((0, 1, 3), [{}, ([0, 1, 3],)]),
+        ((0, 1, 3), [{}, (0, [0, 1, 3])]),
+        # gets optimized
+        (tuple(range(10)), [{}, (slice(0, 2), slice(None))]),
+        ((0, 1, 3, 5, 6, 8), [{}, (slice(0, 2), [0, 1, 3])]),
+        ((0, 3, 4, 5, 6, 8, 24), [{1: [0, 1, 3, 4]}, ([0, 1, 4], slice(None))]),
     ),
 )
 def test_normalize_block_indexing_2d(flatblocks, expected):
@@ -1088,7 +1091,7 @@ def test_normalize_block_indexing_2d(flatblocks, expected):
     alliter, noiter = _normalize_indexes(array, flatblocks, array.blocks.shape)
 
     if expected[0]:
-        expected[0] = {ndim - 1: v for k, v in expected[0].items() if k == -1}
+        expected[0] = {(ndim - 1 if k == -1 else k): v for k, v in expected[0].items()}
 
     assert alliter.keys() == expected[0].keys()
     for actual, expect in zip(alliter.values(), expected[0].values()):
