@@ -6,6 +6,7 @@ import math
 import operator
 from collections import namedtuple
 from functools import partial, reduce
+from numbers import Integral
 from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Mapping, Sequence, Union
 
 import numpy as np
@@ -288,7 +289,7 @@ def rechunk_for_cohorts(
     divisions = []
     counter = 1
     for idx, lab in enumerate(labels):
-        if lab in force_new_chunk_at:
+        if lab in force_new_chunk_at or idx == 0:
             divisions.append(idx)
             counter = 1
             continue
@@ -305,6 +306,7 @@ def rechunk_for_cohorts(
             divisions.append(idx)
             counter = 1
             continue
+
         counter += 1
 
     divisions.append(len(labels))
@@ -313,6 +315,9 @@ def rechunk_for_cohorts(
         print(labels_at_breaks[:40])
 
     newchunks = tuple(np.diff(divisions))
+    if debug:
+        print(divisions[:10], newchunks[:10])
+        print(divisions[-10:], newchunks[-10:])
     assert sum(newchunks) == len(labels)
 
     if newchunks == array.chunks[axis]:
@@ -1046,6 +1051,44 @@ def _reduce_blockwise(
     return result
 
 
+def _normalize_indexes(array, flatblocks, blkshape):
+    """
+    .blocks accessor can only accept one iterable at a time,
+    but can handle multiple slices.
+    To minimize tasks and layers, we normalize to produce slices
+    along as many axes as possible, and then repeatedly apply
+    any remaining iterables in a loop.
+
+    TODO: move this upstream
+    """
+    unraveled = np.unravel_index(flatblocks, blkshape)
+
+    normalized: list[Union[int, np.ndarray, slice]] = []
+    for ax, idx in enumerate(unraveled):
+        i = _unique(idx).squeeze()
+        if i.ndim == 0:
+            normalized.append(i.item())
+        else:
+            if np.array_equal(i, np.arange(blkshape[ax])):
+                normalized.append(slice(None))
+            elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
+                normalized.append(slice(i[0], i[-1] + 1))
+            else:
+                normalized.append(list(i))
+    full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
+
+    # has no iterables
+    noiter = list(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
+    # has all iterables
+    alliter = {ax: i for ax, i in enumerate(full_normalized) if hasattr(i, "__len__")}
+
+    mesh = dict(zip(alliter.keys(), np.ix_(*alliter.values())))
+
+    full_tuple = tuple(i if ax not in mesh else mesh[ax] for ax, i in enumerate(noiter))
+
+    return full_tuple
+
+
 def subset_to_blocks(
     array: DaskArray, flatblocks: Sequence[int], blkshape: tuple[int] | None = None
 ) -> DaskArray:
@@ -1062,45 +1105,34 @@ def subset_to_blocks(
     -------
     dask.array
     """
+    import dask.array
+    from dask.array.slicing import normalize_index
+    from dask.base import tokenize
+    from dask.highlevelgraph import HighLevelGraph
+
     if blkshape is None:
         blkshape = array.blocks.shape
 
-    unraveled = np.unravel_index(flatblocks, blkshape)
-    normalized: list[Union[int, np.ndarray, slice]] = []
-    for ax, idx in enumerate(unraveled):
-        i = _unique(idx).squeeze()
-        if i.ndim == 0:
-            normalized.append(i.item())
-        else:
-            if np.array_equal(i, np.arange(blkshape[ax])):
-                normalized.append(slice(None))
-            elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
-                normalized.append(slice(i[0], i[-1] + 1))
-            else:
-                normalized.append(i)
-    full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
+    index = _normalize_indexes(array, flatblocks, blkshape)
 
-    # has no iterables
-    noiter = tuple(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
-    # has all iterables
-    alliter = {
-        ax: i if hasattr(i, "__len__") else slice(None) for ax, i in enumerate(full_normalized)
-    }
-
-    # apply everything but the iterables
-    if all(i == slice(None) for i in noiter):
+    if all(not isinstance(i, np.ndarray) and i == slice(None) for i in index):
         return array
 
-    subset = array.blocks[noiter]
+    # These rest is copied from dask.array.core.py with slight modifications
+    index = normalize_index(index, array.numblocks)
+    index = tuple(slice(k, k + 1) if isinstance(k, Integral) else k for k in index)
 
-    for ax, inds in alliter.items():
-        if isinstance(inds, slice):
-            continue
-        idxr = [slice(None, None)] * array.ndim
-        idxr[ax] = inds
-        subset = subset.blocks[tuple(idxr)]
+    name = "blocks-" + tokenize(array, index)
+    new_keys = array._key_array[index]
 
-    return subset
+    squeezed = tuple(np.squeeze(i) if isinstance(i, np.ndarray) else i for i in index)
+    chunks = tuple(tuple(np.array(c)[i].tolist()) for c, i in zip(array.chunks, squeezed))
+
+    keys = itertools.product(*(range(len(c)) for c in chunks))
+    layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
+
+    return dask.array.Array(graph, name, chunks, meta=array)
 
 
 def _extract_unknown_groups(reduced, group_chunks, dtype) -> tuple[DaskArray]:
