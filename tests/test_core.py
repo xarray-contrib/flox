@@ -1061,9 +1061,7 @@ def test_subset_blocks():
     (
         ((0, 1, 2, 3, 4), (slice(None),)),
         ((1, 2, 3), (slice(1, 4),)),
-        # gets optimized
         ((1, 3), ([1, 3],)),
-        # gets optimized
         ((0, 1, 3), ([0, 1, 3],)),
     ),
 )
