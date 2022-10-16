@@ -36,7 +36,15 @@ class Cohorts:
         (opt,) = dask.optimize(result)
         return len(opt.dask.to_dict())
 
+    def track_num_layers(self):
+        result = flox.groupby_reduce(
+            self.array, self.by, func="sum", axis=self.axis, method="cohorts"
+        )[0]
+        return len(result.dask.layers)
+
     track_num_tasks.unit = "tasks"
+    track_num_tasks_optimized.unit = "tasks"
+    track_num_layers.unit = "layers"
 
 
 class NWMMidwest(Cohorts):
