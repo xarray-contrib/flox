@@ -6,7 +6,7 @@ import math
 import operator
 from collections import namedtuple
 from functools import partial, reduce
-from numbers import Number
+from numbers import Integral
 from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Mapping, Sequence, Union
 
 import numpy as np
@@ -1119,7 +1119,7 @@ def subset_to_blocks(
         return array
 
     index = normalize_index(index, array.numblocks)
-    index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
+    index = tuple(slice(k, k + 1) if isinstance(k, Integral) else k for k in index)
 
     name = "blocks-" + tokenize(array, index)
     new_keys = array._key_array[index]
