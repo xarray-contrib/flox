@@ -115,6 +115,11 @@ class PerfectMonthly(Cohorts):
         self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 4))
         self.by = self.time.dt.month.values
 
+    def rechunk(self):
+        self.array = flox.core.rechunk_for_cohorts(
+            self.array, -1, self.by, force_new_chunk_at=[1], chunksize=4, ignore_old_chunks=True
+        )
+
 
 class PerfectMonthlyRechunked(PerfectMonthly):
     def setup(self, *args, **kwargs):
