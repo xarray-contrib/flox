@@ -1086,7 +1086,7 @@ def _normalize_indexes(array, flatblocks, blkshape):
 
     full_tuple = tuple(i if ax not in mesh else mesh[ax] for ax, i in enumerate(noiter))
 
-    return full_tuple, alliter, tuple(noiter)
+    return full_tuple
 
 
 def subset_to_blocks(
@@ -1113,26 +1113,22 @@ def subset_to_blocks(
     if blkshape is None:
         blkshape = array.blocks.shape
 
-    index, alliter, noiter = _normalize_indexes(array, flatblocks, blkshape)
+    index = _normalize_indexes(array, flatblocks, blkshape)
 
-    if all(i == slice(None) for i in noiter) and not alliter:
+    if all(not isinstance(i, np.ndarray) and i == slice(None) for i in index):
         return array
 
     index = normalize_index(index, array.numblocks)
     index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
 
     name = "blocks-" + tokenize(array, index)
-
-    squeezed = tuple(np.squeeze(i) if isinstance(i, np.ndarray) else i for i in index)
-
     new_keys = array._key_array[index]
 
+    squeezed = tuple(np.squeeze(i) if isinstance(i, np.ndarray) else i for i in index)
     chunks = tuple(tuple(np.array(c)[i].tolist()) for c, i in zip(array.chunks, squeezed))
 
     keys = itertools.product(*(range(len(c)) for c in chunks))
-
     layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
-
     graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
 
     return dask.array.Array(graph, name, chunks, meta=array)

@@ -21,7 +21,14 @@ from flox.core import (
     subset_to_blocks,
 )
 
-from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
+from . import (
+    assert_equal,
+    assert_equal_tuple,
+    engine,
+    has_dask,
+    raise_if_dask_computes,
+    requires_dask,
+)
 
 labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
 nan_labels = labels.astype(float)  # copy
@@ -1063,86 +1070,60 @@ def test_subset_blocks():
 def test_normalize_block_indexing_1d(flatblocks, expected):
     nblocks = 5
     array = dask.array.ones((nblocks,), chunks=(1,))
-    alliter, noiter = _normalize_indexes(array, flatblocks, array.blocks.shape)
-    assert alliter == {}
-    assert noiter == expected
+    expected = tuple(np.array(i) if isinstance(i, list) else i for i in expected)
+    actual = _normalize_indexes(array, flatblocks, array.blocks.shape)
+    assert_equal_tuple(expected, actual)
 
 
 @requires_dask
 @pytest.mark.parametrize(
     "flatblocks, expected",
     (
-        ((0, 1, 2, 3, 4), [{}, (0, slice(None))]),
-        ((1, 2, 3), [{}, (0, slice(1, 4))]),
-        # gets optimized
-        ((1, 3), [{}, (0, [1, 3])]),
-        # gets optimized
-        ((0, 1, 3), [{}, (0, [0, 1, 3])]),
-        # gets optimized
-        (tuple(range(10)), [{}, (slice(0, 2), slice(None))]),
-        ((0, 1, 3, 5, 6, 8), [{}, (slice(0, 2), [0, 1, 3])]),
-        ((0, 3, 4, 5, 6, 8, 24), [{1: [0, 1, 3, 4]}, ([0, 1, 4], slice(None))]),
+        ((0, 1, 2, 3, 4), (0, slice(None))),
+        ((1, 2, 3), (0, slice(1, 4))),
+        ((1, 3), (0, [1, 3])),
+        ((0, 1, 3), (0, [0, 1, 3])),
+        (tuple(range(10)), (slice(0, 2), slice(None))),
+        ((0, 1, 3, 5, 6, 8), (slice(0, 2), [0, 1, 3])),
+        ((0, 3, 4, 5, 6, 8, 24), np.ix_([0, 1, 4], [0, 1, 3, 4])),
     ),
 )
 def test_normalize_block_indexing_2d(flatblocks, expected):
     nblocks = 5
     ndim = 2
     array = dask.array.ones((nblocks,) * ndim, chunks=(1,) * ndim)
-    alliter, noiter = _normalize_indexes(array, flatblocks, array.blocks.shape)
-
-    if expected[0]:
-        expected[0] = {(ndim - 1 if k == -1 else k): v for k, v in expected[0].items()}
-
-    assert alliter.keys() == expected[0].keys()
-    for actual, expect in zip(alliter.values(), expected[0].values()):
-        np.testing.assert_array_equal(actual, expect)
-    assert noiter == expected[1]
+    expected = tuple(np.array(i) if isinstance(i, list) else i for i in expected)
+    actual = _normalize_indexes(array, flatblocks, array.blocks.shape)
+    assert_equal_tuple(expected, actual)
 
 
 @requires_dask
-def test_subset_block_minimizes_layers():
+def test_subset_block_passthrough():
     # full slice pass through
     array = dask.array.ones((5,), chunks=(1,))
     subset = subset_to_blocks(array, np.arange(5))
     assert subset.name == array.name
 
-    # another full slice pass through
     array = dask.array.ones((5, 5), chunks=1)
     subset = subset_to_blocks(array, np.arange(25))
     assert subset.name == array.name
 
-    # two slices become one block layer
-    subset = subset_to_blocks(array, np.arange(10))
-    assert len(subset.dask.layers) == 2
 
-    # should become two slices and one block layer
-    subset = subset_to_blocks(array, np.arange(8))
+@requires_dask
+@pytest.mark.parametrize(
+    "flatblocks, expectidx",
+    [
+        (np.arange(10), (slice(2), slice(None))),
+        (np.arange(8), (slice(2), slice(None))),
+        ([0, 10], ([0, 2], slice(1))),
+        ([0, 7], (slice(2), [0, 2])),
+        ([0, 7, 9], (slice(2), [0, 2, 4])),
+        ([0, 6, 12, 14], (slice(3), [0, 1, 2, 4])),
+        ([0, 12, 14, 19], np.ix_([0, 2, 3], [0, 2, 4])),
+    ],
+)
+def test_subset_block_2d(flatblocks, expectidx):
+    array = dask.array.from_array(np.arange(25).reshape((5, 5)), chunks=1)
+    subset = subset_to_blocks(array, flatblocks)
     assert len(subset.dask.layers) == 2
-
-    # no overlap in range along the two dimensions
-    # but should be optimized to a single .blocks call
-    # same column
-    subset = subset_to_blocks(array, [0, 10])
-    assert len(subset.dask.layers) == 2
-
-    # different rows and columns
-    # but optimization to slice possible
-    subset = subset_to_blocks(array, [0, 7])
-    assert len(subset.dask.layers) == 2
-
-    subset = subset_to_blocks(array, [0, 7, 9])
-    assert len(subset.dask.layers) == 2
-
-    subset = subset_to_blocks(array, [0, 7, 8, 9])
-    assert len(subset.dask.layers) == 2
-
-    subset = subset_to_blocks(array, [0, 6, 12, 14])
-    assert len(subset.dask.layers) == 2
-
-    # no optimizations possible
-    subset = subset_to_blocks(array, [0, 12, 14, 19])
-    assert len(subset.dask.layers) == 2
-
-    # one slice, one iterable
-    subset = subset_to_blocks(array, np.arange(7))
-    assert len(subset.dask.layers) == 2
+    assert_equal(subset, array.compute()[expectidx])
