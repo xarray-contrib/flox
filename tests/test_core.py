@@ -1141,7 +1141,7 @@ def test_subset_block_minimizes_layers():
 
     # no optimizations possible
     subset = subset_to_blocks(array, [0, 12, 14, 19])
-    assert len(subset.dask.layers) == 3
+    assert len(subset.dask.layers) == 2
 
     # one slice, one iterable
     subset = subset_to_blocks(array, np.arange(7))

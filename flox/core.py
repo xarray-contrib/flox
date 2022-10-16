@@ -6,6 +6,7 @@ import math
 import operator
 from collections import namedtuple
 from functools import partial, reduce
+from numbers import Number
 from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Mapping, Sequence, Union
 
 import numpy as np
@@ -1081,13 +1082,11 @@ def _normalize_indexes(array, flatblocks, blkshape):
     # has all iterables
     alliter = {ax: i for ax, i in enumerate(full_normalized) if hasattr(i, "__len__")}
 
-    # merge in one iterable with noiter to reduce blocks layer by 1.
-    for k, v in alliter.items():
-        if noiter[k] == slice(None):
-            noiter[k] = alliter.pop(k)
-            break
+    mesh = dict(zip(alliter.keys(), np.ix_(*alliter.values())))
 
-    return alliter, tuple(noiter)
+    full_tuple = tuple(i if ax not in mesh else mesh[ax] for ax, i in enumerate(noiter))
+
+    return full_tuple, alliter, tuple(noiter)
 
 
 def subset_to_blocks(
@@ -1106,25 +1105,37 @@ def subset_to_blocks(
     -------
     dask.array
     """
+    import dask.array
+    from dask.array.slicing import normalize_index
+    from dask.base import tokenize
+    from dask.highlevelgraph import HighLevelGraph
+
     if blkshape is None:
         blkshape = array.blocks.shape
 
-    alliter, noiter = _normalize_indexes(array, flatblocks, blkshape)
+    index, alliter, noiter = _normalize_indexes(array, flatblocks, blkshape)
 
-    # apply everything but the iterables
-    if not all(i == slice(None) for i in noiter):
-        subset = array.blocks[noiter]
-    else:
-        subset = array
+    if all(i == slice(None) for i in noiter) and not alliter:
+        return array
 
-    for ax, inds in alliter.items():
-        if isinstance(inds, slice):
-            continue
-        idxr = [slice(None, None)] * array.ndim
-        idxr[ax] = inds
-        subset = subset.blocks[tuple(idxr)]
+    index = normalize_index(index, array.numblocks)
+    index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
 
-    return subset
+    name = "blocks-" + tokenize(array, index)
+
+    squeezed = tuple(np.squeeze(i) if isinstance(i, np.ndarray) else i for i in index)
+
+    new_keys = array._key_array[index]
+
+    chunks = tuple(tuple(np.array(c)[i].tolist()) for c, i in zip(array.chunks, squeezed))
+
+    keys = itertools.product(*(range(len(c)) for c in chunks))
+
+    layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
+
+    return dask.array.Array(graph, name, chunks, meta=array)
 
 
 def _extract_unknown_groups(reduced, group_chunks, dtype) -> tuple[DaskArray]:
