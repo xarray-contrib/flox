@@ -1118,6 +1118,7 @@ def subset_to_blocks(
     if all(not isinstance(i, np.ndarray) and i == slice(None) for i in index):
         return array
 
+    # These rest is copied from dask.array.core.py with slight modifications
     index = normalize_index(index, array.numblocks)
     index = tuple(slice(k, k + 1) if isinstance(k, Integral) else k for k in index)
 
