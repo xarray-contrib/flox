@@ -5,6 +5,21 @@ import numpy as np
 from .xrutils import isnull
 
 
+def _prepare_for_flox(group_idx, array):
+    """
+    Sort the input array once to save time.
+    """
+    assert array.shape[-1] == group_idx.shape[0]
+    issorted = (group_idx[:-1] <= group_idx[1:]).all()
+    if issorted:
+        ordered_array = array
+    else:
+        perm = group_idx.argsort(kind="stable")
+        group_idx = group_idx[..., perm]
+        ordered_array = array[..., perm]
+    return group_idx, ordered_array
+
+
 def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None):
     """
     most of this code is from shoyer's gist
@@ -13,7 +28,7 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
     # assumes input is sorted, which I do in core._prepare_for_flox
     aux = group_idx
 
-    flag = np.concatenate(([True], aux[1:] != aux[:-1]))
+    flag = np.concatenate((np.array([True], like=array), aux[1:] != aux[:-1]))
     uniques = aux[flag]
     (inv_idx,) = flag.nonzero()
 
@@ -25,11 +40,11 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
     if out is None:
         out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
 
-    if (len(uniques) == size) and (uniques == np.arange(size)).all():
+    if (len(uniques) == size) and (uniques == np.arange(size, like=array)).all():
         # The previous version of this if condition
         #     ((uniques[1:] - uniques[:-1]) == 1).all():
         # does not work when group_idx is [1, 2] for e.g.
-        # This happens  during binning
+        # This happens during binning
         op.reduceat(array, inv_idx, axis=axis, dtype=dtype, out=out)
     else:
         out[..., uniques] = op.reduceat(array, inv_idx, axis=axis, dtype=dtype)
@@ -91,8 +106,7 @@ def nanlen(group_idx, array, *args, **kwargs):
 def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     if fill_value is None:
         fill_value = 0
-    out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
-    sum(group_idx, array, axis=axis, size=size, dtype=dtype, out=out)
+    out = sum(group_idx, array, axis=axis, size=size, dtype=dtype, fill_value=fill_value)
     out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
 
@@ -100,7 +114,6 @@ def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
 def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     if fill_value is None:
         fill_value = 0
-    out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
-    nansum(group_idx, array, size=size, axis=axis, dtype=dtype, out=out)
+    out = nansum(group_idx, array, size=size, axis=axis, dtype=dtype, fill_value=fill_value)
     out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out

@@ -2,11 +2,14 @@ name: flox-tests
 channels:
   - conda-forge
 dependencies:
+  - asv
   - cachey
   - codecov
   - dask-core
   - netcdf4
   - pandas
+  - numpy>=1.20
+  - matplotlib
   - pip
   - pytest
   - pytest-cov

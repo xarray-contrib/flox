@@ -14,7 +14,7 @@ try:
 
     dask_array_type = da.Array
 except ImportError:
-    dask_array_type = ()
+    dask_array_type = ()  # type: ignore
 
 
 try:
@@ -22,7 +22,7 @@ try:
 
     xr_types = (xr.DataArray, xr.Dataset)
 except ImportError:
-    xr_types = ()
+    xr_types = ()  # type: ignore
 
 
 def _importorskip(modname, minversion=None):
@@ -80,25 +80,51 @@ def raise_if_dask_computes(max_computes=0):
     return dask.config.set(scheduler=scheduler)
 
 
-def assert_equal(a, b):
+def assert_equal(a, b, tolerance=None):
     __tracebackhide__ = True
 
     if isinstance(a, list):
         a = np.array(a)
     if isinstance(b, list):
         b = np.array(b)
+
     if isinstance(a, pd_types) or isinstance(b, pd_types):
         pd.testing.assert_index_equal(a, b)
-    elif has_xarray and isinstance(a, xr_types) or isinstance(b, xr_types):
+        return
+    if has_xarray and isinstance(a, xr_types) or isinstance(b, xr_types):
         xr.testing.assert_identical(a, b)
-    elif has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
+        return
+
+    if tolerance is None and (
+        np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64)
+    ):
+        tolerance = {"atol": 1e-18, "rtol": 1e-15}
+    else:
+        tolerance = {}
+
+    if has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
         # sometimes it's nice to see values and shapes
         # rather than being dropped into some file in dask
-        np.testing.assert_allclose(a, b)
+        np.testing.assert_allclose(a, b, **tolerance)
         # does some validation of the dask graph
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
-        np.testing.assert_allclose(a, b, equal_nan=True)
+        if a.dtype != b.dtype:
+            raise AssertionError(f"a and b have different dtypes: (a: {a.dtype}, b: {b.dtype})")
+
+        np.testing.assert_allclose(a, b, equal_nan=True, **tolerance)
+
+
+def assert_equal_tuple(a, b):
+    """assert_equal for .blocks indexing tuples"""
+    assert len(a) == len(b)
+
+    for a_, b_ in zip(a, b):
+        assert type(a_) == type(b_)
+        if isinstance(a_, np.ndarray):
+            np.testing.assert_array_equal(a_, b_)
+        else:
+            assert a_ == b_
 
 
 @pytest.fixture(scope="module", params=["numbagg"])

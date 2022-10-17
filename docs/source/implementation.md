@@ -13,7 +13,7 @@ or `xarray_reduce`.
 
 First we describe xarray's current strategy
 
-## `method="split-reduce"`: Xarray's current GroupBy strategy
+## Background: Xarray's current GroupBy strategy
 
 Xarray's current strategy is to find all unique group labels, index out each group,
 and then apply the reduction operation. Note that this only works if we know the group

@@ -8,4 +8,5 @@ try:
     cache = cachey.Cache(1e6)
     memoize = partial(cache.memoize, key=dask.base.tokenize)
 except ImportError:
-    memoize = lambda x: x
+    cache = {}
+    memoize = lambda x: x  # type: ignore
