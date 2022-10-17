@@ -1293,14 +1293,7 @@ def dask_groupby_agg(
         name=f"{name}-chunk-{token}",
     )
 
-    if expected_groups is None:
-        if is_duck_dask_array(by_input):
-            expected_groups = None
-        else:
-            expected_groups = _get_expected_groups(by_input, sort=sort)
-    group_chunks: tuple[tuple[Union[int, float], ...]] = (
-        (len(expected_groups),) if expected_groups is not None else (np.nan,),
-    )
+    group_chunks: tuple[tuple[Union[int, float], ...]]
 
     if method in ["map-reduce", "cohorts"]:
         combine: Callable[..., IntermediateDict]
@@ -1334,12 +1327,12 @@ def dask_groupby_agg(
             )
             if is_duck_dask_array(by_input) and expected_groups is None:
                 groups = _extract_unknown_groups(reduced, group_chunks=group_chunks, dtype=by.dtype)
+                group_chunks = (np.nan,)
             else:
                 if expected_groups is None:
-                    expected_groups_ = _get_expected_groups(by_input, sort=sort)
-                else:
-                    expected_groups_ = expected_groups
-                groups = (expected_groups_.to_numpy(),)
+                    expected_groups = _get_expected_groups(by_input, sort=sort)
+                groups = (expected_groups.to_numpy(),)
+            group_chunks = ((len(expected_groups),),)
 
         elif method == "cohorts":
             chunks_cohorts = find_group_cohorts(
