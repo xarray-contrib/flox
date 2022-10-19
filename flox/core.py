@@ -816,8 +816,25 @@ def _expand_dims(results: IntermediateDict) -> IntermediateDict:
     return results
 
 
+def _find_unique_groups(x_chunk):
+    from dask.base import flatten
+    from dask.utils import deepmap
+
+    unique_groups = _unique(np.asarray(tuple(flatten(deepmap(listify_groups, x_chunk)))))
+    unique_groups = unique_groups[~isnull(unique_groups)]
+
+    if len(unique_groups) == 0:
+        unique_groups = [np.nan]
+    return unique_groups
+
+
 def _simple_combine(
-    x_chunk, agg: Aggregation, axis: T_Axes, keepdims: bool, is_aggregate: bool = False
+    x_chunk,
+    agg: Aggregation,
+    axis: T_Axes,
+    keepdims: bool,
+    reindex: bool,
+    is_aggregate: bool = False,
 ) -> IntermediateDict:
     """
     'Simple' combination of blockwise results.
@@ -830,8 +847,19 @@ def _simple_combine(
     4. At the final agggregate step, we squeeze out DUMMY_AXIS
     """
     from dask.array.core import deepfirst
+    from dask.utils import deepmap
 
-    results: IntermediateDict = {"groups": deepfirst(x_chunk)["groups"]}
+    if not reindex:
+        # We didn't reindex at the blockwise step
+        # So now reindex before combining by reducing along DUMMY_AXIS
+        unique_groups = _find_unique_groups(x_chunk)
+        x_chunk = deepmap(
+            partial(reindex_intermediates, agg=agg, unique_groups=unique_groups), x_chunk
+        )
+    else:
+        unique_groups = deepfirst(x_chunk)["groups"]
+
+    results: IntermediateDict = {"groups": unique_groups}
     results["intermediates"] = []
     axis_ = axis[:-1] + (DUMMY_AXIS,)
     for idx, combine in enumerate(agg.combine):
@@ -886,7 +914,6 @@ def _grouped_combine(
     sort: bool = True,
 ) -> IntermediateDict:
     """Combine intermediates step of tree reduction."""
-    from dask.base import flatten
     from dask.utils import deepmap
 
     if isinstance(x_chunk, dict):
@@ -897,11 +924,7 @@ def _grouped_combine(
         # when there's only a single axis of reduction, we can just concatenate later,
         # reindexing is unnecessary
         # I bet we can minimize the amount of reindexing for mD reductions too, but it's complicated
-        unique_groups = _unique(np.array(tuple(flatten(deepmap(listify_groups, x_chunk)))))
-        unique_groups = unique_groups[~isnull(unique_groups)]
-        if len(unique_groups) == 0:
-            unique_groups = [np.nan]
-
+        unique_groups = _find_unique_groups(x_chunk)
         x_chunk = deepmap(
             partial(reindex_intermediates, agg=agg, unique_groups=unique_groups), x_chunk
         )
@@ -1216,7 +1239,8 @@ def dask_groupby_agg(
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
 
-    do_simple_combine = method != "blockwise" and reindex and not _is_arg_reduction(agg)
+    do_simple_combine = not _is_arg_reduction(agg)
+
     if method == "blockwise":
         #  use the "non dask" code path, but applied blockwise
         blockwise_method = partial(
@@ -1268,31 +1292,32 @@ def dask_groupby_agg(
     if method in ["map-reduce", "cohorts"]:
         combine: Callable[..., IntermediateDict]
         if do_simple_combine:
-            combine = _simple_combine
+            combine = partial(_simple_combine, reindex=reindex)
+            combine_name = "simple-combine"
         else:
             combine = partial(_grouped_combine, engine=engine, sort=sort)
+            combine_name = "grouped-combine"
+
+        tree_reduce = partial(
+            dask.array.reductions._tree_reduce,
+            name=f"{name}-reduce-{method}-{combine_name}",
+            dtype=array.dtype,
+            axis=axis,
+            keepdims=True,
+            concatenate=False,
+        )
+        aggregate = partial(_aggregate, combine=combine, agg=agg, fill_value=fill_value)
 
         # Each chunk of `reduced`` is really a dict mapping
         # 1. reduction name to array
         # 2. "groups" to an array of group labels
         # Note: it does not make sense to interpret axis relative to
         # shape of intermediate results after the blockwise call
-        tree_reduce = partial(
-            dask.array.reductions._tree_reduce,
-            combine=partial(combine, agg=agg),
-            name=f"{name}-reduce-{method}",
-            dtype=array.dtype,
-            axis=axis,
-            keepdims=True,
-            concatenate=False,
-        )
-        aggregate = partial(
-            _aggregate, combine=combine, agg=agg, fill_value=fill_value, reindex=reindex
-        )
         if method == "map-reduce":
             reduced = tree_reduce(
                 intermediate,
-                aggregate=partial(aggregate, expected_groups=expected_groups),
+                combine=partial(combine, agg=agg),
+                aggregate=partial(aggregate, expected_groups=expected_groups, reindex=reindex),
             )
             if is_duck_dask_array(by_input) and expected_groups is None:
                 groups = _extract_unknown_groups(reduced, group_chunks=group_chunks, dtype=by.dtype)
@@ -1310,23 +1335,17 @@ def dask_groupby_agg(
             reduced_ = []
             groups_ = []
             for blks, cohort in chunks_cohorts.items():
+                index = pd.Index(cohort)
                 subset = subset_to_blocks(intermediate, blks, array.blocks.shape[-len(axis) :])
-                if do_simple_combine:
-                    # reindex so that reindex can be set to True later
-                    reindexed = dask.array.map_blocks(
-                        reindex_intermediates,
-                        subset,
-                        agg=agg,
-                        unique_groups=cohort,
-                        meta=subset._meta,
-                    )
-                else:
-                    reindexed = subset
-
+                reindexed = dask.array.map_blocks(
+                    reindex_intermediates, subset, agg=agg, unique_groups=index, meta=subset._meta
+                )
+                # now that we have reindexed, we can set reindex=True explicitlly
                 reduced_.append(
                     tree_reduce(
                         reindexed,
-                        aggregate=partial(aggregate, expected_groups=cohort, reindex=reindex),
+                        combine=partial(combine, agg=agg, reindex=True),
+                        aggregate=partial(aggregate, expected_groups=index, reindex=True),
                     )
                 )
                 groups_.append(cohort)
@@ -1382,27 +1401,23 @@ def _validate_reindex(
     if reindex is True:
         if _is_arg_reduction(func):
             raise NotImplementedError
-        if method == "blockwise":
-            raise NotImplementedError
+        if method in ["blockwise", "cohorts"]:
+            raise ValueError(
+                "reindex=True is not a valid choice for method='blockwise' or method='cohorts'."
+            )
 
     if reindex is None:
         if method == "blockwise" or _is_arg_reduction(func):
             reindex = False
 
-        elif expected_groups is not None:
-            reindex = True
-
-        elif method in ["split-reduce", "cohorts"]:
-            reindex = True
+        elif method == "cohorts":
+            reindex = False
 
         elif method == "map-reduce":
             if expected_groups is None and by_is_dask:
                 reindex = False
             else:
                 reindex = True
-
-    if method in ["split-reduce", "cohorts"] and reindex is False:
-        raise NotImplementedError
 
     assert isinstance(reindex, bool)
     return reindex
