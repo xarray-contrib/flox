@@ -13,6 +13,7 @@ from flox.core import (
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
     _normalize_indexes,
+    _validate_reindex,
     factorize_,
     find_group_cohorts,
     groupby_reduce,
@@ -1137,3 +1138,33 @@ def test_subset_block_2d(flatblocks, expectidx):
     subset = subset_to_blocks(array, flatblocks)
     assert len(subset.dask.layers) == 2
     assert_equal(subset, array.compute()[expectidx])
+
+
+@pytest.mark.parametrize("method", ["map-reduce", "cohorts"])
+@pytest.mark.parametrize(
+    "expected, reindex, func, expected_groups, by_is_dask",
+    [
+        # argmax only False
+        [False, None, "argmax", None, False],
+        # True when by is numpy but expected is None
+        [True, None, "sum", None, False],
+        # False when by is dask but expected is None
+        [False, None, "sum", None, True],
+        # if expected_groups then always True
+        [True, None, "sum", [1, 2, 3], False],
+        [True, None, "sum", ([1], [2]), False],
+        [True, None, "sum", ([1], [2]), True],
+        [True, None, "sum", ([1], None), False],
+        [True, None, "sum", ([1], None), True],
+    ],
+)
+def test_validate_reindex(expected, reindex, func, method, expected_groups, by_is_dask):
+    if by_is_dask and method == "cohorts":
+        # This should error elsewhere
+        pytest.skip()
+    call = partial(_validate_reindex, reindex, func, method, expected_groups, by_is_dask)
+    if "arg" in func and method == "cohorts":
+        with pytest.raises(NotImplementedError):
+            call()
+    else:
+        assert call() == expected
