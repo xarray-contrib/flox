@@ -1388,27 +1388,35 @@ def dask_groupby_agg(
     return (result, groups)
 
 
-def _validate_reindex(reindex: bool | None, func, method: T_Method, expected_groups) -> bool | None:
+def _validate_reindex(
+    reindex: bool | None, func, method: T_Method, expected_groups, by_is_dask: bool
+) -> bool:
     if reindex is True:
         if _is_arg_reduction(func):
             raise NotImplementedError
         if method == "blockwise":
             raise NotImplementedError
 
-    if method == "blockwise" or _is_arg_reduction(func):
-        reindex = False
+    if reindex is None:
+        if method == "blockwise" or _is_arg_reduction(func):
+            reindex = False
 
-    if reindex is None and expected_groups is not None:
-        reindex = True
+        elif expected_groups is not None:
+            reindex = True
+
+        elif method in ["split-reduce", "cohorts"]:
+            reindex = True
+
+        elif method == "map-reduce":
+            if expected_groups is None and by_is_dask:
+                reindex = False
+            else:
+                reindex = True
 
     if method in ["split-reduce", "cohorts"] and reindex is False:
         raise NotImplementedError
 
-    if method in ["split-reduce", "cohorts"] and reindex is None:
-        reindex = True
-
-    # TODO: Should reindex be a bool-only at this point? Would've been nice but
-    # None's are relied on after this function as well.
+    assert isinstance(reindex, bool)
     return reindex
 
 
@@ -1597,7 +1605,6 @@ def groupby_reduce(
             "argreductions not supported for engine='flox' yet."
             "Try engine='numpy' or engine='numba' instead."
         )
-    reindex = _validate_reindex(reindex, func, method, expected_groups)
 
     bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
@@ -1605,6 +1612,8 @@ def groupby_reduce(
 
     if method in ["split-reduce", "cohorts"] and by_is_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
+
+    reindex = _validate_reindex(reindex, func, method, expected_groups, by_is_dask)
 
     if not is_duck_array(array):
         array = np.asarray(array)

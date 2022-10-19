@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import reduce
+from functools import partial, reduce
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -221,14 +221,26 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         if not has_dask:
             continue
         for method in ["map-reduce", "cohorts", "split-reduce"]:
-            if "arg" in func and method != "map-reduce":
-                continue
-            actual, *groups = groupby_reduce(array, *by, method=method, **flox_kwargs)
-            for actual_group, expect in zip(groups, expected_groups):
-                assert_equal(actual_group, expect, tolerance)
-            if "arg" in func:
-                assert actual.dtype.kind == "i"
-            assert_equal(actual, expected, tolerance)
+            if method == "map-reduce":
+                reindexes = [True, False, None]
+            else:
+                reindexes = [None]
+            for reindex in reindexes:
+                call = partial(
+                    groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
+                )
+                if "arg" in func:
+                    if method != "map-reduce" or reindex is True:
+                        with pytest.raises(NotImplementedError):
+                            call()
+                        continue
+
+                actual, *groups = call()
+                for actual_group, expect in zip(groups, expected_groups):
+                    assert_equal(actual_group, expect, tolerance)
+                if "arg" in func:
+                    assert actual.dtype.kind == "i"
+                assert_equal(actual, expected, tolerance)
 
 
 @requires_dask
