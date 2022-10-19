@@ -39,8 +39,7 @@ if TYPE_CHECKING:
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
     T_Engine = Literal["flox", "numpy", "numba"]
-    T_MethodCohorts = Literal["cohorts", "split-reduce"]
-    T_Method = Literal["map-reduce", "blockwise", T_MethodCohorts]
+    T_Method = Literal["map-reduce", "blockwise", "cohorts"]
     T_IsBins = Union[bool | Sequence[bool]]
 
 
@@ -161,8 +160,6 @@ def find_group_cohorts(labels, chunks, merge: bool = True):
     merge : bool, optional
         Attempt to merge cohorts when one cohort's chunks are a subset
         of another cohort's chunks.
-    method : ["split-reduce", "cohorts"], optional
-        Which method are we using?
 
     Returns
     -------
@@ -1243,7 +1240,7 @@ def dask_groupby_agg(
         partial(
             blockwise_method,
             axis=axis,
-            expected_groups=None if method in ["split-reduce", "cohorts"] else expected_groups,
+            expected_groups=None if method == "cohorts" else expected_groups,
             engine=engine,
             sort=sort,
         ),
@@ -1268,7 +1265,7 @@ def dask_groupby_agg(
         (len(expected_groups),) if expected_groups is not None else (np.nan,),
     )
 
-    if method in ["map-reduce", "cohorts", "split-reduce"]:
+    if method in ["map-reduce", "cohorts"]:
         combine: Callable[..., IntermediateDict]
         if do_simple_combine:
             combine = _simple_combine
@@ -1306,7 +1303,7 @@ def dask_groupby_agg(
                     expected_groups_ = expected_groups
                 groups = (expected_groups_.to_numpy(),)
 
-        elif method in ["cohorts", "split-reduce"]:
+        elif method == "cohorts":
             chunks_cohorts = find_group_cohorts(
                 by_input, [array.chunks[ax] for ax in axis], merge=True
             )
@@ -1604,6 +1601,9 @@ def groupby_reduce(
     if method in ["split-reduce", "cohorts"] and by_is_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
 
+    if method == "split-reduce":
+        method = "cohorts"
+
     reindex = _validate_reindex(reindex, func, method, expected_groups, by_is_dask)
 
     if not is_duck_array(array):
@@ -1634,7 +1634,7 @@ def groupby_reduce(
 
     # TODO: could restrict this to dask-only
     factorize_early = (nby > 1) or (
-        any(isbins) and method in ["split-reduce", "cohorts"] and is_duck_dask_array(array)
+        any(isbins) and method == "cohorts" and is_duck_dask_array(array)
     )
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
@@ -1653,7 +1653,7 @@ def groupby_reduce(
         axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
     nax = len(axis_)
 
-    if method in ["blockwise", "cohorts", "split-reduce"] and nax != by_.ndim:
+    if method in ["blockwise", "cohorts"] and nax != by_.ndim:
         raise NotImplementedError(
             "Must reduce along all dimensions of `by` when method != 'map-reduce'."
             f"Received method={method!r}"
