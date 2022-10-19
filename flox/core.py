@@ -1164,7 +1164,7 @@ def subset_to_blocks(
     return dask.array.Array(graph, name, chunks, meta=array)
 
 
-def _extract_unknown_groups(reduced, group_chunks, dtype) -> tuple[DaskArray]:
+def _extract_unknown_groups(reduced, dtype) -> tuple[DaskArray]:
     import dask.array
     from dask.highlevelgraph import HighLevelGraph
 
@@ -1180,7 +1180,7 @@ def _extract_unknown_groups(reduced, group_chunks, dtype) -> tuple[DaskArray]:
         dask.array.Array(
             HighLevelGraph.from_collections(groups_token, layer, dependencies=[reduced]),
             groups_token,
-            chunks=group_chunks,
+            chunks=(np.nan,),
             meta=np.array([], dtype=dtype),
         ),
     )
@@ -1326,7 +1326,7 @@ def dask_groupby_agg(
                 aggregate=partial(aggregate, expected_groups=expected_groups, reindex=reindex),
             )
             if is_duck_dask_array(by_input) and expected_groups is None:
-                groups = _extract_unknown_groups(reduced, group_chunks=group_chunks, dtype=by.dtype)
+                groups = _extract_unknown_groups(reduced, dtype=by.dtype)
                 group_chunks = (np.nan,)
             else:
                 if expected_groups is None:
