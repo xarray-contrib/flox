@@ -626,7 +626,7 @@ def test_npg_nanarg_bug(func):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize("method", ["split-reduce", "cohorts", "map-reduce"])
+@pytest.mark.parametrize("method", ["cohorts", "map-reduce"])
 @pytest.mark.parametrize("chunk_labels", [False, True])
 @pytest.mark.parametrize("chunks", ((), (1,), (2,)))
 def test_groupby_bins(chunk_labels, chunks, engine, method) -> None:
