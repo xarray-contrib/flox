@@ -136,10 +136,10 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def _unique(a):
+def _unique(a: np.ndarray):
     """Much faster to use pandas unique and sort the results.
     np.unique sorts before uniquifying and is slow."""
-    return np.sort(pd.unique(a))
+    return np.sort(pd.unique(a.reshape(-1)))
 
 
 @memoize
@@ -897,7 +897,7 @@ def _grouped_combine(
         # when there's only a single axis of reduction, we can just concatenate later,
         # reindexing is unnecessary
         # I bet we can minimize the amount of reindexing for mD reductions too, but it's complicated
-        unique_groups = _unique(tuple(flatten(deepmap(listify_groups, x_chunk))))
+        unique_groups = _unique(np.array(tuple(flatten(deepmap(listify_groups, x_chunk)))))
         unique_groups = unique_groups[~isnull(unique_groups)]
         if len(unique_groups) == 0:
             unique_groups = [np.nan]
