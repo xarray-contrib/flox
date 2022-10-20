@@ -54,6 +54,8 @@ else:
 ALL_FUNCS = (
     "sum",
     "nansum",
+    "argmax",
+    pytest.param("nanargmax", marks=(pytest.mark.skip,)),
     "prod",
     "nanprod",
     "mean",
@@ -66,8 +68,6 @@ ALL_FUNCS = (
     "nanmax",
     "min",
     "nanmin",
-    "argmax",
-    pytest.param("nanargmax", marks=(pytest.mark.skip,)),
     "argmin",
     pytest.param("nanargmin", marks=(pytest.mark.skip,)),
     "any",
