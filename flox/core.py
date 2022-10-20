@@ -231,9 +231,9 @@ def find_group_cohorts(labels, chunks, merge: bool = True):
 
 
 def rechunk_for_cohorts(
-    array,
+    array: DaskArray,
     axis: T_Axis,
-    labels,
+    labels: np.ndarray,
     force_new_chunk_at,
     chunksize=None,
     ignore_old_chunks=False,
@@ -326,7 +326,7 @@ def rechunk_for_cohorts(
         return array.rechunk({axis: newchunks})
 
 
-def rechunk_for_blockwise(array, axis: T_Axis, labels):
+def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     embarassingly parallel group reductions.
@@ -863,9 +863,9 @@ def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axes = None) -> np.ndarray:
     # return concatenate3(mapped)
 
 
-def reindex_intermediates(x, agg, unique_groups):
+def reindex_intermediates(x: IntermediateDict, agg: Aggregation, unique_groups) -> IntermediateDict:
     new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
-    newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
+    newx: IntermediateDict = {"groups": np.broadcast_to(unique_groups, new_shape)}
     newx["intermediates"] = tuple(
         reindex_(
             v, from_=np.atleast_1d(x["groups"].squeeze()), to=pd.Index(unique_groups), fill_value=f
@@ -875,7 +875,7 @@ def reindex_intermediates(x, agg, unique_groups):
     return newx
 
 
-def listify_groups(x):
+def listify_groups(x: IntermediateDict):
     return list(np.atleast_1d(x["groups"].squeeze()))
 
 
