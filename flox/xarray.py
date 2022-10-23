@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Hashable, Iterable, Sequence, Union
 
 import numpy as np
@@ -61,7 +62,6 @@ def xarray_reduce(
     isbin: bool | Sequence[bool] = False,
     sort: bool = True,
     dim: Dims | ellipsis = None,
-    split_out: int = 1,
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
     method: str = "map-reduce",
@@ -94,8 +94,6 @@ def xarray_reduce(
     dim : hashable
         dimension name along which to reduce. If None, reduces across all
         dimensions of `by`
-    split_out : int, optional
-        Number of output chunks along grouped dimension in output.
     fill_value
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
@@ -396,7 +394,6 @@ def xarray_reduce(
             "func": func,
             "axis": axis,
             "sort": sort,
-            "split_out": split_out,
             "fill_value": fill_value,
             "method": method,
             "min_count": min_count,
@@ -564,6 +561,11 @@ def resample_reduce(
     keep_attrs: bool = True,
     **kwargs,
 ):
+
+    warnings.warn(
+        "flox.xarray.resample_reduce is now deprecated. Please use Xarray's resample method directly.",
+        DeprecationWarning,
+    )
 
     obj = resampler._obj
     dim = resampler._group_dim
