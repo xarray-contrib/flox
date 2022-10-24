@@ -127,7 +127,7 @@ def assert_equal_tuple(a, b):
             assert a_ == b_
 
 
-@pytest.fixture(scope="module", params=["numpy"])
+@pytest.fixture(scope="module", params=["flox", "numpy", "numba"])
 def engine(request):
     if request.param == "numba":
         try:
