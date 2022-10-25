@@ -1760,7 +1760,7 @@ def groupby_reduce(
             assert len(groups) == 1
             sorted_idx = np.argsort(groups[0])
             # This optimization helps specifically with resampling
-            if not (sorted_idx[1:] <= sorted_idx[:-1]).all():
+            if not (sorted_idx[:-1] <= sorted_idx[1:]).all():
                 result = result[..., sorted_idx]
                 groups = (groups[0][sorted_idx],)
 
