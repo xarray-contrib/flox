@@ -1183,3 +1183,23 @@ def test_validate_reindex():
         for func in ["sum", "argmax"]:
             actual = _validate_reindex(None, func, method, expected_groups=None, by_is_dask=False)
             assert actual is False
+
+
+@requires_dask
+def test_1d_blockwise_sort_optimization():
+    # Make sure for resampling problems sorting isn't done.
+    time = pd.Series(pd.date_range("2020-09-01", "2020-12-31 23:59", freq="3H"))
+    array = dask.array.ones((len(time),), chunks=(224,))
+
+    actual, _ = groupby_reduce(array, time.dt.dayofyear.values, method="blockwise", func="count")
+    assert all("getitem" not in k for k in actual.dask)
+
+    actual, _ = groupby_reduce(
+        array, time.dt.dayofyear.values[::-1], sort=True, method="blockwise", func="count"
+    )
+    assert any("getitem" in k for k in actual.dask.layers)
+
+    actual, _ = groupby_reduce(
+        array, time.dt.dayofyear.values[::-1], sort=False, method="blockwise", func="count"
+    )
+    assert all("getitem" not in k for k in actual.dask.layers)
