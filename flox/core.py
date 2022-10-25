@@ -1368,7 +1368,7 @@ def dask_groupby_agg(
         raise ValueError(f"Unknown method={method}.")
 
     # extract results from the dict
-    adjust_chunks = {inds[ax]: lambda: 0 for ax in axis}
+    adjust_chunks = {inds[ax]: lambda c: 0 for ax in axis}
     if method == "blockwise" and len(axis) > 1:
         nblocks = tuple(len(array.chunks[ax]) for ax in axis)
         group_chunks = np.unravel_index(group_chunks, nblocks)
