@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from functools import partial, reduce
 from typing import TYPE_CHECKING
 
@@ -219,29 +220,31 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert actual.dtype.kind == "i"
         assert_equal(actual, expected, tolerance)
 
-        if not has_dask:
+        if not has_dask or chunks is None:
             continue
-        for method in ["map-reduce", "cohorts", "split-reduce"]:
-            if method == "map-reduce":
-                reindexes = [True, False, None]
-            else:
-                reindexes = [None]
-            for reindex in reindexes:
-                call = partial(
-                    groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
-                )
-                if "arg" in func:
-                    if method != "map-reduce" or reindex is True:
-                        with pytest.raises(NotImplementedError):
-                            call()
-                        continue
 
-                actual, *groups = call()
-                for actual_group, expect in zip(groups, expected_groups):
-                    assert_equal(actual_group, expect, tolerance)
-                if "arg" in func:
-                    assert actual.dtype.kind == "i"
-                assert_equal(actual, expected, tolerance)
+        params = list(itertools.product(["map-reduce"], [True, False, None]))
+        params.extend(itertools.product(["cohorts"], [False, None]))
+        for method, reindex in params:
+            call = partial(
+                groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
+            )
+            if "arg" in func and reindex is True:
+                # simple_combine with argreductions not supported right now
+                with pytest.raises(NotImplementedError):
+                    call()
+                continue
+            actual, *groups = call()
+            if "arg" not in func:
+                # make sure we use simple combine
+                assert any("simple-combine" in key for key in actual.dask.layers.keys())
+            else:
+                assert any("grouped-combine" in key for key in actual.dask.layers.keys())
+            for actual_group, expect in zip(groups, expected_groups):
+                assert_equal(actual_group, expect, tolerance)
+            if "arg" in func:
+                assert actual.dtype.kind == "i"
+            assert_equal(actual, expected, tolerance)
 
 
 @requires_dask
@@ -514,7 +517,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     assert_equal(actual, expected, tolerance)
 
 
-@pytest.mark.parametrize("chunks", [None, (2, 2, 3)])
+@pytest.mark.parametrize("reindex,chunks", [(None, None), (False, (2, 2, 3)), (True, (2, 2, 3))])
 @pytest.mark.parametrize(
     "axis, groups, expected_shape",
     [
@@ -523,7 +526,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         (None, [0], (1,)),  # global reduction; 0 shaped group axis; 1 group
     ],
 )
-def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, engine):
+def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engine):
     def _maybe_chunk(arr):
         if chunks:
             if not has_dask:
@@ -546,6 +549,7 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, engine):
         axis=axis,
         fill_value=0,
         engine=engine,
+        reindex=reindex,
     )
     assert_equal(result, np.zeros(expected_shape, dtype=np.intp))
 
@@ -558,7 +562,10 @@ def test_groupby_reduce_nans(chunks, axis, groups, expected_shape, engine):
 
 
 @requires_dask
-def test_groupby_all_nan_blocks(engine):
+@pytest.mark.parametrize(
+    "expected_groups, reindex", [(None, None), ([0, 1, 2], True), ([0, 1, 2], False)]
+)
+def test_groupby_all_nan_blocks(expected_groups, reindex, engine):
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
     nan_labels = labels.astype(float)  # copy
     nan_labels[:5] = np.nan
@@ -573,8 +580,10 @@ def test_groupby_all_nan_blocks(engine):
         da.from_array(array, chunks=(1, 3)),
         da.from_array(by, chunks=(1, 3)),
         func="sum",
-        expected_groups=None,
+        expected_groups=expected_groups,
         engine=engine,
+        reindex=reindex,
+        method="map-reduce",
     )
     assert_equal(actual, expected)
 
@@ -1140,7 +1149,6 @@ def test_subset_block_2d(flatblocks, expectidx):
     assert_equal(subset, array.compute()[expectidx])
 
 
-@pytest.mark.parametrize("method", ["map-reduce", "cohorts"])
 @pytest.mark.parametrize(
     "expected, reindex, func, expected_groups, by_is_dask",
     [
@@ -1158,13 +1166,20 @@ def test_subset_block_2d(flatblocks, expectidx):
         [True, None, "sum", ([1], None), True],
     ],
 )
-def test_validate_reindex(expected, reindex, func, method, expected_groups, by_is_dask):
-    if by_is_dask and method == "cohorts":
-        # This should error elsewhere
-        pytest.skip()
-    call = partial(_validate_reindex, reindex, func, method, expected_groups, by_is_dask)
-    if "arg" in func and method == "cohorts":
+def test_validate_reindex_map_reduce(expected, reindex, func, expected_groups, by_is_dask):
+    actual = _validate_reindex(reindex, func, "map-reduce", expected_groups, by_is_dask)
+    assert actual == expected
+
+
+def test_validate_reindex():
+    for method in ["map-reduce", "cohorts"]:
         with pytest.raises(NotImplementedError):
-            call()
-    else:
-        assert call() == expected
+            _validate_reindex(True, "argmax", method, expected_groups=None, by_is_dask=False)
+
+    for method in ["blockwise", "cohorts"]:
+        with pytest.raises(ValueError):
+            _validate_reindex(True, "sum", method, expected_groups=None, by_is_dask=False)
+
+        for func in ["sum", "argmax"]:
+            actual = _validate_reindex(None, func, method, expected_groups=None, by_is_dask=False)
+            assert actual is False

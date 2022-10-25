@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 
 import flox
@@ -7,26 +9,31 @@ from . import parameterized
 N = 1000
 
 
+def _get_combine(combine):
+    if combine == "grouped":
+        return partial(flox.core._grouped_combine, engine="numpy")
+    else:
+        return partial(flox.core._simple_combine, reindex=False)
+
+
 class Combine:
     def setup(self, *args, **kwargs):
         raise NotImplementedError
 
-    @parameterized("kind", ("cohorts", "mapreduce"))
-    def time_combine(self, kind):
-        flox.core._grouped_combine(
+    @parameterized(("kind", "combine"), (("reindexed", "not_reindexed"), ("grouped", "simple")))
+    def time_combine(self, kind, combine):
+        _get_combine(combine)(
             getattr(self, f"x_chunk_{kind}"),
             **self.kwargs,
             keepdims=True,
-            engine="numpy",
         )
 
-    @parameterized("kind", ("cohorts", "mapreduce"))
-    def peakmem_combine(self, kind):
-        flox.core._grouped_combine(
+    @parameterized(("kind", "combine"), (("reindexed", "not_reindexed"), ("grouped", "simple")))
+    def peakmem_combine(self, kind, combine):
+        _get_combine(combine)(
             getattr(self, f"x_chunk_{kind}"),
             **self.kwargs,
             keepdims=True,
-            engine="numpy",
         )
 
 
@@ -47,7 +54,7 @@ class Combine1d(Combine):
             }
 
         # motivated by
-        self.x_chunk_mapreduce = [
+        self.x_chunk_not_reindexed = [
             construct_member(groups)
             for groups in [
                 np.array((1, 2, 3, 4)),
@@ -57,5 +64,7 @@ class Combine1d(Combine):
             * 2
         ]
 
-        self.x_chunk_cohorts = [construct_member(groups) for groups in [np.array((1, 2, 3, 4))] * 4]
+        self.x_chunk_reindexed = [
+            construct_member(groups) for groups in [np.array((1, 2, 3, 4))] * 4
+        ]
         self.kwargs = {"agg": flox.aggregations.mean, "axis": (3,)}
