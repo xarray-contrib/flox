@@ -115,6 +115,18 @@ def assert_equal(a, b, tolerance=None):
         np.testing.assert_allclose(a, b, equal_nan=True, **tolerance)
 
 
+def assert_equal_tuple(a, b):
+    """assert_equal for .blocks indexing tuples"""
+    assert len(a) == len(b)
+
+    for a_, b_ in zip(a, b):
+        assert type(a_) == type(b_)
+        if isinstance(a_, np.ndarray):
+            np.testing.assert_array_equal(a_, b_)
+        else:
+            assert a_ == b_
+
+
 @pytest.fixture(scope="module", params=["numpy"])
 def engine(request):
     if request.param == "numba":

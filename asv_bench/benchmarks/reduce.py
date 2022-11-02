@@ -6,7 +6,7 @@ import flox
 from . import parameterized
 
 N = 1000
-funcs = ["sum", "nansum", "mean", "nanmean", "max"]
+funcs = ["sum", "nansum", "mean", "nanmean", "max", "var", "nanvar"]
 engines = ["flox", "numpy"]
 
 
