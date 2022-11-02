@@ -59,6 +59,7 @@ jobs:
           environment-name: flox-tests
           extra-specs: |
             python=${{env.PYTHON_VERSION}}
+            conda
           cache-env: true
           cache-env-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
 
@@ -100,6 +101,7 @@ jobs:
           environment-name: xarray-tests
           extra-specs: |
             python=${{env.PYTHON_VERSION}}
+            conda
           cache-env: true
           cache-env-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
       - name: Install xarray
