@@ -26,20 +26,6 @@ if TYPE_CHECKING:
     Dims = Union[str, Iterable[Hashable], None]
 
 
-def _get_input_core_dims(group_names, dim, ds, grouper_dims):
-    input_core_dims = [[], []]
-    for g in group_names:
-        if g in dim:
-            continue
-        if g in ds.dims:
-            input_core_dims[0].extend([g])
-        if g in grouper_dims:
-            input_core_dims[1].extend([g])
-    input_core_dims[0].extend(dim)
-    input_core_dims[1].extend(dim)
-    return input_core_dims
-
-
 def _restore_dim_order(result, obj, by):
     def lookup_order(dimension):
         if dimension == by.name and by.ndim == 1:
@@ -278,11 +264,7 @@ def xarray_reduce(
     else:
         dim_tuple = tuple(grouper_dims)
 
-    # broadcast all variables against each other along all dimensions in `by` variables
-    # don't exclude `dim` because it need not be a dimension in any of the `by` variables!
-    # in the case where dim is Ellipsis, and by.ndim < obj.ndim
-    # then we also broadcast `by` to all `obj.dims`
-    # TODO: avoid this broadcasting
+    # broadcast to make sure grouper dimensions are present in the array.
     exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim_tuple)
     ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
 
@@ -392,9 +374,6 @@ def xarray_reduce(
             is_missing_dim = not (any(d in v.dims for d in dim_tuple))
             if is_missing_dim:
                 missing_dim[k] = v
-
-    input_core_dims = _get_input_core_dims(group_names, dim_tuple, ds_broad, grouper_dims)[:-1]
-    # input_core_dims += [input_core_dims[-1]] * (nby -o 1)
 
     # dim_tuple contains dimensions we are reducing over. These need to be the last
     # core dimensions to be synchronized with axis.
