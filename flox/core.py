@@ -173,7 +173,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True):
 
     # Build an array with the shape of labels, but where every element is the "chunk number"
     # 1. First subset the array appropriately
-    axis = tuple(range(-labels.ndim, 0))
+    axis = range(-labels.ndim, 0)
     # Easier to create a dask array and use the .blocks property
     array = dask.array.ones(tuple(sum(c) for c in chunks), chunks=chunks)
     labels = np.broadcast_to(labels, array.shape[-labels.ndim :])
