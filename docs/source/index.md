@@ -8,7 +8,8 @@
 [![PyPI](https://img.shields.io/pypi/v/flox.svg?style=flat)](https://pypi.org/project/flox/)
 [![Conda-forge](https://img.shields.io/conda/vn/conda-forge/flox.svg?style=flat)](https://anaconda.org/conda-forge/flox)
 
-This project explores strategies for fast GroupBy reductions with dask.array. It used to be called `dask_groupby`. It was motivated by
+`flox` mainly provides strategies for fast GroupBy reductions with dask.array. `flox` uses the MapReduce paradigm (or a "tree reduction")
+to run the GroupBy operation in a parallel-native way totally avoiding a sort or shuffle operation. It was motivated by
 
 1.  Dask Dataframe GroupBy
     [blogpost](https://blog.dask.org/2019/10/08/df-groupby)
@@ -16,6 +17,17 @@ This project explores strategies for fast GroupBy reductions with dask.array. It
     [issue](https://github.com/pydata/xarray/issues/4473)
 
 See a presentation ([video](https://discourse.pangeo.io/t/november-17-2021-flox-fast-furious-groupby-reductions-with-dask-at-pangeo-scale/2016), [slides](https://docs.google.com/presentation/d/1YubKrwu9zPHC_CzVBhvORuQBW-z148BvX3Ne8XcvWsQ/edit?usp=sharing)) about this package, from the Pangeo Showcase.
+
+## Why flox?
+
+1. {py:func}`flox.groupby_reduce` wraps the `numpy-groupies` package for performant Groupby reductions on nD arrays.
+1. {py:func}`flox.groupby_reduce` provides [parallel-friendly strategies](algorithms) for GroupBy reductions by wrapping `numpy-groupies` for dask arrays.
+1. `flox` integrates with xarray to provide more performant Groupby and Resampling operations.
+1. {py:func}`flox.xarray.xarray_reduce` extends Xarray's GroupBy operations allowing lazy grouping by dask arrays, grouping by multiple arrays,
+   as well as combining categorical grouping and histrogram-style binning operations using multiple variables.
+1. `flox` also provides utility functions for rechunking both dask arrays and Xarray objects along a single dimension using the group labels as a guide:
+  1. To rechunk for blockwise operations: {py:func}`flox.rechunk_for_blockwise`,  {py:func}`flox.xarray.rechunk_for_blockwise`.
+  1. To rechunk so that "cohorts", or groups of labels, tend to occur in the same chunks: {py:func}`flox.rechunk_for_cohorts`,  {py:func}`flox.xarray.rechunk_for_cohorts`.
 
 ## Installing
 
@@ -27,19 +39,15 @@ $ pip install flox
 $ conda install -c conda-forge flox
 ```
 
-## API
-
-There are two main functions
-1.  {py:func}`flox.core.groupby_reduce`
-    "pure" dask array interface
-1.  {py:func}`flox.xarray.xarray_reduce`
-    "pure" xarray interface; though [work is ongoing](https://github.com/pydata/xarray/pull/5734) to integrate this
-    package in xarray.
-
 ## Acknowledgements
 
-This work was funded in part by NASA-ACCESS 80NSSC18M0156 "Community tools for analysis of NASA Earth Observing System
-Data in the Cloud" (PI J. Hamman), and [NCAR's Earth System Data Science Initiative](https://ncar.github.io/esds/).
+This work was funded in part by
+1. NASA-ACCESS 80NSSC18M0156 "Community tools for analysis of NASA Earth Observing System
+   Data in the Cloud" (PI J. Hamman),
+2. NASA-OSTFL 80NSSC22K0345 "Enhancing analysis of NASA data with the open-source Python Xarray Library" (PIs Scott Henderson, University of Washington;
+   Deepak Cherian, NCAR; Jessica Scheick, University of New Hampshire), and
+3. [NCAR's Earth System Data Science Initiative](https://ncar.github.io/esds/).
+
 It was motivated by many discussions in the [Pangeo](https://pangeo.io) community.
 
 ## Contents

@@ -1,18 +1,26 @@
+(algorithms)=
 # Algorithms
 
 `flox` outsources the core GroupBy operation to the vectorized implementations in
-[numpy_groupies](https://github.com/ml31415/numpy-groupies). Constructing
-an efficient groupby reduction with dask is hard, and depends on how the
-groups are distributed amongst the blocks of an array. `flox` implements 4 strategies for
+[numpy_groupies](https://github.com/ml31415/numpy-groupies).
+
+Running an efficient groupby reduction in parallel is hard, and strongly depends on how the
+groups are distributed amongst the blocks of an array.
+
+`flox` implements 4 strategies for
 grouped reductions, each is appropriate for a particular distribution of groups
-among the blocks of a dask array.
+among the blocks of a dask array. Switch between the various strategies by passing `method`
+and/or `reindex` to either {py:func}`flox.core.groupby_reduce` or `xarray_reduce`.
+Your options are:
+1. `method="blockwise"`
+1. `method="map-reduce"` with `reindex=False`
+1. `method="map-reduce"` with `reindex=True`
+1. `method="cohorts"`
 
-Switch between the various strategies by passing `method` to either {py:func}`flox.core.groupby_reduce`
-or `xarray_reduce`.
+The most appropriate strategy for your problem will depend on the chunking of your dataset,
+and the distribution of group labels across those chunks.
 
-
-First we describe xarray's current strategy
-
+(xarray-split)=
 ## Background: Xarray's current GroupBy strategy
 
 Xarray's current strategy is to find all unique group labels, index out each group,
@@ -49,24 +57,25 @@ till all group results are in one block. At that point the result is
 
 ## `method="blockwise"`
 
-One case where `"map-reduce"` doesn't work well is the case of "resampling" reductions. An
+One case where `method="map-reduce"` doesn't work well is the case of "resampling" reductions. An
 example here is resampling from daily frequency to monthly frequency data:  `da.resample(time="M").mean()`
 For resampling type reductions,
 1. Group members occur sequentially (all days in January 2001 occur one after the other)
-2. All groups are roughly equal length (31 days in January but 28 in most Februaries)
+2. All groups not of exactly equal length (31 days in January but 28 in most Februaries)
 3. All members in a group are next to each other (if the time series is sorted, which it
    usually is).
 
-In this case, it makes sense to use `dask.dataframe` resample strategy which is to rechunk
+In this case, it makes sense to use `dask.dataframe` resample strategy which is to rechunk using {py:func}`flox.rechunk_for_blockwise`
 so that all members of a group are in a single block. Then, the groupby operation can be applied blockwise.
 
-![blockwise-strategy-schematic](/../diagrams/blockwise.png)
+![blockwise-strategy-schematic](/../diagrams/new-blockwise.svg)
 
 *Tradeoffs*
 1. Only works for certain groupings.
 1. Group labels must be known at graph construction time, so this only works for numpy arrays
 1. Currently the rechunking is only implemented for 1D arrays (being motivated by time resampling),
    but a nD generalization seems possible.
+1. Only can use the `blockwise` strategy for grouping by `nD` arrays.
 1. Works better when multiple groups are already in a single block; so that the intial
    rechunking only involves a small amount of communication.
 
