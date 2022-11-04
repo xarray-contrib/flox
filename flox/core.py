@@ -1225,11 +1225,13 @@ def dask_groupby_agg(
     # Unifying chunks is necessary for argreductions.
     # We need to rechunk before zipping up with the index
     # let's always do it anyway
-    # if not is_duck_dask_array(by):
-    # chunk numpy arrays like the input array
-    # This removes an extra rechunk-merge layer that would be
-    # added otherwise
-    #    by = dask.array.from_array(by, chunks=tuple(array.chunks[ax] for ax in range(-by.ndim, 0)))
+    if not is_duck_dask_array(by):
+        # chunk numpy arrays like the input array
+        # This removes an extra rechunk-merge layer that would be
+        # added otherwise
+        chunks = tuple(array.chunks[ax] if by.shape[ax] != 1 else (1,) for ax in range(-by.ndim, 0))
+
+        by = dask.array.from_array(by, chunks=chunks)
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
     # preprocess the array: for argreductions, this zips the index together with the array block
