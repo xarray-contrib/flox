@@ -54,6 +54,27 @@ def _restore_dim_order(result, obj, by):
     return result.transpose(*new_order)
 
 
+def _broadcast_size_one_dims(*arrays, core_dims):
+    """Broadcast by adding size-1 dimensions in the right place.
+
+    Workaround because apply_ufunc doesn't support this yet.
+    https://github.com/pydata/xarray/issues/3032#issuecomment-503337637
+
+    Specialized to the groupby problem.
+    """
+    array_dims = set(core_dims[0])
+    broadcasted = [arrays[0]]
+    for dims, array in zip(core_dims[1:], arrays[1:]):
+        assert set(dims).issubset(array_dims)
+        order = [dims.index(d) for d in core_dims[0] if d in dims]
+        array = array.transpose(*order)
+        axis = [core_dims[0].index(d) for d in core_dims[0] if d not in dims]
+        broadcasted.append(np.expand_dims(array, axis))
+
+    # ic(tuple(zip(core_dims, (a.shape for a in broadcasted))))
+    return broadcasted
+
+
 def xarray_reduce(
     obj: T_Dataset | T_DataArray,
     *by: T_DataArray | Hashable,
@@ -255,7 +276,7 @@ def xarray_reduce(
     elif dim is not None:
         dim_tuple = _atleast_1d(dim)
     else:
-        dim_tuple = tuple()
+        dim_tuple = tuple(grouper_dims)
 
     # broadcast all variables against each other along all dimensions in `by` variables
     # don't exclude `dim` because it need not be a dimension in any of the `by` variables!
@@ -263,12 +284,7 @@ def xarray_reduce(
     # then we also broadcast `by` to all `obj.dims`
     # TODO: avoid this broadcasting
     exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim_tuple)
-    ds_broad, *by_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)
-
-    # all members of by_broad have the same dimensions
-    # so we just pull by_broad[0].dims if dim is None
-    if not dim_tuple:
-        dim_tuple = tuple(by_broad[0].dims)
+    ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
 
     if any(d not in grouper_dims and d not in obj.dims for d in dim_tuple):
         raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
@@ -298,7 +314,7 @@ def xarray_reduce(
     expected_groups = list(expected_groups)
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
-    for idx, (b_, expect, isbin_) in enumerate(zip(by_broad, expected_groups, isbins)):
+    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups, isbins)):
         group_name = b_.name if not isbin_ else f"{b_.name}_bins"
         group_names += (group_name,)
 
@@ -326,7 +342,10 @@ def xarray_reduce(
             # This will never be reached
             raise ValueError("expect_index cannot be None")
 
-    def wrapper(array, *by, func, skipna, **kwargs):
+    def wrapper(array, *by, func, skipna, core_dims, **kwargs):
+
+        array, *by = _broadcast_size_one_dims(array, *by, core_dims=core_dims)
+
         # Handle skipna here because I need to know dtype to make a good default choice.
         # We cannnot handle this easily for xarray Datasets in xarray_reduce
         if skipna and func in ["all", "any", "count"]:
@@ -374,17 +393,24 @@ def xarray_reduce(
             if is_missing_dim:
                 missing_dim[k] = v
 
-    input_core_dims = _get_input_core_dims(group_names, dim_tuple, ds_broad, grouper_dims)
-    input_core_dims += [input_core_dims[-1]] * (nby - 1)
+    input_core_dims = _get_input_core_dims(group_names, dim_tuple, ds_broad, grouper_dims)[:-1]
+    # input_core_dims += [input_core_dims[-1]] * (nby -o 1)
 
+    # dim_tuple contains dimensions we are reducing over. These need to be the last
+    # core dimensions to be synchronized with axis.
+    input_core_dims = [[d for d in grouper_dims if d not in dim_tuple] + list(dim_tuple)]
+    input_core_dims += [list(b.dims) for b in by_da]
+
+    output_core_dims = [d for d in input_core_dims[0] if d not in dim_tuple]
+    output_core_dims.extend(group_names)
     actual = xr.apply_ufunc(
         wrapper,
         ds_broad.drop_vars(tuple(missing_dim)).transpose(..., *grouper_dims),
-        *by_broad,
+        *by_da,
         input_core_dims=input_core_dims,
         # for xarray's test_groupby_duplicate_coordinate_labels
         exclude_dims=set(dim_tuple),
-        output_core_dims=[group_names],
+        output_core_dims=[output_core_dims],
         dask="allowed",
         dask_gufunc_kwargs=dict(
             output_sizes=group_sizes, output_dtypes=[dtype] if dtype is not None else None
@@ -404,6 +430,7 @@ def xarray_reduce(
             "isbin": isbins,
             "finalize_kwargs": finalize_kwargs,
             "dtype": dtype,
+            "core_dims": input_core_dims,
         },
     )
 
@@ -413,7 +440,7 @@ def xarray_reduce(
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
-    for name, expect, by_ in zip(group_names, expected_groups, by_broad):
+    for name, expect, by_ in zip(group_names, expected_groups, by_da):
         # Can't remove this till xarray handles IntervalIndex
         if isinstance(expect, pd.IntervalIndex):
             expect = expect.to_numpy()
@@ -443,7 +470,7 @@ def xarray_reduce(
                 template = obj
 
             if actual[var].ndim > 1:
-                actual[var] = _restore_dim_order(actual[var], template, by_broad[0])
+                actual[var] = _restore_dim_order(actual[var], template, by_da[0])
 
     if missing_dim:
         for k, v in missing_dim.items():

@@ -173,9 +173,10 @@ def find_group_cohorts(labels, chunks, merge: bool = True):
 
     # Build an array with the shape of labels, but where every element is the "chunk number"
     # 1. First subset the array appropriately
-    axis = range(-labels.ndim, 0)
+    axis = tuple(range(-labels.ndim, 0))
     # Easier to create a dask array and use the .blocks property
     array = dask.array.ones(tuple(sum(c) for c in chunks), chunks=chunks)
+    labels = np.broadcast_to(labels, array.shape[-labels.ndim :])
 
     #  Iterate over each block and create a new block of same shape with "chunk number"
     shape = tuple(array.blocks.shape[ax] for ax in axis)
@@ -479,7 +480,7 @@ def factorize_(
                 idx, groups = pd.factorize(flat, sort=sort)
 
             found_groups.append(np.array(groups))
-        factorized.append(idx)
+        factorized.append(idx.reshape(groupvar.shape))
 
     grp_shape = tuple(len(grp) for grp in found_groups)
     ngroups = math.prod(grp_shape)
@@ -489,12 +490,11 @@ def factorize_(
         # Restore these after the raveling
         nan_by_mask = reduce(np.logical_or, [(f == -1) for f in factorized])
         group_idx[nan_by_mask] = -1
-        group_idx = group_idx.reshape(by[0].shape)
     else:
         group_idx = factorized[0]
 
     if fastpath:
-        return group_idx.reshape(by[0].shape), found_groups, grp_shape
+        return group_idx, found_groups, grp_shape
 
     if np.isscalar(axis) and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
@@ -502,7 +502,6 @@ def factorize_(
         # we collapse to a 2D by and axis=-1
         offset_group = True
         group_idx, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
-        group_idx = group_idx.reshape(-1)
     else:
         size = ngroups
         offset_group = False
@@ -647,6 +646,8 @@ def chunk_reduce(
     else:
         nax = by.ndim
 
+    assert by.ndim <= array.ndim
+
     final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
     final_groups_shape = (1,) * (nax - 1)
 
@@ -667,9 +668,17 @@ def chunk_reduce(
     )
     groups = groups[0]
 
+    if isinstance(axis, Sequence):
+        needs_broadcast = any(
+            group_idx.shape[ax] != array.shape[ax] and group_idx.shape[ax] == 1
+            for ax in range(-len(axis), 0)
+        )
+        if needs_broadcast:
+            group_idx = np.broadcast_to(group_idx, array.shape[-by.ndim :])
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by.ndim] + (math.prod(array.shape[-by.ndim :]),)
     array = array.reshape(newshape)
+    group_idx = group_idx.reshape(-1)
 
     assert group_idx.ndim == 1
     empty = np.all(props.nanmask)
@@ -1216,11 +1225,11 @@ def dask_groupby_agg(
     # Unifying chunks is necessary for argreductions.
     # We need to rechunk before zipping up with the index
     # let's always do it anyway
-    if not is_duck_dask_array(by):
-        # chunk numpy arrays like the input array
-        # This removes an extra rechunk-merge layer that would be
-        # added otherwise
-        by = dask.array.from_array(by, chunks=tuple(array.chunks[ax] for ax in range(-by.ndim, 0)))
+    # if not is_duck_dask_array(by):
+    # chunk numpy arrays like the input array
+    # This removes an extra rechunk-merge layer that would be
+    # added otherwise
+    #    by = dask.array.from_array(by, chunks=tuple(array.chunks[ax] for ax in range(-by.ndim, 0)))
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
     # preprocess the array: for argreductions, this zips the index together with the array block
@@ -1424,8 +1433,9 @@ def _validate_reindex(
 
 
 def _assert_by_is_aligned(shape, by):
+    assert all(b.ndim == by[0].ndim for b in by[1:])
     for idx, b in enumerate(by):
-        if shape[-b.ndim :] != b.shape:
+        if not all(j in [i, 1] for i, j in zip(shape[-b.ndim :], b.shape)):
             raise ValueError(
                 "`array` and `by` arrays must be aligned "
                 "i.e. array.shape[-by.ndim :] == by.shape. "
