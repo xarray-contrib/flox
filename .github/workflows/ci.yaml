@@ -77,7 +77,7 @@ jobs:
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set up conda environment
-        uses: mamba-org/provision-with-micromamba@v13
+        uses: mamba-org/provision-with-micromamba@v14
         with:
           environment-file: ci/${{ matrix.env }}.yml
           environment-name: flox-tests
@@ -100,7 +100,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set up conda environment
-        uses: mamba-org/provision-with-micromamba@v13
+        uses: mamba-org/provision-with-micromamba@v14
         with:
           environment-file: ci/upstream-dev-env.yml
           environment-name: flox-tests
@@ -122,7 +122,7 @@ jobs:
           repository: 'pydata/xarray'
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set up conda environment
-        uses: mamba-org/provision-with-micromamba@v13
+        uses: mamba-org/provision-with-micromamba@v14
         with:
           environment-file: ci/requirements/environment.yml
           environment-name: xarray-tests
