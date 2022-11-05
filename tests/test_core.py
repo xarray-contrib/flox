@@ -782,18 +782,21 @@ def test_dtype_preservation(dtype, func, engine):
 
 @requires_dask
 @pytest.mark.parametrize("dtype", [np.int32, np.int64])
+@pytest.mark.parametrize(
+    "labels_dtype", [pytest.param(np.int32, marks=pytest.mark.xfail), np.int64]
+)
 @pytest.mark.parametrize("method", ["map-reduce", "cohorts"])
-def test_cohorts_map_reduce_consistent_dtypes(method, dtype):
+def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
     repeats = np.array([4, 4, 12, 2, 3, 4], dtype=np.int32)
-    labels = np.repeat(np.arange(6, dtype=np.int32), repeats)
+    labels = np.repeat(np.arange(6, dtype=labels_dtype), repeats)
     array = dask.array.from_array(labels.astype(dtype), chunks=(4, 8, 4, 9, 4))
 
     actual, actual_groups = groupby_reduce(array, labels, func="count", method=method)
-    assert_equal(actual_groups, np.arange(6, dtype=np.int32))
+    assert_equal(actual_groups, np.arange(6, dtype=labels.dtype))
     assert_equal(actual, repeats.astype(np.int64))
 
     actual, actual_groups = groupby_reduce(array, labels, func="sum", method=method)
-    assert_equal(actual_groups, np.arange(6, dtype=np.int32))
+    assert_equal(actual_groups, np.arange(6, dtype=labels.dtype))
     assert_equal(actual, np.array([0, 4, 24, 6, 12, 20], dtype))
 
 
