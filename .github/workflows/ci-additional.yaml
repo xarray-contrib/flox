@@ -59,6 +59,7 @@ jobs:
           environment-name: flox-tests
           extra-specs: |
             python=${{env.PYTHON_VERSION}}
+            lxml
           cache-env: true
           cache-env-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
 
