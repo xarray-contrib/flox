@@ -205,6 +205,7 @@ def test_groupby_reduce_all(
         tolerance = None
 
     for kwargs in finalize_kwargs:
+        flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
         with np.errstate(invalid="ignore", divide="ignore"):
             if "arg" in func and add_nan_by:
                 array[..., nanmask] = np.nan
@@ -214,9 +215,7 @@ def test_groupby_reduce_all(
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
 
-        actual, *groups = groupby_reduce(
-            array, *bys, func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value
-        )
+        actual, *groups = groupby_reduce(array, *by, **flox_kwargs)
         assert actual.ndim == (array.ndim + nby - 1)
         assert expected.ndim == (array.ndim + nby - 1)
         expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
