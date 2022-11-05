@@ -475,7 +475,7 @@ def test_cache() -> None:
 
 @pytest.mark.parametrize("use_cftime", [True, False])
 @pytest.mark.parametrize("func", ["count", "mean"])
-def test_datetime_array_reduce(use_cftime: bool, func: str, engine: T_Engine) -> None:
+def test_datetime_array_reduce(use_cftime: bool, func: T_Agg, engine: T_Engine) -> None:
 
     time = xr.DataArray(
         xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
