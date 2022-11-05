@@ -7,7 +7,7 @@ dependencies:
   - xarray
   - numpy>=1.20
   - numpydoc
-  - numpy_groupies
+  - numpy_groupies>=0.9.19
   - toolz
   - matplotlib-base
   - myst-parser

@@ -6,6 +6,7 @@ import math
 import operator
 from collections import namedtuple
 from functools import partial, reduce
+from numbers import Integral
 from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Mapping, Sequence, Union
 
 import numpy as np
@@ -38,8 +39,7 @@ if TYPE_CHECKING:
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
     T_Engine = Literal["flox", "numpy", "numba"]
-    T_MethodCohorts = Literal["cohorts", "split-reduce"]
-    T_Method = Literal["map-reduce", "blockwise", T_MethodCohorts]
+    T_Method = Literal["map-reduce", "blockwise", "cohorts"]
     T_IsBins = Union[bool | Sequence[bool]]
 
 
@@ -136,10 +136,10 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks)
 
 
-def _unique(a):
+def _unique(a: np.ndarray) -> np.ndarray:
     """Much faster to use pandas unique and sort the results.
     np.unique sorts before uniquifying and is slow."""
-    return np.sort(pd.unique(a))
+    return np.sort(pd.unique(a.reshape(-1)))
 
 
 @memoize
@@ -160,8 +160,6 @@ def find_group_cohorts(labels, chunks, merge: bool = True):
     merge : bool, optional
         Attempt to merge cohorts when one cohort's chunks are a subset
         of another cohort's chunks.
-    method : ["split-reduce", "cohorts"], optional
-        Which method are we using?
 
     Returns
     -------
@@ -230,9 +228,9 @@ def find_group_cohorts(labels, chunks, merge: bool = True):
 
 
 def rechunk_for_cohorts(
-    array,
+    array: DaskArray,
     axis: T_Axis,
-    labels,
+    labels: np.ndarray,
     force_new_chunk_at,
     chunksize=None,
     ignore_old_chunks=False,
@@ -288,7 +286,7 @@ def rechunk_for_cohorts(
     divisions = []
     counter = 1
     for idx, lab in enumerate(labels):
-        if lab in force_new_chunk_at:
+        if lab in force_new_chunk_at or idx == 0:
             divisions.append(idx)
             counter = 1
             continue
@@ -305,6 +303,7 @@ def rechunk_for_cohorts(
             divisions.append(idx)
             counter = 1
             continue
+
         counter += 1
 
     divisions.append(len(labels))
@@ -313,6 +312,9 @@ def rechunk_for_cohorts(
         print(labels_at_breaks[:40])
 
     newchunks = tuple(np.diff(divisions))
+    if debug:
+        print(divisions[:10], newchunks[:10])
+        print(divisions[-10:], newchunks[-10:])
     assert sum(newchunks) == len(labels)
 
     if newchunks == array.chunks[axis]:
@@ -321,7 +323,7 @@ def rechunk_for_cohorts(
         return array.rechunk({axis: newchunks})
 
 
-def rechunk_for_blockwise(array, axis: T_Axis, labels):
+def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     embarassingly parallel group reductions.
@@ -814,8 +816,25 @@ def _expand_dims(results: IntermediateDict) -> IntermediateDict:
     return results
 
 
+def _find_unique_groups(x_chunk) -> np.ndarray:
+    from dask.base import flatten
+    from dask.utils import deepmap
+
+    unique_groups = _unique(np.asarray(tuple(flatten(deepmap(listify_groups, x_chunk)))))
+    unique_groups = unique_groups[~isnull(unique_groups)]
+
+    if len(unique_groups) == 0:
+        unique_groups = np.array([np.nan])
+    return unique_groups
+
+
 def _simple_combine(
-    x_chunk, agg: Aggregation, axis: T_Axes, keepdims: bool, is_aggregate: bool = False
+    x_chunk,
+    agg: Aggregation,
+    axis: T_Axes,
+    keepdims: bool,
+    reindex: bool,
+    is_aggregate: bool = False,
 ) -> IntermediateDict:
     """
     'Simple' combination of blockwise results.
@@ -828,8 +847,19 @@ def _simple_combine(
     4. At the final agggregate step, we squeeze out DUMMY_AXIS
     """
     from dask.array.core import deepfirst
+    from dask.utils import deepmap
 
-    results: IntermediateDict = {"groups": deepfirst(x_chunk)["groups"]}
+    if not reindex:
+        # We didn't reindex at the blockwise step
+        # So now reindex before combining by reducing along DUMMY_AXIS
+        unique_groups = _find_unique_groups(x_chunk)
+        x_chunk = deepmap(
+            partial(reindex_intermediates, agg=agg, unique_groups=unique_groups), x_chunk
+        )
+    else:
+        unique_groups = deepfirst(x_chunk)["groups"]
+
+    results: IntermediateDict = {"groups": unique_groups}
     results["intermediates"] = []
     axis_ = axis[:-1] + (DUMMY_AXIS,)
     for idx, combine in enumerate(agg.combine):
@@ -858,9 +888,9 @@ def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axes = None) -> np.ndarray:
     # return concatenate3(mapped)
 
 
-def reindex_intermediates(x, agg, unique_groups):
+def reindex_intermediates(x: IntermediateDict, agg: Aggregation, unique_groups) -> IntermediateDict:
     new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
-    newx = {"groups": np.broadcast_to(unique_groups, new_shape)}
+    newx: IntermediateDict = {"groups": np.broadcast_to(unique_groups, new_shape)}
     newx["intermediates"] = tuple(
         reindex_(
             v, from_=np.atleast_1d(x["groups"].squeeze()), to=pd.Index(unique_groups), fill_value=f
@@ -870,7 +900,7 @@ def reindex_intermediates(x, agg, unique_groups):
     return newx
 
 
-def listify_groups(x):
+def listify_groups(x: IntermediateDict):
     return list(np.atleast_1d(x["groups"].squeeze()))
 
 
@@ -884,7 +914,6 @@ def _grouped_combine(
     sort: bool = True,
 ) -> IntermediateDict:
     """Combine intermediates step of tree reduction."""
-    from dask.base import flatten
     from dask.utils import deepmap
 
     if isinstance(x_chunk, dict):
@@ -895,11 +924,7 @@ def _grouped_combine(
         # when there's only a single axis of reduction, we can just concatenate later,
         # reindexing is unnecessary
         # I bet we can minimize the amount of reindexing for mD reductions too, but it's complicated
-        unique_groups = _unique(tuple(flatten(deepmap(listify_groups, x_chunk))))
-        unique_groups = unique_groups[~isnull(unique_groups)]
-        if len(unique_groups) == 0:
-            unique_groups = [np.nan]
-
+        unique_groups = _find_unique_groups(x_chunk)
         x_chunk = deepmap(
             partial(reindex_intermediates, agg=agg, unique_groups=unique_groups), x_chunk
         )
@@ -1046,6 +1071,44 @@ def _reduce_blockwise(
     return result
 
 
+def _normalize_indexes(array, flatblocks, blkshape):
+    """
+    .blocks accessor can only accept one iterable at a time,
+    but can handle multiple slices.
+    To minimize tasks and layers, we normalize to produce slices
+    along as many axes as possible, and then repeatedly apply
+    any remaining iterables in a loop.
+
+    TODO: move this upstream
+    """
+    unraveled = np.unravel_index(flatblocks, blkshape)
+
+    normalized: list[Union[int, np.ndarray, slice]] = []
+    for ax, idx in enumerate(unraveled):
+        i = _unique(idx).squeeze()
+        if i.ndim == 0:
+            normalized.append(i.item())
+        else:
+            if np.array_equal(i, np.arange(blkshape[ax])):
+                normalized.append(slice(None))
+            elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
+                normalized.append(slice(i[0], i[-1] + 1))
+            else:
+                normalized.append(list(i))
+    full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
+
+    # has no iterables
+    noiter = list(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
+    # has all iterables
+    alliter = {ax: i for ax, i in enumerate(full_normalized) if hasattr(i, "__len__")}
+
+    mesh = dict(zip(alliter.keys(), np.ix_(*alliter.values())))
+
+    full_tuple = tuple(i if ax not in mesh else mesh[ax] for ax, i in enumerate(noiter))
+
+    return full_tuple
+
+
 def subset_to_blocks(
     array: DaskArray, flatblocks: Sequence[int], blkshape: tuple[int] | None = None
 ) -> DaskArray:
@@ -1062,45 +1125,34 @@ def subset_to_blocks(
     -------
     dask.array
     """
+    import dask.array
+    from dask.array.slicing import normalize_index
+    from dask.base import tokenize
+    from dask.highlevelgraph import HighLevelGraph
+
     if blkshape is None:
         blkshape = array.blocks.shape
 
-    unraveled = np.unravel_index(flatblocks, blkshape)
-    normalized: list[Union[int, np.ndarray, slice]] = []
-    for ax, idx in enumerate(unraveled):
-        i = _unique(idx).squeeze()
-        if i.ndim == 0:
-            normalized.append(i.item())
-        else:
-            if np.array_equal(i, np.arange(blkshape[ax])):
-                normalized.append(slice(None))
-            elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
-                normalized.append(slice(i[0], i[-1] + 1))
-            else:
-                normalized.append(i)
-    full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
+    index = _normalize_indexes(array, flatblocks, blkshape)
 
-    # has no iterables
-    noiter = tuple(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
-    # has all iterables
-    alliter = {
-        ax: i if hasattr(i, "__len__") else slice(None) for ax, i in enumerate(full_normalized)
-    }
-
-    # apply everything but the iterables
-    if all(i == slice(None) for i in noiter):
+    if all(not isinstance(i, np.ndarray) and i == slice(None) for i in index):
         return array
 
-    subset = array.blocks[noiter]
+    # These rest is copied from dask.array.core.py with slight modifications
+    index = normalize_index(index, array.numblocks)
+    index = tuple(slice(k, k + 1) if isinstance(k, Integral) else k for k in index)
 
-    for ax, inds in alliter.items():
-        if isinstance(inds, slice):
-            continue
-        idxr = [slice(None, None)] * array.ndim
-        idxr[ax] = inds
-        subset = subset.blocks[tuple(idxr)]
+    name = "blocks-" + tokenize(array, index)
+    new_keys = array._key_array[index]
 
-    return subset
+    squeezed = tuple(np.squeeze(i) if isinstance(i, np.ndarray) else i for i in index)
+    chunks = tuple(tuple(np.array(c)[i].tolist()) for c, i in zip(array.chunks, squeezed))
+
+    keys = itertools.product(*(range(len(c)) for c in chunks))
+    layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
+
+    return dask.array.Array(graph, name, chunks, meta=array)
 
 
 def _extract_unknown_groups(reduced, group_chunks, dtype) -> tuple[DaskArray]:
@@ -1143,7 +1195,6 @@ def dask_groupby_agg(
 
     import dask.array
     from dask.array.core import slices_from_chunks
-    from dask.highlevelgraph import HighLevelGraph
 
     # I think _tree_reduce expects this
     assert isinstance(axis, Sequence)
@@ -1187,7 +1238,8 @@ def dask_groupby_agg(
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
 
-    do_simple_combine = method != "blockwise" and reindex and not _is_arg_reduction(agg)
+    do_simple_combine = not _is_arg_reduction(agg)
+
     if method == "blockwise":
         #  use the "non dask" code path, but applied blockwise
         blockwise_method = partial(
@@ -1211,10 +1263,13 @@ def dask_groupby_agg(
         partial(
             blockwise_method,
             axis=axis,
-            expected_groups=None if method in ["split-reduce", "cohorts"] else expected_groups,
+            expected_groups=None if method == "cohorts" else expected_groups,
             engine=engine,
             sort=sort,
         ),
+        # output indices are the same as input indices
+        # Unlike xhistogram, we don't always know what the size of the group
+        # dimension will be unless reindex=True
         inds,
         array,
         inds,
@@ -1224,7 +1279,7 @@ def dask_groupby_agg(
         dtype=array.dtype,  # this is purely for show
         meta=array._meta,
         align_arrays=False,
-        token=f"{name}-chunk-{token}",
+        name=f"{name}-chunk-{token}",
     )
 
     if expected_groups is None:
@@ -1236,34 +1291,35 @@ def dask_groupby_agg(
         (len(expected_groups),) if expected_groups is not None else (np.nan,),
     )
 
-    if method in ["map-reduce", "cohorts", "split-reduce"]:
+    if method in ["map-reduce", "cohorts"]:
         combine: Callable[..., IntermediateDict]
         if do_simple_combine:
-            combine = _simple_combine
+            combine = partial(_simple_combine, reindex=reindex)
+            combine_name = "simple-combine"
         else:
             combine = partial(_grouped_combine, engine=engine, sort=sort)
+            combine_name = "grouped-combine"
+
+        tree_reduce = partial(
+            dask.array.reductions._tree_reduce,
+            name=f"{name}-reduce-{method}-{combine_name}",
+            dtype=array.dtype,
+            axis=axis,
+            keepdims=True,
+            concatenate=False,
+        )
+        aggregate = partial(_aggregate, combine=combine, agg=agg, fill_value=fill_value)
 
         # Each chunk of `reduced`` is really a dict mapping
         # 1. reduction name to array
         # 2. "groups" to an array of group labels
         # Note: it does not make sense to interpret axis relative to
         # shape of intermediate results after the blockwise call
-        tree_reduce = partial(
-            dask.array.reductions._tree_reduce,
-            combine=partial(combine, agg=agg),
-            name=f"{name}-reduce-{method}",
-            dtype=array.dtype,
-            axis=axis,
-            keepdims=True,
-            concatenate=False,
-        )
-        aggregate = partial(
-            _aggregate, combine=combine, agg=agg, fill_value=fill_value, reindex=reindex
-        )
         if method == "map-reduce":
             reduced = tree_reduce(
                 intermediate,
-                aggregate=partial(aggregate, expected_groups=expected_groups),
+                combine=partial(combine, agg=agg),
+                aggregate=partial(aggregate, expected_groups=expected_groups, reindex=reindex),
             )
             if is_duck_dask_array(by_input) and expected_groups is None:
                 groups = _extract_unknown_groups(reduced, group_chunks=group_chunks, dtype=by.dtype)
@@ -1274,33 +1330,30 @@ def dask_groupby_agg(
                     expected_groups_ = expected_groups
                 groups = (expected_groups_.to_numpy(),)
 
-        elif method in ["cohorts", "split-reduce"]:
+        elif method == "cohorts":
             chunks_cohorts = find_group_cohorts(
                 by_input, [array.chunks[ax] for ax in axis], merge=True
             )
             reduced_ = []
             groups_ = []
             for blks, cohort in chunks_cohorts.items():
+                index = pd.Index(cohort)
                 subset = subset_to_blocks(intermediate, blks, array.blocks.shape[-len(axis) :])
-                if do_simple_combine:
-                    # reindex so that reindex can be set to True later
-                    reindexed = dask.array.map_blocks(
-                        reindex_intermediates,
-                        subset,
-                        agg=agg,
-                        unique_groups=cohort,
-                        meta=subset._meta,
-                    )
-                else:
-                    reindexed = subset
-
+                reindexed = dask.array.map_blocks(
+                    reindex_intermediates, subset, agg=agg, unique_groups=index, meta=subset._meta
+                )
+                # now that we have reindexed, we can set reindex=True explicitlly
                 reduced_.append(
                     tree_reduce(
                         reindexed,
-                        aggregate=partial(aggregate, expected_groups=cohort, reindex=reindex),
+                        combine=partial(combine, agg=agg, reindex=True),
+                        aggregate=partial(aggregate, expected_groups=index, reindex=True),
                     )
                 )
-                groups_.append(cohort)
+                # This is done because pandas promotes to 64-bit types when an Index is created
+                # So we use the index to generate the return value for consistency with "map-reduce"
+                # This is important on windows
+                groups_.append(index.values)
 
             reduced = dask.array.concatenate(reduced_, axis=-1)
             groups = (np.concatenate(groups_),)
@@ -1312,71 +1365,94 @@ def dask_groupby_agg(
         # find number of groups in each chunk, this is needed for output chunks
         # along the reduced axis
         slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
-        if expected_groups is None:
-            groups_in_block = tuple(_unique(by_input[slc]) for slc in slices)
-        else:
-            # For cohorts, we could be indexing a block with groups that
-            # are not in the cohort (usually for nD `by`)
-            # Only keep the expected groups.
-            groups_in_block = tuple(
-                np.intersect1d(by_input[slc], expected_groups) for slc in slices
-            )
+        groups_in_block = tuple(_unique(by_input[slc]) for slc in slices)
         groups = (np.concatenate(groups_in_block),)
-
         ngroups_per_block = tuple(len(grp) for grp in groups_in_block)
         group_chunks = (ngroups_per_block,)
-
     else:
         raise ValueError(f"Unknown method={method}.")
 
-    # extract results from the dict
+    out_inds = inds[: -len(axis)] + (inds[-1],)
     output_chunks = reduced.chunks[: -len(axis)] + group_chunks
-    ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
-    layer2: dict[tuple, tuple] = {}
-    agg_name = f"{name}-{token}"
-    for ochunk in itertools.product(*ochunks):
-        if method == "blockwise":
-            if len(axis) == 1:
-                inchunk = ochunk
-            else:
-                nblocks = tuple(len(array.chunks[ax]) for ax in axis)
-                inchunk = ochunk[:-1] + np.unravel_index(ochunk[-1], nblocks)
-        else:
-            inchunk = ochunk[:-1] + (0,) * (len(axis) - 1) + (ochunk[-1],)
+    if method == "blockwise" and len(axis) > 1:
+        # The final results are available but the blocks along axes
+        # need to be reshaped to axis=-1
+        # I don't know that this is possible with blockwise
+        # All other code paths benefit from an unmaterialized Blockwise layer
+        reduced = _collapse_blocks_along_axes(reduced, axis, group_chunks)
 
-        layer2[(agg_name, *ochunk)] = (operator.getitem, (reduced.name, *inchunk), agg.name)
-
-    result = dask.array.Array(
-        HighLevelGraph.from_collections(agg_name, layer2, dependencies=[reduced]),
-        agg_name,
-        chunks=output_chunks,
+    # Can't use map_blocks because it forces concatenate=True along drop_axes,
+    result = dask.array.blockwise(
+        _extract_result,
+        out_inds,
+        reduced,
+        inds,
+        adjust_chunks=dict(zip(out_inds, output_chunks)),
         dtype=agg.dtype[agg.name],
+        key=agg.name,
+        name=f"{name}-{token}",
+        concatenate=False,
     )
 
     return (result, groups)
 
 
-def _validate_reindex(reindex: bool | None, func, method: T_Method, expected_groups) -> bool | None:
+def _collapse_blocks_along_axes(reduced, axis, group_chunks):
+    import dask.array
+    from dask.highlevelgraph import HighLevelGraph
+
+    nblocks = tuple(reduced.numblocks[ax] for ax in axis)
+    output_chunks = reduced.chunks[: -len(axis)] + ((1,) * (len(axis) - 1),) + group_chunks
+
+    # extract results from the dict
+    ochunks = tuple(range(len(chunks_v)) for chunks_v in output_chunks)
+    layer2: dict[tuple, tuple] = {}
+    name = f"reshape-{reduced.name}"
+
+    for ochunk in itertools.product(*ochunks):
+        inchunk = ochunk[: -len(axis)] + np.unravel_index(ochunk[-1], nblocks)
+        layer2[(name, *ochunk)] = (reduced.name, *inchunk)
+
+    return dask.array.Array(
+        HighLevelGraph.from_collections(name, layer2, dependencies=[reduced]),
+        name,
+        chunks=output_chunks,
+        dtype=reduced.dtype,
+    )
+
+
+def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
+    from dask.array.core import deepfirst
+
+    # deepfirst should be not be needed here but sometimes we receive a list of dict?
+    return deepfirst(result_dict)[key]
+
+
+def _validate_reindex(
+    reindex: bool | None, func, method: T_Method, expected_groups, by_is_dask: bool
+) -> bool:
     if reindex is True:
         if _is_arg_reduction(func):
             raise NotImplementedError
-        if method == "blockwise":
-            raise NotImplementedError
+        if method in ["blockwise", "cohorts"]:
+            raise ValueError(
+                "reindex=True is not a valid choice for method='blockwise' or method='cohorts'."
+            )
 
-    if method == "blockwise" or _is_arg_reduction(func):
-        reindex = False
+    if reindex is None:
+        if method == "blockwise" or _is_arg_reduction(func):
+            reindex = False
 
-    if reindex is None and expected_groups is not None:
-        reindex = True
+        elif method == "cohorts":
+            reindex = False
 
-    if method in ["split-reduce", "cohorts"] and reindex is False:
-        raise NotImplementedError
+        elif method == "map-reduce":
+            if expected_groups is None and by_is_dask:
+                reindex = False
+            else:
+                reindex = True
 
-    if method in ["split-reduce", "cohorts"] and reindex is None:
-        reindex = True
-
-    # TODO: Should reindex be a bool-only at this point? Would've been nice but
-    # None's are relied on after this function as well.
+    assert isinstance(reindex, bool)
     return reindex
 
 
@@ -1565,7 +1641,6 @@ def groupby_reduce(
             "argreductions not supported for engine='flox' yet."
             "Try engine='numpy' or engine='numba' instead."
         )
-    reindex = _validate_reindex(reindex, func, method, expected_groups)
 
     bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
@@ -1573,6 +1648,11 @@ def groupby_reduce(
 
     if method in ["split-reduce", "cohorts"] and by_is_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
+
+    if method == "split-reduce":
+        method = "cohorts"
+
+    reindex = _validate_reindex(reindex, func, method, expected_groups, by_is_dask)
 
     if not is_duck_array(array):
         array = np.asarray(array)
@@ -1602,7 +1682,7 @@ def groupby_reduce(
 
     # TODO: could restrict this to dask-only
     factorize_early = (nby > 1) or (
-        any(isbins) and method in ["split-reduce", "cohorts"] and is_duck_dask_array(array)
+        any(isbins) and method == "cohorts" and is_duck_dask_array(array)
     )
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
@@ -1621,7 +1701,7 @@ def groupby_reduce(
         axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
     nax = len(axis_)
 
-    if method in ["blockwise", "cohorts", "split-reduce"] and nax != by_.ndim:
+    if method in ["blockwise", "cohorts"] and nax != by_.ndim:
         raise NotImplementedError(
             "Must reduce along all dimensions of `by` when method != 'map-reduce'."
             f"Received method={method!r}"
@@ -1713,7 +1793,7 @@ def groupby_reduce(
             assert len(groups) == 1
             sorted_idx = np.argsort(groups[0])
             # This optimization helps specifically with resampling
-            if not (sorted_idx[1:] <= sorted_idx[:-1]).all():
+            if not (sorted_idx[:-1] <= sorted_idx[1:]).all():
                 result = result[..., sorted_idx]
                 groups = (groups[0][sorted_idx],)
 
