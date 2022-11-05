@@ -33,8 +33,8 @@ known_third_party = [
 
 [tool.mypy]
 allow_redefinition = true
-exclude = "properties|asv_bench|doc|tests|flycheck"
-files = "flox/*.py"
+exclude = "properties|doc|flycheck"
+files = "flox"
 show_error_codes = true
 
 [[tool.mypy.overrides]]
