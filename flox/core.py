@@ -1808,9 +1808,4 @@ def groupby_reduce(
 
     if _is_minmax_reduction(func) and is_bool_array:
         result = result.astype(bool)
-
-    # we lose dtype information when creating a pandas Index
-    # That's always int64 or float64, so cast back
-    # I think this will get fixed in pandas 2.0
-    groups = tuple(g.astype(b.dtype) for g, b in zip(groups, bys))
     return (result, *groups)
