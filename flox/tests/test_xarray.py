@@ -28,7 +28,7 @@ except ValueError:
     pass
 
 if TYPE_CHECKING:
-    from flox.core import T_Agg, T_Engine
+    from flox.core import T_Engine
 
 
 tolerance64 = {"rtol": 1e-15, "atol": 1e-18}
@@ -475,7 +475,7 @@ def test_cache() -> None:
 
 @pytest.mark.parametrize("use_cftime", [True, False])
 @pytest.mark.parametrize("func", ["count", "mean"])
-def test_datetime_array_reduce(use_cftime: bool, func: T_Agg, engine: T_Engine) -> None:
+def test_datetime_array_reduce(use_cftime: bool, func, engine: T_Engine) -> None:
 
     time = xr.DataArray(
         xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
