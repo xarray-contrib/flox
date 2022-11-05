@@ -232,6 +232,9 @@ def test_groupby_reduce_all(
         params = list(itertools.product(["map-reduce"], [True, False, None]))
         params.extend(itertools.product(["cohorts"], [False, None]))
         for method, reindex in params:
+            flox_kwargs = dict(
+                func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value
+            )
             call = partial(
                 groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
             )
@@ -395,7 +398,7 @@ def test_groupby_agg_dask(
         actual, _ = groupby_reduce(array, by, engine=engine, **kwargs)
     assert_equal(expected, actual)
 
-    expected_groups = [0, 2, 1]
+    kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=False)
     assert_equal(groups, np.array([0, 2, 1], dtype=np.intp))
@@ -1005,7 +1008,7 @@ def test_multiple_groupers() -> None:
 
 
 def test_factorize_reindex_sorting_strings() -> None:
-    expected = factorize_(
+    kwargs = dict(
         by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),
         axis=-1,
         expected_groups=(np.array(["El-Nino", "Neutral", "foo", "La-Nina"]),),
@@ -1025,8 +1028,7 @@ def test_factorize_reindex_sorting_strings() -> None:
 
 
 def test_factorize_reindex_sorting_ints() -> None:
-    expected_groups = (np.array([0, 1, 2, 3, 4, 5]),)
-    expected = factorize_(
+    kwargs = dict(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
         axis=-1,
         expected_groups=(np.array([0, 1, 2, 3, 4, 5], np.int64),),
@@ -1038,7 +1040,7 @@ def test_factorize_reindex_sorting_ints() -> None:
     expected = factorize_(**kwargs, reindex=True, sort=False)[0]
     assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.int64))
 
-    expected_groups = (np.arange(5, -1, -1),)
+    kwargs["expected_groups"] = (np.arange(5, -1, -1),)
 
     expected = factorize_(**kwargs, reindex=True, sort=True)[0]
     assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.int64))
