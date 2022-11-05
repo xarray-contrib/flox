@@ -231,9 +231,6 @@ def test_groupby_reduce_all(
         params = list(itertools.product(["map-reduce"], [True, False, None]))
         params.extend(itertools.product(["cohorts"], [False, None]))
         for method, reindex in params:
-            flox_kwargs = dict(
-                func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value
-            )
             call = partial(
                 groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
             )
