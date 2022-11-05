@@ -361,78 +361,32 @@ def test_groupby_agg_dask(
         labels[:3] = np.nan  # entire block is NaN when group_chunks=3
         labels[-2:] = np.nan
 
-    kwargs = dict(
+    kwargs: dict[str, Any] = dict(
         func=func, expected_groups=[0, 1, 2], fill_value=False if func in ["all", "any"] else 123
     )
-    expected_groups = [0, 1, 2]
-    fill_value = False if func in ["all", "any"] else 123
 
-    expected, _ = groupby_reduce(
-        array.compute(),
-        labels,
-        engine="numpy",
-        func=func,
-        expected_groups=expected_groups,
-        fill_value=fill_value,
-    )
-    actual, _ = groupby_reduce(
-        array.compute(),
-        labels,
-        engine=engine,
-        func=func,
-        expected_groups=expected_groups,
-        fill_value=fill_value,
-    )
+    expected, _ = groupby_reduce(array.compute(), labels, engine="numpy", **kwargs)
+    actual, _ = groupby_reduce(array.compute(), labels, engine=engine, **kwargs)
     assert_equal(actual, expected)
 
     with raise_if_dask_computes():
-        actual, _ = groupby_reduce(
-            array,
-            labels,
-            engine=engine,
-            func=func,
-            expected_groups=expected_groups,
-            fill_value=fill_value,
-        )
+        actual, _ = groupby_reduce(array, labels, engine=engine, **kwargs)
     assert_equal(actual, expected)
 
     by = from_array(labels, group_chunks)
     with raise_if_dask_computes():
-        actual, _ = groupby_reduce(
-            array,
-            by,
-            engine=engine,
-            func=func,
-            expected_groups=expected_groups,
-            fill_value=fill_value,
-        )
+        actual, _ = groupby_reduce(array, by, engine=engine, **kwargs)
     assert_equal(expected, actual)
 
     expected_groups = [0, 2, 1]
     with raise_if_dask_computes():
-        actual, groups = groupby_reduce(
-            array,
-            by,
-            engine=engine,
-            func=func,
-            expected_groups=expected_groups,
-            fill_value=fill_value,
-            sort=False,
-        )
+        actual, groups = groupby_reduce(array, by, **kwargs, sort=False)
     assert_equal(groups, [0, 2, 1])
     assert_equal(expected, actual[..., [0, 2, 1]])
 
     kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
-        actual, groups = groupby_reduce(
-            array,
-            by,
-            engine=engine,
-            func=func,
-            expected_groups=expected_groups,
-            fill_value=fill_value,
-            sort=True,
-        )
+        actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=True)
     assert_equal(groups, [0, 1, 2])
     assert_equal(expected, actual)
 
@@ -441,31 +395,30 @@ def test_numpy_reduce_axis_subset(engine: T_Engine) -> None:
     # TODO: add NaNs
     by = labels2d
     array = np.ones_like(by)
-    result, _ = groupby_reduce(array, by, func="count", engine=engine, fill_value=0, axis=1)
+    kwargs: dict[str, Any] = dict(func="count", engine=engine, fill_value=0)
+    result, _ = groupby_reduce(array, by, *[], axis=1, **kwargs)
     assert_equal(result, [[2, 3], [2, 3]])
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
-    result, _ = groupby_reduce(array, by, func="count", engine=engine, fill_value=0, axis=1)
+    result, _ = groupby_reduce(array, by, **kwargs, axis=1)
     subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, func="count", engine=engine, fill_value=0, axis=2)
+    result, _ = groupby_reduce(array, by, **kwargs, axis=2)
     subarr = np.array([[2, 3], [2, 3]])
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, func="count", engine=engine, fill_value=0, axis=(1, 2))
+    result, _ = groupby_reduce(array, by, **kwargs, axis=(1, 2))
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(array, by, func="count", engine=engine, fill_value=0, axis=(2, 1))
+    result, _ = groupby_reduce(array, by, **kwargs, axis=(2, 1))
     assert_equal(result, expected)
 
-    result, _ = groupby_reduce(
-        array, by[0, ...], func="count", engine=engine, fill_value=0, axis=(1, 2)
-    )
+    result, _ = groupby_reduce(array, by[0, ...], **kwargs, axis=(1, 2))
     expected = np.array([[4, 6], [4, 6], [4, 6]])
     assert_equal(result, expected)
 
@@ -863,31 +816,15 @@ def test_cohorts_nd_by(func: str, method: T_Method, axis: int | None, engine: T_
     if axis is not None and method != "map-reduce":
         pytest.xfail()
 
-    actual, groups = groupby_reduce(
-        array, by, func=func, engine=engine, method=method, axis=axis, fill_value=fill_value
+    kwargs: dict[str, Any] = dict(
+        func=func, engine=engine, method=method, axis=axis, fill_value=fill_value
     )
-    expected, sorted_groups = groupby_reduce(
-        array.compute(),
-        by,
-        func=func,
-        engine=engine,
-        method=method,
-        axis=axis,
-        fill_value=fill_value,
-    )
+    actual, groups = groupby_reduce(array, by, **kwargs)
+    expected, sorted_groups = groupby_reduce(array.compute(), by, **kwargs)
     assert_equal(groups, sorted_groups)
     assert_equal(actual, expected)
 
-    actual, groups = groupby_reduce(
-        array,
-        by,
-        sort=False,
-        func=func,
-        engine=engine,
-        method=method,
-        axis=axis,
-        fill_value=fill_value,
-    )
+    actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
     if method == "map-reduce":
         assert_equal(groups, [1, 30, 2, 31, 3, 4, 40])
     else:
@@ -971,17 +908,16 @@ def test_map_reduce_blockwise_mixed() -> None:
 @requires_dask
 @pytest.mark.parametrize("method", ["split-reduce", "blockwise", "map-reduce", "cohorts"])
 def test_group_by_datetime(engine: T_Engine, method: T_Method) -> None:
-    t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()
-    data = t.dt.dayofyear
-    daskarray = dask.array.from_array(data.values, chunks=30)
-
-    actual, _ = groupby_reduce(
-        daskarray,
-        t,
+    kwargs: dict[str, Any] = dict(
         func="mean",
         method=method,
         engine=engine,
     )
+    t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()
+    data = t.dt.dayofyear
+    daskarray = dask.array.from_array(data.values, chunks=30)
+
+    actual, _ = groupby_reduce(daskarray, t, **kwargs)
     expected = data.to_numpy().astype(float)
     assert_equal(expected, actual)
 
@@ -989,15 +925,7 @@ def test_group_by_datetime(engine: T_Engine, method: T_Method) -> None:
         return None
 
     edges = pd.date_range("1999-12-31", "2000-12-31", freq="M").to_series().to_numpy()
-    actual, _ = groupby_reduce(
-        daskarray,
-        t.to_numpy(),
-        isbin=True,
-        expected_groups=edges,
-        func="mean",
-        method=method,
-        engine=engine,
-    )
+    actual, _ = groupby_reduce(daskarray, t.to_numpy(), isbin=True, expected_groups=edges, **kwargs)
     expected = data.resample("M").mean().to_numpy()
     assert_equal(expected, actual)
 
@@ -1006,9 +934,7 @@ def test_group_by_datetime(engine: T_Engine, method: T_Method) -> None:
         t.to_numpy(),
         isbin=True,
         expected_groups=edges,
-        func="mean",
-        method=method,
-        engine=engine,
+        **kwargs,
     )
     expected = np.broadcast_to(expected, (2, 3, expected.shape[-1]))
     assert_equal(expected, actual)
