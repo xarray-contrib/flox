@@ -1811,6 +1811,6 @@ def groupby_reduce(
 
     # we lose dtype information when creating a pandas Index
     # That's always int64 or float64, so cast back
-    # TODO: migrate to NumericIndex but I think this will just fix itself
+    # I think this will get fixed in pandas 2.0
     groups = tuple(g.astype(b.dtype) for g, b in zip(groups, bys))
     return (result, *groups)
