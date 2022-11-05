@@ -26,7 +26,6 @@ from flox.core import (
 from . import (
     assert_equal,
     assert_equal_tuple,
-    engine,
     has_dask,
     raise_if_dask_computes,
     requires_dask,
