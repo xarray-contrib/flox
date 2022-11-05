@@ -21,22 +21,22 @@ def pytest_runtest_setup(item):
         pytest.skip("set --run-network-tests to run test requiring an internet connection")
 
 
-@pytest.fixture(autouse=True)
-def add_standard_imports(doctest_namespace, tmpdir):
-    import numpy as np
-    import pandas as pd
+# @pytest.fixture(autouse=True)
+# def add_standard_imports(doctest_namespace, tmpdir):
+#     import numpy as np
+#     import pandas as pd
 
-    import xarray as xr
+#     import xarray as xr
 
-    doctest_namespace["np"] = np
-    doctest_namespace["pd"] = pd
-    doctest_namespace["xr"] = xr
+#     doctest_namespace["np"] = np
+#     doctest_namespace["pd"] = pd
+#     doctest_namespace["xr"] = xr
 
-    # always seed numpy.random to make the examples deterministic
-    np.random.seed(0)
+#     # always seed numpy.random to make the examples deterministic
+#     np.random.seed(0)
 
-    # always switch to the temporary directory, so files get written there
-    tmpdir.chdir()
+#     # always switch to the temporary directory, so files get written there
+#     tmpdir.chdir()
 
 
 @pytest.fixture(scope="module", params=["flox", "numpy", "numba"])
