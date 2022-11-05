@@ -782,7 +782,7 @@ def test_dtype_preservation(dtype, func, engine):
 
 @requires_dask
 @pytest.mark.parametrize("dtype", [np.int32, np.int64])
-@pytest.mark.parametrize("method", ["split-reduce", "map-reduce", "cohorts"])
+@pytest.mark.parametrize("method", ["map-reduce", "cohorts"])
 def test_cohorts_map_reduce_consistent_dtypes(method, dtype):
     repeats = np.array([4, 4, 12, 2, 3, 4], dtype=np.int32)
     labels = np.repeat(np.arange(6, dtype=np.int32), repeats)
