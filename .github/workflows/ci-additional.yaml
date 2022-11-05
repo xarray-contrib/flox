@@ -97,14 +97,14 @@ jobs:
         uses: mamba-org/provision-with-micromamba@v14
         with:
           environment-file: ${{env.CONDA_ENV_FILE}}
-          environment-name: xarray-tests
+          environment-name: flox-tests
           extra-specs: |
             python=${{env.PYTHON_VERSION}}
             conda
             lxml
           cache-env: true
           cache-env-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
-      - name: Install xarray
+      - name: Install flox
         run: |
           python -m pip install --no-deps -e .
       - name: Version info
