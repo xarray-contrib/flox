@@ -837,7 +837,7 @@ def test_cohorts_nd_by(func: str, method: T_Method, axis: int | None, engine: T_
     by[0, 1] = 30
     by[2, 1] = 40
     by[0, 4] = 31
-    array = np.broadcast_to(array, (2, 3) + array.shape)
+    array = dask.array.broadcast_to(array, (2, 3) + array.shape)
 
     if "arg" in func and (axis is None or engine == "flox"):
         pytest.skip()
