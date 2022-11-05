@@ -503,7 +503,7 @@ def test_groupby_bins_indexed_coordinate() -> None:
         expected_groups=([40, 50, 60, 70],),
         isbin=(True,),
         func="mean",
-        method="split-reduce",
+        method="cohorts",
     )
     xr.testing.assert_allclose(expected, actual)
 

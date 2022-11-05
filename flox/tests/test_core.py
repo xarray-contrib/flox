@@ -80,6 +80,10 @@ ALL_FUNCS = (
 if TYPE_CHECKING:
     from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt, T_Method
 
+    # Let anything through in kwargs for code readability, will likely miss a lot of
+    # type errors within these dicts though:
+    T_Kwargs = dict[str, Any]
+
 
 def test_alignment_error():
     da = np.ones((12,))
@@ -195,7 +199,7 @@ def test_groupby_reduce_all(
             bys[idx][2 * idx : 2 * idx + 3] = np.nan
     nanmask = reduce(np.logical_or, (np.isnan(b) for b in bys))
 
-    finalize_kwargs: list[dict[str, Any]] = [{}]
+    finalize_kwargs: list[T_Kwargs] = [{}]
     if "var" in func or "std" in func:
         finalize_kwargs = finalize_kwargs + [{"ddof": 1}, {"ddof": 0}]
         fill_value = np.nan
@@ -205,7 +209,9 @@ def test_groupby_reduce_all(
         tolerance = None
 
     for kwargs in finalize_kwargs:
-        flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
+        flox_kwargs: T_Kwargs = dict(
+            func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value
+        )
         with np.errstate(invalid="ignore", divide="ignore"):
             if "arg" in func and add_nan_by:
                 array[..., nanmask] = np.nan
@@ -377,7 +383,7 @@ def test_groupby_agg_dask(
         labels[:3] = np.nan  # entire block is NaN when group_chunks=3
         labels[-2:] = np.nan
 
-    kwargs: dict[str, Any] = dict(
+    kwargs: T_Kwargs = dict(
         func=func, expected_groups=[0, 1, 2], fill_value=False if func in ["all", "any"] else 123
     )
 
@@ -410,7 +416,7 @@ def test_numpy_reduce_axis_subset(engine: T_Engine) -> None:
     # TODO: add NaNs
     by = labels2d
     array = np.ones_like(by, dtype=np.int64)
-    kwargs = dict(func="count", engine=engine, fill_value=0)
+    kwargs: T_Kwargs = dict(func="count", engine=engine, fill_value=0)
     result, _ = groupby_reduce(array, by, **kwargs, axis=1)
     assert_equal(result, np.array([[2, 3], [2, 3]], dtype=np.int64))
 
@@ -845,7 +851,7 @@ def test_cohorts_nd_by(func: str, method: T_Method, axis: int | None, engine: T_
     if axis is not None and method != "map-reduce":
         pytest.xfail()
 
-    kwargs: dict[str, Any] = dict(
+    kwargs: T_Kwargs = dict(
         func=func, engine=engine, method=method, axis=axis, fill_value=fill_value
     )
     actual, groups = groupby_reduce(array, by, **kwargs)
@@ -928,7 +934,7 @@ def test_map_reduce_blockwise_mixed() -> None:
         dask.array.from_array(data.values, chunks=365),
         t.dt.month,
         func="mean",
-        method="split-reduce",
+        method="cohorts",
     )
     expected, _ = groupby_reduce(data, t.dt.month, func="mean")
     assert_equal(expected, actual)
@@ -937,7 +943,7 @@ def test_map_reduce_blockwise_mixed() -> None:
 @requires_dask
 @pytest.mark.parametrize("method", ["split-reduce", "blockwise", "map-reduce", "cohorts"])
 def test_group_by_datetime(engine: T_Engine, method: T_Method) -> None:
-    kwargs: dict[str, Any] = dict(
+    kwargs: T_Kwargs = dict(
         func="mean",
         method=method,
         engine=engine,
@@ -1004,7 +1010,7 @@ def test_multiple_groupers() -> None:
 
 
 def test_factorize_reindex_sorting_strings() -> None:
-    kwargs = dict(
+    kwargs: T_Kwargs = dict(
         by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),
         axis=-1,
         expected_groups=(np.array(["El-Nino", "Neutral", "foo", "La-Nina"]),),
@@ -1024,7 +1030,7 @@ def test_factorize_reindex_sorting_strings() -> None:
 
 
 def test_factorize_reindex_sorting_ints() -> None:
-    kwargs = dict(
+    kwargs: T_Kwargs = dict(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
         axis=-1,
         expected_groups=(np.array([0, 1, 2, 3, 4, 5], np.int64),),
@@ -1069,7 +1075,7 @@ def test_custom_aggregation_blockwise() -> None:
     expected = np.median(array, axis=-1, keepdims=True)
     assert_equal(expected, actual)
 
-    methods: list[T_Method] = ["map-reduce", "cohorts", "split-reduce"]
+    methods: list[T_Method] = ["map-reduce", "cohorts"]
     for method in methods:
         with pytest.raises(NotImplementedError):
             groupby_reduce(
