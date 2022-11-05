@@ -1350,7 +1350,10 @@ def dask_groupby_agg(
                         aggregate=partial(aggregate, expected_groups=index, reindex=True),
                     )
                 )
-                groups_.append(cohort)
+                # This is done because pandas promotes to 64-bit types when an Index is created
+                # So we use the index to generate the return value for consistency with "map-reduce"
+                # This is important on windows
+                groups_.append(index.values)
 
             reduced = dask.array.concatenate(reduced_, axis=-1)
             groups = (np.concatenate(groups_),)
