@@ -215,7 +215,7 @@ def test_groupby_reduce_all(
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
 
-        actual, *groups = groupby_reduce(array, *by, **flox_kwargs)
+        actual, *groups = groupby_reduce(array, *bys, **flox_kwargs)
         assert actual.ndim == (array.ndim + nby - 1)
         assert expected.ndim == (array.ndim + nby - 1)
         expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
@@ -232,7 +232,7 @@ def test_groupby_reduce_all(
         params.extend(itertools.product(["cohorts"], [False, None]))
         for method, reindex in params:
             call = partial(
-                groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
+                groupby_reduce, array, *bys, method=method, reindex=reindex, **flox_kwargs
             )
             if "arg" in func and reindex is True:
                 # simple_combine with argreductions not supported right now
