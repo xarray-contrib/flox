@@ -76,7 +76,7 @@ def draw_mesh(
         plt.gcf().set_size_inches((ncol * pxin, (nrow + 2) * pxin))
 
 
-def visualize_groups_1d(array, labels, axis=-1, colors=None, cmap=None, append=True):
+def visualize_groups_1d(array, labels, axis=-1, colors=None, cmap=None, append=True, x0=0):
     """
     Visualize group distribution for a 1D array of group labels.
     """
@@ -108,7 +108,7 @@ def visualize_groups_1d(array, labels, axis=-1, colors=None, cmap=None, append=T
             colors=col,
             randomize=False,
             append=append,
-            x0=i0 * 2.3,  # + (i0 - 1) * 0.025,
+            x0=x0 + i0 * 2.3,  # + (i0 - 1) * 0.025,
         )
         i0 += i
 

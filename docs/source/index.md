@@ -56,7 +56,9 @@ It was motivated by many discussions in the [Pangeo](https://pangeo.io) communit
    :maxdepth: 1
 
    implementation.md
+   engines.md
    custom.md
+   xarray.md
    api.rst
    user-stories.md
 ```
