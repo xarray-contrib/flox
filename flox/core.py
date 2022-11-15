@@ -1083,7 +1083,7 @@ def _normalize_indexes(array: DaskArray, flatblocks, blkshape) -> tuple:
     """
     unraveled = np.unravel_index(flatblocks, blkshape)
 
-    normalized: list[Union[int, np.ndarray, slice]] = []
+    normalized: list[Union[int, slice, list[int]]] = []
     for ax, idx in enumerate(unraveled):
         i = _unique(idx).squeeze()
         if i.ndim == 0:
@@ -1397,7 +1397,7 @@ def dask_groupby_agg(
     return (result, groups)
 
 
-def _collapse_blocks_along_axes(reduced: DaskArray, axis: T_Axis, group_chunks) -> DaskArray:
+def _collapse_blocks_along_axes(reduced: DaskArray, axis: T_Axes, group_chunks) -> DaskArray:
     import dask.array
     from dask.highlevelgraph import HighLevelGraph
 
