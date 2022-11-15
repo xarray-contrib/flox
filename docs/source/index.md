@@ -1,12 +1,16 @@
 # flox: fast & furious GroupBy reductions for `dask.array`
-
-## Overview
-
 [![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/xarray-contrib/flox/CI?logo=github&style=flat)](https://github.com/xarray-contrib/flox/actions)
-[![GitHub Workflow Code Style Status](https://img.shields.io/github/workflow/status/xarray-contrib/flox/code-style?label=Code%20Style&style=flat)](https://github.com/xarray-contrib/flox/actions)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/xarray-contrib/flox/main.svg)](https://results.pre-commit.ci/latest/github/xarray-contrib/flox/main)
 [![image](https://img.shields.io/codecov/c/github/xarray-contrib/flox.svg?style=flat)](https://codecov.io/gh/xarray-contrib/flox)
+[![Documentation Status](https://readthedocs.org/projects/flox/badge/?version=latest)](https://flox.readthedocs.io/en/latest/?badge=latest)
+
 [![PyPI](https://img.shields.io/pypi/v/flox.svg?style=flat)](https://pypi.org/project/flox/)
 [![Conda-forge](https://img.shields.io/conda/vn/conda-forge/flox.svg?style=flat)](https://anaconda.org/conda-forge/flox)
+
+[![NASA-80NSSC18M0156](https://img.shields.io/badge/NASA-80NSSC18M0156-blue)](https://earthdata.nasa.gov/esds/competitive-programs/access/pangeo-ml)
+[![NASA-80NSSC22K0345](https://img.shields.io/badge/NASA-80NSSC22K0345-blue)](https://science.nasa.gov/open-science-overview)
+
+## Overview
 
 `flox` mainly provides strategies for fast GroupBy reductions with dask.array. `flox` uses the MapReduce paradigm (or a "tree reduction")
 to run the GroupBy operation in a parallel-native way totally avoiding a sort or shuffle operation. It was motivated by
