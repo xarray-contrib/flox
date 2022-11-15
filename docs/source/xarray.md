@@ -1,6 +1,6 @@
 # Xarray
 
-Xarray will use flox by default for numpy and dask array backed Xarray objects if it is installed. By default, it will use `method="cohorts"` which generalizes
+Xarray will use flox by default (if installed) for DataArrays containing numpy and dask arrays. The default choice is `method="cohorts"` which generalizes
 the best. Pass flox-specific kwargs to the specific reduction method:
 ```python
 ds.groupby("time.month").mean(method="map-reduce", engine="flox")

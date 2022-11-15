@@ -7,14 +7,14 @@
 Running an efficient groupby reduction in parallel is hard, and strongly depends on how the
 groups are distributed amongst the blocks of an array.
 
-`flox` implements 4 strategies for
-grouped reductions, each is appropriate for a particular distribution of groups
+`flox` implements 4 strategies for grouped reductions, each is appropriate for a particular distribution of groups
 among the blocks of a dask array. Switch between the various strategies by passing `method`
 and/or `reindex` to either {py:func}`flox.core.groupby_reduce` or `xarray_reduce`.
+
 Your options are:
-1. `method="blockwise"`
 1. `method="map-reduce"` with `reindex=False`
 1. `method="map-reduce"` with `reindex=True`
+1. `method="blockwise"`
 1. `method="cohorts"`
 
 The most appropriate strategy for your problem will depend on the chunking of your dataset,
@@ -61,7 +61,7 @@ If we know all the group labels, we can do so right at the blockwise step (`rein
 `xhistogram`, where the bin edges, or group labels oof the output, are known. The downside is the potential of large memory use
 if number of output groups is much larger than number of groups in a block.
 
-```{image} ../diagrams/new-map-reduce-reindex-True.svg
+```{image} ../diagrams/new-map-reduce-reindex-True-annotated.svg
 :alt: map-reduce-reindex-True-strategy-schematic
 :width: 100%
 ```
@@ -70,7 +70,7 @@ if number of output groups is much larger than number of groups in a block.
 We can `reindex` at the combine stage to groups present in the blocks being combined (`reindex=False`). This can limit memory use at the cost
 of a performance reduction due to extra copies of the intermediate data during reindexing.
 
-```{image} ../diagrams/new-map-reduce-reindex-False.svg
+```{image} ../diagrams/new-map-reduce-reindex-False-annotated.svg
 :alt: map-reduce-reindex-True-strategy-schematic
 :width: 100%
 ```
@@ -99,7 +99,7 @@ For resampling type reductions,
 In this case, it makes sense to use `dask.dataframe` resample strategy which is to rechunk using {py:func}`flox.rechunk_for_blockwise`
 so that all members of a group are in a single block. Then, the groupby operation can be applied blockwise.
 
-```{image} ../diagrams/new-blockwise.svg
+```{image} ../diagrams/new-blockwise-annotated.svg
 :alt: blockwise-strategy-schematic
 :width: 100%
 ```
@@ -158,7 +158,7 @@ We first apply the groupby-reduction blockwise, then split and reindex blocks to
 using `map-reduce`. Because the split or shuffle step occurs after the blockwise reduction, we *sometimes* communicate a significantly smaller amount of data
 than if we split or shuffled the input array.
 
-```{image} /../diagrams/new-cohorts.svg
+```{image} /../diagrams/new-cohorts-annotated.svg
 :alt: cohorts-strategy-schematic
 :width: 100%
 ```
