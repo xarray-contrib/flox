@@ -1,24 +1,27 @@
 (algorithms)=
 # Parallel Algorithms
 
-`flox` outsources the core GroupBy operation to the vectorized implementations in
-[numpy_groupies](https://github.com/ml31415/numpy-groupies).
-
-Running an efficient groupby reduction in parallel is hard, and strongly depends on how the
-groups are distributed amongst the blocks of an array.
+`flox` outsources the core GroupBy operation to the vectorized implementations controlled by the
+[`engine` kwarg](engines.md). Applying these implementations on a parallel array type like dask
+can be hard. Performance strongly depends on how the groups are distributed amongst the blocks of an array.
 
 `flox` implements 4 strategies for grouped reductions, each is appropriate for a particular distribution of groups
 among the blocks of a dask array. Switch between the various strategies by passing `method`
-and/or `reindex` to either {py:func}`flox.core.groupby_reduce` or `xarray_reduce`.
+and/or `reindex` to either {py:func}`flox.groupby_reduce` or {py:func}`flox.xarray.xarray_reduce`.
 
 Your options are:
 1. `method="map-reduce"` with `reindex=False`
 1. `method="map-reduce"` with `reindex=True`
-1. `method="blockwise"`
-1. `method="cohorts"`
+1. [`method="blockwise"`](method-blockwise)
+1. [`method="cohorts"`](method-cohorts)
 
 The most appropriate strategy for your problem will depend on the chunking of your dataset,
 and the distribution of group labels across those chunks.
+
+```{tip}
+Currently these strategieis are implemented for dask. We would like to generalize to other parallel array types
+as appropriate (e.g. Ramba, cubed, arkouda). Please open an issue to discuss if you are interested.
+```
 
 (xarray-split)=
 ## Background: Xarray's current GroupBy strategy
@@ -82,9 +85,10 @@ A bigger advantagee is that this approach allows grouping by a dask array so gro
 For example, consider `groupby("time.month")` with monthly frequency data and chunksize of 4 along `time`.
 ![cohorts-schematic](/../diagrams/cohorts-month-chunk4.png)
 With `reindex=True`, each block will become 3x its original size at the blockwise step: input blocks have 4 timesteps while output block
-has a value for all 12 months. One could use `reindex=False` to control memory usage but also see [`method="cohorts"`](cohorts) below.
+has a value for all 12 months. One could use `reindex=False` to control memory usage but also see [`method="cohorts"`](method-cohorts) below.
 
 
+(method-blockwise)=
 ## `method="blockwise"`
 
 One case where `method="map-reduce"` doesn't work well is the case of "resampling" reductions. An
@@ -113,6 +117,7 @@ so that all members of a group are in a single block. Then, the groupby operatio
 1. Works better when multiple groups are already in a single block; so that the intial
    rechunking only involves a small amount of communication.
 
+(method-cohorts)=
 ## `method="cohorts"`
 
 The `map-reduce` strategy is quite effective but can involve some unnecessary communication. It can be possible to exploit

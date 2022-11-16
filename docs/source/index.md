@@ -24,14 +24,14 @@ See a presentation ([video](https://discourse.pangeo.io/t/november-17-2021-flox-
 
 ## Why flox?
 
-1. {py:func}`flox.groupby_reduce` wraps the `numpy-groupies` package for performant Groupby reductions on nD arrays.
-1. {py:func}`flox.groupby_reduce` provides [parallel-friendly strategies](algorithms) for GroupBy reductions by wrapping `numpy-groupies` for dask arrays.
-1. `flox` integrates with xarray to provide more performant Groupby and Resampling operations.
-1. {py:func}`flox.xarray.xarray_reduce` extends Xarray's GroupBy operations allowing lazy grouping by dask arrays, grouping by multiple arrays,
-   as well as combining categorical grouping and histrogram-style binning operations using multiple variables.
+1. {py:func}`flox.groupby_reduce` [wraps](engines.md) the `numpy-groupies` package for performant Groupby reductions on nD arrays.
+1. {py:func}`flox.groupby_reduce` provides [parallel-friendly strategies](implementation.md) for GroupBy reductions by wrapping `numpy-groupies` for dask arrays.
+1. `flox` [integrates with xarray](xarray.md) to provide more performant Groupby and Resampling operations.
+1. {py:func}`flox.xarray.xarray_reduce` [extends](xarray.md) Xarray's GroupBy operations allowing lazy grouping by dask arrays, grouping by multiple arrays,
+   as well as combining categorical grouping and histogram-style binning operations using multiple variables.
 1. `flox` also provides utility functions for rechunking both dask arrays and Xarray objects along a single dimension using the group labels as a guide:
-  1. To rechunk for blockwise operations: {py:func}`flox.rechunk_for_blockwise`,  {py:func}`flox.xarray.rechunk_for_blockwise`.
-  1. To rechunk so that "cohorts", or groups of labels, tend to occur in the same chunks: {py:func}`flox.rechunk_for_cohorts`,  {py:func}`flox.xarray.rechunk_for_cohorts`.
+    1. To rechunk for blockwise operations: {py:func}`flox.rechunk_for_blockwise`,  {py:func}`flox.xarray.rechunk_for_blockwise`.
+    1. To rechunk so that "cohorts", or groups of labels, tend to occur in the same chunks: {py:func}`flox.rechunk_for_cohorts`,  {py:func}`flox.xarray.rechunk_for_cohorts`.
 
 ## Installing
 
@@ -59,9 +59,10 @@ It was motivated by many discussions in the [Pangeo](https://pangeo.io) communit
 .. toctree::
    :maxdepth: 1
 
-   implementation.md
+   aggregations.md
    engines.md
-   custom.md
+   implementation.md
+   arrays.md
    xarray.md
    api.rst
    user-stories.md

@@ -1,3 +1,4 @@
+(xarray)=
 # Xarray
 
 Xarray will use flox by default (if installed) for DataArrays containing numpy and dask arrays. The default choice is `method="cohorts"` which generalizes
