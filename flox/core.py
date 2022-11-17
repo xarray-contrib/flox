@@ -1485,10 +1485,7 @@ def _factorize_multiple(by, expected_groups, by_is_dask, reindex):
         import dask.array
 
         group_idx = dask.array.map_blocks(
-            _lazy_factorize_wrapper,
-            *np.broadcast_arrays(*by),
-            meta=np.array((), dtype=np.int64),
-            **kwargs,
+            _lazy_factorize_wrapper, *by, meta=np.array((), dtype=np.int64), **kwargs
         )
         found_groups = tuple(
             None if is_duck_dask_array(b) else pd.unique(b.reshape(-1)) for b in by
