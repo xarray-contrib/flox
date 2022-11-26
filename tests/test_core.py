@@ -564,9 +564,9 @@ def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engi
 
 @requires_dask
 @pytest.mark.parametrize(
-    "expected_groups, reindex", [(None, None), ([0, 1, 2], True), ([0, 1, 2], False)]
+    "expected_groups, reindex", [(None, None), (None, False), ([0, 1, 2], True), ([0, 1, 2], False)]
 )
-def test_groupby_all_nan_blocks(expected_groups, reindex, engine):
+def test_groupby_all_nan_blocks_dask(expected_groups, reindex, engine):
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
     nan_labels = labels.astype(float)  # copy
     nan_labels[:5] = np.nan
@@ -963,21 +963,73 @@ def test_factorize_values_outside_bins():
     assert_equal(expected, actual)
 
 
-def test_multiple_groupers() -> None:
+@pytest.mark.parametrize("chunk", [True, False])
+def test_multiple_groupers_bins(chunk) -> None:
+    if chunk and not has_dask:
+        pytest.skip()
+
+    xp = dask.array if chunk else np
+    array_kwargs = {"chunks": 2} if chunk else {}
+    array = xp.ones((5, 2), **array_kwargs, dtype=np.int64)
+
     actual, *_ = groupby_reduce(
-        np.ones((5, 2)),
+        array,
         np.arange(10).reshape(5, 2),
-        np.arange(10).reshape(5, 2),
+        xp.arange(10).reshape(5, 2),
         axis=(0, 1),
         expected_groups=(
             pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
             pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
         ),
-        reindex=True,
         func="count",
     )
     expected = np.eye(5, 5, dtype=np.int64)
     assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize("expected_groups", [None, (np.arange(5), [2, 3]), (None, [2, 3])])
+@pytest.mark.parametrize(
+    "by1", [np.arange(5)[:, None], np.broadcast_to(np.arange(5)[:, None], (5, 2))]
+)
+@pytest.mark.parametrize(
+    "by2",
+    [
+        np.arange(2, 4).reshape(1, 2),
+        np.broadcast_to(np.arange(2, 4).reshape(1, 2), (5, 2)),
+        np.arange(2, 4).reshape(1, 2),
+    ],
+)
+@pytest.mark.parametrize("chunk", [True, False])
+def test_multiple_groupers(chunk, by1, by2, expected_groups) -> None:
+
+    if chunk and (not has_dask or expected_groups is None):
+        pytest.skip()
+
+    xp = dask.array if chunk else np
+    array_kwargs = {"chunks": 2} if chunk else {}
+    array = xp.ones((5, 2), **array_kwargs, dtype=np.int64)
+
+    if chunk:
+        by2 = dask.array.from_array(by2)
+
+    expected = np.ones((5, 2), dtype=np.int64)
+    actual, *_ = groupby_reduce(
+        array, by1, by2, axis=(0, 1), func="count", expected_groups=expected_groups
+    )
+    assert_equal(expected, actual)
+
+
+@requires_dask
+def test_multiple_groupers_errors() -> None:
+    with pytest.raises(ValueError):
+        groupby_reduce(
+            dask.array.ones((5, 2)),
+            np.arange(10).reshape(5, 2),
+            dask.array.arange(10).reshape(5, 2),
+            axis=(0, 1),
+            expected_groups=None,
+            func="count",
+        )
 
 
 def test_factorize_reindex_sorting_strings():
@@ -1159,7 +1211,7 @@ def test_subset_block_2d(flatblocks, expectidx):
 
 
 @pytest.mark.parametrize(
-    "expected, reindex, func, expected_groups, by_is_dask",
+    "expected, reindex, func, expected_groups, any_by_dask",
     [
         # argmax only False
         [False, None, "argmax", None, False],
@@ -1175,22 +1227,22 @@ def test_subset_block_2d(flatblocks, expectidx):
         [True, None, "sum", ([1], None), True],
     ],
 )
-def test_validate_reindex_map_reduce(expected, reindex, func, expected_groups, by_is_dask):
-    actual = _validate_reindex(reindex, func, "map-reduce", expected_groups, by_is_dask)
+def test_validate_reindex_map_reduce(expected, reindex, func, expected_groups, any_by_dask):
+    actual = _validate_reindex(reindex, func, "map-reduce", expected_groups, any_by_dask)
     assert actual == expected
 
 
 def test_validate_reindex():
     for method in ["map-reduce", "cohorts"]:
         with pytest.raises(NotImplementedError):
-            _validate_reindex(True, "argmax", method, expected_groups=None, by_is_dask=False)
+            _validate_reindex(True, "argmax", method, expected_groups=None, any_by_dask=False)
 
     for method in ["blockwise", "cohorts"]:
         with pytest.raises(ValueError):
-            _validate_reindex(True, "sum", method, expected_groups=None, by_is_dask=False)
+            _validate_reindex(True, "sum", method, expected_groups=None, any_by_dask=False)
 
         for func in ["sum", "argmax"]:
-            actual = _validate_reindex(None, func, method, expected_groups=None, by_is_dask=False)
+            actual = _validate_reindex(None, func, method, expected_groups=None, any_by_dask=False)
             assert actual is False
 
 
