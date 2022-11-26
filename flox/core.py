@@ -176,6 +176,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True):
     axis = range(-labels.ndim, 0)
     # Easier to create a dask array and use the .blocks property
     array = dask.array.ones(tuple(sum(c) for c in chunks), chunks=chunks)
+    labels = np.broadcast_to(labels, array.shape[-labels.ndim :])
 
     #  Iterate over each block and create a new block of same shape with "chunk number"
     shape = tuple(array.blocks.shape[ax] for ax in axis)
@@ -479,7 +480,7 @@ def factorize_(
                 idx, groups = pd.factorize(flat, sort=sort)
 
             found_groups.append(np.array(groups))
-        factorized.append(idx)
+        factorized.append(idx.reshape(groupvar.shape))
 
     grp_shape = tuple(len(grp) for grp in found_groups)
     ngroups = math.prod(grp_shape)
@@ -489,12 +490,11 @@ def factorize_(
         # Restore these after the raveling
         nan_by_mask = reduce(np.logical_or, [(f == -1) for f in factorized])
         group_idx[nan_by_mask] = -1
-        group_idx = group_idx.reshape(by[0].shape)
     else:
         group_idx = factorized[0]
 
     if fastpath:
-        return group_idx.reshape(by[0].shape), found_groups, grp_shape
+        return group_idx, found_groups, grp_shape
 
     if np.isscalar(axis) and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
@@ -502,7 +502,6 @@ def factorize_(
         # we collapse to a 2D by and axis=-1
         offset_group = True
         group_idx, size = offset_labels(group_idx.reshape(by[0].shape), ngroups)
-        group_idx = group_idx.reshape(-1)
     else:
         size = ngroups
         offset_group = False
@@ -647,6 +646,8 @@ def chunk_reduce(
     else:
         nax = by.ndim
 
+    assert by.ndim <= array.ndim
+
     final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
     final_groups_shape = (1,) * (nax - 1)
 
@@ -667,9 +668,17 @@ def chunk_reduce(
     )
     groups = groups[0]
 
+    if isinstance(axis, Sequence):
+        needs_broadcast = any(
+            group_idx.shape[ax] != array.shape[ax] and group_idx.shape[ax] == 1
+            for ax in range(-len(axis), 0)
+        )
+        if needs_broadcast:
+            group_idx = np.broadcast_to(group_idx, array.shape[-by.ndim :])
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by.ndim] + (math.prod(array.shape[-by.ndim :]),)
     array = array.reshape(newshape)
+    group_idx = group_idx.reshape(-1)
 
     assert group_idx.ndim == 1
     empty = np.all(props.nanmask)
@@ -1219,7 +1228,9 @@ def dask_groupby_agg(
         # chunk numpy arrays like the input array
         # This removes an extra rechunk-merge layer that would be
         # added otherwise
-        by = dask.array.from_array(by, chunks=tuple(array.chunks[ax] for ax in range(-by.ndim, 0)))
+        chunks = tuple(array.chunks[ax] if by.shape[ax] != 1 else (1,) for ax in range(-by.ndim, 0))
+
+        by = dask.array.from_array(by, chunks=chunks)
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
     # preprocess the array: for argreductions, this zips the index together with the array block
@@ -1429,7 +1440,7 @@ def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
 
 
 def _validate_reindex(
-    reindex: bool | None, func, method: T_Method, expected_groups, by_is_dask: bool
+    reindex: bool | None, func, method: T_Method, expected_groups, any_by_dask: bool
 ) -> bool:
     if reindex is True:
         if _is_arg_reduction(func):
@@ -1447,7 +1458,7 @@ def _validate_reindex(
             reindex = False
 
         elif method == "map-reduce":
-            if expected_groups is None and by_is_dask:
+            if expected_groups is None and any_by_dask:
                 reindex = False
             else:
                 reindex = True
@@ -1457,8 +1468,9 @@ def _validate_reindex(
 
 
 def _assert_by_is_aligned(shape, by):
+    assert all(b.ndim == by[0].ndim for b in by[1:])
     for idx, b in enumerate(by):
-        if shape[-b.ndim :] != b.shape:
+        if not all(j in [i, 1] for i, j in zip(shape[-b.ndim :], b.shape)):
             raise ValueError(
                 "`array` and `by` arrays must be aligned "
                 "i.e. array.shape[-by.ndim :] == by.shape. "
@@ -1495,26 +1507,34 @@ def _lazy_factorize_wrapper(*by, **kwargs):
     return group_idx
 
 
-def _factorize_multiple(by, expected_groups, by_is_dask, reindex):
+def _factorize_multiple(by, expected_groups, any_by_dask, reindex):
     kwargs = dict(
         expected_groups=expected_groups,
         axis=None,  # always None, we offset later if necessary.
         fastpath=True,
         reindex=reindex,
     )
-    if by_is_dask:
+    if any_by_dask:
         import dask.array
+
+        # unifying chunks will make sure all arrays in `by` are dask arrays
+        # with compatible chunks, even if there was originally a numpy array
+        inds = tuple(range(by[0].ndim))
+        chunks, by_ = dask.array.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
 
         group_idx = dask.array.map_blocks(
             _lazy_factorize_wrapper,
-            *np.broadcast_arrays(*by),
+            *by_,
+            chunks=tuple(chunks.values()),
             meta=np.array((), dtype=np.int64),
             **kwargs,
         )
         found_groups = tuple(
             None if is_duck_dask_array(b) else pd.unique(b.reshape(-1)) for b in by
         )
-        grp_shape = tuple(len(e) for e in expected_groups)
+        grp_shape = tuple(
+            len(e) if e is not None else len(f) for e, f in zip(expected_groups, found_groups)
+        )
     else:
         group_idx, found_groups, grp_shape = factorize_(by, **kwargs)
 
@@ -1644,15 +1664,16 @@ def groupby_reduce(
 
     bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
-    by_is_dask = any(is_duck_dask_array(b) for b in bys)
+    by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
+    any_by_dask = any(by_is_dask)
 
-    if method in ["split-reduce", "cohorts"] and by_is_dask:
+    if method in ["split-reduce", "cohorts"] and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
 
     if method == "split-reduce":
         method = "cohorts"
 
-    reindex = _validate_reindex(reindex, func, method, expected_groups, by_is_dask)
+    reindex = _validate_reindex(reindex, func, method, expected_groups, any_by_dask)
 
     if not is_duck_array(array):
         array = np.asarray(array)
@@ -1667,6 +1688,11 @@ def groupby_reduce(
         expected_groups = (None,) * nby
 
     _assert_by_is_aligned(array.shape, bys)
+    for idx, (expect, is_dask) in enumerate(zip(expected_groups, by_is_dask)):
+        if is_dask and (reindex or nby > 1) and expect is None:
+            raise ValueError(
+                f"`expected_groups` for array {idx} in `by` cannot be None since it is a dask.array."
+            )
 
     if nby == 1 and not isinstance(expected_groups, tuple):
         expected_groups = (np.asarray(expected_groups),)
@@ -1686,7 +1712,7 @@ def groupby_reduce(
     )
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
-            bys, expected_groups, by_is_dask=by_is_dask, reindex=reindex
+            bys, expected_groups, any_by_dask=any_by_dask, reindex=reindex
         )
         expected_groups = (pd.RangeIndex(math.prod(grp_shape)),)
 
@@ -1709,7 +1735,7 @@ def groupby_reduce(
 
     # TODO: make sure expected_groups is unique
     if nax == 1 and by_.ndim > 1 and expected_groups is None:
-        if not by_is_dask:
+        if not any_by_dask:
             expected_groups = _get_expected_groups(by_, sort)
         else:
             # When we reduce along all axes, we are guaranteed to see all
