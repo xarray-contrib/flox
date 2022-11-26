@@ -1204,7 +1204,7 @@ def test_subset_block_2d(flatblocks, expectidx):
 
 
 @pytest.mark.parametrize(
-    "expected, reindex, func, expected_groups, by_is_dask",
+    "expected, reindex, func, expected_groups, any_by_dask",
     [
         # argmax only False
         [False, None, "argmax", None, False],
@@ -1220,22 +1220,22 @@ def test_subset_block_2d(flatblocks, expectidx):
         [True, None, "sum", ([1], None), True],
     ],
 )
-def test_validate_reindex_map_reduce(expected, reindex, func, expected_groups, by_is_dask):
-    actual = _validate_reindex(reindex, func, "map-reduce", expected_groups, by_is_dask)
+def test_validate_reindex_map_reduce(expected, reindex, func, expected_groups, any_by_dask):
+    actual = _validate_reindex(reindex, func, "map-reduce", expected_groups, any_by_dask)
     assert actual == expected
 
 
 def test_validate_reindex():
     for method in ["map-reduce", "cohorts"]:
         with pytest.raises(NotImplementedError):
-            _validate_reindex(True, "argmax", method, expected_groups=None, by_is_dask=False)
+            _validate_reindex(True, "argmax", method, expected_groups=None, any_by_dask=False)
 
     for method in ["blockwise", "cohorts"]:
         with pytest.raises(ValueError):
-            _validate_reindex(True, "sum", method, expected_groups=None, by_is_dask=False)
+            _validate_reindex(True, "sum", method, expected_groups=None, any_by_dask=False)
 
         for func in ["sum", "argmax"]:
-            actual = _validate_reindex(None, func, method, expected_groups=None, by_is_dask=False)
+            actual = _validate_reindex(None, func, method, expected_groups=None, any_by_dask=False)
             assert actual is False
 
 
