@@ -93,7 +93,7 @@ class ERA5MonthHour(ERA5Dataset, Cohorts):
         ret = flox.core._factorize_multiple(
             by,
             expected_groups=(pd.Index(np.arange(1, 13)), pd.Index(np.arange(1, 25))),
-            by_is_dask=False,
+            any_by_dask=False,
             reindex=False,
         )
         # Add one so the rechunk code is simpler and makes sense
