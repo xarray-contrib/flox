@@ -64,6 +64,6 @@ It was motivated by many discussions in the [Pangeo](https://pangeo.io) communit
    implementation.md
    arrays.md
    xarray.md
-   api.rst
    user-stories.md
+   api.rst
 ```
