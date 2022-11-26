@@ -1656,7 +1656,7 @@ def groupby_reduce(
 
     _assert_by_is_aligned(array.shape, bys)
     for idx, (expect, is_dask) in enumerate(zip(expected_groups, by_is_dask)):
-        if is_dask and expect is None:
+        if is_dask and (reindex or nby > 1) and expect is None:
             raise ValueError(
                 f"`expected_groups` for array {idx} in `by` cannot be None since it is a dask.array."
             )

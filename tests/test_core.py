@@ -563,9 +563,9 @@ def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engi
 
 @requires_dask
 @pytest.mark.parametrize(
-    "expected_groups, reindex", [(None, None), ([0, 1, 2], True), ([0, 1, 2], False)]
+    "expected_groups, reindex", [(None, None), (None, False), ([0, 1, 2], True), ([0, 1, 2], False)]
 )
-def test_groupby_all_nan_blocks(expected_groups, reindex, engine):
+def test_groupby_all_nan_blocks_dask(expected_groups, reindex, engine):
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
     nan_labels = labels.astype(float)  # copy
     nan_labels[:5] = np.nan
