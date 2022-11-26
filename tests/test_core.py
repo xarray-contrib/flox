@@ -955,16 +955,16 @@ def test_factorize_values_outside_bins():
 
 
 @pytest.mark.parametrize("chunk", [True, False])
-def test_multiple_groupers(chunk) -> None:
-
+def test_multiple_groupers_bins(chunk) -> None:
     if chunk and not has_dask:
         pytest.skip()
 
     xp = dask.array if chunk else np
     array_kwargs = {"chunks": 2} if chunk else {}
+    array = xp.ones((5, 2), **array_kwargs, dtype=int)
 
     actual, *_ = groupby_reduce(
-        xp.ones((5, 2), **array_kwargs),
+        array,
         np.arange(10).reshape(5, 2),
         xp.arange(10).reshape(5, 2),
         axis=(0, 1),
@@ -972,55 +972,40 @@ def test_multiple_groupers(chunk) -> None:
             pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
             pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
         ),
-        reindex=True,
         func="count",
     )
     expected = np.eye(5, 5, dtype=int)
     assert_equal(expected, actual)
 
+
+@pytest.mark.parametrize("expected_groups", [None, (np.arange(5), [2, 3]), (None, [2, 3])])
+@pytest.mark.parametrize(
+    "by1", [np.arange(5)[:, None], np.broadcast_to(np.arange(5)[:, None], (5, 2))]
+)
+@pytest.mark.parametrize(
+    "by2",
+    [
+        np.arange(2, 4).reshape(1, 2),
+        np.broadcast_to(np.arange(2, 4).reshape(1, 2), (5, 2)),
+        np.arange(2, 4).reshape(1, 2),
+    ],
+)
+@pytest.mark.parametrize("chunk", [True, False])
+def test_multiple_groupers(chunk, by1, by2, expected_groups) -> None:
+
+    if chunk and (not has_dask or expected_groups is None):
+        pytest.skip()
+
+    xp = dask.array if chunk else np
+    array_kwargs = {"chunks": 2} if chunk else {}
+    array = xp.ones((5, 2), **array_kwargs)
+
+    if chunk:
+        by2 = dask.array.from_array(by2)
+
     expected = np.ones((5, 2), dtype=int)
-
     actual, *_ = groupby_reduce(
-        xp.ones((5, 2), **array_kwargs),
-        np.broadcast_to(np.arange(5)[:, None], (5, 2)),
-        np.broadcast_to(xp.arange(2, 4).reshape(1, 2), (5, 2)),
-        axis=(0, 1),
-        reindex=True,
-        func="count",
-        expected_groups=(np.arange(5), [2, 3]) if chunk else None,
-    )
-    assert_equal(expected, actual)
-
-    actual, *_ = groupby_reduce(
-        xp.ones((5, 2), **array_kwargs),
-        np.broadcast_to(np.arange(5)[:, None], (5, 2)),
-        xp.arange(2, 4).reshape(1, 2),
-        axis=(0, 1),
-        reindex=True,
-        func="count",
-        expected_groups=(np.arange(5), [2, 3]) if chunk else None,
-    )
-    assert_equal(expected, actual)
-
-    actual, *_ = groupby_reduce(
-        xp.ones((5, 2), **array_kwargs),
-        np.arange(5).reshape(5, 1),
-        np.broadcast_to(xp.arange(2, 4)[None, :], (5, 2)),
-        axis=(0, 1),
-        reindex=True,
-        func="count",
-        expected_groups=(np.arange(5), [2, 3]) if chunk else None,
-    )
-    assert_equal(expected, actual)
-
-    actual, *_ = groupby_reduce(
-        xp.ones((5, 2), **array_kwargs),
-        np.arange(5).reshape(5, 1),
-        xp.arange(2, 4).reshape(1, 2),
-        axis=(0, 1),
-        reindex=True,
-        func="count",
-        expected_groups=(np.arange(5), [2, 3]) if chunk else None,
+        array, by1, by2, axis=(0, 1), func="count", expected_groups=expected_groups
     )
     assert_equal(expected, actual)
 
