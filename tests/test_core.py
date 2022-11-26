@@ -998,7 +998,7 @@ def test_multiple_groupers(chunk, by1, by2, expected_groups) -> None:
 
     xp = dask.array if chunk else np
     array_kwargs = {"chunks": 2} if chunk else {}
-    array = xp.ones((5, 2), **array_kwargs)
+    array = xp.ones((5, 2), **array_kwargs, dtype=int)
 
     if chunk:
         by2 = dask.array.from_array(by2)
