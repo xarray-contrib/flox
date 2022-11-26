@@ -954,11 +954,19 @@ def test_factorize_values_outside_bins():
     assert_equal(expected, actual)
 
 
-def test_multiple_groupers() -> None:
+@pytest.mark.parametrize("chunk", [True, False])
+def test_multiple_groupers(chunk) -> None:
+
+    if chunk and not has_dask:
+        pytest.skip()
+
+    xp = dask.array if chunk else np
+    array_kwargs = {"chunks": 2} if chunk else {}
+
     actual, *_ = groupby_reduce(
-        np.ones((5, 2)),
+        xp.ones((5, 2), **array_kwargs),
         np.arange(10).reshape(5, 2),
-        np.arange(10).reshape(5, 2),
+        xp.arange(10).reshape(5, 2),
         axis=(0, 1),
         expected_groups=(
             pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
@@ -968,6 +976,52 @@ def test_multiple_groupers() -> None:
         func="count",
     )
     expected = np.eye(5, 5, dtype=int)
+    assert_equal(expected, actual)
+
+    expected = np.ones((5, 2), dtype=int)
+
+    actual, *_ = groupby_reduce(
+        xp.ones((5, 2), **array_kwargs),
+        np.broadcast_to(np.arange(5)[:, None], (5, 2)),
+        np.broadcast_to(xp.arange(2, 4).reshape(1, 2), (5, 2)),
+        axis=(0, 1),
+        reindex=True,
+        func="count",
+        expected_groups=(np.arange(5), [2, 3]) if chunk else None,
+    )
+    assert_equal(expected, actual)
+
+    actual, *_ = groupby_reduce(
+        xp.ones((5, 2), **array_kwargs),
+        np.broadcast_to(np.arange(5)[:, None], (5, 2)),
+        xp.arange(2, 4).reshape(1, 2),
+        axis=(0, 1),
+        reindex=True,
+        func="count",
+        expected_groups=(np.arange(5), [2, 3]) if chunk else None,
+    )
+    assert_equal(expected, actual)
+
+    actual, *_ = groupby_reduce(
+        xp.ones((5, 2), **array_kwargs),
+        np.arange(5).reshape(5, 1),
+        np.broadcast_to(xp.arange(2, 4)[None, :], (5, 2)),
+        axis=(0, 1),
+        reindex=True,
+        func="count",
+        expected_groups=(np.arange(5), [2, 3]) if chunk else None,
+    )
+    assert_equal(expected, actual)
+
+    actual, *_ = groupby_reduce(
+        xp.ones((5, 2), **array_kwargs),
+        np.arange(5).reshape(5, 1),
+        xp.arange(2, 4).reshape(1, 2),
+        axis=(0, 1),
+        reindex=True,
+        func="count",
+        expected_groups=(np.arange(5), [2, 3]) if chunk else None,
+    )
     assert_equal(expected, actual)
 
 

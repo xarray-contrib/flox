@@ -1487,10 +1487,14 @@ def _factorize_multiple(by, expected_groups, any_by_dask, reindex):
         # unifying chunks will make sure all arrays in `by` are dask arrays
         # with compatible chunks, even if there was originally a numpy array
         inds = tuple(range(by[0].ndim))
-        _, by_ = dask.array.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
+        chunks, by_ = dask.array.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
 
         group_idx = dask.array.map_blocks(
-            _lazy_factorize_wrapper, *by_, meta=np.array((), dtype=np.int64), **kwargs
+            _lazy_factorize_wrapper,
+            *by_,
+            chunks=tuple(chunks.values()),
+            meta=np.array((), dtype=np.int64),
+            **kwargs,
         )
         found_groups = tuple(
             None if is_duck_dask_array(b) else pd.unique(b.reshape(-1)) for b in by
