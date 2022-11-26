@@ -961,7 +961,7 @@ def test_multiple_groupers_bins(chunk) -> None:
 
     xp = dask.array if chunk else np
     array_kwargs = {"chunks": 2} if chunk else {}
-    array = xp.ones((5, 2), **array_kwargs, dtype=int)
+    array = xp.ones((5, 2), **array_kwargs, dtype=np.int64)
 
     actual, *_ = groupby_reduce(
         array,
@@ -974,7 +974,7 @@ def test_multiple_groupers_bins(chunk) -> None:
         ),
         func="count",
     )
-    expected = np.eye(5, 5, dtype=int)
+    expected = np.eye(5, 5, dtype=np.int64)
     assert_equal(expected, actual)
 
 
@@ -998,12 +998,12 @@ def test_multiple_groupers(chunk, by1, by2, expected_groups) -> None:
 
     xp = dask.array if chunk else np
     array_kwargs = {"chunks": 2} if chunk else {}
-    array = xp.ones((5, 2), **array_kwargs, dtype=int)
+    array = xp.ones((5, 2), **array_kwargs, dtype=np.int64)
 
     if chunk:
         by2 = dask.array.from_array(by2)
 
-    expected = np.ones((5, 2), dtype=int)
+    expected = np.ones((5, 2), dtype=np.int64)
     actual, *_ = groupby_reduce(
         array, by1, by2, axis=(0, 1), func="count", expected_groups=expected_groups
     )
