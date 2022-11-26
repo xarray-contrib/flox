@@ -1551,7 +1551,7 @@ def groupby_reduce(
     ----------
     array : ndarray or DaskArray
         Array to be reduced, possibly nD
-    by : ndarray or DaskArray
+    *by : ndarray or DaskArray
         Array of labels to group over. Must be aligned with ``array`` so that
         ``array.shape[-by.ndim :] == by.shape``
     func : str or Aggregation
@@ -1570,7 +1570,7 @@ def groupby_reduce(
         Negative integers are normalized using array.ndim
     fill_value : Any
         Value to assign when a label in ``expected_groups`` is not present.
-    dtype: data-type , optional
+    dtype : data-type , optional
         DType for the output. Can be anything that is accepted by ``np.dtype``.
     min_count : int, default: None
         The required number of valid values to perform the operation. If
@@ -1616,11 +1616,11 @@ def groupby_reduce(
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
     reindex : bool, optional
-        Whether to "reindex" the blockwise results to `expected_groups` (possibly automatically detected).
+        Whether to "reindex" the blockwise results to ``expected_groups`` (possibly automatically detected).
         If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
         and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
-        original block size. Avoid that by using method="cohorts". By default, it is turned off for argreductions.
+        original block size. Avoid that by using ``method="cohorts"``. By default, it is turned off for argreductions.
     finalize_kwargs : dict, optional
         Kwargs passed to finalize the reduction such as ``ddof`` for var, std.
 
