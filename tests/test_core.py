@@ -1010,6 +1010,19 @@ def test_multiple_groupers(chunk, by1, by2, expected_groups) -> None:
     assert_equal(expected, actual)
 
 
+@requires_dask
+def test_multiple_groupers_errors() -> None:
+    with pytest.raises(ValueError):
+        groupby_reduce(
+            dask.array.ones((5, 2)),
+            np.arange(10).reshape(5, 2),
+            dask.array.arange(10).reshape(5, 2),
+            axis=(0, 1),
+            expected_groups=None,
+            func="count",
+        )
+
+
 def test_factorize_reindex_sorting_strings():
     kwargs = dict(
         by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),

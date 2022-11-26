@@ -1653,6 +1653,11 @@ def groupby_reduce(
         expected_groups = (None,) * nby
 
     _assert_by_is_aligned(array.shape, bys)
+    for idx, (expect, is_dask) in enumerate(zip(expected_groups, by_is_dask)):
+        if is_dask and expect is None:
+            raise ValueError(
+                f"`expected_groups` for array {idx} in `by` cannot be None since it is a dask.array."
+            )
 
     if nby == 1 and not isinstance(expected_groups, tuple):
         expected_groups = (np.asarray(expected_groups),)
