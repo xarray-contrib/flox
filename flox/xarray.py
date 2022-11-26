@@ -57,7 +57,6 @@ def _broadcast_size_one_dims(*arrays, core_dims):
         axis = [core_dims[0].index(d) for d in core_dims[0] if d not in dims]
         broadcasted.append(np.expand_dims(array, axis))
 
-    # ic(tuple(zip(core_dims, (a.shape for a in broadcasted))))
     return broadcasted
 
 
