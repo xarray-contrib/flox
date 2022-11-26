@@ -40,7 +40,7 @@ def draw_mesh(
     ax.set_aspect(1)
     ax.set_axis_off()
 
-    ncolors = len(colors)
+    # ncolors = len(colors)
     if not randomize:
         colors = iter(colors)
 
@@ -68,7 +68,7 @@ def draw_mesh(
         if draw_line_at is not None and icolor > 0 and icolor % draw_line_at == 0:
             plt.plot([x, x], [y - 0.75 * dx, y + 0.75 * dx], color="k", lw=2)
 
-    assert n + 1 == ncolors, (n, ncolors)
+    # assert n + 1 == ncolors, (n, ncolors)
     ax.set_xlim((0, max(xpts) + 2 * dx))
     ax.set_ylim((-0.75 * dx + min(ypts), max(ypts) + 0.75 * dx))
 

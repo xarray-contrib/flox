@@ -19,7 +19,7 @@ The most appropriate strategy for your problem will depend on the chunking of yo
 and the distribution of group labels across those chunks.
 
 ```{tip}
-Currently these strategieis are implemented for dask. We would like to generalize to other parallel array types
+Currently these strategies are implemented for dask. We would like to generalize to other parallel array types
 as appropriate (e.g. Ramba, cubed, arkouda). Please open an issue to discuss if you are interested.
 ```
 
@@ -32,7 +32,10 @@ labels (i.e. you cannot use this strategy to group by a dask array).
 
 Schematically, this looks like (colors indicate group labels; separated groups of colors
 indicate different blocks of an array):
-![xarray-current-strategy](../diagrams/split-reduce.png)
+```{image} ../diagrams/new-split-apply-combine-annotated.svg
+:alt: xarray-current-strategy
+:width: 100%
+```
 
 The first step is to extract all members of a group, which involves a *lot* of
 communication and is quite expensive (in dataframe terminology, this is a "shuffle").
