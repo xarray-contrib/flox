@@ -10,8 +10,8 @@ among the blocks of a dask array. Switch between the various strategies by passi
 and/or `reindex` to either {py:func}`flox.groupby_reduce` or {py:func}`flox.xarray.xarray_reduce`.
 
 Your options are:
-1. `method="map-reduce"` with `reindex=False`
-1. `method="map-reduce"` with `reindex=True`
+1. [`method="map-reduce"` with `reindex=False`](map-reindex-false)
+1. [`method="map-reduce"` with `reindex=True`](map-reindex-True)
 1. [`method="blockwise"`](method-blockwise)
 1. [`method="cohorts"`](method-cohorts)
 
@@ -58,6 +58,7 @@ group in a block so the blockwise application of groupby-reduce actually reduces
 2. One downside is that the final result will only have one chunk along the new group axis.
 3. We have two choices for how to reindex. See below.
 
+(map-reindex-True)=
 ### `reindex=True`
 
 If we know all the group labels, we can do so right at the blockwise step (`reindex=True`). This matches `dask.array.histogram` and
@@ -69,6 +70,7 @@ if number of output groups is much larger than number of groups in a block.
 :width: 100%
 ```
 
+(map-reindex-False)=
 ### `reindex=False`
 We can `reindex` at the combine stage to groups present in the blocks being combined (`reindex=False`). This can limit memory use at the cost
 of a performance reduction due to extra copies of the intermediate data during reindexing.
@@ -78,7 +80,7 @@ of a performance reduction due to extra copies of the intermediate data during r
 :width: 100%
 ```
 
-A bigger advantagee is that this approach allows grouping by a dask array so group labels can be discovered at compute time, similar to `dask.dataframe`.
+This approach allows grouping by a dask array so group labels can be discovered at compute time, similar to `dask.dataframe.groupby`.
 
 ### Example
 
