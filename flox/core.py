@@ -1407,7 +1407,7 @@ def dask_groupby_agg(
 
 
 def _validate_reindex(
-    reindex: bool | None, func, method: T_Method, expected_groups, by_is_dask: bool
+    reindex: bool | None, func, method: T_Method, expected_groups, any_by_dask: bool
 ) -> bool:
     if reindex is True:
         if _is_arg_reduction(func):
@@ -1425,7 +1425,7 @@ def _validate_reindex(
             reindex = False
 
         elif method == "map-reduce":
-            if expected_groups is None and by_is_dask:
+            if expected_groups is None and any_by_dask:
                 reindex = False
             else:
                 reindex = True
@@ -1474,14 +1474,14 @@ def _lazy_factorize_wrapper(*by, **kwargs):
     return group_idx
 
 
-def _factorize_multiple(by, expected_groups, by_is_dask, reindex):
+def _factorize_multiple(by, expected_groups, any_by_dask, reindex):
     kwargs = dict(
         expected_groups=expected_groups,
         axis=None,  # always None, we offset later if necessary.
         fastpath=True,
         reindex=reindex,
     )
-    if by_is_dask:
+    if any_by_dask:
         import dask.array
 
         # unifying chunks will make sure all arrays in `by` are dask arrays
@@ -1625,15 +1625,16 @@ def groupby_reduce(
 
     bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
-    by_is_dask = any(is_duck_dask_array(b) for b in bys)
+    by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
+    any_by_dask = any(by_is_dask)
 
-    if method in ["split-reduce", "cohorts"] and by_is_dask:
+    if method in ["split-reduce", "cohorts"] and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
 
     if method == "split-reduce":
         method = "cohorts"
 
-    reindex = _validate_reindex(reindex, func, method, expected_groups, by_is_dask)
+    reindex = _validate_reindex(reindex, func, method, expected_groups, any_by_dask)
 
     if not is_duck_array(array):
         array = np.asarray(array)
@@ -1667,7 +1668,7 @@ def groupby_reduce(
     )
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
-            bys, expected_groups, by_is_dask=by_is_dask, reindex=reindex
+            bys, expected_groups, any_by_dask=any_by_dask, reindex=reindex
         )
         expected_groups = (pd.RangeIndex(math.prod(grp_shape)),)
 
@@ -1690,7 +1691,7 @@ def groupby_reduce(
 
     # TODO: make sure expected_groups is unique
     if nax == 1 and by_.ndim > 1 and expected_groups is None:
-        if not by_is_dask:
+        if not any_by_dask:
             expected_groups = _get_expected_groups(by_, sort)
         else:
             # When we reduce along all axes, we are guaranteed to see all
