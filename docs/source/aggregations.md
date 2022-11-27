@@ -1,7 +1,27 @@
-# Custom reductions
+# Aggregations
 
-`flox` implements all common reductions provided by `numpy_groupies` in `aggregations.py`.
-It also allows you to specify a custom Aggregation (again inspired by dask.dataframe),
+`flox` implements all common reductions provided by `numpy_groupies` in `aggregations.py`. Control this by passing
+the `func` kwarg:
+
+- `"sum"`, `"nansum"`
+- `"prod"`, `"nanprod"`
+- `"count"` - number of non-NaN elements by group
+- `"mean"`, `"nanmean"`
+- `"var"`, `"nanvar"`
+- `"std"`, `"nanstd"`
+- `"argmin"`
+- `"argmax"`
+- `"first"`
+- `"last"`
+
+
+```{tip}
+We would like to add support for `cumsum`, `cumprod` ([issue](https://github.com/xarray-contrib/flox/issues/91)). Contributions are welcome!
+```
+
+## Custom Aggregations
+
+`flox` also allows you to specify a custom Aggregation (again inspired by dask.dataframe),
 though this might not be fully functional at the moment. See `aggregations.py` for examples.
 
 See the ["Custom Aggregations"](user-stories/custom-aggregations.ipynb) user story for a more user-friendly example.

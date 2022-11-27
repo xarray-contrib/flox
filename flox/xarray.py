@@ -103,7 +103,7 @@ def xarray_reduce(
     fill_value
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
-    dtype: data-type, optional
+    dtype : data-type, optional
         DType for the output. Can be anything accepted by ``np.dtype``.
     method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
         Strategy for reduction of dask arrays only:
@@ -161,7 +161,7 @@ def xarray_reduce(
         and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
-    **finalize_kwargs :
+    **finalize_kwargs
         kwargs passed to the finalize function, like ``ddof`` for var, std.
 
     Returns

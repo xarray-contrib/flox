@@ -43,8 +43,8 @@ extensions = [
 ]
 
 extlinks = {
-    "issue": ("https://github.com/xarray-contrib/flox/issues/%s", "GH#"),
-    "pr": ("https://github.com/xarray-contrib/flox/pull/%s", "GH#"),
+    "issue": ("https://github.com/xarray-contrib/flox/issues/%s", "GH#%s"),
+    "pr": ("https://github.com/xarray-contrib/flox/pull/%s", "PR#%s"),
 }
 
 templates_path = ["_templates"]
@@ -174,7 +174,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     #    "numba": ("https://numba.pydata.org/numba-doc/latest", None),
     "dask": ("https://docs.dask.org/en/latest", None),
-    "xarray": ("http://xarray.pydata.org/en/stable/", None),
+    "xarray": ("https://docs.xarray.dev/en/stable/", None),
 }
 
 autosummary_generate = True

@@ -1,4 +1,4 @@
-# User Stories
+# Tricks & Stories
 
 ```{eval-rst}
 .. toctree::
