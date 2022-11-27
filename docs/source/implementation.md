@@ -44,10 +44,10 @@ big datasets.
 
 ## `method="map-reduce"`
 
-The first idea is to use the "map-reduce" strategy (inspired by `dask.dataframe`).
 
 ![map-reduce-strategy-schematic](/../diagrams/map-reduce.png)
 
+The "map-reduce" strategy is inspired by `dask.dataframe.groupby`).
 The GroupBy reduction is first applied blockwise. Those intermediate results are
 combined by concatenating to form a new array which is then reduced
 again. The combining of intermediate results uses dask\'s `_tree_reduce`
@@ -59,7 +59,7 @@ till all group results are in one block. At that point the result is
 reduction at the first combine step is effective. Here "effective" means we have multiple members of a single
 group in a block so the blockwise application of groupby-reduce actually reduces values and releases some memory.
 2. One downside is that the final result will only have one chunk along the new group axis.
-3. We have two choices for how to reindex. See below.
+3. We have two choices for how to construct the intermediate arrays. See below.
 
 (map-reindex-True)=
 ### `reindex=True`
@@ -163,22 +163,22 @@ remaining groups of months (May-Aug; Sep-Dec) and then concatenate. This is the 
 
 ### Summary
 
-We can generalize this idea for more complicated problems (inspired by [this dask PR](https://github.com/dask/dask/pull/9302)).
+We can generalize this idea for more complicated problems (inspired by the ``split_out``kwarg in `dask.dataframe.groupby`)
 We first apply the groupby-reduction blockwise, then split and reindex blocks to create a new array with which we complete the reduction
-using `map-reduce`. Because the split or shuffle step occurs after the blockwise reduction, we *sometimes* communicate a significantly smaller amount of data
-than if we split or shuffled the input array.
+using `map-reduce`. Because the split or shuffle step occurs after the blockwise reduction, we *sometimes* communicate a significantly smaller
+amount of data than if we split or shuffled the input array.
 
 ```{image} /../diagrams/new-cohorts-annotated.svg
 :alt: cohorts-strategy-schematic
 :width: 100%
 ```
 
-*Tradeoffs*
+### Tradeoffs
 1. Group labels must be known at graph construction time, so this only works for numpy arrays.
 1. This does require more tasks and a more complicated graph, but the communication overhead can be significantly lower.
 1. The detection of "cohorts" is currrently slow but could be improved.
-1. The extra effort of detecting cohorts and mutiple copying of intermediate blocks seems to be only worth the effort if the chunk sizes are small relative to the
-   approximate period of group labels, or small relative to the size of spatially localized groups.
+1. The extra effort of detecting cohorts and mutiple copying of intermediate blocks may be worthwhile only if the chunk sizes are small
+   relative to the approximate period of group labels, or small relative to the size of spatially localized groups.
 
 
 ### Example : sensitivity to chunking
