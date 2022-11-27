@@ -1180,7 +1180,7 @@ def _extract_unknown_groups(reduced, dtype) -> tuple[DaskArray]:
         dask.array.Array(
             HighLevelGraph.from_collections(groups_token, layer, dependencies=[reduced]),
             groups_token,
-            chunks=(np.nan,),
+            chunks=((np.nan,),),
             meta=np.array([], dtype=dtype),
         ),
     )
@@ -1327,12 +1327,12 @@ def dask_groupby_agg(
             )
             if is_duck_dask_array(by_input) and expected_groups is None:
                 groups = _extract_unknown_groups(reduced, dtype=by.dtype)
-                group_chunks = (np.nan,)
+                group_chunks = ((np.nan,),)
             else:
                 if expected_groups is None:
                     expected_groups = _get_expected_groups(by_input, sort=sort)
                 groups = (expected_groups.to_numpy(),)
-            group_chunks = ((len(expected_groups),),)
+                group_chunks = ((len(expected_groups),),)
 
         elif method == "cohorts":
             chunks_cohorts = find_group_cohorts(
