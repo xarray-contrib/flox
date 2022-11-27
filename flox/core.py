@@ -1543,6 +1543,33 @@ def _factorize_multiple(by, expected_groups, any_by_dask, reindex):
     return (group_idx,), final_groups, grp_shape
 
 
+def _validate_expected_groups(by, expected_groups):
+    nby = len(by)
+
+    if expected_groups is None:
+        return (None,) * nby
+
+    if nby == 1 and not isinstance(expected_groups, tuple):
+        return (np.asarray(expected_groups),)
+
+    if nby > 1 and not isinstance(expected_groups, tuple):  # TODO: test for list
+        raise ValueError(
+            "When grouping by multiple variables, expected_groups must be a tuple "
+            "of either arrays or coercible to arrays (like lists) ."
+            "For example `expected_groups=(np.array([1, 2, 3]), ['a', 'b', 'c'])`."
+            "When grouping by a single variable, you can pass an array or something "
+            "convertible to an array for convenience: `expected_groups=['a', 'b', 'c']`."
+        )
+
+    if len(expected_groups) != nby:
+        raise ValueError(
+            f"Must have same number of `expected_groups` (received {len(expected_groups)}) "
+            f" and variables to group by (received {nby})."
+        )
+
+    return expected_groups
+
+
 def groupby_reduce(
     array: np.ndarray | DaskArray,
     *by: np.ndarray | DaskArray,
@@ -1679,23 +1706,16 @@ def groupby_reduce(
         isbins = isbin
     else:
         isbins = (isbin,) * nby
-    if expected_groups is None:
-        expected_groups = (None,) * nby
 
     _assert_by_is_aligned(array.shape, bys)
+
+    expected_groups = _validate_expected_groups(by, expected_groups)
+
     for idx, (expect, is_dask) in enumerate(zip(expected_groups, by_is_dask)):
         if is_dask and (reindex or nby > 1) and expect is None:
             raise ValueError(
                 f"`expected_groups` for array {idx} in `by` cannot be None since it is a dask.array."
             )
-
-    if nby == 1 and not isinstance(expected_groups, tuple):
-        expected_groups = (np.asarray(expected_groups),)
-    elif len(expected_groups) != nby:
-        raise ValueError(
-            f"Must have same number of `expected_groups` (received {len(expected_groups)}) "
-            f" and variables to group by (received {nby})."
-        )
 
     # We convert to pd.Index since that lets us know if we are binning or not
     # (pd.IntervalIndex or not)

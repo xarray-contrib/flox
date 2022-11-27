@@ -13,6 +13,7 @@ from .aggregations import Aggregation, _atleast_1d
 from .core import (
     _convert_expected_groups_to_index,
     _get_expected_groups,
+    _validate_expected_groups,
     groupby_reduce,
     rechunk_for_blockwise as rechunk_array_for_blockwise,
     rechunk_for_cohorts as rechunk_array_for_cohorts,
@@ -216,16 +217,10 @@ def xarray_reduce(
     else:
         isbins = (isbin,) * nby
 
-    if expected_groups is None:
-        expected_groups = (None,) * nby
-    if isinstance(expected_groups, (np.ndarray, list)):  # TODO: test for list
-        if nby == 1:
-            expected_groups = (expected_groups,)
-        else:
-            raise ValueError("Needs better message.")
+    expected_groups = _validate_expected_groups(by, expected_groups)
 
     if not sort:
-        raise NotImplementedError
+        raise NotImplementedError("sort must be True for xarray_reduce")
 
     # eventually drop the variables we are grouping by
     maybe_drop = [b for b in by if isinstance(b, Hashable)]
