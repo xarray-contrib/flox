@@ -1465,9 +1465,11 @@ def _assert_by_is_aligned(shape, by):
     for idx, b in enumerate(by):
         if not all(j in [i, 1] for i, j in zip(shape[-b.ndim :], b.shape)):
             raise ValueError(
-                "`array` and `by` arrays must be aligned "
-                "i.e. array.shape[-by.ndim :] == by.shape. "
-                "for every array in `by`."
+                "`array` and `by` arrays must be 'aligned' "
+                "so that such that by_ is broadcastable to array.shape[-by.ndim:] "
+                "for every array `by_` in `by`. "
+                "Either array.shape[-by_.ndim :] == by_.shape or the only differences "
+                "should be size-1 dimensions in by_."
                 f"Received array of shape {shape} but "
                 f"array {idx} in `by` has shape {b.shape}."
             )
