@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from xarray.core.resample import Resample
     from xarray.core.types import T_DataArray, T_Dataset
 
+    from .core import T_Engine, T_Method
+
     Dims = Union[str, Iterable[Hashable], None]
 
 
@@ -70,8 +72,8 @@ def xarray_reduce(
     dim: Dims | ellipsis = None,
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
-    method: str = "map-reduce",
-    engine: str = "numpy",
+    method: T_Method = "map-reduce",
+    engine: T_Engine = "numpy",
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
