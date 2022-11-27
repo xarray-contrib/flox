@@ -499,6 +499,12 @@ def test_mixed_grouping(chunk):
     assert (r.sel(v1=[3, 4, 5]) == 0).all().data
 
 
+def test_alignment_error():
+    da = xr.DataArray(np.arange(10), dims="x", coords={"x": np.arange(10)})
+    with pytest.raises(ValueError):
+        xarray_reduce(da, da.x.sel(x=slice(5)), func="count")
+
+
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("dtype_out", [np.float64, "float64", np.dtype("float64")])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
