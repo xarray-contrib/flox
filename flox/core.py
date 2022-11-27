@@ -1543,8 +1543,7 @@ def _factorize_multiple(by, expected_groups, any_by_dask, reindex):
     return (group_idx,), final_groups, grp_shape
 
 
-def _validate_expected_groups(by, expected_groups):
-    nby = len(by)
+def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectedGroups:
 
     if expected_groups is None:
         return (None,) * nby
@@ -1710,7 +1709,7 @@ def groupby_reduce(
 
     _assert_by_is_aligned(array.shape, bys)
 
-    expected_groups = _validate_expected_groups(by, expected_groups)
+    expected_groups = _validate_expected_groups(nby, expected_groups)
 
     for idx, (expect, is_dask) in enumerate(zip(expected_groups, by_is_dask)):
         if is_dask and (reindex or nby > 1) and expect is None:

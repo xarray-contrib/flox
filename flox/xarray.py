@@ -217,7 +217,7 @@ def xarray_reduce(
     else:
         isbins = (isbin,) * nby
 
-    expected_groups = _validate_expected_groups(by, expected_groups)
+    expected_groups = _validate_expected_groups(nby, expected_groups)
 
     if not sort:
         raise NotImplementedError("sort must be True for xarray_reduce")
