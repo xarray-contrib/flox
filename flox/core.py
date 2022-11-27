@@ -1555,8 +1555,9 @@ def _validate_expected_groups(by, expected_groups):
     if nby > 1 and not isinstance(expected_groups, tuple):  # TODO: test for list
         raise ValueError(
             "When grouping by multiple variables, expected_groups must be a tuple "
-            "of either arrays or coercible to arrays (like lists) ."
+            "of either arrays or objects convertible to an array (like lists). "
             "For example `expected_groups=(np.array([1, 2, 3]), ['a', 'b', 'c'])`."
+            f"Received a {type(expected_groups).__name__} instead. "
             "When grouping by a single variable, you can pass an array or something "
             "convertible to an array for convenience: `expected_groups=['a', 'b', 'c']`."
         )

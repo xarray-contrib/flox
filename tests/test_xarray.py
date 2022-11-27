@@ -168,12 +168,22 @@ def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
 
 
 @requires_dask
-def test_dask_groupers_error():
+@pytest.mark.parametrize(
+    "expected_groups",
+    (None, (None, None), [[1, 2], [1, 2]]),
+)
+def test_validate_expected_groups(expected_groups):
     da = xr.DataArray(
         [1.0, 2.0], dims="x", coords={"labels": ("x", [1, 2]), "labels2": ("x", [1, 2])}
     )
     with pytest.raises(ValueError):
-        xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
+        xarray_reduce(
+            da.chunk({"x": 1}),
+            "labels",
+            "labels2",
+            func="count",
+            expected_groups=expected_groups,
+        )
 
 
 @requires_dask
