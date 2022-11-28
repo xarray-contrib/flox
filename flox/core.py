@@ -28,7 +28,9 @@ from .xrutils import is_duck_array, is_duck_dask_array, isnull
 if TYPE_CHECKING:
     import dask.array.Array as DaskArray
 
-    T_ExpectedGroups = Union[Sequence, np.ndarray, pd.Index]
+    T_Expect = Union[Sequence, np.ndarray, pd.Index, None]
+    T_ExpectTuple = tuple[T_Expect, ...]
+    T_ExpectedGroups = Union[T_Expect, T_ExpectTuple]
     T_ExpectedGroupsOpt = Union[T_ExpectedGroups, None]
     T_Func = Union[str, Callable]
     T_Funcs = Union[T_Func, Sequence[T_Func]]
@@ -1476,7 +1478,7 @@ def _assert_by_is_aligned(shape, by):
 
 
 def _convert_expected_groups_to_index(
-    expected_groups: T_ExpectedGroups, isbin: Sequence[bool], sort: bool
+    expected_groups: T_ExpectTuple, isbin: Sequence[bool], sort: bool
 ) -> tuple[pd.Index | None, ...]:
     out: list[pd.Index | None] = []
     for ex, isbin_ in zip(expected_groups, isbin):
@@ -1543,7 +1545,7 @@ def _factorize_multiple(by, expected_groups, any_by_dask, reindex):
     return (group_idx,), final_groups, grp_shape
 
 
-def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectedGroups:
+def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectTuple:
 
     if expected_groups is None:
         return (None,) * nby
@@ -1560,6 +1562,9 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
             "When grouping by a single variable, you can pass an array or something "
             "convertible to an array for convenience: `expected_groups=['a', 'b', 'c']`."
         )
+
+    if TYPE_CHECKING:
+        assert isinstance(expected_groups, tuple)
 
     if len(expected_groups) != nby:
         raise ValueError(
