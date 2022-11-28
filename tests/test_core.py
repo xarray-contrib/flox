@@ -1019,8 +1019,26 @@ def test_multiple_groupers(chunk, by1, by2, expected_groups) -> None:
     assert_equal(expected, actual)
 
 
+@pytest.mark.parametrize(
+    "expected_groups",
+    (
+        [None, None, None],
+        (None,),
+    ),
+)
+def test_validate_expected_groups(expected_groups):
+    with pytest.raises(ValueError):
+        groupby_reduce(
+            np.ones((10,)),
+            np.ones((10,)),
+            np.ones((10,)),
+            expected_groups=expected_groups,
+            func="mean",
+        )
+
+
 @requires_dask
-def test_multiple_groupers_errors() -> None:
+def test_validate_expected_groups_not_none_dask() -> None:
     with pytest.raises(ValueError):
         groupby_reduce(
             dask.array.ones((5, 2)),
