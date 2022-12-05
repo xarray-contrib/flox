@@ -1295,7 +1295,7 @@ def test_negative_index_factorize_race_condition():
     S2 = dask.array.random.random_sample(shape, chunks=chunks)
 
     bins = np.arange(-5, -2.05, 0.1)
-    func = ["mean", "count"]
+    func = ["mean", "count", "sum"]
 
     out = [
         groupby_reduce(
