@@ -451,7 +451,7 @@ def factorize_(
             # group_idx[nanmask] = nan_sentinel assignment later
             # this is important in shared-memory parallelism with dask
             # TODO: figure out how to avoid this
-            idx = flat  # .copy()
+            idx = flat.copy()
             found_groups.append(np.array(expect))
             # TODO: fix by using masked integers
             idx[idx > expect[-1]] = -1
