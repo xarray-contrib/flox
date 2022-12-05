@@ -446,7 +446,12 @@ def factorize_(
     for groupvar, expect in zip(by, expected_groups):
         flat = groupvar.reshape(-1)
         if isinstance(expect, pd.RangeIndex):
-            idx = flat
+            # idx is a view of the original `by` aray
+            # copy here so we don't have a race condition with the
+            # group_idx[nanmask] = nan_sentinel assignment later
+            # this is important in shared-memory parallelism with dask
+            # TODO: figure out how to avoid this
+            idx = flat.copy()
             found_groups.append(np.array(expect))
             # TODO: fix by using masked integers
             idx[idx > expect[-1]] = -1
