@@ -1282,3 +1282,30 @@ def test_1d_blockwise_sort_optimization():
         array, time.dt.dayofyear.values[::-1], sort=False, method="blockwise", func="count"
     )
     assert all("getitem" not in k for k in actual.dask.layers)
+
+
+@requires_dask
+def test_negative_index_factorize_race_condition():
+    # shape = (10, 2000)
+    # chunks = ((shape[0]-1,1), 10)
+    shape = (101, 174000)
+    chunks = ((101,), 8760)
+    eps = dask.array.random.random_sample(shape, chunks=chunks)
+    N2 = dask.array.random.random_sample(shape, chunks=chunks)
+    S2 = dask.array.random.random_sample(shape, chunks=chunks)
+
+    bins = np.arange(-5, -2.05, 0.1)
+    func = ["mean", "count"]
+
+    out = [
+        groupby_reduce(
+            eps,
+            N2,
+            S2,
+            func=f,
+            expected_groups=(bins, bins),
+            isbin=(True, True),
+        )
+        for f in func
+    ]
+    [dask.compute(out, scheduler="threads") for _ in range(5)]
