@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import warnings
 from functools import partial, reduce
 from typing import TYPE_CHECKING
 
@@ -204,11 +205,18 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     for kwargs in finalize_kwargs:
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
         with np.errstate(invalid="ignore", divide="ignore"):
-            if "arg" in func and add_nan_by:
-                array[..., nanmask] = np.nan
-                expected = getattr(np, "nan" + func)(array, axis=-1, **kwargs)
-            else:
-                expected = getattr(np, func)(array[..., ~nanmask], axis=-1, **kwargs)
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+                warnings.filterwarnings("ignore", r"Degrees of freedom <= 0 for slice")
+                warnings.filterwarnings("ignore", r"Mean of empty slice")
+
+                # computing silences a bunch of dask warnings
+                array_ = array.compute() if chunks is not None else array
+                if "arg" in func and add_nan_by:
+                    array_[..., nanmask] = np.nan
+                    expected = getattr(np, "nan" + func)(array_, axis=-1, **kwargs)
+                else:
+                    expected = getattr(np, func)(array_[..., ~nanmask], axis=-1, **kwargs)
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
 

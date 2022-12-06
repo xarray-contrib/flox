@@ -223,7 +223,7 @@ def xarray_reduce(
         raise NotImplementedError("sort must be True for xarray_reduce")
 
     # eventually drop the variables we are grouping by
-    maybe_drop = [b for b in by if isinstance(b, Hashable)]
+    maybe_drop = set(b for b in by if isinstance(b, Hashable))
     unindexed_dims = tuple(
         b
         for b, isbin_ in zip(by, isbins)
@@ -242,6 +242,20 @@ def xarray_reduce(
         ds = obj
     else:
         ds = obj._to_temp_dataset()
+
+    try:
+        from xarray.indexes import PandasMultiIndex
+    except ImportError:
+        PandasMultiIndex = tuple()  # type: ignore
+
+    more_drop = set()
+    for var in maybe_drop:
+        maybe_midx = ds._indexes.get(var, None)
+        if isinstance(maybe_midx, PandasMultiIndex):
+            idx_coord_names = set(maybe_midx.index.names + [maybe_midx.dim])
+            idx_other_names = idx_coord_names - set(maybe_drop)
+            more_drop.update(idx_other_names)
+    maybe_drop.update(more_drop)
 
     ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
 

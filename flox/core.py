@@ -4,6 +4,7 @@ import copy
 import itertools
 import math
 import operator
+import warnings
 from collections import namedtuple
 from functools import partial, reduce
 from numbers import Integral
@@ -881,7 +882,9 @@ def _simple_combine(
     for idx, combine in enumerate(agg.combine):
         array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis_)
         assert array.ndim >= 2
-        result = getattr(np, combine)(array, axis=axis_, keepdims=True)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+            result = getattr(np, combine)(array, axis=axis_, keepdims=True)
         if is_aggregate:
             # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
             result = result.squeeze(axis=DUMMY_AXIS)
