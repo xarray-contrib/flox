@@ -286,7 +286,8 @@ def test_xarray_resample_dataset_multiple_arrays(engine):
     # The separate computes are necessary here to force xarray
     # to compute all variables in result at the same time.
     expected = resampler.mean().compute()
-    result = resample_reduce(resampler, "mean", engine=engine).compute()
+    with pytest.warns(DeprecationWarning):
+        result = resample_reduce(resampler, "mean", engine=engine).compute()
     xr.testing.assert_allclose(expected, result)
 
 
@@ -450,7 +451,8 @@ def test_datetime_array_reduce(use_cftime, func, engine):
         name="time",
     )
     expected = getattr(time.resample(time="YS"), func)()
-    actual = resample_reduce(time.resample(time="YS"), func=func, engine=engine)
+    with pytest.warns(DeprecationWarning):
+        actual = resample_reduce(time.resample(time="YS"), func=func, engine=engine)
     assert_equal(expected, actual)
 
 

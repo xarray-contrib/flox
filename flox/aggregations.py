@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from functools import partial
 
 import numpy as np
@@ -48,9 +49,12 @@ def generic_aggregate(
 
     group_idx = np.asarray(group_idx, like=array)
 
-    return method(
-        group_idx, array, axis=axis, size=size, fill_value=fill_value, dtype=dtype, **kwargs
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+        result = method(
+            group_idx, array, axis=axis, size=size, fill_value=fill_value, dtype=dtype, **kwargs
+        )
+    return result
 
 
 def _normalize_dtype(dtype, array_dtype, fill_value=None):
@@ -243,11 +247,18 @@ nanprod = Aggregation(
     fill_value=1,
     final_fill_value=dtypes.NA,
 )
+
+
+def _mean_finalize(sum_, count):
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return sum_ / count
+
+
 mean = Aggregation(
     "mean",
     chunk=("sum", "nanlen"),
     combine=("sum", "sum"),
-    finalize=lambda sum_, count: sum_ / count,
+    finalize=_mean_finalize,
     fill_value=(0, 0),
     dtypes=(None, np.intp),
     final_dtype=np.floating,
@@ -256,7 +267,7 @@ nanmean = Aggregation(
     "nanmean",
     chunk=("nansum", "nanlen"),
     combine=("sum", "sum"),
-    finalize=lambda sum_, count: sum_ / count,
+    finalize=_mean_finalize,
     fill_value=(0, 0),
     dtypes=(None, np.intp),
     final_dtype=np.floating,
@@ -265,7 +276,8 @@ nanmean = Aggregation(
 
 # TODO: fix this for complex numbers
 def _var_finalize(sumsq, sum_, count, ddof=0):
-    result = (sumsq - (sum_**2 / count)) / (count - ddof)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        result = (sumsq - (sum_**2 / count)) / (count - ddof)
     result[count <= ddof] = np.nan
     return result
 
@@ -352,6 +364,10 @@ def argreduce_preprocess(array, axis):
     )
 
 
+def _pick_second(*x):
+    return x[1]
+
+
 argmax = Aggregation(
     "argmax",
     preprocess=argreduce_preprocess,
@@ -360,7 +376,7 @@ argmax = Aggregation(
     reduction_type="argreduce",
     fill_value=(dtypes.NINF, 0),
     final_fill_value=-1,
-    finalize=lambda *x: x[1],
+    finalize=_pick_second,
     dtypes=(None, np.intp),
     final_dtype=np.intp,
 )
@@ -373,7 +389,7 @@ argmin = Aggregation(
     reduction_type="argreduce",
     fill_value=(dtypes.INF, 0),
     final_fill_value=-1,
-    finalize=lambda *x: x[1],
+    finalize=_pick_second,
     dtypes=(None, np.intp),
     final_dtype=np.intp,
 )
@@ -386,7 +402,7 @@ nanargmax = Aggregation(
     reduction_type="argreduce",
     fill_value=(dtypes.NINF, -1),
     final_fill_value=-1,
-    finalize=lambda *x: x[1],
+    finalize=_pick_second,
     dtypes=(None, np.intp),
     final_dtype=np.intp,
 )
@@ -399,7 +415,7 @@ nanargmin = Aggregation(
     reduction_type="argreduce",
     fill_value=(dtypes.INF, -1),
     final_fill_value=-1,
-    finalize=lambda *x: x[1],
+    finalize=_pick_second,
     dtypes=(None, np.intp),
     final_dtype=np.intp,
 )
