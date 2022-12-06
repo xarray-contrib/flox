@@ -210,11 +210,13 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 warnings.filterwarnings("ignore", r"Degrees of freedom <= 0 for slice")
                 warnings.filterwarnings("ignore", r"Mean of empty slice")
 
+                # computing silences a bunch of dask warnings
+                array_ = array.compute() if chunks is not None else array
                 if "arg" in func and add_nan_by:
-                    array[..., nanmask] = np.nan
-                    expected = getattr(np, "nan" + func)(array, axis=-1, **kwargs)
+                    array_[..., nanmask] = np.nan
+                    expected = getattr(np, "nan" + func)(array_, axis=-1, **kwargs)
                 else:
-                    expected = getattr(np, func)(array[..., ~nanmask], axis=-1, **kwargs)
+                    expected = getattr(np, func)(array_[..., ~nanmask], axis=-1, **kwargs)
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
 
