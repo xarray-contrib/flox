@@ -408,7 +408,7 @@ def test_numpy_reduce_axis_subset(engine):
     array = np.ones_like(by, dtype=np.int64)
     kwargs = dict(func="count", engine=engine, fill_value=0)
     result, _ = groupby_reduce(array, by, **kwargs, axis=1)
-    assert_equal(result, np.array([[2, 3], [2, 3]], dtype=np.int64))
+    assert_equal(result, np.array([[2, 3], [2, 3]], dtype=np.intp))
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
@@ -955,7 +955,6 @@ def test_group_by_datetime(engine, method):
 
 
 def test_factorize_values_outside_bins():
-
     # pd.factorize returns intp
     vals = factorize_(
         (np.arange(10).reshape(5, 2), np.arange(10).reshape(5, 2)),
