@@ -956,6 +956,7 @@ def test_group_by_datetime(engine, method):
 
 def test_factorize_values_outside_bins():
 
+    # pd.factorize returns intp
     vals = factorize_(
         (np.arange(10).reshape(5, 2), np.arange(10).reshape(5, 2)),
         axis=(0, 1),
@@ -967,7 +968,7 @@ def test_factorize_values_outside_bins():
         fastpath=True,
     )
     actual = vals[0]
-    expected = np.array([[-1, -1], [-1, 0], [6, 12], [18, 24], [-1, -1]], np.int64)
+    expected = np.array([[-1, -1], [-1, 0], [6, 12], [18, 24], [-1, -1]], np.intp)
     assert_equal(expected, actual)
 
 
