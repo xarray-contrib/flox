@@ -418,19 +418,19 @@ def test_numpy_reduce_axis_subset(engine):
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by, **kwargs, axis=2)
-    subarr = np.array([[2, 3], [2, 3]], dtype=np.int64)
+    subarr = np.array([[2, 3], [2, 3]], dtype=np.intp)
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by, **kwargs, axis=(1, 2))
-    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.int64)
+    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.intp)
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by, **kwargs, axis=(2, 1))
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by[0, ...], **kwargs, axis=(1, 2))
-    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.int64)
+    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.intp)
     assert_equal(result, expected)
 
 
