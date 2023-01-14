@@ -140,7 +140,7 @@ def test_groupby_reduce(
     elif func == "sum":
         expected_result = np.array(expected, dtype=dtype)
     elif func == "count":
-        expected_result = np.array(expected, dtype=np.int64)
+        expected_result = np.array(expected, dtype=np.intp)
 
     result, groups, = groupby_reduce(
         array,
@@ -284,7 +284,7 @@ def test_groupby_reduce_count():
     array = np.array([0, 0, np.nan, np.nan, np.nan, 1, 1])
     labels = np.array(["a", "b", "b", "b", "c", "c", "c"])
     result, _ = groupby_reduce(array, labels, func="count")
-    assert_equal(result, np.array([1, 1, 2], dtype=np.int64))
+    assert_equal(result, np.array([1, 1, 2], dtype=np.intp))
 
 
 def test_func_is_aggregation():
@@ -408,29 +408,29 @@ def test_numpy_reduce_axis_subset(engine):
     array = np.ones_like(by, dtype=np.int64)
     kwargs = dict(func="count", engine=engine, fill_value=0)
     result, _ = groupby_reduce(array, by, **kwargs, axis=1)
-    assert_equal(result, np.array([[2, 3], [2, 3]], dtype=np.int64))
+    assert_equal(result, np.array([[2, 3], [2, 3]], dtype=np.intp))
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
     result, _ = groupby_reduce(array, by, **kwargs, axis=1)
-    subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]], dtype=np.int64)
+    subarr = np.array([[1, 1], [1, 1], [0, 2], [1, 1], [1, 1]], dtype=np.intp)
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by, **kwargs, axis=2)
-    subarr = np.array([[2, 3], [2, 3]], dtype=np.int64)
+    subarr = np.array([[2, 3], [2, 3]], dtype=np.intp)
     expected = np.tile(subarr, (3, 1, 1))
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by, **kwargs, axis=(1, 2))
-    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.int64)
+    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.intp)
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by, **kwargs, axis=(2, 1))
     assert_equal(result, expected)
 
     result, _ = groupby_reduce(array, by[0, ...], **kwargs, axis=(1, 2))
-    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.int64)
+    expected = np.array([[4, 6], [4, 6], [4, 6]], dtype=np.intp)
     assert_equal(result, expected)
 
 
@@ -672,7 +672,7 @@ def test_groupby_bins(chunk_labels, chunks, engine, method) -> None:
             engine=engine,
             method=method,
         )
-    expected = np.array([3, 1, 0], dtype=np.int64)
+    expected = np.array([3, 1, 0], dtype=np.intp)
     for left, right in zip(groups, pd.IntervalIndex.from_arrays([1, 2, 4], [2, 4, 5]).to_numpy()):
         assert left == right
     assert_equal(actual, expected)
@@ -955,7 +955,7 @@ def test_group_by_datetime(engine, method):
 
 
 def test_factorize_values_outside_bins():
-
+    # pd.factorize returns intp
     vals = factorize_(
         (np.arange(10).reshape(5, 2), np.arange(10).reshape(5, 2)),
         axis=(0, 1),
@@ -967,7 +967,7 @@ def test_factorize_values_outside_bins():
         fastpath=True,
     )
     actual = vals[0]
-    expected = np.array([[-1, -1], [-1, 0], [6, 12], [18, 24], [-1, -1]], np.int64)
+    expected = np.array([[-1, -1], [-1, 0], [6, 12], [18, 24], [-1, -1]], np.intp)
     assert_equal(expected, actual)
 
 
@@ -991,7 +991,8 @@ def test_multiple_groupers_bins(chunk) -> None:
         ),
         func="count",
     )
-    expected = np.eye(5, 5, dtype=np.int64)
+    # output from `count` is intp
+    expected = np.eye(5, 5, dtype=np.intp)
     assert_equal(expected, actual)
 
 
@@ -1020,7 +1021,8 @@ def test_multiple_groupers(chunk, by1, by2, expected_groups) -> None:
     if chunk:
         by2 = dask.array.from_array(by2)
 
-    expected = np.ones((5, 2), dtype=np.int64)
+    # output from `count` is intp
+    expected = np.ones((5, 2), dtype=np.intp)
     actual, *_ = groupby_reduce(
         array, by1, by2, axis=(0, 1), func="count", expected_groups=expected_groups
     )
@@ -1059,6 +1061,7 @@ def test_validate_expected_groups_not_none_dask() -> None:
 
 
 def test_factorize_reindex_sorting_strings():
+    # pd.factorize seems to return intp so int32 on 32bit arch
     kwargs = dict(
         by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),
         axis=-1,
@@ -1066,19 +1069,20 @@ def test_factorize_reindex_sorting_strings():
     )
 
     expected = factorize_(**kwargs, reindex=True, sort=True)[0]
-    assert_equal(expected, np.array([0, 1, 4, 2], dtype=np.int64))
+    assert_equal(expected, np.array([0, 1, 4, 2], dtype=np.intp))
 
     expected = factorize_(**kwargs, reindex=True, sort=False)[0]
-    assert_equal(expected, np.array([0, 3, 4, 1], dtype=np.int64))
+    assert_equal(expected, np.array([0, 3, 4, 1], dtype=np.intp))
 
     expected = factorize_(**kwargs, reindex=False, sort=False)[0]
-    assert_equal(expected, np.array([0, 1, 2, 3], dtype=np.int64))
+    assert_equal(expected, np.array([0, 1, 2, 3], dtype=np.intp))
 
     expected = factorize_(**kwargs, reindex=False, sort=True)[0]
-    assert_equal(expected, np.array([0, 1, 3, 2], dtype=np.int64))
+    assert_equal(expected, np.array([0, 1, 3, 2], dtype=np.intp))
 
 
 def test_factorize_reindex_sorting_ints():
+    # pd.factorize seems to return intp so int32 on 32bit arch
     kwargs = dict(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
         axis=-1,
@@ -1086,18 +1090,18 @@ def test_factorize_reindex_sorting_ints():
     )
 
     expected = factorize_(**kwargs, reindex=True, sort=True)[0]
-    assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.int64))
+    assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.intp))
 
     expected = factorize_(**kwargs, reindex=True, sort=False)[0]
-    assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.int64))
+    assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.intp))
 
     kwargs["expected_groups"] = (np.arange(5, -1, -1),)
 
     expected = factorize_(**kwargs, reindex=True, sort=True)[0]
-    assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.int64))
+    assert_equal(expected, np.array([6, 1, 6, 2, 3, 5], dtype=np.intp))
 
     expected = factorize_(**kwargs, reindex=True, sort=False)[0]
-    assert_equal(expected, np.array([6, 4, 6, 3, 2, 0], dtype=np.int64))
+    assert_equal(expected, np.array([6, 4, 6, 3, 2, 0], dtype=np.intp))
 
 
 @requires_dask
