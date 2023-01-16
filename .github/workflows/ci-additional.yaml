@@ -71,7 +71,15 @@ jobs:
           conda list
       - name: Run doctests
         run: |
-          python -m pytest --doctest-modules flox --ignore flox/tests
+          python -m pytest --doctest-modules flox --ignore flox/tests --cov=./ --cov-report=xml
+      - name: Upload code coverage to Codecov
+        uses: codecov/codecov-action@v3.1.1
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          env_vars: RUNNER_OS
+          name: codecov-umbrella
+          fail_ci_if_error: false
 
   mypy:
     name: Mypy

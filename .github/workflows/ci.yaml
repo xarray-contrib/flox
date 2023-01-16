@@ -89,7 +89,7 @@ jobs:
           python -m pip install --no-deps -e .
       - name: Run tests
         run: |
-          python -m pytest -n auto
+          python -m pytest -n auto --cov=./ --cov-report=xml
       - name: Upload code coverage to Codecov
         uses: codecov/codecov-action@v3.1.1
         with:
@@ -160,7 +160,7 @@ jobs:
         id: status
         run: |
           set -euo pipefail
-          python -m pytest -n auto xarray/tests/test_groupby.py
+          python -m pytest -n auto --cov=./ --cov-report=xml xarray/tests/test_groupby.py
       - name: Upload code coverage to Codecov
         uses: codecov/codecov-action@v3.1.1
         with:
