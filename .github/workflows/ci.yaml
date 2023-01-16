@@ -161,7 +161,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pytest -n auto xarray/tests/test_groupby.py
-     - name: Upload code coverage to Codecov
+      - name: Upload code coverage to Codecov
         uses: codecov/codecov-action@v3.1.1
         with:
           file: ./coverage.xml
