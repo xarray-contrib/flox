@@ -160,12 +160,4 @@ jobs:
         id: status
         run: |
           set -euo pipefail
-          python -m pytest -n auto --cov=./ --cov-report=xml xarray/tests/test_groupby.py
-      - name: Upload code coverage to Codecov
-        uses: codecov/codecov-action@v3.1.1
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          env_vars: RUNNER_OS
-          name: codecov-umbrella
-          fail_ci_if_error: false
+          python -m pytest -n auto xarray/tests/test_groupby.py
