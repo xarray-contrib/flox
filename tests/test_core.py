@@ -393,12 +393,12 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=False)
-    assert_equal(groups, np.array([0, 2, 1], dtype=np.intp))
+    assert_equal(groups, np.array([0, 2, 1], dtype=np.int64))
     assert_equal(expected, actual[..., [0, 2, 1]])
 
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=True)
-    assert_equal(groups, np.array([0, 1, 2], np.intp))
+    assert_equal(groups, np.array([0, 1, 2], np.int64))
     assert_equal(expected, actual)
 
 
@@ -447,11 +447,11 @@ def test_dask_reduce_axis_subset():
             axis=1,
             expected_groups=[0, 2],
         )
-    assert_equal(result, np.array([[2, 3], [2, 3]], dtype=np.int64))
+    assert_equal(result, np.array([[2, 3], [2, 3]], dtype=np.intp))
 
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     array = np.ones_like(by)
-    subarr = np.array([[1, 1], [1, 1], [123, 2], [1, 1], [1, 1]], dtype=np.int64)
+    subarr = np.array([[1, 1], [1, 1], [123, 2], [1, 1], [1, 1]], dtype=np.intp)
     expected = np.tile(subarr, (3, 1, 1))
     with raise_if_dask_computes():
         result, _ = groupby_reduce(
@@ -464,7 +464,7 @@ def test_dask_reduce_axis_subset():
         )
     assert_equal(result, expected)
 
-    subarr = np.array([[2, 3], [2, 3]], dtype=np.int64)
+    subarr = np.array([[2, 3], [2, 3]], dtype=np.intp)
     expected = np.tile(subarr, (3, 1, 1))
     with raise_if_dask_computes():
         result, _ = groupby_reduce(
@@ -801,7 +801,7 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
 
     actual, actual_groups = groupby_reduce(array, labels, func="count", method=method)
     assert_equal(actual_groups, np.arange(6, dtype=labels.dtype))
-    assert_equal(actual, repeats.astype(np.int64))
+    assert_equal(actual, repeats.astype(np.intp))
 
     actual, actual_groups = groupby_reduce(array, labels, func="sum", method=method)
     assert_equal(actual_groups, np.arange(6, dtype=labels.dtype))
