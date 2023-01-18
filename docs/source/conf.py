@@ -95,12 +95,33 @@ exclude_patterns = ["_build"]
 # show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = "sphinx"
+pygments_style = "igor"
 
 
 # -- Options for HTML output ---------------------------------------------------
 
 html_theme = "furo"
+
+# Theme options are theme-specific and customize the look and feel of a theme
+# further.  For a list of options available for each theme, see the
+# documentation.
+css_vars = {
+    "admonition-font-size": "0.9rem",
+    "font-size--small": "92%",
+    "font-size--small--2": "87.5%",
+}
+html_theme_options = dict(
+    sidebar_hide_name=True,
+    light_css_variables=css_vars,
+    dark_css_variables=css_vars,
+)
+
+html_context = {
+    "github_user": "xarray-contrib",
+    "github_repo": "flox",
+    "github_version": "main",
+    "doc_path": "doc",
+}
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
