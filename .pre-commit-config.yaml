@@ -25,14 +25,24 @@ repos:
       hooks:
         - id: isort
 
-    - repo: https://github.com/deathbeds/prenotebook
-      rev: f5bdb72a400f1a56fe88109936c83aa12cc349fa
+    - repo: https://github.com/executablebooks/mdformat
+      rev: 0.7.16
       hooks:
-        - id: prenotebook
-          args:
-            [
-              '--keep-output',
-              '--keep-metadata',
-              '--keep-execution-count',
-              '--keep-empty',
-            ]
+      - id: mdformat
+        additional_dependencies:
+          - mdformat-black
+          - mdformat-myst
+
+    - repo: https://github.com/nbQA-dev/nbQA
+      rev: 1.4.0
+      hooks:
+          - id: nbqa-black
+          - id: nbqa-pyupgrade
+            args: [--py37-plus]
+          - id: nbqa-isort
+
+    - repo: https://github.com/kynan/nbstripout
+      rev: 0.6.1
+      hooks:
+        - id: nbstripout
+          args: [--extra-keys=metadata.kernelspec metadata.language_info.version]
