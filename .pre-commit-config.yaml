@@ -34,7 +34,7 @@ repos:
           - mdformat-myst
 
     - repo: https://github.com/nbQA-dev/nbQA
-      rev: 1.4.0
+      rev: 1.6.1
       hooks:
           - id: nbqa-black
           - id: nbqa-pyupgrade
