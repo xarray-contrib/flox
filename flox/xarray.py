@@ -313,7 +313,9 @@ def xarray_reduce(
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
     for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups, isbins)):
-        group_name = b_.name if not isbin_ else f"{b_.name}_bins"
+        group_name = (
+            f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
+        )
         group_names += (group_name,)
 
         if isbin_ and isinstance(expect, int):
