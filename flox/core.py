@@ -1737,7 +1737,7 @@ def groupby_reduce(
     # (pd.IntervalIndex or not)
     expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, sort)
 
-    is_binning = any(isbins) or any([isinstance(e, pd.IntervalIndex) for e in expected_groups])
+    is_binning = any([isinstance(e, pd.IntervalIndex) for e in expected_groups])
 
     # TODO: could restrict this to dask-only
     factorize_early = (nby > 1) or (
