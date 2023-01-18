@@ -16,5 +16,6 @@ dependencies:
   - furo
   - ipykernel
   - jupyter
+  - sphinx-codeautolink
   - pip:
     - git+https://github.com/xarray-contrib/flox

@@ -40,7 +40,10 @@ extensions = [
     "numpydoc",
     "sphinx.ext.napoleon",
     "myst_nb",
+    "sphinx_codeautolink",
 ]
+
+codeautolink_concat_default = True
 
 extlinks = {
     "issue": ("https://github.com/xarray-contrib/flox/issues/%s", "GH#%s"),

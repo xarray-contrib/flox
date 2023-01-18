@@ -211,7 +211,7 @@ Consider our earlier example, `groupby("time.month")` with monthly frequency dat
 `flox` can find these cohorts, below it identifies the cohorts with labels `1,2,3,4`; `5,6,7,8`, and `9,10,11,12`.
 
 ```python
->>> flox.find_group_cohorts(labels, array.chunks[-1]))
+>>> flox.find_group_cohorts(labels, array.chunks[-1]).values()
 [[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]  # 3 cohorts
 ```
 
@@ -219,7 +219,7 @@ Now consider `chunksize=5`.
 ![cohorts-schematic](/../diagrams/cohorts-month-chunk5.png)
 
 ```python
->>> flox.core.find_group_cohorts(labels, array.chunks[-1]))
+>>> flox.core.find_group_cohorts(labels, array.chunks[-1]).values()
 [[1], [2, 3], [4, 5], [6], [7, 8], [9, 10], [11], [12]]  # 8 cohorts
 ```
 
