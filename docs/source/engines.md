@@ -1,4 +1,5 @@
 (engines)=
+
 # Engines
 
 `flox` provides multiple options, using the `engine` kwarg, for computing the core GroupBy reduction on numpy or other array types other than dask.
@@ -7,13 +8,14 @@
    (.e.g `np.maximum.at`) to provided reasonably performant aggregations.
 1. `engine="numba"` wraps `numpy_groupies.aggregate_numba`. This uses `numba` kernels for the core aggregation.
 1. `engine="flox"` uses the `ufunc.reduceat` method after first argsorting the array so that all group members occur sequentially. This was copied from
-    a [gist by Stephan Hoyer](https://gist.github.com/shoyer/f538ac78ae904c936844)
+   a [gist by Stephan Hoyer](https://gist.github.com/shoyer/f538ac78ae904c936844)
 
 See [](arrays) for more details.
 
 ## Tradeoffs
 
-    For the common case of reducing a nD array by a 1D array of group labels (e.g. `groupby("time.month")`), `engine="flox"` *can* be faster.
+For the common case of reducing a nD array by a 1D array of group labels (e.g. `groupby("time.month")`), `engine="flox"` *can* be faster.
+
 The reason is that `numpy_groupies` converts all groupby problems to a 1D problem, this can involve [some overhead](https://github.com/ml31415/numpy-groupies/pull/46).
 It is possible to optimize this a bit in `flox` or `numpy_groupies`, but the work has not been done yet.
 The advantage of `engine="numpy"` is that it tends to work for more array types, since it appears to be more common to implement `np.bincount`, and not `np.add.reduceat`.
