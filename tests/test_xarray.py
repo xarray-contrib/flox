@@ -457,7 +457,8 @@ def test_datetime_array_reduce(use_cftime, func, engine):
 
 
 @requires_dask
-def test_groupby_bins_indexed_coordinate():
+@pytest.mark.parametrize("method", ["cohorts", "map-reduce"])
+def test_groupby_bins_indexed_coordinate(method):
     ds = (
         xr.tutorial.open_dataset("air_temperature")
         .isel(time=slice(100))
@@ -472,7 +473,17 @@ def test_groupby_bins_indexed_coordinate():
         expected_groups=([40, 50, 60, 70],),
         isbin=(True,),
         func="mean",
-        method="split-reduce",
+        method=method,
+    )
+    xr.testing.assert_allclose(expected, actual)
+
+    actual = xarray_reduce(
+        ds,
+        ds.lat,
+        dim=ds.air.dims,
+        expected_groups=pd.IntervalIndex.from_breaks([40, 50, 60, 70]),
+        func="mean",
+        method=method,
     )
     xr.testing.assert_allclose(expected, actual)
 

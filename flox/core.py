@@ -1559,7 +1559,10 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
         return (None,) * nby
 
     if nby == 1 and not isinstance(expected_groups, tuple):
-        return (np.asarray(expected_groups),)
+        if isinstance(expected_groups, pd.Index):
+            return (expected_groups,)
+        else:
+            return (np.asarray(expected_groups),)
 
     if nby > 1 and not isinstance(expected_groups, tuple):  # TODO: test for list
         raise ValueError(
@@ -1734,9 +1737,11 @@ def groupby_reduce(
     # (pd.IntervalIndex or not)
     expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, sort)
 
+    is_binning = any([isinstance(e, pd.IntervalIndex) for e in expected_groups])
+
     # TODO: could restrict this to dask-only
     factorize_early = (nby > 1) or (
-        any(isbins) and method == "cohorts" and is_duck_dask_array(array)
+        is_binning and method == "cohorts" and is_duck_dask_array(array)
     )
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
