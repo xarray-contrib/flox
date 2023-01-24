@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import warnings
 from functools import partial
+from typing import Callable
 
 import numpy as np
 import numpy_groupies as npg
@@ -114,6 +115,7 @@ class Aggregation:
         dtypes=None,
         final_dtype=None,
         reduction_type="reduce",
+        units_func: Callable | None = None,
     ):
         """
         Blueprint for computing grouped aggregations.
@@ -156,6 +158,8 @@ class Aggregation:
             per reduction in ``chunk`` as a tuple.
         final_dtype : DType, optional
             DType for output. By default, uses dtype of array being reduced.
+        units_func : pint.Unit
+            units for the output
         """
         self.name = name
         # preprocess before blockwise
@@ -187,6 +191,8 @@ class Aggregation:
         # The following are set by _initialize_aggregation
         self.finalize_kwargs = {}
         self.min_count = None
+        self.units_func = units_func
+        self.units = None
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
@@ -235,17 +241,44 @@ count = Aggregation(
     final_dtype=np.intp,
 )
 
+
+def identity(x):
+    return x
+
+
+def square(x):
+    return x**2
+
+
+def raise_units_error(x):
+    raise ValueError(
+        "Units cannot supported for prod in general. "
+        "We can only attach units when there are "
+        "equal number of members in each group. "
+        "Please strip units and then reattach units "
+        "to the output manually."
+    )
+
+
 # note that the fill values are the result of np.func([np.nan, np.nan])
 # final_fill_value is used for groups that don't exist. This is usually np.nan
-sum_ = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
-nansum = Aggregation("nansum", chunk="nansum", combine="sum", fill_value=0)
-prod = Aggregation("prod", chunk="prod", combine="prod", fill_value=1, final_fill_value=1)
+sum_ = Aggregation("sum", chunk="sum", combine="sum", fill_value=0, units_func=identity)
+nansum = Aggregation("nansum", chunk="nansum", combine="sum", fill_value=0, units_func=identity)
+prod = Aggregation(
+    "prod",
+    chunk="prod",
+    combine="prod",
+    fill_value=1,
+    final_fill_value=1,
+    units_func=raise_units_error,
+)
 nanprod = Aggregation(
     "nanprod",
     chunk="nanprod",
     combine="prod",
     fill_value=1,
     final_fill_value=dtypes.NA,
+    units_func=raise_units_error,
 )
 
 
@@ -262,6 +295,7 @@ mean = Aggregation(
     fill_value=(0, 0),
     dtypes=(None, np.intp),
     final_dtype=np.floating,
+    units_func=identity,
 )
 nanmean = Aggregation(
     "nanmean",
@@ -271,6 +305,7 @@ nanmean = Aggregation(
     fill_value=(0, 0),
     dtypes=(None, np.intp),
     final_dtype=np.floating,
+    units_func=identity,
 )
 
 
@@ -296,6 +331,7 @@ var = Aggregation(
     final_fill_value=np.nan,
     dtypes=(None, None, np.intp),
     final_dtype=np.floating,
+    units_func=square,
 )
 nanvar = Aggregation(
     "nanvar",
@@ -306,6 +342,7 @@ nanvar = Aggregation(
     final_fill_value=np.nan,
     dtypes=(None, None, np.intp),
     final_dtype=np.floating,
+    units_func=square,
 )
 std = Aggregation(
     "std",
@@ -316,6 +353,7 @@ std = Aggregation(
     final_fill_value=np.nan,
     dtypes=(None, None, np.intp),
     final_dtype=np.floating,
+    units_func=identity,
 )
 nanstd = Aggregation(
     "nanstd",
@@ -329,10 +367,14 @@ nanstd = Aggregation(
 )
 
 
-min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF)
-nanmin = Aggregation("nanmin", chunk="nanmin", combine="nanmin", fill_value=np.nan)
-max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF)
-nanmax = Aggregation("nanmax", chunk="nanmax", combine="nanmax", fill_value=np.nan)
+min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF, units_func=identity)
+nanmin = Aggregation(
+    "nanmin", chunk="nanmin", combine="nanmin", fill_value=np.nan, units_func=identity
+)
+max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF, units_func=identity)
+nanmax = Aggregation(
+    "nanmax", chunk="nanmax", combine="nanmax", fill_value=np.nan, units_func=identity
+)
 
 
 def argreduce_preprocess(array, axis):
@@ -420,10 +462,14 @@ nanargmin = Aggregation(
     final_dtype=np.intp,
 )
 
-first = Aggregation("first", chunk=None, combine=None, fill_value=0)
-last = Aggregation("last", chunk=None, combine=None, fill_value=0)
-nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=np.nan)
-nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=np.nan)
+first = Aggregation("first", chunk=None, combine=None, fill_value=0, units_func=identity)
+last = Aggregation("last", chunk=None, combine=None, fill_value=0, units_func=identity)
+nanfirst = Aggregation(
+    "nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=np.nan, units_func=identity
+)
+nanlast = Aggregation(
+    "nanlast", chunk="nanlast", combine="nanlast", fill_value=np.nan, units_func=identity
+)
 
 all_ = Aggregation(
     "all",
@@ -483,6 +529,7 @@ def _initialize_aggregation(
     dtype,
     array_dtype,
     fill_value,
+    array_units,
     min_count: int | None,
     finalize_kwargs,
 ) -> Aggregation:
@@ -547,4 +594,8 @@ def _initialize_aggregation(
         agg.dtype["intermediate"] += (np.intp,)
         agg.dtype["numpy"] += (np.intp,)
 
+    if array_units is not None and agg.units_func is not None:
+        import pint
+
+        agg.units = agg.units_func(pint.Quantity([1], units=array_units))
     return agg

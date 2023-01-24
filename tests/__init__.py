@@ -24,6 +24,13 @@ try:
 except ImportError:
     xr_types = ()  # type: ignore
 
+try:
+    import pint
+
+    pint_types = pint.Quantity
+except ImportError:
+    pint_types = ()  # type: ignore
+
 
 def _importorskip(modname, minversion=None):
     try:
@@ -46,6 +53,7 @@ def LooseVersion(vstring):
 
 
 has_dask, requires_dask = _importorskip("dask")
+has_pint, requires_pint = _importorskip("pint")
 has_xarray, requires_xarray = _importorskip("xarray")
 
 
@@ -94,6 +102,14 @@ def assert_equal(a, b, tolerance=None):
     if has_xarray and isinstance(a, xr_types) or isinstance(b, xr_types):
         xr.testing.assert_identical(a, b)
         return
+
+    if has_pint and isinstance(a, pint_types) or isinstance(b, pint_types):
+        assert isinstance(a, pint_types)
+        assert isinstance(b, pint_types)
+        assert a.units == b.units
+
+        a = a.magnitude
+        b = b.magnitude
 
     if tolerance is None and (
         np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64)
