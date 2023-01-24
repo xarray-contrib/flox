@@ -158,8 +158,8 @@ class Aggregation:
             per reduction in ``chunk`` as a tuple.
         final_dtype : DType, optional
             DType for output. By default, uses dtype of array being reduced.
-        units_func : pint.Unit
-            units for the output
+        units_func : callable
+            function whose output will be used to infer units.
         """
         self.name = name
         # preprocess before blockwise
