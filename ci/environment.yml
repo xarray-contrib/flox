@@ -11,6 +11,7 @@ dependencies:
   - numpy>=1.20
   - lxml  # for mypy coverage report
   - matplotlib
+  - pint
   - pip
   - pytest
   - pytest-cov
