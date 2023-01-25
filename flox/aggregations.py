@@ -3,11 +3,14 @@ from __future__ import annotations
 import copy
 import warnings
 from functools import partial
+from typing import Any, Callable, Dict
 
 import numpy as np
 import numpy_groupies as npg
 
 from . import aggregate_flox, aggregate_npg, xrdtypes as dtypes, xrutils
+
+FuncTuple = tuple[Callable | str, ...]
 
 
 def _is_arg_reduction(func: str | Aggregation) -> bool:
@@ -103,12 +106,12 @@ class Aggregation:
         self,
         name,
         *,
-        numpy=None,
-        chunk,
-        combine,
-        preprocess=None,
-        aggregate=None,
-        finalize=None,
+        numpy: str | FuncTuple | None = None,
+        chunk: str | FuncTuple | None,
+        combine: str | FuncTuple | None,
+        preprocess: Callable | None = None,
+        aggregate: Callable | None = None,
+        finalize: Callable | None = None,
         fill_value=None,
         final_fill_value=dtypes.NA,
         dtypes=None,
@@ -162,15 +165,15 @@ class Aggregation:
         self.preprocess = preprocess
         # Use "chunk_reduce" or "chunk_argreduce"
         self.reduction_type = reduction_type
-        self.numpy = (numpy,) if numpy else (self.name,)
+        self.numpy: FuncTuple = (numpy,) if numpy else (self.name,)
         # initialize blockwise reduction
-        self.chunk = _atleast_1d(chunk)
+        self.chunk: FuncTuple = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
-        self.combine = _atleast_1d(combine)
+        self.combine: FuncTuple = _atleast_1d(combine)
         # final aggregation
-        self.aggregate = aggregate if aggregate else self.combine[0]
+        self.aggregate: Callable | str = aggregate if aggregate else self.combine[0]
         # finalize results (see mean)
-        self.finalize = finalize if finalize else lambda x: x
+        self.finalize: Callable | None = finalize
 
         self.fill_value = {}
         # This is used for the final reindexing
@@ -185,8 +188,8 @@ class Aggregation:
         self.dtype["intermediate"] = self._normalize_dtype_fill_value(dtypes, "dtype")
 
         # The following are set by _initialize_aggregation
-        self.finalize_kwargs = {}
-        self.min_count = None
+        self.finalize_kwargs: Dict[Any, Any] = {}
+        self.min_count: int | None = None
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
@@ -211,7 +214,7 @@ class Aggregation:
             self.dtype,
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "\n".join(
             (
                 f"{self.name}, fill: {np.unique(self.fill_value.values())}, dtype: {self.dtype}",
@@ -484,7 +487,7 @@ def _initialize_aggregation(
     array_dtype,
     fill_value,
     min_count: int | None,
-    finalize_kwargs,
+    finalize_kwargs: Dict[Any, Any] | None,
 ) -> Aggregation:
     if not isinstance(func, Aggregation):
         try:
@@ -502,10 +505,9 @@ def _initialize_aggregation(
 
     # np.dtype(None) == np.dtype("float64")!!!
     # so check for not None
-    if dtype is not None and not isinstance(dtype, np.dtype):
-        dtype = np.dtype(dtype)
+    dtype_ = np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
 
-    agg.dtype[func] = _normalize_dtype(dtype or agg.dtype[func], array_dtype, fill_value)
+    agg.dtype[func] = _normalize_dtype(dtype_ or agg.dtype[func], array_dtype, fill_value)
     agg.dtype["numpy"] = (agg.dtype[func],)
     agg.dtype["intermediate"] = [
         _normalize_dtype(int_dtype, np.result_type(array_dtype, agg.dtype[func]), int_fv)
@@ -539,9 +541,9 @@ def _initialize_aggregation(
     # where the identity element is 0, 1
     if min_count is not None:
         agg.min_count = min_count
-        agg.chunk += ("nanlen",)
-        agg.numpy += ("nanlen",)
-        agg.combine += ("sum",)
+        agg.chunk = agg.chunk + ("nanlen",)
+        agg.numpy = agg.numpy + ("nanlen",)
+        agg.combine = agg.combine + ("sum",)
         agg.fill_value["intermediate"] += (0,)
         agg.fill_value["numpy"] += (0,)
         agg.dtype["intermediate"] += (np.intp,)
