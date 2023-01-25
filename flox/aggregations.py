@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict
 
 import numpy as np
 import numpy_groupies as npg
+from numpy.typing import DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrdtypes as dtypes, xrutils
 
@@ -60,7 +61,7 @@ def generic_aggregate(
     return result
 
 
-def _normalize_dtype(dtype, array_dtype, fill_value=None):
+def _normalize_dtype(dtype: DTypeLike, array_dtype: np.dtype, fill_value=None) -> np.dtype:
     if dtype is None:
         dtype = array_dtype
     if dtype is np.floating:
@@ -217,12 +218,12 @@ class Aggregation:
     def __repr__(self) -> str:
         return "\n".join(
             (
-                f"{self.name}, fill: {np.unique(self.fill_value.values())}, dtype: {self.dtype}",
-                f"chunk: {self.chunk}",
-                f"combine: {self.combine}",
-                f"aggregate: {self.aggregate}",
-                f"finalize: {self.finalize}",
-                f"min_count: {self.min_count}",
+                f"{self.name!r}, fill: {self.fill_value.values()!r}, dtype: {self.dtype}",
+                f"chunk: {self.chunk!r}",
+                f"combine: {self.combine!r}",
+                f"aggregate: {self.aggregate!r}",
+                f"finalize: {self.finalize!r}",
+                f"min_count: {self.min_count!r}",
             )
         )
 
@@ -505,16 +506,18 @@ def _initialize_aggregation(
 
     # np.dtype(None) == np.dtype("float64")!!!
     # so check for not None
-    dtype_ = np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
+    dtype_: np.dtype | None = (
+        np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
+    )
 
     agg.dtype[func] = _normalize_dtype(dtype_ or agg.dtype[func], array_dtype, fill_value)
     agg.dtype["numpy"] = (agg.dtype[func],)
-    agg.dtype["intermediate"] = [
+    agg.dtype["intermediate"] = tuple(
         _normalize_dtype(int_dtype, np.result_type(array_dtype, agg.dtype[func]), int_fv)
         if int_dtype is None
         else int_dtype
         for int_dtype, int_fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
-    ]
+    )
 
     # Replace sentinel fill values according to dtype
     agg.fill_value["intermediate"] = tuple(
