@@ -807,7 +807,7 @@ def _finalize_results(
     else:
         finalized["groups"] = squeezed["groups"]
 
-    finalized[agg.name] = finalized[agg.name].astype(agg.dtype[agg.name], copy=False)
+    finalized[agg.name] = finalized[agg.name].astype(agg.dtype["final"], copy=False)
     return finalized
 
 
@@ -1404,7 +1404,7 @@ def dask_groupby_agg(
         reduced,
         inds,
         adjust_chunks=dict(zip(out_inds, output_chunks)),
-        dtype=agg.dtype[agg.name],
+        dtype=agg.dtype["final"],
         key=agg.name,
         name=f"{name}-{token}",
         concatenate=False,
