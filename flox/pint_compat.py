@@ -1,12 +1,11 @@
 def _strip_units(*arrays):
-    pint_quantity: tuple | None
     try:
         import pint
 
         pint_quantity = (pint.Quantity,)
 
     except ImportError:
-        pint_quantity = None
+        pint_quantity = ()
 
     bare = tuple(array.magnitude if isinstance(array, pint_quantity) else array for array in arrays)
     units = [array.units if isinstance(array, pint_quantity) else None for array in arrays]
