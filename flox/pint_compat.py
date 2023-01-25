@@ -10,7 +10,7 @@ def _strip_units(*arrays):
     bare = tuple(array.magnitude if isinstance(array, pint_quantity) else array for array in arrays)
     units = [array.units if isinstance(array, pint_quantity) else None for array in arrays]
 
-    return *bare, units
+    return bare[0], bare[1:], units
 
 
 def _reattach_units(*arrays, units):

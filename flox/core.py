@@ -1703,7 +1703,7 @@ def groupby_reduce(
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
     any_by_dask = any(by_is_dask)
 
-    array, *bys, units = _strip_units(array, *bys)
+    array, bys, units = _strip_units(array, *bys)
 
     if method in ["split-reduce", "cohorts"] and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
