@@ -364,6 +364,7 @@ nanstd = Aggregation(
     final_fill_value=np.nan,
     dtypes=(None, None, np.intp),
     final_dtype=np.floating,
+    units_func=identity,
 )
 
 

@@ -1325,10 +1325,13 @@ def test_negative_index_factorize_race_condition():
 
 
 @requires_pint
-@pytest.mark.parametrize("func", ["all", "count", "sum", "var"])
+@pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("chunk", [True, False])
-def test_pint(chunk, func):
+def test_pint(chunk, func, engine):
     import pint
+
+    if func in ["prod", "nanprod"]:
+        pytest.skip()
 
     if chunk:
         d = dask.array.array([1, 2, 3])
@@ -1339,7 +1342,7 @@ def test_pint(chunk, func):
     actual, _ = groupby_reduce(q, [0, 0, 1], func=func)
     expected, _ = groupby_reduce(q.magnitude, [0, 0, 1], func=func)
 
-    units = None if func in ["count", "all"] else getattr(np, func)(q).units
+    units = None if func in ["count", "all", "any"] or "arg" in func else getattr(np, func)(q).units
     if units is not None:
         expected = pint.Quantity(expected, units=units)
     assert_equal(expected, actual)
