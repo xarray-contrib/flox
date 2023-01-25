@@ -1,8 +1,9 @@
 def _strip_units(*arrays):
+    pint_quantity: tuple | None
     try:
         import pint
 
-        pint_quantity = pint.Quantity
+        pint_quantity = (pint.Quantity,)
 
     except ImportError:
         pint_quantity = None
