@@ -139,4 +139,36 @@ xarray_reduce(da, "labels1", "labels2", func="sum")
 
 ## Histogramming (Binning by multiple variables)
 
+An unweighted histogram is simply a groupby multiple variables with count.
+
+```{code-cell} python
+arr = np.ones((4, 12))
+labels1 = np.array(np.linspace(0, 10, 12))
+labels2 = np.array([1, 2, 2, 1])
+
+da = xr.DataArray(
+    arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels1": ("y", labels1)}
+)
+da
+```
+
+Specify bins in `expected_groups`
+
+```{code-cell} python
+xarray_reduce(
+    da,
+    "labels1",
+    "labels2",
+    func="count",
+    expected_groups=(
+        pd.IntervalIndex.from_breaks([-0.5, 4.5, 6.5, 8.9]),
+        pd.IntervalIndex.from_breaks([0.5, 1.5, 1.9]),
+    ),
+)
+```
+
 ## Resampling
+
+Use the xarray interface i.e. `da.resample(time="M").mean()`.
+
+Optionally pass [`method="blockwise"`](method-blockwise): `da.resample(time="M").mean(method="blockwise")`
