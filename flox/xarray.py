@@ -347,7 +347,7 @@ def xarray_reduce(
         array, *by = _broadcast_size_one_dims(array, *by, core_dims=core_dims)
 
         # Handle skipna here because I need to know dtype to make a good default choice.
-        # We cannnot handle this easily for xarray Datasets in xarray_reduce
+        # We cannot handle this easily for xarray Datasets in xarray_reduce
         if skipna and func in ["all", "any", "count"]:
             raise ValueError(f"skipna cannot be truthy for {func} reductions.")
 
@@ -511,7 +511,7 @@ def rechunk_for_cohorts(
         Labels at which we always start a new chunk. For
         the example ``labels`` array, this would be `1`.
     chunksize : int, optional
-        nominal chunk size. Chunk size is exceded when the label
+        nominal chunk size. Chunk size is exceeded when the label
         in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
         If None, uses median chunksize along ``dim``.
 
