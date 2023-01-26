@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import warnings
 from functools import partial
-from typing import Any, Callable, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 import numpy as np
 import numpy_groupies as npg
@@ -11,7 +11,8 @@ from numpy.typing import DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrdtypes as dtypes, xrutils
 
-FuncTuple = tuple[Callable | str, ...]
+if TYPE_CHECKING:
+    FuncTuple = tuple[Callable | str, ...]
 
 
 def _is_arg_reduction(func: str | Aggregation) -> bool:
