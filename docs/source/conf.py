@@ -64,6 +64,7 @@ author = "Deepak Cherian"
 # Myst_nb options
 nb_execution_excludepatterns = ["climatology-hourly.ipynb"]
 nb_execution_raise_on_error = True
+nb_execution_mode = "cache"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
