@@ -17,7 +17,6 @@ dependencies:
   - pytest-xdist
   - xarray
   - pre-commit
-  - typing_extensions
   - numpy_groupies>=0.9.19
   - pooch
   - toolz
