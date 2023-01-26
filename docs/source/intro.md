@@ -37,6 +37,12 @@ da = xr.DataArray(
 )
 ```
 
+Apply the reduction using {py:func}`flox.xarray.xarray_reduce` specifying the reduction operation in `func`
+
+```{code-cell}
+xarray_reduce(da, labels, func="sum")
+```
+
 ### With dask
 
 Let's first chunk `da` and `labels`
