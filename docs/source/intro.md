@@ -95,11 +95,16 @@ numpy_result.identical(dask_result)
 
 ## Binning by a single variable
 
-For binning, specify the bin edges in `expected_groups` and pass `isbin=True`
+For binning, specify the bin edges in `expected_groups` using {py:class}`pandas.IntervalIndex`:
 
 ```{code-cell}
+import pandas as pd
+
 xarray_reduce(
-    da, labels, func="sum", expected_groups=[0.5, 1.5, 2.5, 6], isbin=True
+    da,
+    labels,
+    func="sum",
+    expected_groups=pd.IntervalIndex.from_breaks([0.5, 1.5, 2.5, 6]),
 )
 ```
 
@@ -107,15 +112,16 @@ Similarly for dask inputs
 
 ```{code-cell}
 xarray_reduce(
-    da_chunked, labels_chunked, func="sum", expected_groups=[0.5, 1.5, 2.5, 6], isbin=True
+    da_chunked,
+    labels_chunked,
+    func="sum",
+    expected_groups=pd.IntervalIndex.from_breaks([0.5, 1.5, 2.5, 6]),
 )
 ```
 
-For more control over the binning (which edge is closed), pass a {py:class}`pandas.IntervalIndex`:
+For more control over the binning (which edge is closed), pass the appropriate kwarg to {py:class}`pandas.IntervalIndex`:
 
 ```{code-cell}
-import pandas as pd
-
 xarray_reduce(
     da_chunked,
     labels_chunked,
@@ -167,8 +173,8 @@ xarray_reduce(
     "labels2",
     func="count",
     expected_groups=(
-        pd.IntervalIndex.from_breaks([-0.5, 4.5, 6.5, 8.9]),
-        pd.IntervalIndex.from_breaks([0.5, 1.5, 1.9]),
+        pd.IntervalIndex.from_breaks([-0.5, 4.5, 6.5, 8.9]),  # labels1
+        pd.IntervalIndex.from_breaks([0.5, 1.5, 1.9]),  # labels2
     ),
 )
 ```
