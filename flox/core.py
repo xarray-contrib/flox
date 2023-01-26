@@ -1104,7 +1104,7 @@ def _normalize_indexes(array: DaskArray, flatblocks, blkshape) -> tuple:
     """
     unraveled = np.unravel_index(flatblocks, blkshape)
 
-    normalized: list[Union[int, slice, list[int]]] = []
+    normalized: list[int | slice | list[int]] = []
     for ax, idx in enumerate(unraveled):
         i = _unique(idx).squeeze()
         if i.ndim == 0:
@@ -1305,7 +1305,7 @@ def dask_groupby_agg(
         name=f"{name}-chunk-{token}",
     )
 
-    group_chunks: tuple[tuple[Union[int, float], ...]]
+    group_chunks: tuple[tuple[int | float, ...]]
 
     if method in ["map-reduce", "cohorts"]:
         combine: Callable[..., IntermediateDict]

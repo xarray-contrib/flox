@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import warnings
 from functools import partial
-from typing import Any, Callable, Dict, Type, TypedDict
+from typing import Any, Callable, TypedDict
 
 import numpy as np
 import numpy_groupies as npg
@@ -29,8 +29,8 @@ class AggDtypeInit(TypedDict):
 
 class AggDtype(TypedDict):
     final: np.dtype
-    numpy: tuple[np.dtype | Type[np.intp], ...]
-    intermediate: tuple[np.dtype | Type[np.intp], ...]
+    numpy: tuple[np.dtype | type[np.intp], ...]
+    intermediate: tuple[np.dtype | type[np.intp], ...]
 
 
 def generic_aggregate(
@@ -202,7 +202,7 @@ class Aggregation:
         self.dtype: AggDtype = None  # type: ignore
 
         # The following are set by _initialize_aggregation
-        self.finalize_kwargs: Dict[Any, Any] = {}
+        self.finalize_kwargs: dict[Any, Any] = {}
         self.min_count: int | None = None
 
     def _normalize_dtype_fill_value(self, value, name):
@@ -501,7 +501,7 @@ def _initialize_aggregation(
     array_dtype,
     fill_value,
     min_count: int | None,
-    finalize_kwargs: Dict[Any, Any] | None,
+    finalize_kwargs: dict[Any, Any] | None,
 ) -> Aggregation:
     if not isinstance(func, Aggregation):
         try:
