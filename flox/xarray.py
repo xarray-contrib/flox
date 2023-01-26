@@ -223,7 +223,7 @@ def xarray_reduce(
         raise NotImplementedError("sort must be True for xarray_reduce")
 
     # eventually drop the variables we are grouping by
-    maybe_drop = set(b for b in by if isinstance(b, Hashable))
+    maybe_drop = {b for b in by if isinstance(b, Hashable)}
     unindexed_dims = tuple(
         b
         for b, isbin_ in zip(by, isbins)
