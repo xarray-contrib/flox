@@ -807,7 +807,7 @@ def _finalize_results(
     else:
         finalized["groups"] = squeezed["groups"]
 
-    finalized[agg.name] = finalized[agg.name].astype(agg.dtype[agg.name], copy=False)
+    finalized[agg.name] = finalized[agg.name].astype(agg.dtype["final"], copy=False)
     return finalized
 
 
@@ -884,6 +884,7 @@ def _simple_combine(
         assert array.ndim >= 2
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+            assert isinstance(combine, str)
             result = getattr(np, combine)(array, axis=axis_, keepdims=True)
         if is_aggregate:
             # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
@@ -1015,7 +1016,7 @@ def _grouped_combine(
             if array.shape[-1] == 0:
                 # all empty when combined
                 results["intermediates"].append(
-                    np.empty(shape=(1,) * (len(axis) - 1) + (0,), dtype=agg.dtype)
+                    np.empty(shape=(1,) * (len(axis) - 1) + (0,), dtype=dtype)
                 )
                 results["groups"] = np.empty(
                     shape=(1,) * (len(neg_axis) - 1) + (0,), dtype=groups.dtype
@@ -1059,10 +1060,11 @@ def _reduce_blockwise(
     agg.finalize = None
 
     assert agg.finalize_kwargs is not None
-    finalize_kwargs = agg.finalize_kwargs
-    if isinstance(finalize_kwargs, Mapping):
-        finalize_kwargs = (finalize_kwargs,)
-    finalize_kwargs = finalize_kwargs + ({},) + ({},)
+    if isinstance(agg.finalize_kwargs, Mapping):
+        finalize_kwargs_: tuple[dict[Any, Any], ...] = (agg.finalize_kwargs,)
+    else:
+        finalize_kwargs_ = agg.finalize_kwargs
+    finalize_kwargs_ += ({},) + ({},)
 
     results = chunk_reduce(
         array,
@@ -1075,7 +1077,7 @@ def _reduce_blockwise(
         # (see below)
         fill_value=agg.fill_value["numpy"],
         dtype=agg.dtype["numpy"],
-        kwargs=finalize_kwargs,
+        kwargs=finalize_kwargs_,
         engine=engine,
         sort=sort,
         reindex=reindex,
@@ -1102,7 +1104,7 @@ def _normalize_indexes(array: DaskArray, flatblocks, blkshape) -> tuple:
     """
     unraveled = np.unravel_index(flatblocks, blkshape)
 
-    normalized: list[Union[int, slice, list[int]]] = []
+    normalized: list[int | slice | list[int]] = []
     for ax, idx in enumerate(unraveled):
         i = _unique(idx).squeeze()
         if i.ndim == 0:
@@ -1303,7 +1305,7 @@ def dask_groupby_agg(
         name=f"{name}-chunk-{token}",
     )
 
-    group_chunks: tuple[tuple[Union[int, float], ...]]
+    group_chunks: tuple[tuple[int | float, ...]]
 
     if method in ["map-reduce", "cohorts"]:
         combine: Callable[..., IntermediateDict]
@@ -1402,7 +1404,7 @@ def dask_groupby_agg(
         reduced,
         inds,
         adjust_chunks=dict(zip(out_inds, output_chunks)),
-        dtype=agg.dtype[agg.name],
+        dtype=agg.dtype["final"],
         key=agg.name,
         name=f"{name}-{token}",
         concatenate=False,
@@ -1600,7 +1602,7 @@ def groupby_reduce(
     method: T_Method = "map-reduce",
     engine: T_Engine = "numpy",
     reindex: bool | None = None,
-    finalize_kwargs: Mapping | None = None,
+    finalize_kwargs: dict[Any, Any] | None = None,
 ) -> tuple[DaskArray, np.ndarray | DaskArray]:
     """
     GroupBy reductions using tree reductions for dask.array
