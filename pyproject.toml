@@ -53,3 +53,8 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 addopts = "--tb=short"
+
+
+[tool.codespell]
+ignore-words-list = "nd,nax"
+skip = "*.html"

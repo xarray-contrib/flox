@@ -136,7 +136,7 @@ width: 100%
 1. Currently the rechunking is only implemented for 1D arrays (being motivated by time resampling),
    but a nD generalization seems possible.
 1. Only can use the `blockwise` strategy for grouping by `nD` arrays.
-1. Works better when multiple groups are already in a single block; so that the intial
+1. Works better when multiple groups are already in a single block; so that the initial
    rechunking only involves a small amount of communication.
 
 (method-cohorts)=
@@ -198,8 +198,8 @@ width: 100%
 
 1. Group labels must be known at graph construction time, so this only works for numpy arrays.
 1. This does require more tasks and a more complicated graph, but the communication overhead can be significantly lower.
-1. The detection of "cohorts" is currrently slow but could be improved.
-1. The extra effort of detecting cohorts and mutiple copying of intermediate blocks may be worthwhile only if the chunk sizes are small
+1. The detection of "cohorts" is currently slow but could be improved.
+1. The extra effort of detecting cohorts and mul;tiple copying of intermediate blocks may be worthwhile only if the chunk sizes are small
    relative to the approximate period of group labels, or small relative to the size of spatially localized groups.
 
 ### Example : sensitivity to chunking
@@ -211,7 +211,7 @@ Consider our earlier example, `groupby("time.month")` with monthly frequency dat
 `flox` can find these cohorts, below it identifies the cohorts with labels `1,2,3,4`; `5,6,7,8`, and `9,10,11,12`.
 
 ```python
->>> flox.find_group_cohorts(labels, array.chunks[-1]))
+>>> flox.find_group_cohorts(labels, array.chunks[-1]).values()
 [[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]  # 3 cohorts
 ```
 
@@ -219,7 +219,7 @@ Now consider `chunksize=5`.
 ![cohorts-schematic](/../diagrams/cohorts-month-chunk5.png)
 
 ```python
->>> flox.core.find_group_cohorts(labels, array.chunks[-1]))
+>>> flox.core.find_group_cohorts(labels, array.chunks[-1]).values()
 [[1], [2, 3], [4, 5], [6], [7, 8], [9, 10], [11], [12]]  # 8 cohorts
 ```
 
