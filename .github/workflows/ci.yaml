@@ -99,25 +99,6 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
-  upstream-dev:
-    name: upstream-dev
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash -l {0}
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up conda environment
-        uses: mamba-org/provision-with-micromamba@v14
-        with:
-          environment-file: ci/upstream-dev-env.yml
-          environment-name: flox-tests
-          extra-specs: |
-            python="3.10"
-      - name: Run Tests
-        run: |
-          pytest -n 2
-
   xarray-groupby:
     name: xarray-groupby
     runs-on: ubuntu-latest
