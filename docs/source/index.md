@@ -62,6 +62,7 @@ It was motivated by many discussions in the [Pangeo](https://pangeo.io) communit
 .. toctree::
    :maxdepth: 1
 
+   intro.md
    aggregations.md
    engines.md
    arrays.md
