@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import warnings
 from functools import partial
-from typing import Callable
+from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 import numpy as np
 import numpy_groupies as npg
