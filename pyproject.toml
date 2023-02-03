@@ -55,6 +55,9 @@ version = {attr = "flox.__version__"}
 
 [tool.setuptools_scm]
 fallback_version = "999"
+write_to = "flox/_version.py"
+write_to_template= '__version__ = "{version}"'
+tag_regex= "^(?P<prefix>v)?(?P<version>[^\\+]+)(?P<suffix>.*)?$"
 
 [tool.black]
 line-length = 100

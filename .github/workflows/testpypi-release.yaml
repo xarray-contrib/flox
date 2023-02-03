@@ -46,7 +46,7 @@ jobs:
       - name: Check built artifacts
         run: |
           python -m twine check --strict dist/*
-          if [ -f dist/flox-0.0.0.tar.gz ]; then
+          if [ -f dist/flox-999.tar.gz ]; then
             echo "❌ INVALID VERSION NUMBER"
             exit 1
           else
