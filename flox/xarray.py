@@ -343,7 +343,6 @@ def xarray_reduce(
             raise ValueError("expect_index cannot be None")
 
     def wrapper(array, *by, func, skipna, core_dims, **kwargs):
-
         array, *by = _broadcast_size_one_dims(array, *by, core_dims=core_dims)
 
         # Handle skipna here because I need to know dtype to make a good default choice.
@@ -585,7 +584,6 @@ def resample_reduce(
     keep_attrs: bool = True,
     **kwargs,
 ):
-
     warnings.warn(
         "flox.xarray.resample_reduce is now deprecated. Please use Xarray's resample method directly.",
         DeprecationWarning,

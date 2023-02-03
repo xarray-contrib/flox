@@ -4,7 +4,7 @@ ci:
 repos:
     - repo: https://github.com/charliermarsh/ruff-pre-commit
       # Ruff version.
-      rev: 'v0.0.237'
+      rev: 'v0.0.240'
       hooks:
         - id: ruff
           args: ["--fix"]
@@ -18,7 +18,7 @@ repos:
         - id: check-docstring-first
 
     - repo: https://github.com/psf/black
-      rev: 22.12.0
+      rev: 23.1.0
       hooks:
         - id: black
 
@@ -50,6 +50,6 @@ repos:
             - tomli
 
     - repo: https://github.com/abravalheri/validate-pyproject
-      rev: main
+      rev: v0.12.1
       hooks:
         - id: validate-pyproject
