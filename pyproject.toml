@@ -1,11 +1,57 @@
+[project]
+name = "flox"
+description = "GroupBy operations for dask.array"
+license = {file = "LICENSE"}
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["xarray", "dask", "groupby"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "pandas",
+    "numpy>=1.20",
+    "numpy_groupies>=0.9.19",
+    "toolz",
+]
+dynamic=["version"]
+
+
+[project.urls]
+homepage = "https://flox.readthedocs.io"
+documentation = "https://flox.readthedocs.io"
+repository = "https://github.com/xarray-contrib/flox.git"
+changelog = "https://github.com/xarray-contrib/flox/releases"
+
+[project.optional-dependencies]
+all = ["cachey", "dask", "numba", "xarray"]
+test = ["netCDF4"]
+
 [build-system]
 requires = [
-    "setuptools>=42",
+    "pandas",
+    "numpy>=1.20",
+    "numpy_groupies>=0.9.19",
+    "toolz",
+    "setuptools>=45",
     "wheel",
-    "setuptools_scm[toml]>=3.4",
-    "setuptools_scm_git_archive",
+    "setuptools_scm[toml]>=6.2",
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["flox"]
+
+[tool.setuptools.dynamic]
+version = {attr = "flox.__version__"}
 
 [tool.setuptools_scm]
 fallback_version = "999"
@@ -14,13 +60,36 @@ fallback_version = "999"
 line-length = 100
 target-version = ["py38"]
 
-[tool.isort]
-profile = "black"
-skip_gitignore = true
-float_to_top = true
-combine_as_imports = true
-known_first_party = "flox"
-known_third_party = [
+[tool.ruff]
+target-version = "py38"
+builtins = ["ellipsis"]
+exclude = [
+    ".eggs",
+    "doc",
+]
+# E402: module level import not at top of file
+# E501: line too long - let black worry about that
+# E731: do not assign a lambda expression, use a def
+ignore = [
+    "E402",
+    "E501",
+    "E731",
+]
+select = [
+    # Pyflakes
+    "F",
+    # Pycodestyle
+    "E",
+    "W",
+    # isort
+    "I",
+    # Pyupgrade
+    "UP",
+]
+
+[tool.ruff.isort]
+known-first-party = ["flox"]
+known-third-party = [
     "dask",
     "numpy",
     "numpy_groupies",
@@ -36,6 +105,7 @@ allow_redefinition = true
 exclude = "properties|asv_bench|doc|tests|flycheck"
 files = "flox/*.py"
 show_error_codes = true
+warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 module=[
