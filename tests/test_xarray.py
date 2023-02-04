@@ -8,7 +8,7 @@ xr = pytest.importorskip("xarray")
 
 from flox.xarray import rechunk_for_blockwise, resample_reduce, xarray_reduce
 
-from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
+from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
 # isort: off
 if has_dask:
