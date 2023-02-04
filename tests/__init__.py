@@ -131,7 +131,7 @@ def assert_equal_tuple(a, b):
 def engine(request):
     if request.param == "numba":
         try:
-            import numba
+            import numba  # noqa
         except ImportError:
             pytest.xfail()
     return request.param
