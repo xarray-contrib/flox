@@ -615,9 +615,9 @@ def test_preserve_multiindex():
     )
     
     vort = vort.coarsen(
-        i=2,
+        i=2
     ).construct(
-        i=("i_region_coarse", "i_region"),
+        i=("i_region_coarse", "i_region")
     ).stack(region=['face', 'i_region_coarse'])
     
     bins = [np.linspace(0, 1, 10)]
