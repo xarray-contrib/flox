@@ -7,7 +7,7 @@ from .core import groupby_reduce, rechunk_for_blockwise, rechunk_for_cohorts  # 
 
 
 def _get_version():
-    __version__ = "unknown"
+    __version__ = "999"
     try:
         from ._version import __version__
     except ImportError:
