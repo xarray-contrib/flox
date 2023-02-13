@@ -388,7 +388,7 @@ def reindex_(
         )
     idx = from_.get_indexer(to)
     indexer = [slice(None, None)] * array.ndim
-    indexer[axis] = idx  # type: ignore
+    indexer[axis] = idx
     reindexed = array[tuple(indexer)]
     if any(idx == -1):
         if fill_value is None:
@@ -416,7 +416,7 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     )
     # -1 indicates NaNs. preserve these otherwise we aggregate in the wrong groups!
     offset[labels == -1] = -1
-    size: int = math.prod(labels.shape[:-1]) * ngroups  # type: ignore
+    size: int = math.prod(labels.shape[:-1]) * ngroups
     return offset, size
 
 
