@@ -76,8 +76,6 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
 
 
 # TODO: sort
-
-
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
 @pytest.mark.parametrize("chunk", (True, False))
 def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
