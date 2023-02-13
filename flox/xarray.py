@@ -433,7 +433,7 @@ def xarray_reduce(
 
     # restore non-dim coord variables without the core dimension
     # TODO: shouldn't apply_ufunc handle this?
-    for var in set(ds_broad.variables) - set(ds_broad.dims):
+    for var in set(ds_broad.variables) - set(ds_broad.xindexes) - set(ds_broad.dims):
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
