@@ -125,13 +125,3 @@ def assert_equal_tuple(a, b):
             np.testing.assert_array_equal(a_, b_)
         else:
             assert a_ == b_
-
-
-@pytest.fixture(scope="module", params=["flox", "numpy", "numba"])
-def engine(request):
-    if request.param == "numba":
-        try:
-            import numba
-        except ImportError:
-            pytest.xfail()
-    return request.param
