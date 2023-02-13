@@ -9,7 +9,8 @@ import numpy as np
 import numpy_groupies as npg
 from numpy.typing import DTypeLike
 
-from . import aggregate_flox, aggregate_npg, xrdtypes as dtypes, xrutils
+from . import aggregate_flox, aggregate_npg, xrutils
+from . import xrdtypes as dtypes
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]

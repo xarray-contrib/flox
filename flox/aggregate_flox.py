@@ -77,7 +77,6 @@ nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
 
 
 def sum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
-
     return sum(
         group_idx,
         array**2,

@@ -8,14 +8,12 @@ xr = pytest.importorskip("xarray")
 
 from flox.xarray import rechunk_for_blockwise, resample_reduce, xarray_reduce
 
-from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
+from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
-# isort: off
 if has_dask:
     import dask
 
     dask.config.set(scheduler="sync")
-# isort: on
 
 try:
     # Should test against legacy xarray implementation
@@ -188,7 +186,6 @@ def test_validate_expected_groups(expected_groups):
 
 @requires_dask
 def test_xarray_reduce_single_grouper(engine):
-
     # DataArray
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", engine=engine)
@@ -233,7 +230,6 @@ def test_xarray_reduce_single_grouper(engine):
 
 
 def test_xarray_reduce_errors():
-
     da = xr.DataArray(np.ones((12,)), dims="x")
     by = xr.DataArray(np.ones((12,)), dims="x")
 
@@ -444,7 +440,6 @@ def test_cache():
 @pytest.mark.parametrize("use_cftime", [True, False])
 @pytest.mark.parametrize("func", ["count", "mean"])
 def test_datetime_array_reduce(use_cftime, func, engine):
-
     time = xr.DataArray(
         xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
         dims=("time",),
