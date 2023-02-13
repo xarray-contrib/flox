@@ -123,7 +123,7 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     firstidx = first_indexes[labels_at_chunk_bounds]
 
     newchunkidx = [0]
-    for c, f, l in zip(chunkidx, firstidx, lastidx):
+    for c, f, l in zip(chunkidx, firstidx, lastidx):  # noqa
         Δf = abs(c - f)
         Δl = abs(c - l)
         if c == 0 or newchunkidx[-1] > l:
@@ -363,7 +363,6 @@ def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray):
 def reindex_(
     array: np.ndarray, from_, to, fill_value=None, axis: T_Axis = -1, promote: bool = False
 ) -> np.ndarray:
-
     if not isinstance(to, pd.Index):
         if promote:
             to = pd.Index(to)
@@ -390,7 +389,7 @@ def reindex_(
         )
     idx = from_.get_indexer(to)
     indexer = [slice(None, None)] * array.ndim
-    indexer[axis] = idx  # type: ignore
+    indexer[axis] = idx
     reindexed = array[tuple(indexer)]
     if any(idx == -1):
         if fill_value is None:
@@ -418,7 +417,7 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     )
     # -1 indicates NaNs. preserve these otherwise we aggregate in the wrong groups!
     offset[labels == -1] = -1
-    size: int = math.prod(labels.shape[:-1]) * ngroups  # type: ignore
+    size: int = math.prod(labels.shape[:-1]) * ngroups
     return offset, size
 
 
@@ -1214,7 +1213,6 @@ def dask_groupby_agg(
     sort: bool = True,
     chunks_cohorts=None,
 ) -> tuple[DaskArray, tuple[np.ndarray | DaskArray]]:
-
     import dask.array
     from dask.array.core import slices_from_chunks
 
@@ -1557,7 +1555,6 @@ def _factorize_multiple(by, expected_groups, any_by_dask, reindex):
 
 
 def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectTuple:
-
     if expected_groups is None:
         return (None,) * nby
 
