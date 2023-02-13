@@ -86,7 +86,6 @@ def test_alignment_error():
         groupby_reduce(da, labels, func="mean")
 
 
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("dtype", (float, int))
 @pytest.mark.parametrize("chunk", [False, True])
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
@@ -337,7 +336,6 @@ def test_numpy_reduce_nd_md():
 
 
 @requires_dask
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("reindex", [None, False, True])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("add_nan", [False, True])
@@ -400,7 +398,6 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     assert_equal(expected, actual)
 
 
-@pytest.mark.usesfixture("engine")
 def test_numpy_reduce_axis_subset(engine):
     # TODO: add NaNs
     by = labels2d
@@ -484,7 +481,6 @@ def test_dask_reduce_axis_subset():
 
 
 @requires_dask
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize(
     "axis", [None, (0, 1, 2), (0, 1), (0, 2), (1, 2), 0, 1, 2, (0,), (1,), (2,)]
@@ -525,7 +521,6 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     assert_equal(actual, expected, tolerance)
 
 
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("reindex,chunks", [(None, None), (False, (2, 2, 3)), (True, (2, 2, 3))])
 @pytest.mark.parametrize(
     "axis, groups, expected_shape",
@@ -571,7 +566,6 @@ def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engi
 
 
 @requires_dask
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize(
     "expected_groups, reindex", [(None, None), (None, False), ([0, 1, 2], True), ([0, 1, 2], False)]
 )
@@ -645,7 +639,6 @@ def test_npg_nanarg_bug(func):
     assert_equal(actual, expected)
 
 
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize(
     "kwargs",
     (
@@ -741,7 +734,6 @@ def test_rechunk_for_cohorts(chunk_at, expected):
     assert rechunked.chunks == expected
 
 
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("chunks", [None, 3])
 @pytest.mark.parametrize("fill_value", [123, np.nan])
 @pytest.mark.parametrize("func", ALL_FUNCS)
@@ -774,7 +766,6 @@ def test_fill_value_behaviour(func, chunks, fill_value, engine):
 
 
 @requires_dask
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("func", ["mean", "sum"])
 @pytest.mark.parametrize("dtype", ["float32", "float64", "int32", "int64"])
 def test_dtype_preservation(dtype, func, engine):
@@ -813,7 +804,6 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
 
 
 @requires_dask
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("axis", (-1, None))
 @pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce", "split-reduce"])
@@ -854,7 +844,6 @@ def test_cohorts_nd_by(func, method, axis, engine):
     assert_equal(reindexed, expected)
 
 
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("func", ["sum", "count"])
 @pytest.mark.parametrize("fill_value, expected", ((0, np.integer), (np.nan, np.floating)))
 def test_dtype_promotion(func, fill_value, expected, engine):
@@ -867,7 +856,6 @@ def test_dtype_promotion(func, fill_value, expected, engine):
     assert np.issubdtype(actual.dtype, expected)
 
 
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("func", ["mean", "nanmean"])
 def test_empty_bins(func, engine):
     array = np.ones((2, 3, 2))
@@ -901,7 +889,6 @@ def test_datetime_binning():
     assert_equal(group_idx, expected)
 
 
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_bool_reductions(func, engine):
     if "arg" in func and engine == "flox":
@@ -928,7 +915,6 @@ def test_map_reduce_blockwise_mixed() -> None:
 
 
 @requires_dask
-@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("method", ["split-reduce", "blockwise", "map-reduce", "cohorts"])
 def test_group_by_datetime(engine, method):
     kwargs = dict(
