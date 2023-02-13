@@ -598,34 +598,30 @@ def test_dtype_accumulation(use_flox, chunk):
 
 def test_preserve_multiindex():
     """Regression test for GH issue #215"""
-    
+
     vort = xr.DataArray(
-    name='vort',
-    data=np.random.uniform(size=(4, 2)), 
-    dims=['i', 'face'],
-    coords={
-        'i': ('i', np.arange(4)), 
-        'face': ('face', np.arange(2))
-        }
-    )
-    
-    vort = vort.coarsen(
-        i=2
-    ).construct(
-        i=("i_region_coarse", "i_region")
-    ).stack(region=['face', 'i_region_coarse'])
-    
-    bins = [np.linspace(0, 1, 10)]
-    bin_intervals = tuple(pd.IntervalIndex.from_breaks(b) for b in bins)
-    
-    hist = xarray_reduce(
-        xr.DataArray(1),                # weights
-        vort,                           # variables we want to bin
-        func="count",                   # count occurrences falling in bins
-        expected_groups=bin_intervals,  # bins for each variable
-        dim=['i_region'],               # broadcast dimensions
-        fill_value=0,                   # fill empty bins with 0 counts
+        name="vort",
+        data=np.random.uniform(size=(4, 2)),
+        dims=["i", "face"],
+        coords={"i": ("i", np.arange(4)), "face": ("face", np.arange(2))},
     )
 
-    assert 'region' in hist.coords
-    
+    vort = (
+        vort.coarsen(i=2)
+        .construct(i=("i_region_coarse", "i_region"))
+        .stack(region=["face", "i_region_coarse"])
+    )
+
+    bins = [np.linspace(0, 1, 10)]
+    bin_intervals = tuple(pd.IntervalIndex.from_breaks(b) for b in bins)
+
+    hist = xarray_reduce(
+        xr.DataArray(1),  # weights
+        vort,  # variables we want to bin
+        func="count",  # count occurrences falling in bins
+        expected_groups=bin_intervals,  # bins for each variable
+        dim=["i_region"],  # broadcast dimensions
+        fill_value=0,  # fill empty bins with 0 counts
+    )
+
+    assert "region" in hist.coords
