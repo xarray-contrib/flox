@@ -10,12 +10,10 @@ from flox.xarray import rechunk_for_blockwise, resample_reduce, xarray_reduce
 
 from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
-# isort: off
 if has_dask:
     import dask
 
     dask.config.set(scheduler="sync")
-# isort: on
 
 try:
     # Should test against legacy xarray implementation
@@ -28,6 +26,7 @@ tolerance64 = {"rtol": 1e-15, "atol": 1e-18}
 np.random.seed(123)
 
 
+@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("reindex", [None, False, True])
 @pytest.mark.parametrize("min_count", [None, 1, 3])
 @pytest.mark.parametrize("add_nan", [True, False])
@@ -78,6 +77,7 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
 
 
 # TODO: sort
+@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
 @pytest.mark.parametrize("chunk", (True, False))
 def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
@@ -127,6 +127,7 @@ def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
     xr.testing.assert_identical(expected.transpose("z", "labels2", "labels"), actual)
 
 
+@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
 @pytest.mark.parametrize("chunk", (True, False))
 def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
@@ -187,6 +188,7 @@ def test_validate_expected_groups(expected_groups):
 
 
 @requires_dask
+@pytest.mark.usesfixture("engine")
 def test_xarray_reduce_single_grouper(engine):
     # DataArray
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
@@ -247,6 +249,7 @@ def test_xarray_reduce_errors():
             xarray_reduce(da, by.chunk(), func="mean")
 
 
+@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("isdask", [True, False])
 @pytest.mark.parametrize("dataarray", [True, False])
 @pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
@@ -273,6 +276,7 @@ def test_xarray_resample(chunklen, isdask, dataarray, engine):
 
 
 @requires_dask
+@pytest.mark.usesfixture("engine")
 def test_xarray_resample_dataset_multiple_arrays(engine):
     # regression test for #35
     times = pd.date_range("2000", periods=5)
@@ -328,6 +332,7 @@ def test_rechunk_for_blockwise(inchunks, expected):
 # TODO: dim=None, dim=Ellipsis, groupby unindexed dim
 
 
+@pytest.mark.usesfixture("engine")
 def test_groupby_duplicate_coordinate_labels(engine):
     # fix for http://stackoverflow.com/questions/38065129
     array = xr.DataArray([1, 2, 3], [("x", [1, 1, 2])])
@@ -336,6 +341,7 @@ def test_groupby_duplicate_coordinate_labels(engine):
     assert_equal(expected, actual)
 
 
+@pytest.mark.usesfixture("engine")
 def test_multi_index_groupby_sum(engine):
     # regression test for xarray GH873
     ds = xr.Dataset(
@@ -359,6 +365,7 @@ def test_multi_index_groupby_sum(engine):
     assert_equal(expected, actual)
 
 
+@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("chunks", (None, 2))
 def test_xarray_groupby_bins(chunks, engine):
     array = xr.DataArray([1, 1, 1, 1, 1], dims="x")
@@ -439,6 +446,7 @@ def test_cache():
     assert len(cache.data) == 2
 
 
+@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("use_cftime", [True, False])
 @pytest.mark.parametrize("func", ["count", "mean"])
 def test_datetime_array_reduce(use_cftime, func, engine):
@@ -525,6 +533,7 @@ def test_alignment_error():
         xarray_reduce(da, da.x.sel(x=slice(5)), func="count")
 
 
+@pytest.mark.usesfixture("engine")
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("dtype_out", [np.float64, "float64", np.dtype("float64")])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
