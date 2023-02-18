@@ -475,7 +475,12 @@ def factorize_(
             # digitize is 0 or idx.max() for values outside the bounds of all intervals
             # make it behave like pd.cut:
             if len(bins) > 1:
-                idx = np.digitize(flat, bins=bins, right=expect.closed_right) - 1
+                idx = np.digitize(
+                    flat,
+                    bins=bins.view(np.intp) if bins.dtype.kind == "M" else bins,
+                    right=expect.closed_right,
+                )
+                idx -= 1
                 # idx[idx == idx.max()] = -1
                 idx[bins.max() < flat] = -1
             else:
