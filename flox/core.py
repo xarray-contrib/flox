@@ -480,6 +480,7 @@ def factorize_(
                     bins=bins.view(np.intp) if bins.dtype.kind == "M" else bins,
                     right=expect.closed_right,
                 )
+                idx = pd.to_numeric(idx, downcast="integer")
                 idx -= 1
                 # idx[idx == idx.max()] = -1
                 idx[bins.max() < flat] = -1
