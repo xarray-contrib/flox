@@ -483,8 +483,8 @@ def factorize_(
                 )
                 idx = pd.to_numeric(idx, downcast="integer")
                 idx -= 1
-                larger_than_bins = flat > bins.max() if right else flat >= bins.max()
-                idx[larger_than_bins] = -1
+                within_bins = flat <= bins.max() if right else flat < bins.max()
+                idx[~within_bins] = -1
             else:
                 idx = np.zeros_like(flat, dtype=np.intp) - 1
 
