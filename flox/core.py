@@ -474,8 +474,11 @@ def factorize_(
 
             # digitize is 0 or idx.max() for values outside the bounds of all intervals
             # make it behave like pd.cut:
-            idx = np.digitize(flat, bins=bins, right=expect.closed_right) - 1
-            idx[idx == idx.max()] = -1
+            if len(bins) > 1:
+                idx = np.digitize(flat, bins=bins, right=expect.closed_right) - 1
+                idx[idx == idx.max()] = -1
+            else:
+                idx = np.zeros_like(flat, dtype=np.intp) - 1
 
             found_groups.append(expect)
         else:
