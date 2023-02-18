@@ -476,7 +476,8 @@ def factorize_(
             # make it behave like pd.cut:
             if len(bins) > 1:
                 idx = np.digitize(flat, bins=bins, right=expect.closed_right) - 1
-                idx[idx == idx.max()] = -1
+                # idx[idx == idx.max()] = -1
+                idx[bins.max() < flat] = -1
             else:
                 idx = np.zeros_like(flat, dtype=np.intp) - 1
 
