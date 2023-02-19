@@ -276,7 +276,7 @@ def xarray_reduce(
     exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim_tuple)
 
     try:
-        xr.align(ds, *by_da, join="exact")
+        xr.align(ds, *by_da, join="exact", copy=False)
     except ValueError as e:
         raise ValueError(
             "Object being grouped must be exactly aligned with every array in `by`."
