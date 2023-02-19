@@ -353,7 +353,7 @@ def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray):
     DaskArray
         Rechunked array
     """
-    labels = factorize_((labels,), axis=())[0]
+    labels = factorize_((labels,), axes=())[0]
     chunks = array.chunks[axis]
     newchunks = _get_optimal_chunks_for_groups(chunks, labels)
     if newchunks == chunks:
@@ -1545,7 +1545,7 @@ def _factorize_multiple(by: T_Bys, expected_groups, any_by_dask: bool, reindex):
             chunks=tuple(chunks.values()),
             meta=np.array((), dtype=np.int64),
             expected_groups=expected_groups,
-            axis=(),  # always (), we offset later if necessary.
+            axes=(),  # always (), we offset later if necessary.
             fastpath=True,
             reindex=reindex,
         )
@@ -1559,7 +1559,7 @@ def _factorize_multiple(by: T_Bys, expected_groups, any_by_dask: bool, reindex):
         group_idx, found_groups, grp_shape = factorize_(
             by,
             expected_groups=expected_groups,
-            axis=(),  # always (), we offset later if necessary.
+            axes=(),  # always (), we offset later if necessary.
             fastpath=True,
             reindex=reindex,
         )
