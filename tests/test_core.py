@@ -884,7 +884,8 @@ def test_datetime_binning():
 
     ret = factorize_((by.to_numpy(),), axis=0, expected_groups=(actual,))
     group_idx = ret[0]
-    expected = pd.cut(by, time_bins).codes.copy()
+    # Ignore pd.cut's dtype as it won't match np.digitize:
+    expected = pd.cut(by, time_bins).codes.copy().astype(group_idx.dtype)
     expected[0] = 14  # factorize doesn't return -1 for nans
     assert_equal(group_idx, expected)
 

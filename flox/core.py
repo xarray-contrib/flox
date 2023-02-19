@@ -468,8 +468,26 @@ def factorize_(
                 bins = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
             else:
                 bins = np.concatenate([expect.left.to_numpy(), [expect.right[-1]]])
+
             # code is -1 for values outside the bounds of all intervals
-            idx = pd.cut(flat, bins=bins, right=expect.closed_right).codes.copy()
+            # idx = pd.cut(flat, bins=bins, right=expect.closed_right).codes.copy()
+
+            # digitize is 0 or idx.max() for values outside the bounds of all intervals
+            # make it behave like pd.cut:
+            if len(bins) > 1:
+                right = expect.closed_right
+                idx = np.digitize(
+                    flat,
+                    bins=bins.view(np.intp) if bins.dtype.kind == "M" else bins,
+                    right=right,
+                )
+                # idx = pd.to_numeric(idx, downcast="integer")
+                idx -= 1
+                within_bins = flat <= bins.max() if right else flat < bins.max()
+                idx[~within_bins] = -1
+            else:
+                idx = np.zeros_like(flat, dtype=np.intp) - 1
+
             found_groups.append(expect)
         else:
             if expect is not None and reindex:
