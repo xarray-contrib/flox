@@ -676,7 +676,7 @@ def chunk_reduce(
             nax = 1
     else:
         nax = by.ndim
-        axes = (axis,) * nax
+        axes = (axis,) * nax if axis is not None else ()
 
     assert by.ndim <= array.ndim
 
