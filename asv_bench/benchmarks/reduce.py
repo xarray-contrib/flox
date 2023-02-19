@@ -1,13 +1,15 @@
 import numpy as np
 import numpy_groupies as npg
+import pandas as pd
 
 import flox
 
 from . import parameterized
 
 N = 1000
-funcs = ["sum", "nansum", "mean", "nanmean", "max", "var", "nanvar"]
+funcs = ["sum", "nansum", "mean", "nanmean", "max", "var", "nanvar", "count"]
 engines = ["flox", "numpy"]
+expected_groups = [None, pd.IntervalIndex.from_breaks([1, 2, 4])]
 
 
 class ChunkReduce:
@@ -22,24 +24,26 @@ class ChunkReduce:
                 )
         raise NotImplementedError
 
-    @parameterized("func, engine", [funcs, engines])
-    def time_reduce(self, func, engine):
+    @parameterized("func, engine, expected_groups", [funcs, engines, expected_groups])
+    def time_reduce(self, func, engine, expected_groups):
         flox.groupby_reduce(
             self.array,
             self.labels,
             func=func,
             engine=engine,
             axis=self.axis,
+            expected_groups=expected_groups,
         )
 
-    @parameterized("func, engine", [funcs, engines])
-    def peakmem_reduce(self, func, engine):
+    @parameterized("func, engine, expected_groups", [funcs, engines, expected_groups])
+    def peakmem_reduce(self, func, engine, expected_groups):
         flox.groupby_reduce(
             self.array,
             self.labels,
             func=func,
             engine=engine,
             axis=self.axis,
+            expected_groups=expected_groups,
         )
 
 

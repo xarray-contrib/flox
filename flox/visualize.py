@@ -24,7 +24,6 @@ def draw_mesh(
     y0=0,
     append=False,
 ):
-
     dx = 2
     xpts = x0 + np.arange(0, (ncol + nspaces) * dx, dx)
     ypts = y0 + np.arange(0, nrow * dx, dx)
@@ -118,7 +117,6 @@ def visualize_groups_1d(array, labels, axis=-1, colors=None, cmap=None, append=T
 
 
 def get_colormap(N):
-
     cmap = mpl.cm.get_cmap("tab20_r").copy()
     ncolors = len(cmap.colors)
     q = N // ncolors
@@ -129,7 +127,6 @@ def get_colormap(N):
 
 
 def factorize_cohorts(by, cohorts):
-
     factorized = np.full(by.shape, -1)
     for idx, cohort in enumerate(cohorts):
         factorized[np.isin(by, cohort)] = idx

@@ -27,7 +27,6 @@ from flox.core import (
 from . import (
     assert_equal,
     assert_equal_tuple,
-    engine,
     has_dask,
     raise_if_dask_computes,
     requires_dask,
@@ -38,7 +37,6 @@ nan_labels = labels.astype(float)  # copy
 nan_labels[:5] = np.nan
 labels2d = np.array([labels[:5], np.flip(labels[:5])])
 
-# isort:off
 if has_dask:
     import dask
     import dask.array as da
@@ -50,8 +48,6 @@ else:
     def dask_array_ones(*args):
         return None
 
-
-# isort:on
 
 ALL_FUNCS = (
     "sum",
@@ -142,7 +138,7 @@ def test_groupby_reduce(
     elif func == "count":
         expected_result = np.array(expected, dtype=np.intp)
 
-    result, groups, = groupby_reduce(
+    (result, groups) = groupby_reduce(
         array,
         by,
         func=func,
@@ -436,7 +432,6 @@ def test_numpy_reduce_axis_subset(engine):
 
 @requires_dask
 def test_dask_reduce_axis_subset():
-
     by = labels2d
     array = np.ones_like(by, dtype=np.int64)
     with raise_if_dask_computes():
@@ -644,10 +639,17 @@ def test_npg_nanarg_bug(func):
     assert_equal(actual, expected)
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    (
+        dict(expected_groups=np.array([1, 2, 4, 5]), isbin=True),
+        dict(expected_groups=pd.IntervalIndex.from_breaks([1, 2, 4, 5])),
+    ),
+)
 @pytest.mark.parametrize("method", ["cohorts", "map-reduce"])
 @pytest.mark.parametrize("chunk_labels", [False, True])
 @pytest.mark.parametrize("chunks", ((), (1,), (2,)))
-def test_groupby_bins(chunk_labels, chunks, engine, method) -> None:
+def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
     array = [1, 1, 1, 1, 1, 1]
     labels = [0.2, 1.5, 1.9, 2, 3, 20]
 
@@ -663,14 +665,7 @@ def test_groupby_bins(chunk_labels, chunks, engine, method) -> None:
 
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(
-            array,
-            labels,
-            func="count",
-            expected_groups=np.array([1, 2, 4, 5]),
-            isbin=True,
-            fill_value=0,
-            engine=engine,
-            method=method,
+            array, labels, func="count", fill_value=0, engine=engine, method=method, **kwargs
         )
     expected = np.array([3, 1, 0], dtype=np.intp)
     for left, right in zip(groups, pd.IntervalIndex.from_arrays([1, 2, 4], [2, 4, 5]).to_numpy()):
@@ -889,7 +884,8 @@ def test_datetime_binning():
 
     ret = factorize_((by.to_numpy(),), axis=0, expected_groups=(actual,))
     group_idx = ret[0]
-    expected = pd.cut(by, time_bins).codes.copy()
+    # Ignore pd.cut's dtype as it won't match np.digitize:
+    expected = pd.cut(by, time_bins).codes.copy().astype(group_idx.dtype)
     expected[0] = 14  # factorize doesn't return -1 for nans
     assert_equal(group_idx, expected)
 
@@ -1010,7 +1006,6 @@ def test_multiple_groupers_bins(chunk) -> None:
 )
 @pytest.mark.parametrize("chunk", [True, False])
 def test_multiple_groupers(chunk, by1, by2, expected_groups) -> None:
-
     if chunk and (not has_dask or expected_groups is None):
         pytest.skip()
 

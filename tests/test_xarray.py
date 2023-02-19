@@ -8,14 +8,12 @@ xr = pytest.importorskip("xarray")
 
 from flox.xarray import rechunk_for_blockwise, resample_reduce, xarray_reduce
 
-from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
+from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
-# isort: off
 if has_dask:
     import dask
 
     dask.config.set(scheduler="sync")
-# isort: on
 
 try:
     # Should test against legacy xarray implementation
@@ -188,7 +186,6 @@ def test_validate_expected_groups(expected_groups):
 
 @requires_dask
 def test_xarray_reduce_single_grouper(engine):
-
     # DataArray
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", engine=engine)
@@ -233,7 +230,6 @@ def test_xarray_reduce_single_grouper(engine):
 
 
 def test_xarray_reduce_errors():
-
     da = xr.DataArray(np.ones((12,)), dims="x")
     by = xr.DataArray(np.ones((12,)), dims="x")
 
@@ -444,7 +440,6 @@ def test_cache():
 @pytest.mark.parametrize("use_cftime", [True, False])
 @pytest.mark.parametrize("func", ["count", "mean"])
 def test_datetime_array_reduce(use_cftime, func, engine):
-
     time = xr.DataArray(
         xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
         dims=("time",),
@@ -457,7 +452,8 @@ def test_datetime_array_reduce(use_cftime, func, engine):
 
 
 @requires_dask
-def test_groupby_bins_indexed_coordinate():
+@pytest.mark.parametrize("method", ["cohorts", "map-reduce"])
+def test_groupby_bins_indexed_coordinate(method):
     ds = (
         xr.tutorial.open_dataset("air_temperature")
         .isel(time=slice(100))
@@ -472,7 +468,17 @@ def test_groupby_bins_indexed_coordinate():
         expected_groups=([40, 50, 60, 70],),
         isbin=(True,),
         func="mean",
-        method="split-reduce",
+        method=method,
+    )
+    xr.testing.assert_allclose(expected, actual)
+
+    actual = xarray_reduce(
+        ds,
+        ds.lat,
+        dim=ds.air.dims,
+        expected_groups=pd.IntervalIndex.from_breaks([40, 50, 60, 70]),
+        func="mean",
+        method=method,
     )
     xr.testing.assert_allclose(expected, actual)
 
@@ -588,3 +594,34 @@ def test_dtype_accumulation(use_flox, chunk):
         assert np.issubdtype(actual.dtype, np.float64)
         assert np.issubdtype(actual.compute().dtype, np.float64)
         xr.testing.assert_allclose(expected, actual, **tolerance64)
+
+
+def test_preserve_multiindex():
+    """Regression test for GH issue #215"""
+
+    vort = xr.DataArray(
+        name="vort",
+        data=np.random.uniform(size=(4, 2)),
+        dims=["i", "face"],
+        coords={"i": ("i", np.arange(4)), "face": ("face", np.arange(2))},
+    )
+
+    vort = (
+        vort.coarsen(i=2)
+        .construct(i=("i_region_coarse", "i_region"))
+        .stack(region=["face", "i_region_coarse"])
+    )
+
+    bins = [np.linspace(0, 1, 10)]
+    bin_intervals = tuple(pd.IntervalIndex.from_breaks(b) for b in bins)
+
+    hist = xarray_reduce(
+        xr.DataArray(1),  # weights
+        vort,  # variables we want to bin
+        func="count",  # count occurrences falling in bins
+        expected_groups=bin_intervals,  # bins for each variable
+        dim=["i_region"],  # broadcast dimensions
+        fill_value=0,  # fill empty bins with 0 counts
+    )
+
+    assert "region" in hist.coords

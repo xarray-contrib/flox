@@ -18,7 +18,6 @@ def sum_of_squares(
     fill_value=None,
     dtype=None,
 ):
-
     return _get_aggregate(engine).aggregate(
         group_idx,
         array,
@@ -40,7 +39,6 @@ def nansum_of_squares(
     fill_value=None,
     dtype=None,
 ):
-
     return _get_aggregate(engine).aggregate(
         group_idx,
         array,

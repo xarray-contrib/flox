@@ -3,11 +3,17 @@ from __future__ import annotations
 import copy
 import warnings
 from functools import partial
+from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 import numpy as np
 import numpy_groupies as npg
+from numpy.typing import DTypeLike
 
-from . import aggregate_flox, aggregate_npg, xrdtypes as dtypes, xrutils
+from . import aggregate_flox, aggregate_npg, xrutils
+from . import xrdtypes as dtypes
+
+if TYPE_CHECKING:
+    FuncTuple = tuple[Callable | str, ...]
 
 
 def _is_arg_reduction(func: str | Aggregation) -> bool:
@@ -16,6 +22,17 @@ def _is_arg_reduction(func: str | Aggregation) -> bool:
     if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
         return True
     return False
+
+
+class AggDtypeInit(TypedDict):
+    final: DTypeLike | None
+    intermediate: tuple[DTypeLike, ...]
+
+
+class AggDtype(TypedDict):
+    final: np.dtype
+    numpy: tuple[np.dtype | type[np.intp], ...]
+    intermediate: tuple[np.dtype | type[np.intp], ...]
 
 
 def generic_aggregate(
@@ -57,7 +74,7 @@ def generic_aggregate(
     return result
 
 
-def _normalize_dtype(dtype, array_dtype, fill_value=None):
+def _normalize_dtype(dtype: DTypeLike, array_dtype: np.dtype, fill_value=None) -> np.dtype:
     if dtype is None:
         dtype = array_dtype
     if dtype is np.floating:
@@ -103,16 +120,16 @@ class Aggregation:
         self,
         name,
         *,
-        numpy=None,
-        chunk,
-        combine,
-        preprocess=None,
-        aggregate=None,
-        finalize=None,
+        numpy: str | FuncTuple | None = None,
+        chunk: str | FuncTuple | None,
+        combine: str | FuncTuple | None,
+        preprocess: Callable | None = None,
+        aggregate: Callable | None = None,
+        finalize: Callable | None = None,
         fill_value=None,
         final_fill_value=dtypes.NA,
         dtypes=None,
-        final_dtype=None,
+        final_dtype: DTypeLike | None = None,
         reduction_type="reduce",
     ):
         """
@@ -162,15 +179,15 @@ class Aggregation:
         self.preprocess = preprocess
         # Use "chunk_reduce" or "chunk_argreduce"
         self.reduction_type = reduction_type
-        self.numpy = (numpy,) if numpy else (self.name,)
+        self.numpy: FuncTuple = (numpy,) if numpy else (self.name,)
         # initialize blockwise reduction
-        self.chunk = _atleast_1d(chunk)
+        self.chunk: FuncTuple = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
-        self.combine = _atleast_1d(combine)
+        self.combine: FuncTuple = _atleast_1d(combine)
         # final aggregation
-        self.aggregate = aggregate if aggregate else self.combine[0]
+        self.aggregate: Callable | str = aggregate if aggregate else self.combine[0]
         # finalize results (see mean)
-        self.finalize = finalize if finalize else lambda x: x
+        self.finalize: Callable | None = finalize
 
         self.fill_value = {}
         # This is used for the final reindexing
@@ -180,13 +197,15 @@ class Aggregation:
         # They should make sense when aggregated together with results from other blocks
         self.fill_value["intermediate"] = self._normalize_dtype_fill_value(fill_value, "fill_value")
 
-        self.dtype = {}
-        self.dtype[name] = final_dtype
-        self.dtype["intermediate"] = self._normalize_dtype_fill_value(dtypes, "dtype")
+        self.dtype_init: AggDtypeInit = {
+            "final": final_dtype,
+            "intermediate": self._normalize_dtype_fill_value(dtypes, "dtype"),
+        }
+        self.dtype: AggDtype = None  # type: ignore
 
         # The following are set by _initialize_aggregation
-        self.finalize_kwargs = {}
-        self.min_count = None
+        self.finalize_kwargs: dict[Any, Any] = {}
+        self.min_count: int | None = None
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
@@ -211,15 +230,15 @@ class Aggregation:
             self.dtype,
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "\n".join(
             (
-                f"{self.name}, fill: {np.unique(self.fill_value.values())}, dtype: {self.dtype}",
-                f"chunk: {self.chunk}",
-                f"combine: {self.combine}",
-                f"aggregate: {self.aggregate}",
-                f"finalize: {self.finalize}",
-                f"min_count: {self.min_count}",
+                f"{self.name!r}, fill: {self.fill_value.values()!r}, dtype: {self.dtype}",
+                f"chunk: {self.chunk!r}",
+                f"combine: {self.combine!r}",
+                f"aggregate: {self.aggregate!r}",
+                f"finalize: {self.finalize!r}",
+                f"min_count: {self.min_count!r}",
             )
         )
 
@@ -484,7 +503,7 @@ def _initialize_aggregation(
     array_dtype,
     fill_value,
     min_count: int | None,
-    finalize_kwargs,
+    finalize_kwargs: dict[Any, Any] | None,
 ) -> Aggregation:
     if not isinstance(func, Aggregation):
         try:
@@ -502,24 +521,30 @@ def _initialize_aggregation(
 
     # np.dtype(None) == np.dtype("float64")!!!
     # so check for not None
-    if dtype is not None and not isinstance(dtype, np.dtype):
-        dtype = np.dtype(dtype)
+    dtype_: np.dtype | None = (
+        np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
+    )
 
-    agg.dtype[func] = _normalize_dtype(dtype or agg.dtype[func], array_dtype, fill_value)
-    agg.dtype["numpy"] = (agg.dtype[func],)
-    agg.dtype["intermediate"] = [
-        _normalize_dtype(int_dtype, np.result_type(array_dtype, agg.dtype[func]), int_fv)
-        if int_dtype is None
-        else int_dtype
-        for int_dtype, int_fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
-    ]
+    final_dtype = _normalize_dtype(dtype_ or agg.dtype_init["final"], array_dtype, fill_value)
+    agg.dtype = {
+        "final": final_dtype,
+        "numpy": (final_dtype,),
+        "intermediate": tuple(
+            _normalize_dtype(int_dtype, np.result_type(array_dtype, final_dtype), int_fv)
+            if int_dtype is None
+            else np.dtype(int_dtype)
+            for int_dtype, int_fv in zip(
+                agg.dtype_init["intermediate"], agg.fill_value["intermediate"]
+            )
+        ),
+    }
 
     # Replace sentinel fill values according to dtype
     agg.fill_value["intermediate"] = tuple(
         _get_fill_value(dt, fv)
         for dt, fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
     )
-    agg.fill_value[func] = _get_fill_value(agg.dtype[func], agg.fill_value[func])
+    agg.fill_value[func] = _get_fill_value(agg.dtype["final"], agg.fill_value[func])
 
     fv = fill_value if fill_value is not None else agg.fill_value[agg.name]
     if _is_arg_reduction(agg):

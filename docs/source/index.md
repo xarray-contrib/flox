@@ -1,6 +1,6 @@
 # flox: fast & furious GroupBy reductions for `dask.array`
 
-[![GitHub Workflow CI Status](https://img.shields.io/github/workflow/status/xarray-contrib/flox/CI?logo=github&style=flat)](https://github.com/xarray-contrib/flox/actions)
+[![GitHub Workflow CI Status](https://img.shields.io/github/actions/workflow/status/xarray-contrib/flox/ci.yaml?branch=main&logo=github&style=flat)](https://github.com/xarray-contrib/flox/actions)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/xarray-contrib/flox/main.svg)](https://results.pre-commit.ci/latest/github/xarray-contrib/flox/main)
 [![image](https://img.shields.io/codecov/c/github/xarray-contrib/flox.svg?style=flat)](https://codecov.io/gh/xarray-contrib/flox)
 [![Documentation Status](https://readthedocs.org/projects/flox/badge/?version=latest)](https://flox.readthedocs.io/en/latest/?badge=latest)
@@ -62,6 +62,7 @@ It was motivated by many discussions in the [Pangeo](https://pangeo.io) communit
 .. toctree::
    :maxdepth: 1
 
+   intro.md
    aggregations.md
    engines.md
    arrays.md
