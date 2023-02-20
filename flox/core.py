@@ -521,7 +521,7 @@ def factorize_(
     if fastpath:
         return group_idx, found_groups, grp_shape
 
-    if len(axes) > 1 and groupvar.ndim > 1:
+    if len(axes) == 1 and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
         # this is OK because for 3D by and axis=(1,2),
         # we collapse to a 2D by and axis=-1
