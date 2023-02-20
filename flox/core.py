@@ -430,9 +430,9 @@ def factorize_(
     axes: T_Axes,
     expected_groups: tuple[pd.Index, ...] | None = None,
     reindex: bool = False,
-    sort=True,
-    fastpath=False,
-):
+    sort: bool = True,
+    fastpath: bool = False,
+) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, namedtuple]:
     """
     Returns an array of integer  codes  for groups (and associated data)
     by wrapping pd.cut and pd.factorize (depending on isbin).
