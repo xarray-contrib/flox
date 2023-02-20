@@ -2,8 +2,8 @@ import importlib
 from contextlib import contextmanager
 
 import numpy as np
-import pandas as pd
 import packaging.version
+import pandas as pd
 import pytest
 
 pd_types = (pd.Index,)
