@@ -432,7 +432,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
-) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, namedtuple]:
+) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, type(namedtuple)]:
     """
     Returns an array of integer  codes  for groups (and associated data)
     by wrapping pd.cut and pd.factorize (depending on isbin).
