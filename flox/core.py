@@ -32,7 +32,9 @@ if TYPE_CHECKING:
     T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
-    T_Expect = Union[Sequence, np.ndarray, pd.Index, None]
+    T_ExpectIndex = Union[pd.Index, None]
+    T_Expect = Union[Sequence, np.ndarray, T_ExpectIndex]
+    T_ExpectIndexTuple = tuple[T_ExpectIndex, ...]
     T_ExpectTuple = tuple[T_Expect, ...]
     T_ExpectedGroups = Union[T_Expect, T_ExpectTuple]
     T_ExpectedGroupsOpt = Union[T_ExpectedGroups, None]
@@ -1509,7 +1511,7 @@ def _assert_by_is_aligned(shape: tuple[int, ...], by: T_Bys):
 
 def _convert_expected_groups_to_index(
     expected_groups: T_ExpectTuple, isbin: Sequence[bool], sort: bool
-) -> tuple[pd.Index | None, ...]:
+) -> T_ExpectIndexTuple:
     out: list[pd.Index | None] = []
     for ex, isbin_ in zip(expected_groups, isbin):
         if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin):
@@ -1534,7 +1536,9 @@ def _lazy_factorize_wrapper(*by: T_By, **kwargs):
     return group_idx
 
 
-def _factorize_multiple(by: T_Bys, expected_groups, any_by_dask: bool, reindex):
+def _factorize_multiple(
+    by: T_Bys, expected_groups: T_ExpectIndexTuple, any_by_dask: bool, reindex: bool
+) -> tuple[tuple, tuple, tuple]:
     if any_by_dask:
         import dask.array
 
