@@ -667,13 +667,6 @@ def chunk_reduce(
     if isinstance(axis, Sequence):
         axes: T_Axes = axis
         nax = len(axes)
-        if nax != 1 and nax < by.ndim:
-            # when axis is a tuple
-            # collapse and move reduction dimensions to the end
-            by = _collapse_axis(by, nax)
-            array = _collapse_axis(array, nax)
-            axes = (-1,)
-            nax = 1
     else:
         nax = by.ndim
         if axis is None:
@@ -685,6 +678,14 @@ def chunk_reduce(
 
     final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
     final_groups_shape = (1,) * (nax - 1)
+
+    if 1 < nax < by.ndim:
+        # when axis is a tuple
+        # collapse and move reduction dimensions to the end
+        by = _collapse_axis(by, nax)
+        array = _collapse_axis(array, nax)
+        axes = (-1,)
+        nax = 1
 
     # if indices=[2,2,2], npg assumes groups are (0, 1, 2);
     # and will return a result that is bigger than necessary
