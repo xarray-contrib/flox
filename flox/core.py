@@ -8,7 +8,17 @@ import warnings
 from collections import namedtuple
 from functools import partial, reduce
 from numbers import Integral
-from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Mapping, Sequence, Union, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Literal,
+    Mapping,
+    Sequence,
+    Union,
+    overload,
+)
 
 import numpy as np
 import numpy_groupies as npg
