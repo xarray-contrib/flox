@@ -8,7 +8,7 @@ import warnings
 from collections import namedtuple
 from functools import partial, reduce
 from numbers import Integral
-from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Mapping, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Mapping, Sequence, Union, overload
 
 import numpy as np
 import numpy_groupies as npg
@@ -423,6 +423,30 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     offset[labels == -1] = -1
     size: int = math.prod(labels.shape[:-1]) * ngroups
     return offset, size
+
+
+@overload
+def factorize_(
+    by: T_Bys,
+    axes: T_Axes,
+    expected_groups: tuple[pd.Index, ...] | None = None,
+    reindex: bool = False,
+    sort: bool = True,
+    fastpath: Literal[True] = False,
+) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...]]:
+    ...
+
+
+@overload
+def factorize_(
+    by: T_Bys,
+    axes: T_Axes,
+    expected_groups: tuple[pd.Index, ...] | None = None,
+    reindex: bool = False,
+    sort: bool = True,
+    fastpath: Literal[True] = False,
+) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, FactorProps]:
+    ...
 
 
 def factorize_(
