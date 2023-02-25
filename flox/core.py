@@ -1614,7 +1614,7 @@ def _factorize_multiple(
             len(e) if e is not None else len(f) for e, f in zip(expected_groups, found_groups)
         )
     else:
-        group_idx, found_groups, grp_shape, *_ = factorize_(
+        group_idx, found_groups, grp_shape, ngroups, size, props = factorize_(
             by,
             expected_groups=expected_groups,
             axes=(),  # always (), we offset later if necessary.
