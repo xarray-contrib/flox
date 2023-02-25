@@ -459,6 +459,7 @@ def factorize_(
     ...
 
 
+@overload
 def factorize_(
     by: T_Bys,
     axes: T_Axes,
