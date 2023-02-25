@@ -37,6 +37,8 @@ from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
+    from typing_extensions import Unpack
+
     import dask.array.Array as DaskArray
 
     T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
@@ -444,7 +446,7 @@ def factorize_(
     expected_groups: tuple[pd.Index, ...] | None = None,
     reindex: bool = False,
     sort: bool = True,
-) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, None]:
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, None]:
     ...
 
 
@@ -457,7 +459,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: Literal[False] = False,
-) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, FactorProps]:
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps]:
     ...
 
 
@@ -470,7 +472,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
-) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, FactorProps | None]:
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]:
     ...
 
 
@@ -482,7 +484,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
-) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, FactorProps | None]:
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]:
     """
     Returns an array of integer  codes  for groups (and associated data)
     by wrapping pd.cut and pd.factorize (depending on isbin).
@@ -571,7 +573,7 @@ def factorize_(
         group_idx = factorized[0]
 
     if fastpath:
-        return group_idx, found_groups, grp_shape, ngroups, ngroups, None
+        return group_idx, tuple(found_groups), grp_shape, ngroups, ngroups, None
 
     if len(axes) == 1 and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
@@ -595,7 +597,7 @@ def factorize_(
     group_idx[nanmask] = nan_sentinel
 
     props = FactorProps(offset_group, nan_sentinel, nanmask)
-    return group_idx, found_groups, grp_shape, ngroups, size, props
+    return group_idx, tuple(found_groups), grp_shape, ngroups, size, props
 
 
 def chunk_argreduce(
@@ -1679,7 +1681,7 @@ def groupby_reduce(
     engine: T_Engine = "numpy",
     reindex: bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
-) -> tuple[DaskArray, np.ndarray | DaskArray]:
+) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:
     """
     GroupBy reductions using tree reductions for dask.array
 
@@ -1888,6 +1890,7 @@ def groupby_reduce(
     kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
     agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count, finalize_kwargs)
 
+    groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
         results = _reduce_blockwise(
             array, by_, agg, expected_groups=expected_groups, reindex=reindex, sort=sort, **kwargs
