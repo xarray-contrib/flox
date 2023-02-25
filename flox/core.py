@@ -37,9 +37,8 @@ from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
-    from typing_extensions import Unpack
-
     import dask.array.Array as DaskArray
+    from typing_extensions import Unpack
 
     T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
     T_By = T_DuckArray
