@@ -439,10 +439,11 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
 def factorize_(
     by: T_Bys,
     axes: T_Axes,
+    *,
+    fastpath: Literal[True],
     expected_groups: tuple[pd.Index, ...] | None = None,
     reindex: bool = False,
     sort: bool = True,
-    fastpath: Literal[True] = False,
 ) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, None]:
     ...
 
@@ -451,6 +452,7 @@ def factorize_(
 def factorize_(
     by: T_Bys,
     axes: T_Axes,
+    *,
     expected_groups: tuple[pd.Index, ...] | None = None,
     reindex: bool = False,
     sort: bool = True,
@@ -463,6 +465,7 @@ def factorize_(
 def factorize_(
     by: T_Bys,
     axes: T_Axes,
+    *,
     expected_groups: tuple[pd.Index, ...] | None = None,
     reindex: bool = False,
     sort: bool = True,
@@ -474,6 +477,7 @@ def factorize_(
 def factorize_(
     by: T_Bys,
     axes: T_Axes,
+    *,
     expected_groups: tuple[pd.Index, ...] | None = None,
     reindex: bool = False,
     sort: bool = True,
