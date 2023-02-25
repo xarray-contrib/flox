@@ -433,7 +433,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: Literal[True] = False,
-) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...]]:
+) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, None]:
     ...
 
 
@@ -444,7 +444,7 @@ def factorize_(
     expected_groups: tuple[pd.Index, ...] | None = None,
     reindex: bool = False,
     sort: bool = True,
-    fastpath: Literal[True] = False,
+    fastpath: Literal[False] = False,
 ) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, FactorProps]:
     ...
 
@@ -456,7 +456,18 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
-) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, FactorProps]:
+) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, FactorProps | None]:
+    ...
+
+
+def factorize_(
+    by: T_Bys,
+    axes: T_Axes,
+    expected_groups: tuple[pd.Index, ...] | None = None,
+    reindex: bool = False,
+    sort: bool = True,
+    fastpath: bool = False,
+) -> tuple[np.ndarray, list[np.ndarray], tuple[int, ...], int, int, FactorProps | None]:
     """
     Returns an array of integer  codes  for groups (and associated data)
     by wrapping pd.cut and pd.factorize (depending on isbin).
@@ -545,7 +556,7 @@ def factorize_(
         group_idx = factorized[0]
 
     if fastpath:
-        return group_idx, found_groups, grp_shape
+        return group_idx, found_groups, grp_shape, ngroups, ngroups, None
 
     if len(axes) == 1 and groupvar.ndim > 1:
         # Not reducing along all dimensions of by
@@ -1588,7 +1599,7 @@ def _factorize_multiple(
             len(e) if e is not None else len(f) for e, f in zip(expected_groups, found_groups)
         )
     else:
-        group_idx, found_groups, grp_shape = factorize_(
+        group_idx, found_groups, grp_shape, *_ = factorize_(
             by,
             expected_groups=expected_groups,
             axes=(),  # always (), we offset later if necessary.
