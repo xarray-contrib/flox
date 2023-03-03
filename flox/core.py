@@ -4,6 +4,7 @@ import copy
 import itertools
 import math
 import operator
+import sys
 import warnings
 from collections import namedtuple
 from functools import partial, reduce
@@ -38,12 +39,12 @@ from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
     try:
-        from typing import Unpack
-    except ImportError:
-        try:
+        if sys.version_info < (3, 11):
             from typing_extensions import Unpack
-        except ImportError:
-            Unpack = Any
+        else:
+            from typing import Unpack
+    except (ModuleNotFoundError, ImportError):
+        Unpack: Any  # type: ignore
 
     import dask.array.Array as DaskArray
 
