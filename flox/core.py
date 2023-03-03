@@ -1608,12 +1608,31 @@ def _factorize_multiple(
             fastpath=True,
             reindex=reindex,
         )
-        found_groups = tuple(
-            None if is_duck_dask_array(b) else pd.unique(b.reshape(-1)) for b in by
-        )
-        grp_shape = tuple(
-            len(e) if e is not None else len(f) for e, f in zip(expected_groups, found_groups)
-        )
+
+        fg, gs = [], []
+        for b, e in zip(by, expected_groups):
+            if e is None:
+                if is_duck_dask_array(b):
+                    raise ValueError(
+                        "Please provide expected_groups when grouping by a dask array."
+                    )
+
+                f = pd.unique(b.reshape(-1))
+            else:
+                f = e.to_numpy()
+
+            fg.append(f)
+            gs.append(len(f))
+
+        found_groups = tuple(fg)
+        grp_shape = tuple(gs)
+
+        # found_groups = tuple(
+        #     None if is_duck_dask_array(b) else pd.unique(b.reshape(-1)) for b in by
+        # )
+        # grp_shape = tuple(
+        #     len(e) if e is not None else len(f) for e, f in zip(expected_groups, found_groups)
+        # )
     else:
         group_idx, found_groups, grp_shape, ngroups, size, props = factorize_(
             by,
@@ -1623,14 +1642,14 @@ def _factorize_multiple(
             reindex=reindex,
         )
 
-    final_groups = tuple(
-        found if expect is None else expect.to_numpy()
-        for found, expect in zip(found_groups, expected_groups)
-    )
+    # final_groups = tuple(
+    #     found if expect is None else expect.to_numpy()
+    #     for found, expect in zip(found_groups, expected_groups)
+    # )
 
-    if any(grp is None for grp in final_groups):
-        raise ValueError("Please provide expected_groups when grouping by a dask array.")
-    return (group_idx,), final_groups, grp_shape
+    # if any(grp is None for grp in final_groups):
+    #     raise ValueError("Please provide expected_groups when grouping by a dask array.")
+    return (group_idx,), found_groups, grp_shape
 
 
 def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectTuple:
