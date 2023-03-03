@@ -102,7 +102,7 @@ def _get_expected_groups(by: T_By, sort: bool) -> pd.Index:
     return _convert_expected_groups_to_index((expected,), isbin=(False,), sort=sort)[0]
 
 
-def _get_chunk_reduction(reduction_type: str) -> Callable:
+def _get_chunk_reduction(reduction_type: Literal["reduce", "argreduce"]) -> Callable:
     if reduction_type == "reduce":
         return chunk_reduce
     elif reduction_type == "argreduce":
@@ -170,7 +170,7 @@ def _unique(a: np.ndarray) -> np.ndarray:
 
 
 @memoize
-def find_group_cohorts(labels, chunks, merge: bool = True):
+def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     """
     Finds groups labels that occur together aka "cohorts"
 
@@ -259,11 +259,11 @@ def rechunk_for_cohorts(
     array: DaskArray,
     axis: T_Axis,
     labels: np.ndarray,
-    force_new_chunk_at,
-    chunksize=None,
-    ignore_old_chunks=False,
-    debug=False,
-):
+    force_new_chunk_at: Sequence,
+    chunksize: int | None = None,
+    ignore_old_chunks: bool = False,
+    debug: bool = False,
+) -> DaskArray:
     """
     Rechunks array so that each new chunk contains groups that always occur together.
 
@@ -351,7 +351,7 @@ def rechunk_for_cohorts(
         return array.rechunk({axis: newchunks})
 
 
-def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray):
+def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray) -> DaskArray:
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
     embarassingly parallel group reductions.
@@ -384,7 +384,12 @@ def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray):
 
 
 def reindex_(
-    array: np.ndarray, from_, to, fill_value=None, axis: T_Axis = -1, promote: bool = False
+    array: np.ndarray,
+    from_,
+    to,
+    fill_value: Any = None,
+    axis: T_Axis = -1,
+    promote: bool = False,
 ) -> np.ndarray:
     if not isinstance(to, pd.Index):
         if promote:
