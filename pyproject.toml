@@ -108,7 +108,7 @@ exclude = "properties|asv_bench|doc|tests|flycheck"
 files = "flox/*.py"
 show_error_codes = true
 warn_unused_ignores = true
-enable_incomplete_feature = Unpack
+enable_incomplete_feature = "Unpack"
 
 [[tool.mypy.overrides]]
 module=[
