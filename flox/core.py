@@ -745,10 +745,10 @@ def chunk_reduce(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
-    group_idx, groups, found_groups_shape, _, size, props = factorize_(
+    group_idx, grps, found_groups_shape, _, size, props = factorize_(
         (by,), axes, expected_groups=(expected_groups,), reindex=reindex, sort=sort
     )
-    groups = groups[0]
+    groups = grps[0]
 
     if nax > 1:
         needs_broadcast = any(
@@ -1582,14 +1582,27 @@ def _convert_expected_groups_to_index(
     return tuple(out)
 
 
-def _lazy_factorize_wrapper(*by: T_By, **kwargs):
-    group_idx, *rest = factorize_(by, **kwargs)
+def _lazy_factorize_wrapper(
+    *by: T_By,
+    axes: T_Axes,
+    expected_groups: tuple[pd.Index, ...] | None,
+    reindex: bool,
+    sort: bool,
+    fastpath: bool,
+) -> np.ndarray:
+    group_idx, *rest = factorize_(
+        by,
+        axes=axes,
+        expected_groups=expected_groups,
+        fastpath=fastpath,
+        reindex=reindex,
+    )
     return group_idx
 
 
 def _factorize_multiple(
     by: T_Bys, expected_groups: T_ExpectIndexTuple, any_by_dask: bool, reindex: bool
-) -> tuple[tuple, tuple, tuple]:
+) -> tuple[tuple[np.ndarray], tuple[np.ndarray, ...], tuple[int, ...]]:
     if any_by_dask:
         import dask.array
 
@@ -1603,8 +1616,8 @@ def _factorize_multiple(
             *by_,
             chunks=tuple(chunks.values()),
             meta=np.array((), dtype=np.int64),
-            expected_groups=expected_groups,
             axes=(),  # always (), we offset later if necessary.
+            expected_groups=expected_groups,
             fastpath=True,
             reindex=reindex,
         )
@@ -1626,29 +1639,15 @@ def _factorize_multiple(
 
         found_groups = tuple(fg)
         grp_shape = tuple(gs)
-
-        # found_groups = tuple(
-        #     None if is_duck_dask_array(b) else pd.unique(b.reshape(-1)) for b in by
-        # )
-        # grp_shape = tuple(
-        #     len(e) if e is not None else len(f) for e, f in zip(expected_groups, found_groups)
-        # )
     else:
         group_idx, found_groups, grp_shape, ngroups, size, props = factorize_(
             by,
-            expected_groups=expected_groups,
             axes=(),  # always (), we offset later if necessary.
+            expected_groups=expected_groups,
             fastpath=True,
             reindex=reindex,
         )
 
-    # final_groups = tuple(
-    #     found if expect is None else expect.to_numpy()
-    #     for found, expect in zip(found_groups, expected_groups)
-    # )
-
-    # if any(grp is None for grp in final_groups):
-    #     raise ValueError("Please provide expected_groups when grouping by a dask array.")
     return (group_idx,), found_groups, grp_shape
 
 
