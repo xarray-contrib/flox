@@ -1582,21 +1582,8 @@ def _convert_expected_groups_to_index(
     return tuple(out)
 
 
-def _lazy_factorize_wrapper(
-    *by: T_By,
-    axes: T_Axes,
-    expected_groups: tuple[pd.Index, ...] | None,
-    reindex: bool,
-    sort: bool,
-    fastpath: bool,
-) -> np.ndarray:
-    group_idx, *rest = factorize_(
-        by,
-        axes=axes,
-        expected_groups=expected_groups,
-        fastpath=fastpath,
-        reindex=reindex,
-    )
+def _lazy_factorize_wrapper(*by: T_By, **kwargs) -> np.ndarray:
+    group_idx, *rest = factorize_(by, **kwargs)
     return group_idx
 
 
