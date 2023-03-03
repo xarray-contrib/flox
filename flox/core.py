@@ -1693,7 +1693,7 @@ def groupby_reduce(
     engine: T_Engine = "numpy",
     reindex: bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
-) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:
+) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy yet
     """
     GroupBy reductions using tree reductions for dask.array
 
@@ -1960,4 +1960,4 @@ def groupby_reduce(
 
     if _is_minmax_reduction(func) and is_bool_array:
         result = result.astype(bool)
-    return (result, *groups)
+    return (result, *groups)  # type: ignore[return-value]  # Unpack not in mypy yet
