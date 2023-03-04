@@ -1623,19 +1623,19 @@ def _factorize_multiple(
         )
 
         fg, gs = [], []
-        for b, e in zip(by, expected_groups):
-            if e is None:
-                if is_duck_dask_array(b):
+        for by_, expect in zip(by, expected_groups):
+            if expect is None:
+                if is_duck_dask_array(by_):
                     raise ValueError(
                         "Please provide expected_groups when grouping by a dask array."
                     )
 
-                f = pd.unique(b.reshape(-1))
+                found_group = pd.unique(by_.reshape(-1))
             else:
-                f = e.to_numpy()
+                found_group = expect.to_numpy()
 
-            fg.append(f)
-            gs.append(len(f))
+            fg.append(found_group)
+            gs.append(len(found_group))
 
         found_groups = tuple(fg)
         grp_shape = tuple(gs)
