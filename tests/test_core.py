@@ -1316,3 +1316,12 @@ def test_negative_index_factorize_race_condition():
         for f in func
     ]
     [dask.compute(out, scheduler="threads") for _ in range(5)]
+
+
+@pytest.mark.parametrize("sort", [True, False])
+def test_expected_index_conversion_passthrough_range_index(sort):
+    index = pd.RangeIndex(100)
+    actual = _convert_expected_groups_to_index(
+        expected_groups=(index,), isbin=(False,), sort=(sort,)
+    )
+    assert actual[0] is index
