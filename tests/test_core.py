@@ -882,7 +882,7 @@ def test_datetime_binning():
     expected = pd.IntervalIndex.from_arrays(time_bins[:-1], time_bins[1:])
     assert_equal(actual, expected)
 
-    ret = factorize_((by.to_numpy(),), axis=0, expected_groups=(actual,))
+    ret = factorize_((by.to_numpy(),), axes=(0,), expected_groups=(actual,))
     group_idx = ret[0]
     # Ignore pd.cut's dtype as it won't match np.digitize:
     expected = pd.cut(by, time_bins).codes.copy().astype(group_idx.dtype)
@@ -954,7 +954,7 @@ def test_factorize_values_outside_bins():
     # pd.factorize returns intp
     vals = factorize_(
         (np.arange(10).reshape(5, 2), np.arange(10).reshape(5, 2)),
-        axis=(0, 1),
+        axes=(0, 1),
         expected_groups=(
             pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
             pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
@@ -1059,7 +1059,7 @@ def test_factorize_reindex_sorting_strings():
     # pd.factorize seems to return intp so int32 on 32bit arch
     kwargs = dict(
         by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),
-        axis=-1,
+        axes=(-1,),
         expected_groups=(np.array(["El-Nino", "Neutral", "foo", "La-Nina"]),),
     )
 
@@ -1080,7 +1080,7 @@ def test_factorize_reindex_sorting_ints():
     # pd.factorize seems to return intp so int32 on 32bit arch
     kwargs = dict(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
-        axis=-1,
+        axes=(-1,),
         expected_groups=(np.array([0, 1, 2, 3, 4, 5], np.int64),),
     )
 
