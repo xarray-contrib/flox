@@ -523,23 +523,12 @@ def factorize_(
             idx[idx > expect[-1]] = -1
 
         elif isinstance(expect, pd.IntervalIndex):
-            # when binning we change expected groups to integers marking the interval
-            # this makes the reindexing logic simpler.
-            # workaround for https://github.com/pandas-dev/pandas/issues/47614
-            # we create breaks and pass that to pd.cut, disallow closed="both" for now.
             if expect.closed == "both":
                 raise NotImplementedError
-            if groupvar.dtype.kind == "M":
-                # pd.cut with bins = IntervalIndex[datetime64] doesn't work...
-                bins = np.concatenate([expect.left.to_numpy(), [expect.right[-1].to_numpy()]])
-            else:
-                bins = np.concatenate([expect.left.to_numpy(), [expect.right[-1]]])
-
-            # code is -1 for values outside the bounds of all intervals
-            # idx = pd.cut(flat, bins=bins, right=expect.closed_right).codes.copy()
+            bins = np.concatenate([expect.left.to_numpy(), expect.right.to_numpy()[[-1]]])
 
             # digitize is 0 or idx.max() for values outside the bounds of all intervals
-            # make it behave like pd.cut:
+            # make it behave like pd.cut which uses -1:
             if len(bins) > 1:
                 right = expect.closed_right
                 idx = np.digitize(
@@ -547,7 +536,6 @@ def factorize_(
                     bins=bins.view(np.intp) if bins.dtype.kind == "M" else bins,
                     right=right,
                 )
-                # idx = pd.to_numeric(idx, downcast="integer")
                 idx -= 1
                 within_bins = flat <= bins.max() if right else flat < bins.max()
                 idx[~within_bins] = -1
