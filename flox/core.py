@@ -1519,9 +1519,15 @@ def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
 
 
 def _validate_reindex(
-    reindex: bool | None, func, method: T_Method, expected_groups, any_by_dask: bool
+    reindex: bool | None,
+    func,
+    method: T_Method,
+    expected_groups,
+    any_by_dask: bool,
+    is_dask_array: bool,
 ) -> bool:
-    if reindex is True:
+    all_numpy = not is_dask_array and not any_by_dask
+    if reindex is True and not all_numpy:
         if _is_arg_reduction(func):
             raise NotImplementedError
         if method in ["blockwise", "cohorts"]:
@@ -1530,6 +1536,9 @@ def _validate_reindex(
             )
 
     if reindex is None:
+        if all_numpy:
+            return True
+
         if method == "blockwise" or _is_arg_reduction(func):
             reindex = False
 
@@ -1796,7 +1805,9 @@ def groupby_reduce(
     if method == "split-reduce":
         method = "cohorts"
 
-    reindex = _validate_reindex(reindex, func, method, expected_groups, any_by_dask)
+    reindex = _validate_reindex(
+        reindex, func, method, expected_groups, any_by_dask, is_duck_dask_array(array)
+    )
 
     if not is_duck_array(array):
         array = np.asarray(array)

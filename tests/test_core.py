@@ -1236,7 +1236,7 @@ def test_subset_block_2d(flatblocks, expectidx):
 
 
 @pytest.mark.parametrize(
-    "expected, reindex, func, expected_groups, any_by_dask",
+    "dask_expected, reindex, func, expected_groups, any_by_dask",
     [
         # argmax only False
         [False, None, "argmax", None, False],
@@ -1252,22 +1252,43 @@ def test_subset_block_2d(flatblocks, expectidx):
         [True, None, "sum", ([1], None), True],
     ],
 )
-def test_validate_reindex_map_reduce(expected, reindex, func, expected_groups, any_by_dask):
-    actual = _validate_reindex(reindex, func, "map-reduce", expected_groups, any_by_dask)
-    assert actual == expected
+def test_validate_reindex_map_reduce(
+    dask_expected, reindex, func, expected_groups, any_by_dask
+) -> None:
+    actual = _validate_reindex(
+        reindex, func, "map-reduce", expected_groups, any_by_dask, is_dask_array=True
+    )
+    assert actual is dask_expected
+
+    # always reindex with all numpy inputs
+    actual = _validate_reindex(
+        reindex, func, "map-reduce", expected_groups, any_by_dask=False, is_dask_array=False
+    )
+    assert actual
+
+    actual = _validate_reindex(
+        True, func, "map-reduce", expected_groups, any_by_dask=False, is_dask_array=False
+    )
+    assert actual
 
 
-def test_validate_reindex():
+def test_validate_reindex() -> None:
     for method in ["map-reduce", "cohorts"]:
         with pytest.raises(NotImplementedError):
-            _validate_reindex(True, "argmax", method, expected_groups=None, any_by_dask=False)
+            _validate_reindex(
+                True, "argmax", method, expected_groups=None, any_by_dask=False, is_dask_array=True
+            )
 
     for method in ["blockwise", "cohorts"]:
         with pytest.raises(ValueError):
-            _validate_reindex(True, "sum", method, expected_groups=None, any_by_dask=False)
+            _validate_reindex(
+                True, "sum", method, expected_groups=None, any_by_dask=False, is_dask_array=True
+            )
 
         for func in ["sum", "argmax"]:
-            actual = _validate_reindex(None, func, method, expected_groups=None, any_by_dask=False)
+            actual = _validate_reindex(
+                None, func, method, expected_groups=None, any_by_dask=False, is_dask_array=True
+            )
             assert actual is False
 
 
