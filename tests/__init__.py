@@ -1,8 +1,8 @@
 import importlib
 from contextlib import contextmanager
-from distutils import version
 
 import numpy as np
+import packaging.version
 import pandas as pd
 import pytest
 
@@ -49,7 +49,7 @@ def LooseVersion(vstring):
     # Our development version is something like '0.10.9+aac7bfc'
     # This function just ignored the git commit id.
     vstring = vstring.split("+")[0]
-    return version.LooseVersion(vstring)
+    return packaging.version.Version(vstring)
 
 
 has_dask, requires_dask = _importorskip("dask")

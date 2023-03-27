@@ -883,9 +883,10 @@ def test_datetime_binning():
     expected = pd.IntervalIndex.from_arrays(time_bins[:-1], time_bins[1:])
     assert_equal(actual, expected)
 
-    ret = factorize_((by.to_numpy(),), axis=0, expected_groups=(actual,))
+    ret = factorize_((by.to_numpy(),), axes=(0,), expected_groups=(actual,))
     group_idx = ret[0]
-    expected = pd.cut(by, time_bins).codes.copy()
+    # Ignore pd.cut's dtype as it won't match np.digitize:
+    expected = pd.cut(by, time_bins).codes.copy().astype(group_idx.dtype)
     expected[0] = 14  # factorize doesn't return -1 for nans
     assert_equal(group_idx, expected)
 
@@ -954,7 +955,7 @@ def test_factorize_values_outside_bins():
     # pd.factorize returns intp
     vals = factorize_(
         (np.arange(10).reshape(5, 2), np.arange(10).reshape(5, 2)),
-        axis=(0, 1),
+        axes=(0, 1),
         expected_groups=(
             pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
             pd.IntervalIndex.from_breaks(np.arange(2, 8, 1)),
@@ -1059,7 +1060,7 @@ def test_factorize_reindex_sorting_strings():
     # pd.factorize seems to return intp so int32 on 32bit arch
     kwargs = dict(
         by=(np.array(["El-Nino", "La-Nina", "boo", "Neutral"]),),
-        axis=-1,
+        axes=(-1,),
         expected_groups=(np.array(["El-Nino", "Neutral", "foo", "La-Nina"]),),
     )
 
@@ -1080,7 +1081,7 @@ def test_factorize_reindex_sorting_ints():
     # pd.factorize seems to return intp so int32 on 32bit arch
     kwargs = dict(
         by=(np.array([-10, 1, 10, 2, 3, 5]),),
-        axis=-1,
+        axes=(-1,),
         expected_groups=(np.array([0, 1, 2, 3, 4, 5], np.int64),),
     )
 
@@ -1236,7 +1237,7 @@ def test_subset_block_2d(flatblocks, expectidx):
 
 
 @pytest.mark.parametrize(
-    "expected, reindex, func, expected_groups, any_by_dask",
+    "dask_expected, reindex, func, expected_groups, any_by_dask",
     [
         # argmax only False
         [False, None, "argmax", None, False],
@@ -1252,22 +1253,43 @@ def test_subset_block_2d(flatblocks, expectidx):
         [True, None, "sum", ([1], None), True],
     ],
 )
-def test_validate_reindex_map_reduce(expected, reindex, func, expected_groups, any_by_dask):
-    actual = _validate_reindex(reindex, func, "map-reduce", expected_groups, any_by_dask)
-    assert actual == expected
+def test_validate_reindex_map_reduce(
+    dask_expected, reindex, func, expected_groups, any_by_dask
+) -> None:
+    actual = _validate_reindex(
+        reindex, func, "map-reduce", expected_groups, any_by_dask, is_dask_array=True
+    )
+    assert actual is dask_expected
+
+    # always reindex with all numpy inputs
+    actual = _validate_reindex(
+        reindex, func, "map-reduce", expected_groups, any_by_dask=False, is_dask_array=False
+    )
+    assert actual
+
+    actual = _validate_reindex(
+        True, func, "map-reduce", expected_groups, any_by_dask=False, is_dask_array=False
+    )
+    assert actual
 
 
-def test_validate_reindex():
+def test_validate_reindex() -> None:
     for method in ["map-reduce", "cohorts"]:
         with pytest.raises(NotImplementedError):
-            _validate_reindex(True, "argmax", method, expected_groups=None, any_by_dask=False)
+            _validate_reindex(
+                True, "argmax", method, expected_groups=None, any_by_dask=False, is_dask_array=True
+            )
 
     for method in ["blockwise", "cohorts"]:
         with pytest.raises(ValueError):
-            _validate_reindex(True, "sum", method, expected_groups=None, any_by_dask=False)
+            _validate_reindex(
+                True, "sum", method, expected_groups=None, any_by_dask=False, is_dask_array=True
+            )
 
         for func in ["sum", "argmax"]:
-            actual = _validate_reindex(None, func, method, expected_groups=None, any_by_dask=False)
+            actual = _validate_reindex(
+                None, func, method, expected_groups=None, any_by_dask=False, is_dask_array=True
+            )
             assert actual is False
 
 
@@ -1355,3 +1377,10 @@ def test_pint_prod_error(chunk):
 
     with pytest.raises(ValueError):
         groupby_reduce(q, [0, 0, 1], func="prod")
+@pytest.mark.parametrize("sort", [True, False])
+def test_expected_index_conversion_passthrough_range_index(sort):
+    index = pd.RangeIndex(100)
+    actual = _convert_expected_groups_to_index(
+        expected_groups=(index,), isbin=(False,), sort=(sort,)
+    )
+    assert actual[0] is index

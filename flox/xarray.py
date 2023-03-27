@@ -276,7 +276,7 @@ def xarray_reduce(
     exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim_tuple)
 
     try:
-        xr.align(ds, *by_da, join="exact")
+        xr.align(ds, *by_da, join="exact", copy=False)
     except ValueError as e:
         raise ValueError(
             "Object being grouped must be exactly aligned with every array in `by`."
@@ -432,7 +432,7 @@ def xarray_reduce(
 
     # restore non-dim coord variables without the core dimension
     # TODO: shouldn't apply_ufunc handle this?
-    for var in set(ds_broad.variables) - set(ds_broad.dims):
+    for var in set(ds_broad.variables) - set(ds_broad._indexes) - set(ds_broad.dims):
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
