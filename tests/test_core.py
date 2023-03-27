@@ -1377,6 +1377,8 @@ def test_pint_prod_error(chunk):
 
     with pytest.raises(ValueError):
         groupby_reduce(q, [0, 0, 1], func="prod")
+
+
 @pytest.mark.parametrize("sort", [True, False])
 def test_expected_index_conversion_passthrough_range_index(sort):
     index = pd.RangeIndex(100)
