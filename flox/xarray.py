@@ -257,8 +257,6 @@ def xarray_reduce(
             more_drop.update(idx_other_names)
     maybe_drop.update(more_drop)
 
-    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
-
     if dim is Ellipsis:
         if nby > 1:
             raise NotImplementedError("Multiple by are not allowed when dim is Ellipsis.")
@@ -275,18 +273,6 @@ def xarray_reduce(
     # broadcast to make sure grouper dimensions are present in the array.
     exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim_tuple)
 
-    try:
-        xr.align(ds, *by_da, join="exact", copy=False)
-    except ValueError as e:
-        raise ValueError(
-            "Object being grouped must be exactly aligned with every array in `by`."
-        ) from e
-
-    ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
-
-    if any(d not in grouper_dims and d not in obj.dims for d in dim_tuple):
-        raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
-
     dims_not_in_groupers = tuple(d for d in dim_tuple if d not in grouper_dims)
     if dims_not_in_groupers == tuple(dim_tuple) and not any(isbins):
         # reducing along a dimension along which groups do not vary
@@ -299,11 +285,28 @@ def xarray_reduce(
                 "func must be a string when reducing along a dimension not present in `by`"
             )
         # TODO: skipna needs test
-        result = getattr(ds_broad, dsfunc)(dim=dim_tuple, skipna=skipna)
+        result = getattr(ds, dsfunc)(dim=dim_tuple, skipna=skipna)
         if isinstance(obj, xr.DataArray):
             return obj._from_temp_dataset(result)
         else:
             return result
+
+    try:
+        xr.align(ds, *by_da, join="exact", copy=False)
+    except ValueError as e:
+        raise ValueError(
+            "Object being grouped must be exactly aligned with every array in `by`."
+        ) from e
+
+    if set(ds.dims) < set(grouper_dims):
+        ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
+    else:
+        ds_broad = ds
+
+    if any(d not in grouper_dims and d not in obj.dims for d in dim_tuple):
+        raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
+
+    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
 
     axis = tuple(range(-len(dim_tuple), 0))
 
