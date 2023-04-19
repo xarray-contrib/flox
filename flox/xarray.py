@@ -276,6 +276,23 @@ def xarray_reduce(
     if any(d not in grouper_dims and d not in obj.dims for d in dim_tuple):
         raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
 
+    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
+
+    try:
+        xr.align(ds, *by_da, join="exact", copy=False)
+    except ValueError as e:
+        raise ValueError(
+            "Object being grouped must be exactly aligned with every array in `by`."
+        ) from e
+
+    needs_broadcast = any(
+        not set(grouper_dims).issubset(set(variable.dims)) for variable in ds.data_vars.values()
+    )
+    if needs_broadcast:
+        ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
+    else:
+        ds_broad = ds
+
     dims_not_in_groupers = tuple(d for d in dim_tuple if d not in grouper_dims)
     if dims_not_in_groupers == tuple(dim_tuple) and not any(isbins):
         # reducing along a dimension along which groups do not vary
@@ -288,25 +305,11 @@ def xarray_reduce(
                 "func must be a string when reducing along a dimension not present in `by`"
             )
         # TODO: skipna needs test
-        result = getattr(ds, dsfunc)(dim=dim_tuple, skipna=skipna)
+        result = getattr(ds_broad, dsfunc)(dim=dim_tuple, skipna=skipna)
         if isinstance(obj, xr.DataArray):
             return obj._from_temp_dataset(result)
         else:
             return result
-
-    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
-
-    try:
-        xr.align(ds, *by_da, join="exact", copy=False)
-    except ValueError as e:
-        raise ValueError(
-            "Object being grouped must be exactly aligned with every array in `by`."
-        ) from e
-
-    if not set(grouper_dims).issubset(set(ds.dims)):
-        ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
-    else:
-        ds_broad = ds
 
     axis = tuple(range(-len(dim_tuple), 0))
 
