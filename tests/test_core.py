@@ -653,7 +653,7 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
     array = [1, 1, 1, 1, 1, 1]
     labels = [0.2, 1.5, 1.9, 2, 3, 20]
 
-    if method in ["split-reduce", "cohorts"] and chunk_labels:
+    if method == "cohorts" and chunk_labels:
         pytest.xfail()
 
     if chunks:
@@ -836,10 +836,7 @@ def test_cohorts_nd_by(func, method, axis, engine):
     assert_equal(actual, expected)
 
     actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
-    if method == "map-reduce":
-        assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=np.int64))
-    else:
-        assert_equal(groups, np.array([1, 30, 2, 31, 3, 40, 4], dtype=np.int64))
+    assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=np.int64))
     reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
 
