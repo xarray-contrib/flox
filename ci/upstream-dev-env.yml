@@ -10,6 +10,7 @@ dependencies:
   - numba
   - pytest
   - pytest-cov
+  - pytest-pretty
   - pytest-xdist
   - pip
   - pip:
