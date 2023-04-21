@@ -354,7 +354,7 @@ def rechunk_for_cohorts(
 def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray) -> DaskArray:
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
-    embarassingly parallel group reductions.
+    embarrassingly parallel group reductions.
 
     This only works when the groups are sequential
     (e.g. labels = ``[0,0,0,1,1,1,1,2,2]``).
