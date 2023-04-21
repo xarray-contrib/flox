@@ -148,7 +148,7 @@ def test_groupby_reduce(
     )
     # we use pd.Index(expected_groups).to_numpy() which is always int64
     # for the values in this tests
-    g_dtype = by.dtype if expected_groups is None else np.int64
+    g_dtype = by.dtype if expected_groups is None else np.intp
 
     assert_equal(groups, np.array([0, 1, 2], g_dtype))
     assert_equal(expected_result, result)
@@ -389,12 +389,12 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=False)
-    assert_equal(groups, np.array([0, 2, 1], dtype=np.int64))
+    assert_equal(groups, np.array([0, 2, 1], dtype=np.intp))
     assert_equal(expected, actual[..., [0, 2, 1]])
 
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=True)
-    assert_equal(groups, np.array([0, 1, 2], np.int64))
+    assert_equal(groups, np.array([0, 1, 2], np.intp))
     assert_equal(expected, actual)
 
 
@@ -784,10 +784,8 @@ def test_dtype_preservation(dtype, func, engine):
 
 
 @requires_dask
-@pytest.mark.parametrize("dtype", [np.int32, np.int64])
-@pytest.mark.parametrize(
-    "labels_dtype", [pytest.param(np.int32, marks=pytest.mark.xfail), np.int64]
-)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int32, np.int64])
+@pytest.mark.parametrize("labels_dtype", [np.float32, np.float64, np.int32, np.int64])
 @pytest.mark.parametrize("method", ["map-reduce", "cohorts"])
 def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
     repeats = np.array([4, 4, 12, 2, 3, 4], dtype=np.int32)
