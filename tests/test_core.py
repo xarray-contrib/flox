@@ -88,7 +88,8 @@ def test_alignment_error():
 
 @pytest.mark.parametrize("dtype", (float, int))
 @pytest.mark.parametrize("chunk", [False, True])
-@pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
+# TODO: make this intp when python 3.8 is dropped
+@pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2], dtype=np.int64)])
 @pytest.mark.parametrize(
     "func, array, by, expected",
     [
@@ -148,7 +149,12 @@ def test_groupby_reduce(
     )
     # we use pd.Index(expected_groups).to_numpy() which is always int64
     # for the values in this tests
-    g_dtype = by.dtype if expected_groups is None else np.intp
+    if expected_groups is None:
+        g_dtype = by.dtype
+    elif isinstance(expected_groups, np.ndarray):
+        g_dtype = expected_groups.dtype
+    else:
+        g_dtype = np.int64
 
     assert_equal(groups, np.array([0, 1, 2], g_dtype))
     assert_equal(expected_result, result)
@@ -389,12 +395,12 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     kwargs["expected_groups"] = [0, 2, 1]
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=False)
-    assert_equal(groups, np.array([0, 2, 1], dtype=np.intp))
+    assert_equal(groups, np.array([0, 2, 1], dtype=np.int64))
     assert_equal(expected, actual[..., [0, 2, 1]])
 
     with raise_if_dask_computes():
         actual, groups = groupby_reduce(array, by, engine=engine, **kwargs, sort=True)
-    assert_equal(groups, np.array([0, 1, 2], np.intp))
+    assert_equal(groups, np.array([0, 1, 2], np.int64))
     assert_equal(expected, actual)
 
 
