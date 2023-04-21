@@ -1659,10 +1659,16 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
         return (None,) * nby
 
     if nby == 1 and not isinstance(expected_groups, tuple):
-        if isinstance(expected_groups, pd.Index):
+        if isinstance(expected_groups, (pd.Index, np.ndarray)):
             return (expected_groups,)
         else:
-            return (np.asarray(expected_groups),)
+            array = np.asarray(expected_groups)
+            if np.issubdtype(array.dtype, np.integer):
+                # preserve default dtypes
+                # on pandas 1.5/2, on windows
+                # when a list is passed
+                array = array.astype(np.int64)
+            return (array,)
 
     if nby > 1 and not isinstance(expected_groups, tuple):  # TODO: test for list
         raise ValueError(
