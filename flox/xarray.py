@@ -218,7 +218,7 @@ def xarray_reduce(
     else:
         isbins = (isbin,) * nby
 
-    expected_groups = _validate_expected_groups(nby, expected_groups)
+    expected_groups_valid = _validate_expected_groups(nby, expected_groups)
 
     if not sort:
         raise NotImplementedError("sort must be True for xarray_reduce")
@@ -310,10 +310,10 @@ def xarray_reduce(
 
     # Set expected_groups and convert to index since we need coords, sizes
     # for output xarray objects
-    expected_groups = list(expected_groups)
+    expected_groups_valid_list = list(expected_groups_valid)
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
-    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups, isbins)):
+    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups_valid_list, isbins)):
         group_name = (
             f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
         )
@@ -337,7 +337,7 @@ def xarray_reduce(
         # The if-check is for type hinting mainly, it narrows down the return
         # type of _convert_expected_groups_to_index to pure pd.Index:
         if expect_index is not None:
-            expected_groups[idx] = expect_index
+            expected_groups_valid_list[idx] = expect_index
             group_sizes[group_name] = len(expect_index)
         else:
             # This will never be reached
@@ -423,7 +423,7 @@ def xarray_reduce(
             "skipna": skipna,
             "engine": engine,
             "reindex": reindex,
-            "expected_groups": tuple(expected_groups),
+            "expected_groups": tuple(expected_groups_valid_list),
             "isbin": isbins,
             "finalize_kwargs": finalize_kwargs,
             "dtype": dtype,
@@ -437,7 +437,7 @@ def xarray_reduce(
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
-    for name, expect, by_ in zip(group_names, expected_groups, by_da):
+    for name, expect, by_ in zip(group_names, expected_groups_valid_list, by_da):
         # Can't remove this till xarray handles IntervalIndex
         if isinstance(expect, pd.IntervalIndex):
             expect = expect.to_numpy()
