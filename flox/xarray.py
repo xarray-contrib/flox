@@ -440,22 +440,22 @@ def xarray_reduce(
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
-    for name, expect, by_ in zip(group_names, expected_groups_valid_list, by_da):
+    for name, expct, by_ in zip(group_names, expected_groups_valid_list, by_da):
         # Can't remove this till xarray handles IntervalIndex
-        if isinstance(expect, pd.IntervalIndex):
-            expect = expect.to_numpy()
+        if isinstance(expct, pd.IntervalIndex):
+            expct = expct.to_numpy()
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
         # an object array of tuples
         if name in ds_broad.indexes and isinstance(ds_broad.indexes[name], pd.MultiIndex):
             levelnames = ds_broad.indexes[name].names
-            expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
-            actual[name] = expect
+            expct = pd.MultiIndex.from_tuples(expct.values, names=levelnames)
+            actual[name] = expct
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)
         else:
-            actual[name] = expect
+            actual[name] = expct
         if keep_attrs:
             actual[name].attrs = by_.attrs
 
