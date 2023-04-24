@@ -22,7 +22,7 @@ from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_nu
 
 if TYPE_CHECKING:
     from xarray.core.resample import Resample
-    from xarray.core.types import T_DataArray, T_Dataset
+    from xarray.core.types import T_DataArray, T_Dataset, T_Expect
 
     from .core import T_ExpectedGroupsOpt
 
@@ -311,10 +311,10 @@ def xarray_reduce(
 
     # Set expected_groups and convert to index since we need coords, sizes
     # for output xarray objects
-    expected_groups_valid_list = list(expected_groups_valid)
+    expected_groups_valid_list: list[T_Expect] = []
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
-    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups_valid_list, isbins)):
+    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups_valid, isbins)):
         group_name = (
             f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
         )
@@ -337,12 +337,11 @@ def xarray_reduce(
 
         # The if-check is for type hinting mainly, it narrows down the return
         # type of _convert_expected_groups_to_index to pure pd.Index:
-        if expect_index is not None:
-            expected_groups_valid_list[idx] = expect_index
-            group_sizes[group_name] = len(expect_index)
-        else:
+        if expect_index is None:
             # This will never be reached
             raise ValueError("expect_index cannot be None")
+        expected_groups_valid_list.append(expect_index)
+        group_sizes[group_name] = len(expect_index)
 
     def wrapper(array, *by, func, skipna, core_dims, **kwargs):
         array, *by = _broadcast_size_one_dims(array, *by, core_dims=core_dims)
