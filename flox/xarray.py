@@ -339,11 +339,12 @@ def xarray_reduce(
 
         # The if-check is for type hinting mainly, it narrows down the return
         # type of _convert_expected_groups_to_index to pure pd.Index:
-        if expect_index is None:
+        if expect_index is not None:
+            expected_groups_valid_list.append(expect_index)
+            group_sizes[group_name] = len(expect_index)
+        else:
             # This will never be reached
             raise ValueError("expect_index cannot be None")
-        expected_groups_valid_list.append(expect_index)
-        group_sizes[group_name] = len(expect_index)
 
     def wrapper(array, *by, func, skipna, core_dims, **kwargs):
         array, *by = _broadcast_size_one_dims(array, *by, core_dims=core_dims)
