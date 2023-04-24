@@ -22,9 +22,9 @@ from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_nu
 
 if TYPE_CHECKING:
     from xarray.core.resample import Resample
-    from xarray.core.types import T_DataArray, T_Dataset, T_Expect
+    from xarray.core.types import T_DataArray, T_Dataset
 
-    from .core import T_ExpectedGroupsOpt
+    from .core import T_ExpectedGroupsOpt, T_Expect
 
     Dims = Union[str, Iterable[Hashable], None]
 
