@@ -324,6 +324,8 @@ def xarray_reduce(
             raise NotImplementedError(
                 "flox does not support binning into an integer number of bins yet."
             )
+
+        expect_: T_Expect
         if expect is None:
             if isbin_:
                 raise ValueError(
