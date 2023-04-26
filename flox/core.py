@@ -2324,6 +2324,7 @@ def groupby_reduce(
     nby = len(bys)
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
     any_by_dask = any(by_is_dask)
+    provided_expected = expected_groups is not None
 
     if (
         engine == "numbagg"
@@ -2440,7 +2441,7 @@ def groupby_reduce(
     #     The only way to do this consistently is mask out using min_count
     #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
     if min_count is None:
-        if nax < by_.ndim or fill_value is not None:
+        if nax < by_.ndim or (fill_value is not None and provided_expected):
             min_count_: int = 1
         else:
             min_count_ = 0
@@ -2486,12 +2487,6 @@ def groupby_reduce(
         return (result, groups)
 
     elif not has_dask:
-        if min_count_ == 1:
-            # optimize for pure numpy groupby
-            # We set the fill_value appropriately anyway
-            agg.min_count = None
-            agg.numpy = agg.numpy[:-1]
-
         results = _reduce_blockwise(
             array, by_, agg, expected_groups=expected_, reindex=reindex, sort=sort, **kwargs
         )
