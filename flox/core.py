@@ -2486,6 +2486,12 @@ def groupby_reduce(
         return (result, groups)
 
     elif not has_dask:
+        if min_count_ == 1:
+            # optimize for pure numpy groupby
+            # We set the fill_value appropriately anyway
+            agg.min_count = None
+            agg.numpy = agg.numpy[:-1]
+
         results = _reduce_blockwise(
             array, by_, agg, expected_groups=expected_, reindex=reindex, sort=sort, **kwargs
         )
