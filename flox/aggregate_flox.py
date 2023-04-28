@@ -99,7 +99,11 @@ def nansum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, 
 
 
 def nanlen(group_idx, array, *args, **kwargs):
-    return sum(group_idx, (~isnull(array)).astype(int), *args, **kwargs)
+    if np.issubdtype(array.dtype, bool):
+        array = ~array
+    else:
+        array = ~isnull(array)
+    return sum(group_idx, array.view(np.int8), *args, **kwargs)
 
 
 def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
@@ -107,14 +111,16 @@ def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
         fill_value = 0
     out = sum(group_idx, array, axis=axis, size=size, dtype=dtype, fill_value=fill_value)
     with np.errstate(invalid="ignore", divide="ignore"):
-        out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
+        out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0, dtype=np.intp)
     return out
 
 
 def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     if fill_value is None:
         fill_value = 0
-    out = nansum(group_idx, array, size=size, axis=axis, dtype=dtype, fill_value=fill_value)
+    mask = isnull(array)
+    masked = np.where(mask, 0, array)
+    out = sum(group_idx, masked, size=size, axis=axis, dtype=dtype, fill_value=fill_value)
     with np.errstate(invalid="ignore", divide="ignore"):
-        out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
+        out /= nanlen(group_idx, mask, size=size, axis=axis, fill_value=0, dtype=np.intp)
     return out
