@@ -574,5 +574,7 @@ def _initialize_aggregation(
         agg.fill_value["numpy"] += (0,)
         agg.dtype["intermediate"] += (np.intp,)
         agg.dtype["numpy"] += (np.intp,)
+    else:
+        agg.min_count = 0
 
     return agg
