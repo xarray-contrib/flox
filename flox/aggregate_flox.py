@@ -118,5 +118,7 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     masked = np.where(mask, 0, array)
     out = sum(group_idx, masked, size=size, axis=axis, dtype=dtype, fill_value=fill_value)
     with np.errstate(invalid="ignore", divide="ignore"):
-        out /= sum(group_idx, mask.view(np.int8), size=size, axis=axis, fill_value=0, dtype=np.intp)
+        out /= sum(
+            group_idx, (~mask).view(np.int8), size=size, axis=axis, fill_value=0, dtype=np.intp
+        )
     return out
