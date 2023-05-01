@@ -849,7 +849,7 @@ def _finalize_results(
     """
     squeezed = _squeeze_results(results, axis)
 
-    if agg.min_count is not None:
+    if agg.min_count > 0:
         counts = squeezed["intermediates"][-1]
         squeezed["intermediates"] = squeezed["intermediates"][:-1]
 
@@ -860,7 +860,7 @@ def _finalize_results(
     else:
         finalized[agg.name] = agg.finalize(*squeezed["intermediates"], **agg.finalize_kwargs)
 
-    if agg.min_count is not None:
+    if agg.min_count > 0:
         count_mask = counts < agg.min_count
         if count_mask.any():
             # For one count_mask.any() prevents promoting bool to dtype(fill_value) unless
@@ -1917,7 +1917,12 @@ def groupby_reduce(
             min_count = 1
 
     # TODO: set in xarray?
-    if min_count is not None and func in ["nansum", "nanprod"] and fill_value is None:
+    if (
+        min_count is not None
+        and min_count > 0
+        and func in ["nansum", "nanprod"]
+        and fill_value is None
+    ):
         # nansum, nanprod have fill_value=0, 1
         # overwrite than when min_count is set
         fill_value = np.nan
