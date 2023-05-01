@@ -849,7 +849,7 @@ def _finalize_results(
     """
     squeezed = _squeeze_results(results, axis)
 
-    if agg.min_count is not None:
+    if agg.min_count > 0:
         counts = squeezed["intermediates"][-1]
         squeezed["intermediates"] = squeezed["intermediates"][:-1]
 
@@ -860,7 +860,7 @@ def _finalize_results(
     else:
         finalized[agg.name] = agg.finalize(*squeezed["intermediates"], **agg.finalize_kwargs)
 
-    if agg.min_count is not None:
+    if agg.min_count > 0:
         count_mask = counts < agg.min_count
         if count_mask.any():
             # For one count_mask.any() prevents promoting bool to dtype(fill_value) unless
@@ -1598,7 +1598,11 @@ def _lazy_factorize_wrapper(*by: T_By, **kwargs) -> np.ndarray:
 
 
 def _factorize_multiple(
-    by: T_Bys, expected_groups: T_ExpectIndexTuple, any_by_dask: bool, reindex: bool
+    by: T_Bys,
+    expected_groups: T_ExpectIndexTuple,
+    any_by_dask: bool,
+    reindex: bool,
+    sort: bool = True,
 ) -> tuple[tuple[np.ndarray], tuple[np.ndarray, ...], tuple[int, ...]]:
     if any_by_dask:
         import dask.array
@@ -1617,6 +1621,7 @@ def _factorize_multiple(
             expected_groups=expected_groups,
             fastpath=True,
             reindex=reindex,
+            sort=sort,
         )
 
         fg, gs = [], []
@@ -1643,6 +1648,7 @@ def _factorize_multiple(
             expected_groups=expected_groups,
             fastpath=True,
             reindex=reindex,
+            sort=sort,
         )
 
     return (group_idx,), found_groups, grp_shape
@@ -1653,10 +1659,16 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
         return (None,) * nby
 
     if nby == 1 and not isinstance(expected_groups, tuple):
-        if isinstance(expected_groups, pd.Index):
+        if isinstance(expected_groups, (pd.Index, np.ndarray)):
             return (expected_groups,)
         else:
-            return (np.asarray(expected_groups),)
+            array = np.asarray(expected_groups)
+            if np.issubdtype(array.dtype, np.integer):
+                # preserve default dtypes
+                # on pandas 1.5/2, on windows
+                # when a list is passed
+                array = array.astype(np.int64)
+            return (array,)
 
     if nby > 1 and not isinstance(expected_groups, tuple):  # TODO: test for list
         raise ValueError(
@@ -1833,21 +1845,28 @@ def groupby_reduce(
     # (pd.IntervalIndex or not)
     expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, sort)
 
-    is_binning = any([isinstance(e, pd.IntervalIndex) for e in expected_groups])
-
-    # TODO: could restrict this to dask-only
-    factorize_early = (nby > 1) or (
-        is_binning and method == "cohorts" and is_duck_dask_array(array)
+    # Don't factorize "early only when
+    # grouping by dask arrays, and not having expected_groups
+    factorize_early = not (
+        # can't do it if we are grouping by dask array but don't have expected_groups
+        any(is_dask and ex_ is None for is_dask, ex_ in zip(by_is_dask, expected_groups))
     )
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
-            bys, expected_groups, any_by_dask=any_by_dask, reindex=reindex
+            bys,
+            expected_groups,
+            any_by_dask=any_by_dask,
+            # This is the only way it makes sense I think.
+            # reindex controls what's actually allocated in chunk_reduce
+            # At this point, we care about an accurate conversion to codes.
+            reindex=True,
+            sort=sort,
         )
         expected_groups = (pd.RangeIndex(math.prod(grp_shape)),)
 
     assert len(bys) == 1
-    by_ = bys[0]
-    expected_groups = expected_groups[0]
+    (by_,) = bys
+    (expected_groups,) = expected_groups
 
     if axis is None:
         axis_ = tuple(array.ndim + np.arange(-by_.ndim, 0))
@@ -1898,7 +1917,12 @@ def groupby_reduce(
             min_count = 1
 
     # TODO: set in xarray?
-    if min_count is not None and func in ["nansum", "nanprod"] and fill_value is None:
+    if (
+        min_count is not None
+        and min_count > 0
+        and func in ["nansum", "nanprod"]
+        and fill_value is None
+    ):
         # nansum, nanprod have fill_value=0, 1
         # overwrite than when min_count is set
         fill_value = np.nan

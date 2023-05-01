@@ -88,7 +88,8 @@ def test_alignment_error():
 
 @pytest.mark.parametrize("dtype", (float, int))
 @pytest.mark.parametrize("chunk", [False, True])
-@pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2])])
+# TODO: make this intp when python 3.8 is dropped
+@pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2], dtype=np.int64)])
 @pytest.mark.parametrize(
     "func, array, by, expected",
     [
@@ -148,7 +149,12 @@ def test_groupby_reduce(
     )
     # we use pd.Index(expected_groups).to_numpy() which is always int64
     # for the values in this tests
-    g_dtype = by.dtype if expected_groups is None else np.int64
+    if expected_groups is None:
+        g_dtype = by.dtype
+    elif isinstance(expected_groups, np.ndarray):
+        g_dtype = expected_groups.dtype
+    else:
+        g_dtype = np.int64
 
     assert_equal(groups, np.array([0, 1, 2], g_dtype))
     assert_equal(expected_result, result)
@@ -653,7 +659,7 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
     array = [1, 1, 1, 1, 1, 1]
     labels = [0.2, 1.5, 1.9, 2, 3, 20]
 
-    if method in ["split-reduce", "cohorts"] and chunk_labels:
+    if method == "cohorts" and chunk_labels:
         pytest.xfail()
 
     if chunks:
@@ -784,10 +790,8 @@ def test_dtype_preservation(dtype, func, engine):
 
 
 @requires_dask
-@pytest.mark.parametrize("dtype", [np.int32, np.int64])
-@pytest.mark.parametrize(
-    "labels_dtype", [pytest.param(np.int32, marks=pytest.mark.xfail), np.int64]
-)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int32, np.int64])
+@pytest.mark.parametrize("labels_dtype", [np.float32, np.float64, np.int32, np.int64])
 @pytest.mark.parametrize("method", ["map-reduce", "cohorts"])
 def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
     repeats = np.array([4, 4, 12, 2, 3, 4], dtype=np.int32)
@@ -836,10 +840,7 @@ def test_cohorts_nd_by(func, method, axis, engine):
     assert_equal(actual, expected)
 
     actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
-    if method == "map-reduce":
-        assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=np.int64))
-    else:
-        assert_equal(groups, np.array([1, 30, 2, 31, 3, 40, 4], dtype=np.int64))
+    assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=np.int64))
     reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
     assert_equal(reindexed, expected)
 

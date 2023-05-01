@@ -557,12 +557,15 @@ def _initialize_aggregation(
         assert isinstance(finalize_kwargs, dict)
         agg.finalize_kwargs = finalize_kwargs
 
+    if min_count is None:
+        min_count = 0
+
     # This is needed for the dask pathway.
     # Because we use intermediate fill_value since a group could be
     # absent in one block, but present in another block
     # We set it for numpy to get nansum, nanprod tests to pass
     # where the identity element is 0, 1
-    if min_count is not None:
+    if min_count > 0:
         agg.min_count = min_count
         agg.chunk += ("nanlen",)
         agg.numpy += ("nanlen",)
@@ -571,5 +574,7 @@ def _initialize_aggregation(
         agg.fill_value["numpy"] += (0,)
         agg.dtype["intermediate"] += (np.intp,)
         agg.dtype["numpy"] += (np.intp,)
+    else:
+        agg.min_count = 0
 
     return agg
