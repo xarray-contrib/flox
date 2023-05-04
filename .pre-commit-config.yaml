@@ -4,7 +4,7 @@ ci:
 repos:
     - repo: https://github.com/charliermarsh/ruff-pre-commit
       # Ruff version.
-      rev: 'v0.0.246'
+      rev: 'v0.0.260'
       hooks:
         - id: ruff
           args: ["--fix"]
@@ -18,7 +18,7 @@ repos:
         - id: check-docstring-first
 
     - repo: https://github.com/psf/black
-      rev: 23.1.0
+      rev: 23.3.0
       hooks:
         - id: black
 
@@ -31,7 +31,7 @@ repos:
           - mdformat-myst
 
     - repo: https://github.com/nbQA-dev/nbQA
-      rev: 1.6.1
+      rev: 1.7.0
       hooks:
           - id: nbqa-black
           - id: nbqa-ruff
@@ -44,13 +44,13 @@ repos:
           args: [--extra-keys=metadata.kernelspec metadata.language_info.version]
 
     - repo: https://github.com/codespell-project/codespell
-      rev: v2.2.2
+      rev: v2.2.4
       hooks:
         - id: codespell
           additional_dependencies:
             - tomli
 
     - repo: https://github.com/abravalheri/validate-pyproject
-      rev: v0.12.1
+      rev: v0.12.2
       hooks:
         - id: validate-pyproject
