@@ -276,8 +276,6 @@ def xarray_reduce(
     if any(d not in grouper_dims and d not in obj.dims for d in dim_tuple):
         raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
 
-    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
-
     try:
         xr.align(ds, *by_da, join="exact", copy=False)
     except ValueError as e:
@@ -310,6 +308,8 @@ def xarray_reduce(
             return obj._from_temp_dataset(result)
         else:
             return result
+
+    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
 
     axis = tuple(range(-len(dim_tuple), 0))
 

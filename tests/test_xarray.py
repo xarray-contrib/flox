@@ -343,6 +343,8 @@ def test_multi_index_groupby_sum(engine):
     expected = ds.sum("z")
     stacked = ds.stack(space=["x", "y"])
     actual = xarray_reduce(stacked, "space", dim="z", func="sum", engine=engine)
+    expected_xarray = stacked.groupby("space").sum("z")
+    assert_equal(expected_xarray, actual)
     assert_equal(expected, actual.unstack("space"))
 
     actual = xarray_reduce(stacked.foo, "space", dim="z", func="sum", engine=engine)
