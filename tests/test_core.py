@@ -1347,3 +1347,37 @@ def test_expected_index_conversion_passthrough_range_index(sort):
         expected_groups=(index,), isbin=(False,), sort=(sort,)
     )
     assert actual[0] is index
+
+
+def test_method_check_numpy():
+    bins = [-2, -1, 0, 1, 2]
+    field = np.ones((5, 3))
+    by = np.array([[-1.5, -1.5, 0.5, 1.5, 1.5] * 3]).reshape(5, 3)
+    actual, _ = groupby_reduce(
+        field,
+        by,
+        expected_groups=pd.IntervalIndex.from_breaks(bins),
+        func="count",
+        method="cohorts",
+        fill_value=np.nan,
+    )
+    expected = np.array([6, np.nan, 3, 6])
+    assert_equal(actual, expected)
+
+    actual, _ = groupby_reduce(
+        field,
+        by,
+        expected_groups=pd.IntervalIndex.from_breaks(bins),
+        func="count",
+        fill_value=np.nan,
+        method="cohorts",
+        axis=0,
+    )
+    expected = np.array(
+        [
+            [2.0, np.nan, 1.0, 2.0],
+            [2.0, np.nan, 1.0, 2.0],
+            [2.0, np.nan, 1.0, 2.0],
+        ]
+    )
+    assert_equal(actual, expected)

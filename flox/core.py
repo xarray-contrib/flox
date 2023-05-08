@@ -1875,12 +1875,6 @@ def groupby_reduce(
         axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
     nax = len(axis_)
 
-    if method in ["blockwise", "cohorts"] and nax != by_.ndim:
-        raise NotImplementedError(
-            "Must reduce along all dimensions of `by` when method != 'map-reduce'."
-            f"Received method={method!r}"
-        )
-
     # TODO: make sure expected_groups is unique
     if nax == 1 and by_.ndim > 1 and expected_groups is None:
         if not any_by_dask:
@@ -1947,6 +1941,12 @@ def groupby_reduce(
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"\n\n Received: {func}"
+            )
+
+        if method in ["blockwise", "cohorts"] and nax != by_.ndim:
+            raise NotImplementedError(
+                "Must reduce along all dimensions of `by` when method != 'map-reduce'."
+                f"Received method={method!r}"
             )
 
         # TODO: just do this in dask_groupby_agg
