@@ -235,6 +235,8 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 if "arg" in func and add_nan_by:
                     array_[..., nanmask] = np.nan
                     expected = getattr(np, "nan" + func)(array_, axis=-1, **kwargs)
+                # elif func in ["first", "last"]:
+                #    expected = getattr(xrutils, f"nan{func}")(array_[..., ~nanmask], axis=-1, **kwargs)
                 elif func in ["nanfirst", "nanlast"]:
                     expected = getattr(xrutils, func)(array_[..., ~nanmask], axis=-1, **kwargs)
                 else:
@@ -261,7 +263,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             call = partial(
                 groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
             )
-            if "arg" in func and reindex is True:
+            if ("arg" in func or func in ["first", "last"]) and reindex is True:
                 # simple_combine with argreductions not supported right now
                 with pytest.raises(NotImplementedError):
                     call()
@@ -514,11 +516,18 @@ def test_first_last_disallowed(axis, func):
 
 
 @requires_dask
-@pytest.mark.parametrize("func", ["first", "last", "nanfirst", "nanlast"])
+@pytest.mark.parametrize("func", ["nanfirst", "nanlast"])
 @pytest.mark.parametrize("axis", [None, (0, 1, 2)])
-def test_first_last_disallowed_dask(axis, func):
+def test_nanfirst_nanlast_disallowed_dask(axis, func):
     with pytest.raises(ValueError):
         groupby_reduce(dask.array.empty((2, 3, 2)), np.ones((2, 3, 2)), func=func, axis=axis)
+
+
+@requires_dask
+@pytest.mark.parametrize("func", ["first", "last"])
+def test_first_last_disallowed_dask(func):
+    with pytest.raises(NotImplementedError):
+        groupby_reduce(dask.array.empty((2, 3, 2)), np.ones((2, 3, 2)), func=func, axis=-1)
 
 
 @requires_dask

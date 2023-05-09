@@ -1538,6 +1538,8 @@ def _validate_reindex(
             raise ValueError(
                 "reindex=True is not a valid choice for method='blockwise' or method='cohorts'."
             )
+        if func in ["first", "last"]:
+            raise ValueError("reindex must be None or False when func is 'first' or 'last.")
 
     if reindex is None:
         if all_numpy:
@@ -1561,8 +1563,6 @@ def _validate_reindex(
 
     assert isinstance(reindex, bool)
 
-    if reindex and func in ["first", "last"]:
-        raise ValueError("reindex must be None or False when func is 'first' or 'last.")
     return reindex
 
 
