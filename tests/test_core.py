@@ -513,6 +513,7 @@ def test_first_last_disallowed(axis, func):
         groupby_reduce(np.empty((2, 3, 2)), np.ones((2, 3, 2)), func=func, axis=axis)
 
 
+@requires_dask
 @pytest.mark.parametrize("func", ["first", "last", "nanfirst", "nanlast"])
 @pytest.mark.parametrize("axis", [None, (0, 1, 2)])
 def test_first_last_disallowed_dask(axis, func):
