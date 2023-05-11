@@ -69,7 +69,7 @@ ALL_FUNCS = (
     "min",
     "nanmin",
     "argmin",
-    pytest.param("nanargmin", marks=(pytest.mark.skip,)),
+    "nanargmin",
     "any",
     "all",
     "nanlast",
@@ -233,9 +233,13 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 # computing silences a bunch of dask warnings
                 array_ = array.compute() if chunks is not None else array
                 if "arg" in func and add_nan_by:
+                    # NaNs are in by, but we can't call np.argmax([..., NaN, .. ])
+                    # That would return index of the NaN
+                    # This way, we insert NaNs where there are NaNs in by, and
+                    # call np.nanargmax
                     func_ = f"nan{func}" if "nan" not in func else func
-                    array[..., nanmask] = np.nan
-                    expected = getattr(np, func_)(array, axis=-1, **kwargs)
+                    array_[..., nanmask] = np.nan
+                    expected = getattr(np, func_)(array_, axis=-1, **kwargs)
                 # elif func in ["first", "last"]:
                 #    expected = getattr(xrutils, f"nan{func}")(array_[..., ~nanmask], axis=-1, **kwargs)
                 elif func in ["nanfirst", "nanlast"]:
