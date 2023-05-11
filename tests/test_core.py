@@ -264,6 +264,9 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
 
         params = list(itertools.product(["map-reduce"], [True, False, None]))
         params.extend(itertools.product(["cohorts"], [False, None]))
+        if chunks == -1:
+            params.extend([("blockwise", None)])
+
         for method, reindex in params:
             call = partial(
                 groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
@@ -274,11 +277,12 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                     call()
                 continue
             actual, *groups = call()
-            if "arg" not in func:
-                # make sure we use simple combine
-                assert any("simple-combine" in key for key in actual.dask.layers.keys())
-            else:
-                assert any("grouped-combine" in key for key in actual.dask.layers.keys())
+            if method != "blockwise":
+                if "arg" not in func:
+                    # make sure we use simple combine
+                    assert any("simple-combine" in key for key in actual.dask.layers.keys())
+                else:
+                    assert any("grouped-combine" in key for key in actual.dask.layers.keys())
             for actual_group, expect in zip(groups, expected_groups):
                 assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
