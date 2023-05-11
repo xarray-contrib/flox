@@ -1325,7 +1325,8 @@ def dask_groupby_agg(
 
     # preprocess the array:
     #   - for argreductions, this zips the index together with the array block
-    #   - not necessary for blockwise, for argreductions
+    #   - not necessary for blockwise with argreductions
+    #   - if this is needed later, we can fix this then
     if agg.preprocess and method != "blockwise":
         array = agg.preprocess(array, axis=axis)
 
