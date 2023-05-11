@@ -1323,8 +1323,11 @@ def dask_groupby_agg(
         by = dask.array.from_array(by, chunks=chunks)
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
-    # preprocess the array: for argreductions, this zips the index together with the array block
-    if agg.preprocess:
+    # preprocess the array:
+    #   - for argreductions, this zips the index together with the array block
+    #   - not necessary for blockwise with argreductions
+    #   - if this is needed later, we can fix this then
+    if agg.preprocess and method != "blockwise":
         array = agg.preprocess(array, axis=axis)
 
     # 1. We first apply the groupby-reduction blockwise to generate "intermediates"
