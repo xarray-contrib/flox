@@ -554,7 +554,7 @@ def factorize_(
         else:
             if expect is not None and reindex:
                 sorter = np.argsort(expect)
-                groups = expect[(sorter,)] if sort else expect
+                groups = np.array(expect[(sorter,)]) if sort else expect
                 idx = np.searchsorted(expect, flat, sorter=sorter)
                 mask = ~np.isin(flat, expect) | isnull(flat) | (idx == len(expect))
                 if not sort:
@@ -566,6 +566,7 @@ def factorize_(
             else:
                 if isinstance(flat, np.ndarray):
                     idx, groups = pd.factorize(flat, sort=sort)
+                    groups = np.array(groups)
                 else:
                     assert sort
                     groups, idx = np.unique(flat, return_inverse=True)
