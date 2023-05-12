@@ -25,7 +25,9 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
     most of this code is from shoyer's gist
     https://gist.github.com/shoyer/f538ac78ae904c936844
     """
-    # assumes input is sorted, which I do in core._prepare_for_flox
+    # For numpy arrays, assumes input is sorted, which I do in _prepare_for_flox
+    # For cupy arrays, sorting is not needed
+
     aux = group_idx
 
     flag = np.concatenate((np.array([True], like=array), aux[1:] != aux[:-1]))
@@ -38,7 +40,12 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
         dtype = array.dtype
 
     if out is None:
-        out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
+        out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype, like=array)
+
+    # if isinstance(array, cupy_array_type):
+    #     op = cupy_ops[op]
+    #     op(out, group_idx, array)
+    #     return out
 
     if (len(uniques) == size) and (uniques == np.arange(size, like=array)).all():
         # The previous version of this if condition
