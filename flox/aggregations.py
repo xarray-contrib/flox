@@ -252,8 +252,8 @@ count = Aggregation(
     combine="sum",
     fill_value=0,
     final_fill_value=0,
-    dtypes=np.uintp,
-    final_dtype=np.uintp,
+    dtypes=np.intp,
+    final_dtype=np.intp,
 )
 
 # note that the fill values are the result of np.func([np.nan, np.nan])
@@ -281,7 +281,7 @@ mean = Aggregation(
     combine=("sum", "sum"),
     finalize=_mean_finalize,
     fill_value=(0, 0),
-    dtypes=(None, np.uintp),
+    dtypes=(None, np.intp),
     final_dtype=np.floating,
 )
 nanmean = Aggregation(
@@ -290,7 +290,7 @@ nanmean = Aggregation(
     combine=("sum", "sum"),
     finalize=_mean_finalize,
     fill_value=(0, 0),
-    dtypes=(None, np.uintp),
+    dtypes=(None, np.intp),
     final_dtype=np.floating,
 )
 
@@ -315,7 +315,7 @@ var = Aggregation(
     finalize=_var_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtypes=(None, None, np.uintp),
+    dtypes=(None, None, np.intp),
     final_dtype=np.floating,
 )
 nanvar = Aggregation(
@@ -325,7 +325,7 @@ nanvar = Aggregation(
     finalize=_var_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtypes=(None, None, np.uintp),
+    dtypes=(None, None, np.intp),
     final_dtype=np.floating,
 )
 std = Aggregation(
@@ -335,7 +335,7 @@ std = Aggregation(
     finalize=_std_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtypes=(None, None, np.uintp),
+    dtypes=(None, None, np.intp),
     final_dtype=np.floating,
 )
 nanstd = Aggregation(
@@ -345,7 +345,7 @@ nanstd = Aggregation(
     finalize=_std_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtypes=(None, None, np.uintp),
+    dtypes=(None, None, np.intp),
     final_dtype=np.floating,
 )
 
@@ -368,7 +368,7 @@ def argreduce_preprocess(array, axis):
     assert len(axis) == 1
     axis = axis[0]
 
-    idx = dask.array.arange(array.shape[axis], chunks=array.chunks[axis], dtype=np.uintp)
+    idx = dask.array.arange(array.shape[axis], chunks=array.chunks[axis], dtype=np.intp)
     # broadcast (TODO: is this needed?)
     idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(array.ndim))]
 
@@ -398,8 +398,8 @@ argmax = Aggregation(
     fill_value=(dtypes.NINF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
-    dtypes=(None, np.uintp),
-    final_dtype=np.uintp,
+    dtypes=(None, np.intp),
+    final_dtype=np.intp,
 )
 
 argmin = Aggregation(
@@ -411,8 +411,8 @@ argmin = Aggregation(
     fill_value=(dtypes.INF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
-    dtypes=(None, np.uintp),
-    final_dtype=np.uintp,
+    dtypes=(None, np.intp),
+    final_dtype=np.intp,
 )
 
 nanargmax = Aggregation(
@@ -424,8 +424,8 @@ nanargmax = Aggregation(
     fill_value=(dtypes.NINF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
-    dtypes=(None, np.uintp),
-    final_dtype=np.uintp,
+    dtypes=(None, np.intp),
+    final_dtype=np.intp,
 )
 
 nanargmin = Aggregation(
@@ -437,8 +437,8 @@ nanargmin = Aggregation(
     fill_value=(dtypes.INF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
-    dtypes=(None, np.uintp),
-    final_dtype=np.uintp,
+    dtypes=(None, np.intp),
+    final_dtype=np.intp,
 )
 
 first = Aggregation("first", chunk=None, combine=None, fill_value=0)
@@ -574,10 +574,8 @@ def _initialize_aggregation(
         agg.combine += ("sum",)
         agg.fill_value["intermediate"] += (0,)
         agg.fill_value["numpy"] += (0,)
-        # uintp is supported by cupy, intp is not
-        # Also count is >=0, so uint should be fine.
-        agg.dtype["intermediate"] += (np.uintp,)
-        agg.dtype["numpy"] += (np.uintp,)
+        agg.dtype["intermediate"] += (np.intp,)
+        agg.dtype["numpy"] += (np.intp,)
     else:
         agg.min_count = 0
 
