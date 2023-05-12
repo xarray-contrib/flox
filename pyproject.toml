@@ -33,6 +33,7 @@ changelog = "https://github.com/xarray-contrib/flox/releases"
 
 [project.optional-dependencies]
 all = ["cachey", "dask", "numba", "xarray"]
+cupy = ["cupy>=12.1"]
 test = ["netCDF4"]
 
 [build-system]
