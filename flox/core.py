@@ -522,7 +522,7 @@ def factorize_(
             # this is important in shared-memory parallelism with dask
             # TODO: figure out how to avoid this
             idx = flat.copy()
-            found_groups.append(np.array(expect))
+            found_groups.append(np.array(expect, like=flat))
             # TODO: fix by using masked integers
             idx[idx > expect[-1]] = -1
 
@@ -537,7 +537,7 @@ def factorize_(
                 right = expect.closed_right
                 idx = np.digitize(
                     flat,
-                    bins=bins.view(np.intp) if bins.dtype.kind == "M" else bins,
+                    bins=np.array(bins.view(np.intp) if bins.dtype.kind == "M" else bins, like=flat),
                     right=right,
                 )
                 idx -= 1
@@ -560,9 +560,13 @@ def factorize_(
                     idx = sorter[(idx,)]
                 idx[mask] = -1
             else:
-                idx, groups = pd.factorize(flat, sort=sort)
+                if isinstance(flat, np.ndarray):
+                    idx, groups = pd.factorize(flat, sort=sort)
+                else:
+                    assert sort
+                    groups, idx = np.unique(flat, return_inverse=True)
 
-            found_groups.append(np.array(groups))
+            found_groups.append(groups)
         factorized.append(idx.reshape(groupvar.shape))
 
     grp_shape = tuple(len(grp) for grp in found_groups)
