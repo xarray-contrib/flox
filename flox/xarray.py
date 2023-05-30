@@ -605,10 +605,15 @@ def resample_reduce(
     # this creates a label DataArray since resample doesn't do that somehow
     tostack = []
     for idx, slicer in enumerate(resampler._group_indices):
-        if slicer.stop is None:
-            stop = resampler._obj.sizes[dim]
+        if isinstance(slicer, slice):
+            if slicer.stop is None:
+                stop = resampler._obj.sizes[dim]
+            else:
+                stop = slicer.stop
+        elif isinstance(slicer, list):
+            stop = slicer[-1]
         else:
-            stop = slicer.stop
+            stop = slicer
         tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
     by = xr.DataArray(np.hstack(tostack), dims=(dim,), name="__resample_dim__")
 
