@@ -610,11 +610,10 @@ def resample_reduce(
                 stop = resampler._obj.sizes[dim]
             else:
                 stop = slicer.stop
-        elif isinstance(slicer, list):
-            stop = slicer[-1]
+            tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
         else:
-            stop = slicer
-        tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
+            raise NotImplementedError(f"Only slice type is supported, got {type(slicer)=}.")
+
     by = xr.DataArray(np.hstack(tostack), dims=(dim,), name="__resample_dim__")
 
     result = (
