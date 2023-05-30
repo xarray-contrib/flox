@@ -342,12 +342,10 @@ def xarray_reduce(
         else:
             expect_ = expect
         expect_index = _convert_expected_groups_to_index((expect_,), (isbin_,), sort=sort)[0]
-        reveal_type(expect_index)
 
         # The if-check is for type hinting mainly, it narrows down the return
         # type of _convert_expected_groups_to_index to pure pd.Index:
         if expect_index is not None:
-            reveal_type(expect_index)
             expected_groups_valid_list.append(expect_index)
             group_sizes[group_name] = len(expect_index)
         else:
