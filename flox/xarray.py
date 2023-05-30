@@ -342,10 +342,12 @@ def xarray_reduce(
         else:
             expect_ = expect
         expect_index = _convert_expected_groups_to_index((expect_,), (isbin_,), sort=sort)[0]
+        reveal_type(expect_index)
 
         # The if-check is for type hinting mainly, it narrows down the return
         # type of _convert_expected_groups_to_index to pure pd.Index:
         if expect_index is not None:
+            reveal_type(expect_index)
             expected_groups_valid_list.append(expect_index)
             group_sizes[group_name] = len(expect_index)
         else:
@@ -446,22 +448,22 @@ def xarray_reduce(
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
-    for name, expct, by_ in zip(group_names, expected_groups_valid_list, by_da):
+    for name, expect, by_ in zip(group_names, expected_groups_valid_list, by_da):
         # Can't remove this till xarray handles IntervalIndex
-        if isinstance(expct, pd.IntervalIndex):
-            expct = expct.to_numpy()
+        if isinstance(expect, pd.IntervalIndex):
+            expect = expect.to_numpy()
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
         # an object array of tuples
         if name in ds_broad.indexes and isinstance(ds_broad.indexes[name], pd.MultiIndex):
             levelnames = ds_broad.indexes[name].names
-            expct = pd.MultiIndex.from_tuples(expct.values, names=levelnames)
-            actual[name] = expct
+            expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
+            actual[name] = expect
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)
         else:
-            actual[name] = expct
+            actual[name] = expect
         if keep_attrs:
             actual[name].attrs = by_.attrs
 
