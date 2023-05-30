@@ -547,7 +547,7 @@ def factorize_(
             else:
                 idx = np.zeros_like(flat, dtype=np.intp) - 1
 
-            found_groups.append(expect)
+            found_groups.append(np.array(expect))
         else:
             if expect is not None and reindex:
                 sorter = np.argsort(expect)
