@@ -248,7 +248,7 @@ def xarray_reduce(
     try:
         from xarray.indexes import PandasMultiIndex
     except ImportError:
-        PandasMultiIndex = tuple()
+        PandasMultiIndex = tuple()  # type: ignore
 
     more_drop = set()
     for var in maybe_drop:
