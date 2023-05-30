@@ -220,16 +220,8 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     raveled = labels.reshape(-1)
     # these are chunks where a label is present
     label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
-    try:
-        from mypy import reveal_type
-    except:
-        pass
-    reveal_type(label_chunks)
-    x = 1
-    reveal_type((label_chunks.get(x),))
-    reveal_type(label_chunks.keys())
     # These invert the label_chunks mapping so we know which labels occur together.
-    chunks_cohorts = tlz.groupby(lambda x: tuple(label_chunks.get(x)), label_chunks.keys())
+    chunks_cohorts = tlz.groupby(lambda x: (label_chunks.get(x),), label_chunks.keys())
 
     if merge:
         # First sort by number of chunks occupied by cohort
