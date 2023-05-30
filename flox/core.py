@@ -51,9 +51,10 @@ if TYPE_CHECKING:
     T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
-    T_ExpectIndex = Union[pd.Index, None]
-    T_Expect = Union[Sequence, np.ndarray, T_ExpectIndex]
-    T_ExpectIndexTuple = tuple[T_ExpectIndex, ...]
+    T_ExpectIndex = pd.Index
+    T_ExpectIndexOpt = Union[T_ExpectIndex, None]
+    T_Expect = Union[Sequence, np.ndarray, T_ExpectIndexOpt]
+    T_ExpectIndexTuple = tuple[T_ExpectIndexOpt, ...]
     T_ExpectTuple = tuple[T_Expect, ...]
     T_ExpectedGroups = Union[T_Expect, T_ExpectTuple]
     T_ExpectedGroupsOpt = Union[T_ExpectedGroups, None]
