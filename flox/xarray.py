@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from xarray.core.resample import Resample
     from xarray.core.types import T_DataArray, T_Dataset
 
-    from .core import T_Expect, T_ExpectedGroupsOpt
+    from .core import T_Expect, T_ExpectIndex, T_ExpectedGroupsOpt
 
     Dims = Union[str, Iterable[Hashable], None]
 
@@ -248,7 +248,7 @@ def xarray_reduce(
     try:
         from xarray.indexes import PandasMultiIndex
     except ImportError:
-        PandasMultiIndex = tuple()  # type: ignore
+        PandasMultiIndex = tuple()
 
     more_drop = set()
     for var in maybe_drop:
@@ -317,7 +317,7 @@ def xarray_reduce(
 
     # Set expected_groups and convert to index since we need coords, sizes
     # for output xarray objects
-    expected_groups_valid_list: list[T_Expect] = []
+    expected_groups_valid_list: list[T_ExpectIndex] = []
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
     for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups_valid, isbins)):
@@ -446,22 +446,22 @@ def xarray_reduce(
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
-    for name, expect, by_ in zip(group_names, expected_groups_valid_list, by_da):
+    for name, expect__, by_ in zip(group_names, expected_groups_valid_list, by_da):
         # Can't remove this till xarray handles IntervalIndex
-        if isinstance(expect, pd.IntervalIndex):
-            expect = expect.to_numpy()
+        if isinstance(expect__, pd.IntervalIndex):
+            expect__ = expect__.to_numpy()
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
         # an object array of tuples
         if name in ds_broad.indexes and isinstance(ds_broad.indexes[name], pd.MultiIndex):
             levelnames = ds_broad.indexes[name].names
-            expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
-            actual[name] = expect
+            expect__ = pd.MultiIndex.from_tuples(expect__.values, names=levelnames)
+            actual[name] = expect__
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)
         else:
-            actual[name] = expect
+            actual[name] = expect__
         if keep_attrs:
             actual[name].attrs = by_.attrs
 
