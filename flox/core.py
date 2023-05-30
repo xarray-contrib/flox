@@ -226,7 +226,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
         pass
     reveal_type(label_chunks)
     x = 1
-    reveal_type(tuple(label_chunks.get(x)))
+    reveal_type((label_chunks.get(x),))
     reveal_type(label_chunks.keys())
     # These invert the label_chunks mapping so we know which labels occur together.
     chunks_cohorts = tlz.groupby(lambda x: tuple(label_chunks.get(x)), label_chunks.keys())
