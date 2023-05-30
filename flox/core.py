@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
-    T_ExpectIndex = pd.Index
+    T_ExpectIndex: pd.Index
     T_ExpectIndexOpt = Union[T_ExpectIndex, None]
     T_Expect = Union[Sequence, np.ndarray, T_ExpectIndexOpt]
     T_ExpectIndexTuple = tuple[T_ExpectIndexOpt, ...]
@@ -99,7 +99,7 @@ def _is_first_last_reduction(func: T_Agg) -> bool:
     return isinstance(func, str) and func in ["nanfirst", "nanlast", "first", "last"]
 
 
-def _get_expected_groups(by: T_By, sort: bool) -> pd.Index:
+def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
     if is_duck_dask_array(by):
         raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
     flatby = by.reshape(-1)
@@ -854,7 +854,8 @@ def _finalize_results(
     """
     squeezed = _squeeze_results(results, axis)
 
-    if agg.min_count > 0:
+    min_count = agg.min_count if agg.min_count is not None else 0
+    if min_count > 0:
         counts = squeezed["intermediates"][-1]
         squeezed["intermediates"] = squeezed["intermediates"][:-1]
 
@@ -865,8 +866,8 @@ def _finalize_results(
     else:
         finalized[agg.name] = agg.finalize(*squeezed["intermediates"], **agg.finalize_kwargs)
 
-    if agg.min_count > 0:
-        count_mask = counts < agg.min_count
+    if min_count > 0:
+        count_mask = counts < min_count
         if count_mask.any():
             # For one count_mask.any() prevents promoting bool to dtype(fill_value) unless
             # necessary
