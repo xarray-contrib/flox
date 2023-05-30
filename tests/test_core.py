@@ -3,13 +3,14 @@ from __future__ import annotations
 import itertools
 import warnings
 from functools import partial, reduce
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import pandas as pd
 import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
+from flox import xrutils
 from flox.aggregations import Aggregation
 from flox.core import (
     _convert_expected_groups_to_index,
@@ -53,7 +54,8 @@ ALL_FUNCS = (
     "sum",
     "nansum",
     "argmax",
-    pytest.param("nanargmax", marks=(pytest.mark.skip,)),
+    "nanfirst",
+    "nanargmax",
     "prod",
     "nanprod",
     "mean",
@@ -67,15 +69,31 @@ ALL_FUNCS = (
     "min",
     "nanmin",
     "argmin",
-    pytest.param("nanargmin", marks=(pytest.mark.skip,)),
+    "nanargmin",
     "any",
     "all",
+    "nanlast",
     pytest.param("median", marks=(pytest.mark.skip,)),
     pytest.param("nanmedian", marks=(pytest.mark.skip,)),
 )
 
 if TYPE_CHECKING:
     from flox.core import T_Engine, T_ExpectedGroupsOpt, T_Func2
+
+
+def _get_array_func(func: str) -> Callable:
+    if func == "count":
+
+        def npfunc(x):
+            x = np.asarray(x)
+            return (~np.isnan(x)).sum()
+
+    elif func in ["nanfirst", "nanlast"]:
+        npfunc = getattr(xrutils, func)
+    else:
+        npfunc = getattr(np, func)
+
+    return npfunc
 
 
 def test_alignment_error():
@@ -215,8 +233,17 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 # computing silences a bunch of dask warnings
                 array_ = array.compute() if chunks is not None else array
                 if "arg" in func and add_nan_by:
+                    # NaNs are in by, but we can't call np.argmax([..., NaN, .. ])
+                    # That would return index of the NaN
+                    # This way, we insert NaNs where there are NaNs in by, and
+                    # call np.nanargmax
+                    func_ = f"nan{func}" if "nan" not in func else func
                     array_[..., nanmask] = np.nan
-                    expected = getattr(np, "nan" + func)(array_, axis=-1, **kwargs)
+                    expected = getattr(np, func_)(array_, axis=-1, **kwargs)
+                # elif func in ["first", "last"]:
+                #    expected = getattr(xrutils, f"nan{func}")(array_[..., ~nanmask], axis=-1, **kwargs)
+                elif func in ["nanfirst", "nanlast"]:
+                    expected = getattr(xrutils, func)(array_[..., ~nanmask], axis=-1, **kwargs)
                 else:
                     expected = getattr(np, func)(array_[..., ~nanmask], axis=-1, **kwargs)
         for _ in range(nby):
@@ -237,21 +264,25 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
 
         params = list(itertools.product(["map-reduce"], [True, False, None]))
         params.extend(itertools.product(["cohorts"], [False, None]))
+        if chunks == -1:
+            params.extend([("blockwise", None)])
+
         for method, reindex in params:
             call = partial(
                 groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
             )
-            if "arg" in func and reindex is True:
+            if ("arg" in func or func in ["first", "last"]) and reindex is True:
                 # simple_combine with argreductions not supported right now
                 with pytest.raises(NotImplementedError):
                     call()
                 continue
             actual, *groups = call()
-            if "arg" not in func:
-                # make sure we use simple combine
-                assert any("simple-combine" in key for key in actual.dask.layers.keys())
-            else:
-                assert any("grouped-combine" in key for key in actual.dask.layers.keys())
+            if method != "blockwise":
+                if "arg" not in func:
+                    # make sure we use simple combine
+                    assert any("simple-combine" in key for key in actual.dask.layers.keys())
+                else:
+                    assert any("grouped-combine" in key for key in actual.dask.layers.keys())
             for actual_group, expect in zip(groups, expected_groups):
                 assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
@@ -486,6 +517,28 @@ def test_dask_reduce_axis_subset():
         )
 
 
+@pytest.mark.parametrize("func", ["first", "last", "nanfirst", "nanlast"])
+@pytest.mark.parametrize("axis", [(0, 1)])
+def test_first_last_disallowed(axis, func):
+    with pytest.raises(ValueError):
+        groupby_reduce(np.empty((2, 3, 2)), np.ones((2, 3, 2)), func=func, axis=axis)
+
+
+@requires_dask
+@pytest.mark.parametrize("func", ["nanfirst", "nanlast"])
+@pytest.mark.parametrize("axis", [None, (0, 1, 2)])
+def test_nanfirst_nanlast_disallowed_dask(axis, func):
+    with pytest.raises(ValueError):
+        groupby_reduce(dask.array.empty((2, 3, 2)), np.ones((2, 3, 2)), func=func, axis=axis)
+
+
+@requires_dask
+@pytest.mark.parametrize("func", ["first", "last"])
+def test_first_last_disallowed_dask(func):
+    with pytest.raises(NotImplementedError):
+        groupby_reduce(dask.array.empty((2, 3, 2)), np.ones((2, 3, 2)), func=func, axis=-1)
+
+
 @requires_dask
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize(
@@ -495,8 +548,12 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     if "arg" in func and engine == "flox":
         pytest.skip()
 
-    if not isinstance(axis, int) and "arg" in func and (axis is None or len(axis) > 1):
-        pytest.skip()
+    if not isinstance(axis, int):
+        if "arg" in func and (axis is None or len(axis) > 1):
+            pytest.skip()
+        if ("first" in func or "last" in func) and (axis is not None and len(axis) not in [1, 3]):
+            pytest.skip()
+
     if func in ["all", "any"]:
         fill_value = False
     else:
@@ -513,17 +570,45 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     kwargs = dict(
         func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value, engine=engine
     )
+    expected, _ = groupby_reduce(array, by, **kwargs)
+    if engine == "flox":
+        kwargs.pop("engine")
+        expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
+        assert_equal(expected_npg, expected)
+
+    if func in ["all", "any"]:
+        fill_value = False
+    else:
+        fill_value = 123
+
+    if "var" in func or "std" in func:
+        tolerance = {"rtol": 1e-14, "atol": 1e-16}
+    else:
+        tolerance = None
+    # tests against the numpy output to make sure dask compute matches
+    by = np.broadcast_to(labels2d, (3, *labels2d.shape))
+    rng = np.random.default_rng(12345)
+    array = rng.random(by.shape)
+    kwargs = dict(
+        func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value, engine=engine
+    )
+    expected, _ = groupby_reduce(array, by, **kwargs)
+    if engine == "flox":
+        kwargs.pop("engine")
+        expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
+        assert_equal(expected_npg, expected)
+
+    if ("first" in func or "last" in func) and (
+        axis is None or (not isinstance(axis, int) and len(axis) != 1)
+    ):
+        return
+
     with raise_if_dask_computes():
         actual, _ = groupby_reduce(
             da.from_array(array, chunks=(-1, 2, 3)),
             da.from_array(by, chunks=(-1, 2, 2)),
             **kwargs,
         )
-    expected, _ = groupby_reduce(array, by, **kwargs)
-    if engine == "flox":
-        kwargs.pop("engine")
-        expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
-        assert_equal(expected_npg, expected)
     assert_equal(actual, expected, tolerance)
 
 
@@ -751,15 +836,7 @@ def test_fill_value_behaviour(func, chunks, fill_value, engine):
     if chunks is not None and not has_dask:
         pytest.skip()
 
-    if func == "count":
-
-        def npfunc(x):
-            x = np.asarray(x)
-            return (~np.isnan(x)).sum()
-
-    else:
-        npfunc = getattr(np, func)
-
+    npfunc = _get_array_func(func)
     by = np.array([1, 2, 3, 1, 2, 3])
     array = np.array([np.nan, 1, 1, np.nan, 1, 1])
     if chunks:
@@ -767,7 +844,9 @@ def test_fill_value_behaviour(func, chunks, fill_value, engine):
     actual, _ = groupby_reduce(
         array, by, func=func, engine=engine, fill_value=fill_value, expected_groups=[0, 1, 2, 3]
     )
-    expected = np.array([fill_value, fill_value, npfunc([1.0, 1.0]), npfunc([1.0, 1.0])])
+    expected = np.array(
+        [fill_value, fill_value, npfunc([1.0, 1.0], axis=0), npfunc([1.0, 1.0], axis=0)]
+    )
     assert_equal(actual, expected)
 
 
@@ -832,6 +911,8 @@ def test_cohorts_nd_by(func, method, axis, engine):
 
     if axis is not None and method != "map-reduce":
         pytest.xfail()
+    if axis is None and ("first" in func or "last" in func):
+        pytest.skip()
 
     kwargs = dict(func=func, engine=engine, method=method, axis=axis, fill_value=fill_value)
     actual, groups = groupby_reduce(array, by, **kwargs)
@@ -897,7 +978,8 @@ def test_bool_reductions(func, engine):
         pytest.skip()
     groups = np.array([1, 1, 1])
     data = np.array([True, True, False])
-    expected = np.expand_dims(getattr(np, func)(data), -1)
+    npfunc = _get_array_func(func)
+    expected = np.expand_dims(npfunc(data, axis=0), -1)
     actual, _ = groupby_reduce(data, groups, func=func, engine=engine)
     assert_equal(expected, actual)
 
@@ -1347,3 +1429,37 @@ def test_expected_index_conversion_passthrough_range_index(sort):
         expected_groups=(index,), isbin=(False,), sort=(sort,)
     )
     assert actual[0] is index
+
+
+def test_method_check_numpy():
+    bins = [-2, -1, 0, 1, 2]
+    field = np.ones((5, 3))
+    by = np.array([[-1.5, -1.5, 0.5, 1.5, 1.5] * 3]).reshape(5, 3)
+    actual, _ = groupby_reduce(
+        field,
+        by,
+        expected_groups=pd.IntervalIndex.from_breaks(bins),
+        func="count",
+        method="cohorts",
+        fill_value=np.nan,
+    )
+    expected = np.array([6, np.nan, 3, 6])
+    assert_equal(actual, expected)
+
+    actual, _ = groupby_reduce(
+        field,
+        by,
+        expected_groups=pd.IntervalIndex.from_breaks(bins),
+        func="count",
+        fill_value=np.nan,
+        method="cohorts",
+        axis=0,
+    )
+    expected = np.array(
+        [
+            [2.0, np.nan, 1.0, 2.0],
+            [2.0, np.nan, 1.0, 2.0],
+            [2.0, np.nan, 1.0, 2.0],
+        ]
+    )
+    assert_equal(actual, expected)

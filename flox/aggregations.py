@@ -184,6 +184,8 @@ class Aggregation:
         self.chunk: FuncTuple = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
         self.combine: FuncTuple = _atleast_1d(combine)
+        # simpler reductions used with the "simple combine" algorithm
+        self.simple_combine = None
         # final aggregation
         self.aggregate: Callable | str = aggregate if aggregate else self.combine[0]
         # finalize results (see mean)
@@ -419,7 +421,7 @@ nanargmax = Aggregation(
     chunk=("nanmax", "nanargmax"),  # order is important
     combine=("max", "argmax"),
     reduction_type="argreduce",
-    fill_value=(dtypes.NINF, -1),
+    fill_value=(dtypes.NINF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
     dtypes=(None, np.intp),
@@ -432,7 +434,7 @@ nanargmin = Aggregation(
     chunk=("nanmin", "nanargmin"),  # order is important
     combine=("min", "argmin"),
     reduction_type="argreduce",
-    fill_value=(dtypes.INF, -1),
+    fill_value=(dtypes.INF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
     dtypes=(None, np.intp),
@@ -576,5 +578,17 @@ def _initialize_aggregation(
         agg.dtype["numpy"] += (np.intp,)
     else:
         agg.min_count = 0
+
+    simple_combine = []
+    for combine in agg.combine:
+        if isinstance(combine, str):
+            if combine in ["nanfirst", "nanlast"]:
+                simple_combine.append(getattr(xrutils, combine))
+            else:
+                simple_combine.append(getattr(np, combine))
+        else:
+            simple_combine.append(combine)
+
+    agg.simple_combine = tuple(simple_combine)
 
     return agg

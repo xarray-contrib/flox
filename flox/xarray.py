@@ -259,8 +259,6 @@ def xarray_reduce(
             more_drop.update(idx_other_names)
     maybe_drop.update(more_drop)
 
-    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
-
     if dim is Ellipsis:
         if nby > 1:
             raise NotImplementedError("Multiple by are not allowed when dim is Ellipsis.")
@@ -277,6 +275,9 @@ def xarray_reduce(
     # broadcast to make sure grouper dimensions are present in the array.
     exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim_tuple)
 
+    if any(d not in grouper_dims and d not in obj.dims for d in dim_tuple):
+        raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
+
     try:
         xr.align(ds, *by_da, join="exact", copy=False)
     except ValueError as e:
@@ -284,10 +285,13 @@ def xarray_reduce(
             "Object being grouped must be exactly aligned with every array in `by`."
         ) from e
 
-    ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
-
-    if any(d not in grouper_dims and d not in obj.dims for d in dim_tuple):
-        raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
+    needs_broadcast = any(
+        not set(grouper_dims).issubset(set(variable.dims)) for variable in ds.data_vars.values()
+    )
+    if needs_broadcast:
+        ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
+    else:
+        ds_broad = ds
 
     dims_not_in_groupers = tuple(d for d in dim_tuple if d not in grouper_dims)
     if dims_not_in_groupers == tuple(dim_tuple) and not any(isbins):
@@ -306,6 +310,8 @@ def xarray_reduce(
             return obj._from_temp_dataset(result)
         else:
             return result
+
+    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
 
     axis = tuple(range(-len(dim_tuple), 0))
 
@@ -436,7 +442,7 @@ def xarray_reduce(
 
     # restore non-dim coord variables without the core dimension
     # TODO: shouldn't apply_ufunc handle this?
-    for var in set(ds_broad.variables) - set(ds_broad._indexes) - set(ds_broad.dims):
+    for var in set(ds_broad._coord_names) - set(ds_broad._indexes) - set(ds_broad.dims):
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
