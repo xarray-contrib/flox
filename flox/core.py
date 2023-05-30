@@ -99,7 +99,7 @@ def _is_first_last_reduction(func: T_Agg) -> bool:
     return isinstance(func, str) and func in ["nanfirst", "nanlast", "first", "last"]
 
 
-def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
+def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndexTuple:
     if is_duck_dask_array(by):
         raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
     flatby = by.reshape(-1)
@@ -1589,7 +1589,7 @@ def _assert_by_is_aligned(shape: tuple[int, ...], by: T_Bys):
 def _convert_expected_groups_to_index(
     expected_groups: T_ExpectTuple, isbin: Sequence[bool], sort: bool
 ) -> T_ExpectIndexTuple:
-    out: list[pd.Index | None] = []
+    out: list[T_ExpectIndexOpt] = []
     for ex, isbin_ in zip(expected_groups, isbin):
         if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin_):
             if sort:
