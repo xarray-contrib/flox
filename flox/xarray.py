@@ -449,7 +449,7 @@ def xarray_reduce(
     for name, expect__, by_ in zip(group_names, expected_groups_valid_list, by_da):
         # Can't remove this till xarray handles IntervalIndex
         if isinstance(expect__, pd.IntervalIndex):
-            expect__ = expect__.to_numpy()
+            expect__ = expect__.to_tuples()
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
