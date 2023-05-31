@@ -94,6 +94,10 @@ def _is_minmax_reduction(func: T_Agg) -> bool:
     )
 
 
+def _is_first_last_reduction(func: T_Agg) -> bool:
+    return isinstance(func, str) and func in ["nanfirst", "nanlast", "first", "last"]
+
+
 def _get_expected_groups(by: T_By, sort: bool) -> pd.Index:
     if is_duck_dask_array(by):
         raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
@@ -954,13 +958,13 @@ def _simple_combine(
     results: IntermediateDict = {"groups": unique_groups}
     results["intermediates"] = []
     axis_ = axis[:-1] + (DUMMY_AXIS,)
-    for idx, combine in enumerate(agg.combine):
+    for idx, combine in enumerate(agg.simple_combine):
         array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis_)
         assert array.ndim >= 2
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
-            assert isinstance(combine, str)
-            result = getattr(np, combine)(array, axis=axis_, keepdims=True)
+            assert callable(combine)
+            result = combine(array, axis=axis_, keepdims=True)
         if is_aggregate:
             # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
             result = result.squeeze(axis=DUMMY_AXIS)
@@ -1319,8 +1323,11 @@ def dask_groupby_agg(
         by = dask.array.from_array(by, chunks=chunks)
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
-    # preprocess the array: for argreductions, this zips the index together with the array block
-    if agg.preprocess:
+    # preprocess the array:
+    #   - for argreductions, this zips the index together with the array block
+    #   - not necessary for blockwise with argreductions
+    #   - if this is needed later, we can fix this then
+    if agg.preprocess and method != "blockwise":
         array = agg.preprocess(array, axis=axis)
 
     # 1. We first apply the groupby-reduction blockwise to generate "intermediates"
@@ -1534,10 +1541,16 @@ def _validate_reindex(
             raise ValueError(
                 "reindex=True is not a valid choice for method='blockwise' or method='cohorts'."
             )
+        if func in ["first", "last"]:
+            raise ValueError("reindex must be None or False when func is 'first' or 'last.")
 
     if reindex is None:
         if all_numpy:
             return True
+
+        if func in ["first", "last"]:
+            # have to do the grouped_combine since there's no good fill_value
+            reindex = False
 
         if method == "blockwise" or _is_arg_reduction(func):
             reindex = False
@@ -1552,6 +1565,7 @@ def _validate_reindex(
                 reindex = True
 
     assert isinstance(reindex, bool)
+
     return reindex
 
 
@@ -1875,11 +1889,20 @@ def groupby_reduce(
         axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
     nax = len(axis_)
 
-    if method in ["blockwise", "cohorts"] and nax != by_.ndim:
-        raise NotImplementedError(
-            "Must reduce along all dimensions of `by` when method != 'map-reduce'."
-            f"Received method={method!r}"
-        )
+    has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
+
+    if _is_first_last_reduction(func):
+        if has_dask and nax != 1:
+            raise ValueError(
+                "For dask arrays: first, last, nanfirst, nanlast reductions are "
+                "only supported along a single axis. Please reshape appropriately."
+            )
+
+        elif nax not in [1, by_.ndim]:
+            raise ValueError(
+                "first, last, nanfirst, nanlast reductions are only supported "
+                "along a single axis or when reducing across all dimensions of `by`."
+            )
 
     # TODO: make sure expected_groups is unique
     if nax == 1 and by_.ndim > 1 and expected_groups is None:
@@ -1903,8 +1926,6 @@ def groupby_reduce(
         array = _move_reduce_dims_to_end(array, axis_)
         axis_ = tuple(array.ndim + np.arange(-nax, 0))
         nax = len(axis_)
-
-    has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
 
     # When axis is a subset of possible values; then npg will
     # apply it to groups that don't exist along a particular axis (for e.g.)
@@ -1949,6 +1970,12 @@ def groupby_reduce(
                 f"\n\n Received: {func}"
             )
 
+        if method in ["blockwise", "cohorts"] and nax != by_.ndim:
+            raise NotImplementedError(
+                "Must reduce along all dimensions of `by` when method != 'map-reduce'."
+                f"Received method={method!r}"
+            )
+
         # TODO: just do this in dask_groupby_agg
         # we always need some fill_value (see above) so choose the default if needed
         if kwargs["fill_value"] is None:
@@ -1986,6 +2013,6 @@ def groupby_reduce(
         ).reshape(result.shape[:-1] + grp_shape)
         groups = final_groups
 
-    if _is_minmax_reduction(func) and is_bool_array:
+    if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
         result = result.astype(bool)
     return (result, *groups)  # type: ignore[return-value]  # Unpack not in mypy yet
