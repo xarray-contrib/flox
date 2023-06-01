@@ -99,7 +99,7 @@ def _is_first_last_reduction(func: T_Agg) -> bool:
     return isinstance(func, str) and func in ["nanfirst", "nanlast", "first", "last"]
 
 
-def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndexTuple:
+def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndexOpt:
     if is_duck_dask_array(by):
         raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
     flatby = by.reshape(-1)
@@ -1286,7 +1286,7 @@ def dask_groupby_agg(
     array: DaskArray,
     by: T_By,
     agg: Aggregation,
-    expected_groups: pd.Index | None,
+    expected_groups: T_ExpectIndexOpt,
     axis: T_Axes = (),
     fill_value: Any = None,
     method: T_Method = "map-reduce",
@@ -1572,7 +1572,7 @@ def _validate_reindex(
     return reindex
 
 
-def _assert_by_is_aligned(shape: tuple[int, ...], by: T_Bys):
+def _assert_by_is_aligned(shape: tuple[int, ...], by: T_Bys) -> None:
     assert all(b.ndim == by[0].ndim for b in by[1:])
     for idx, b in enumerate(by):
         if not all(j in [i, 1] for i, j in zip(shape[-b.ndim :], b.shape)):
