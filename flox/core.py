@@ -1620,9 +1620,11 @@ def _convert_expected_groups_to_index(
         if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin_):
             # if isinstance(ex, pd.Index) and (isinstance(ex, pd.IntervalIndex) or not isbin_):
             reveal_type(ex)
+            e = ex
+            reveal_type(e)
             if sort:
-                ex = ex.sort_values()
-            out.append(ex)
+                e = e.sort_values()
+            out.append(e)
         elif ex is not None:
             if isbin_:
                 out.append(pd.IntervalIndex.from_breaks(ex))
