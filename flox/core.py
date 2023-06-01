@@ -565,7 +565,7 @@ def factorize_(
                     idx = sorter[(idx,)]
                 idx[mask] = -1
             else:
-                idx, groups = pd.factorize(flat, sort=sort)
+                idx, groups = pd.factorize(flat, sort=sort)  # type: ignore [arg-type] # pandas issue?
 
             found_groups.append(np.array(groups))
         factorized.append(idx.reshape(groupvar.shape))
