@@ -230,7 +230,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
         return tuple(a)
 
     # chunks_cohorts = tlz.groupby(lambda x: (label_chunks.get(x),), label_chunks.keys())
-    chunks_cohorts = tlz.groupby(test), label_chunks.keys())
+    chunks_cohorts = tlz.groupby(test, label_chunks.keys())
 
     if merge:
         # First sort by number of chunks occupied by cohort
