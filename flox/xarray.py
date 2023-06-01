@@ -628,5 +628,5 @@ def resample_reduce(
         .rename({"__resample_dim__": dim})
         .transpose(dim, ...)
     )
-    result[dim] = resampler._unique_coord.data
+    result[dim] = resampler._unique_coord.data  # type: ignore [attr-defined] # TODO: check if real
     return result
