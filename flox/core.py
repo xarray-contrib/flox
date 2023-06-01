@@ -1618,7 +1618,6 @@ def _convert_expected_groups_to_index(
     for ex, isbin_ in zip(expected_groups, isbin):
         # if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin_):
         if isinstance(ex, pd.Index) and (isinstance(ex, pd.IntervalIndex) or not isbin_):
-
             if sort:
                 ex = ex.sort_values()
             out.append(ex)
