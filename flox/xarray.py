@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from xarray.core.resample import Resample
     from xarray.core.types import T_DataArray, T_Dataset
 
-    from .core import T_ExpectOpt, T_ExpectedGroupsOpt, T_ExpectIndex
+    from .core import T_ExpectedGroupsOpt, T_ExpectIndex, T_ExpectOpt
 
     Dims = Union[str, Iterable[Hashable], None]
 
