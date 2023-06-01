@@ -1690,6 +1690,16 @@ def _factorize_multiple(
     return (group_idx,), found_groups, grp_shape
 
 
+@overload
+def _validate_expected_groups(nby: int, expected_groups: None) -> tuple[None, ...]:
+    ...
+
+
+@overload
+def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroups) -> T_ExpectTuple:
+    ...
+
+
 def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectOptTuple:
     if expected_groups is None:
         return (None,) * nby
