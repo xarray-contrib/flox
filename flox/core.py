@@ -226,8 +226,8 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
 
     # These invert the label_chunks mapping so we know which labels occur together.
     def invert(x) -> tuple[np.ndarray, ...]:
-        arr = label_chunks.get(x)  # type: ignore # pandas issue?
-        return tuple(arr)
+        arr = label_chunks.get(x)
+        return tuple(arr)  # type: ignore [arg-type] # pandas issue?
 
     # chunks_cohorts = tlz.groupby(lambda x: (label_chunks.get(x),), label_chunks.keys())
     chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
