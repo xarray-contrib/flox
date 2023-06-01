@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from xarray.core.resample import Resample
     from xarray.core.types import T_DataArray, T_Dataset
 
-    from .core import T_Expect, T_ExpectedGroupsOpt, T_ExpectIndex
+    from .core import T_ExpectOpt, T_ExpectedGroupsOpt, T_ExpectIndex
 
     Dims = Union[str, Iterable[Hashable], None]
 
@@ -331,7 +331,7 @@ def xarray_reduce(
                 "flox does not support binning into an integer number of bins yet."
             )
 
-        expect_: T_Expect
+        expect_: T_ExpectOpt
         if expect is None:
             if isbin_:
                 raise ValueError(

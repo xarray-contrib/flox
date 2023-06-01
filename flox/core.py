@@ -52,11 +52,14 @@ if TYPE_CHECKING:
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
     T_ExpectIndex = Union[pd.Index]
+    T_ExpectIndexTuple = tuple[T_ExpectIndex, ...]
     T_ExpectIndexOpt = Union[T_ExpectIndex, None]
-    T_Expect = Union[Sequence, np.ndarray, T_ExpectIndexOpt]
-    T_ExpectIndexTuple = tuple[T_ExpectIndexOpt, ...]
+    T_ExpectIndexOptTuple = tuple[T_ExpectIndexOpt, ...]
+    T_Expect = Union[Sequence, np.ndarray, T_ExpectIndex]
     T_ExpectTuple = tuple[T_Expect, ...]
-    T_ExpectedGroups = Union[T_Expect, T_ExpectTuple]
+    T_ExpectOpt = Union[Sequence, np.ndarray, T_ExpectIndexOpt]
+    T_ExpectOptTuple = tuple[T_ExpectOpt, ...]
+    T_ExpectedGroups = Union[T_Expect, T_ExpectOptTuple]
     T_ExpectedGroupsOpt = Union[T_ExpectedGroups, None]
     T_Func = Union[str, Callable]
     T_Funcs = Union[T_Func, Sequence[T_Func]]
@@ -99,7 +102,7 @@ def _is_first_last_reduction(func: T_Agg) -> bool:
     return isinstance(func, str) and func in ["nanfirst", "nanlast", "first", "last"]
 
 
-def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndexOpt:
+def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
     if is_duck_dask_array(by):
         raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
     flatby = by.reshape(-1)
@@ -461,7 +464,7 @@ def factorize_(
     axes: T_Axes,
     *,
     fastpath: Literal[True],
-    expected_groups: T_ExpectIndexTuple | None = None,
+    expected_groups: T_ExpectIndexOptTuple | None = None,
     reindex: bool = False,
     sort: bool = True,
 ) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, None]:
@@ -473,7 +476,7 @@ def factorize_(
     by: T_Bys,
     axes: T_Axes,
     *,
-    expected_groups: T_ExpectIndexTuple | None = None,
+    expected_groups: T_ExpectIndexOptTuple | None = None,
     reindex: bool = False,
     sort: bool = True,
     fastpath: Literal[False] = False,
@@ -486,7 +489,7 @@ def factorize_(
     by: T_Bys,
     axes: T_Axes,
     *,
-    expected_groups: T_ExpectIndexTuple | None = None,
+    expected_groups: T_ExpectIndexOptTuple | None = None,
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
@@ -498,7 +501,7 @@ def factorize_(
     by: T_Bys,
     axes: T_Axes,
     *,
-    expected_groups: T_ExpectIndexTuple | None = None,
+    expected_groups: T_ExpectIndexOptTuple | None = None,
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
@@ -1589,9 +1592,23 @@ def _assert_by_is_aligned(shape: tuple[int, ...], by: T_Bys) -> None:
             )
 
 
+@overload
+def _convert_expected_groups_to_index(
+    expected_groups: tuple[None, ...], isbin: Sequence[bool], sort: bool
+) -> tuple[None, ...]:
+    ...
+
+
+@overload
 def _convert_expected_groups_to_index(
     expected_groups: T_ExpectTuple, isbin: Sequence[bool], sort: bool
 ) -> T_ExpectIndexTuple:
+    ...
+
+
+def _convert_expected_groups_to_index(
+    expected_groups: T_ExpectOptTuple, isbin: Sequence[bool], sort: bool
+) -> T_ExpectIndexOptTuple:
     out: list[T_ExpectIndexOpt] = []
     for ex, isbin_ in zip(expected_groups, isbin):
         if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin_):
@@ -1618,7 +1635,7 @@ def _lazy_factorize_wrapper(*by: T_By, **kwargs) -> np.ndarray:
 
 def _factorize_multiple(
     by: T_Bys,
-    expected_groups: T_ExpectIndexTuple,
+    expected_groups: T_ExpectIndexOptTuple,
     any_by_dask: bool,
     reindex: bool,
     sort: bool = True,
@@ -1673,7 +1690,7 @@ def _factorize_multiple(
     return (group_idx,), found_groups, grp_shape
 
 
-def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectTuple:
+def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectOptTuple:
     if expected_groups is None:
         return (None,) * nby
 
