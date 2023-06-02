@@ -81,7 +81,7 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 # This dummy axis is inserted using np.expand_dims
 # and then reduced over during the combine stage by
 # _simple_combine.
-DUMMY_AXIS = -2 + 0
+DUMMY_AXIS = -2
 
 
 def _is_arg_reduction(func: T_Agg) -> bool:
