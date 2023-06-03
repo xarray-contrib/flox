@@ -14,7 +14,9 @@ def _prepare_for_flox(group_idx, array):
     if issorted:
         ordered_array = array
     else:
-        perm = group_idx.argsort(kind="stable")
+        kind = "stable" if isinstance(group_idx, np.ndarray) else None
+
+        perm = np.argsort(group_idx, kind=kind)
         group_idx = group_idx[..., perm]
         ordered_array = array[..., perm]
     return group_idx, ordered_array

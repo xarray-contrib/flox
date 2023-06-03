@@ -570,6 +570,8 @@ def factorize_(
                 else:
                     assert sort
                     groups, idx = np.unique(flat, return_inverse=True)
+                    idx[np.isnan(flat)] = -1
+                    groups = groups[~np.isnan(groups)]
 
             found_groups.append(groups)
         factorized.append(idx.reshape(groupvar.shape))
@@ -1261,7 +1263,7 @@ def subset_to_blocks(
     layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
     graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
 
-    return dask.array.Array(graph, name, chunks, meta=array)
+    return dask.array.Array(graph, name, chunks, meta=array._meta)
 
 
 def _extract_unknown_groups(reduced, dtype) -> tuple[DaskArray]:
@@ -1494,6 +1496,7 @@ def dask_groupby_agg(
         reduced,
         inds,
         adjust_chunks=dict(zip(out_inds, output_chunks)),
+        meta=array._meta,
         dtype=agg.dtype["final"],
         key=agg.name,
         name=f"{name}-{token}",
