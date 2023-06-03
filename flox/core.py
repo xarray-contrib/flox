@@ -35,7 +35,7 @@ from .aggregations import (
     generic_aggregate,
 )
 from .cache import memoize
-from .xrutils import is_duck_array, is_duck_dask_array, isnull
+from .xrutils import is_duck_array, is_duck_dask_array, isnull, to_numpy
 
 if TYPE_CHECKING:
     try:
@@ -203,7 +203,9 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     import dask
 
     # To do this, we must have values in memory so casting to numpy should be safe
-    labels = np.asarray(labels)
+    if not is_duck_array(labels):
+        labels = np.asarray(labels)
+    labels = to_numpy(labels)
 
     # Build an array with the shape of labels, but where every element is the "chunk number"
     # 1. First subset the array appropriately
@@ -412,7 +414,7 @@ def reindex_(
         reindexed = np.full(array.shape[:-1] + (len(to),), fill_value, dtype=array.dtype)
         return reindexed
 
-    from_ = pd.Index(from_)
+    from_ = pd.Index(to_numpy(from_))
     # short-circuit for trivial case
     if from_.equals(to):
         return array
@@ -931,7 +933,9 @@ def _find_unique_groups(x_chunk) -> np.ndarray:
     from dask.utils import deepmap
 
     tup = tuple(flatten(deepmap(listify_groups, x_chunk)))
-    unique_groups = _unique(np.asarray(tup, like=tup[0]))
+    # passing like=None raises. Seems like a bug
+    kwargs = dict(like=tup[0]) if is_duck_array(tup[0]) else {}
+    unique_groups = _unique(np.asarray(tup, **kwargs))
     unique_groups = unique_groups[~isnull(unique_groups)]
 
     if len(unique_groups) == 0:
@@ -1003,12 +1007,11 @@ def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axes | None = None) -> np.nd
 
 
 def reindex_intermediates(x: IntermediateDict, agg: Aggregation, unique_groups) -> IntermediateDict:
+    to = pd.Index(to_numpy(unique_groups))
     new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
     newx: IntermediateDict = {"groups": np.broadcast_to(unique_groups, new_shape)}
     newx["intermediates"] = tuple(
-        reindex_(
-            v, from_=np.atleast_1d(x["groups"].squeeze()), to=pd.Index(unique_groups), fill_value=f
-        )
+        reindex_(v, from_=to_numpy(np.atleast_1d(x["groups"].squeeze())), to=to, fill_value=f)
         for v, f in zip(x["intermediates"], agg.fill_value["intermediate"])
     )
     return newx
@@ -2025,7 +2028,7 @@ def groupby_reduce(
         # now we get rid of them by reindexing
         # This also handles bins with no data
         result = reindex_(
-            result, from_=groups[0], to=expected_groups, fill_value=fill_value
+            result, from_=to_numpy(groups[0]), to=expected_groups, fill_value=fill_value
         ).reshape(result.shape[:-1] + grp_shape)
         groups = final_groups
 

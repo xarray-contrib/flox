@@ -316,3 +316,20 @@ def nanlast(values, axis, keepdims=False):
         return np.expand_dims(result, axis=axis)
     else:
         return result
+
+
+try:
+    import cupy as cp
+
+    cp_types = (cp.ndarray,)
+except ImportError:
+    cp_types = ()  # type: ignore
+
+
+def to_numpy(a):
+    a_np = a
+    if is_duck_dask_array(a_np):
+        a_np = a_np.compute()
+    if isinstance(a_np, cp_types):
+        a_np = a_np.get()
+    return a_np
