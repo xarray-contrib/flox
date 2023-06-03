@@ -170,7 +170,10 @@ def _get_optimal_chunks_for_groups(chunks, labels):
 def _unique(a: np.ndarray) -> np.ndarray:
     """Much faster to use pandas unique and sort the results.
     np.unique sorts before uniquifying and is slow."""
-    return np.sort(pd.unique(a.reshape(-1)))
+    if isinstance(a, np.ndarray):
+        return np.sort(pd.unique(a.reshape(-1)))
+    else:
+        return np.unique(a.reshape(-1))
 
 
 @memoize
@@ -927,7 +930,8 @@ def _find_unique_groups(x_chunk) -> np.ndarray:
     from dask.base import flatten
     from dask.utils import deepmap
 
-    unique_groups = _unique(np.asarray(tuple(flatten(deepmap(listify_groups, x_chunk)))))
+    tup = tuple(flatten(deepmap(listify_groups, x_chunk)))
+    unique_groups = _unique(np.asarray(tup, like=tup[0]))
     unique_groups = unique_groups[~isnull(unique_groups)]
 
     if len(unique_groups) == 0:
