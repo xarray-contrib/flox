@@ -807,8 +807,8 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
         [(10,), (10,)],
     ],
 )
-def test_rechunk_for_blockwise(inchunks, expected):
-    labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
+def test_rechunk_for_blockwise(inchunks, expected, array_module):
+    labels = array_module.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
 
 

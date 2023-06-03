@@ -135,36 +135,42 @@ def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
 
 @memoize
 def _get_optimal_chunks_for_groups(chunks, labels):
-    chunkidx = np.cumsum(chunks) - 1
+    chunks_array = np.asarray(chunks, like=labels)
+    chunkidx = np.cumsum(chunks_array) - 1
     # what are the groups at chunk boundaries
     labels_at_chunk_bounds = _unique(labels[chunkidx])
     # what's the last index of all groups
-    last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
+    last_indexes = npg.aggregate_numpy.aggregate(
+        labels, np.arange(len(labels), like=labels), func="last"
+    )
     # what's the last index of groups at the chunk boundaries.
     lastidx = last_indexes[labels_at_chunk_bounds]
 
     if len(chunkidx) == len(lastidx) and (chunkidx == lastidx).all():
         return chunks
 
-    first_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="first")
+    first_indexes = npg.aggregate_numpy.aggregate(
+        labels, np.arange(len(labels), like=labels), func="first"
+    )
     firstidx = first_indexes[labels_at_chunk_bounds]
 
-    newchunkidx = [0]
+    newchunkidx = np.array([0], like=labels)
     for c, f, l in zip(chunkidx, firstidx, lastidx):  # noqa
         Δf = abs(c - f)
         Δl = abs(c - l)
         if c == 0 or newchunkidx[-1] > l:
             continue
         if Δf < Δl and f > newchunkidx[-1]:
-            newchunkidx.append(f)
+            newchunkidx = np.append(newchunkidx, f)
         else:
-            newchunkidx.append(l + 1)
+            newchunkidx = np.append(newchunkidx, l + 1)
     if newchunkidx[-1] != chunkidx[-1] + 1:
-        newchunkidx.append(chunkidx[-1] + 1)
+        newchunkidx = np.append(newchunkidx, chunkidx[-1] + 1)
     newchunks = np.diff(newchunkidx)
 
     assert sum(newchunks) == sum(chunks)
-    return tuple(newchunks)
+    # workaround cupy bug with tuple(array)
+    return tuple(newchunks.tolist())
 
 
 def _unique(a: np.ndarray) -> np.ndarray:
@@ -1316,9 +1322,6 @@ def dask_groupby_agg(
     # I think _tree_reduce expects this
     assert isinstance(axis, Sequence)
     assert all(ax >= 0 for ax in axis)
-
-    if method == "blockwise" and not isinstance(by, np.ndarray):
-        raise NotImplementedError
 
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
