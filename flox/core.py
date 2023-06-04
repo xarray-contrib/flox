@@ -81,7 +81,7 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 # This dummy axis is inserted using np.expand_dims
 # and then reduced over during the combine stage by
 # _simple_combine.
-DUMMY_AXIS = -2 + 0
+DUMMY_AXIS = -2
 
 
 def _is_arg_reduction(func: T_Agg) -> bool:
@@ -229,7 +229,6 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
         arr = label_chunks.get(x)
         return tuple(arr)  # type: ignore [arg-type] # pandas issue?
 
-    # chunks_cohorts = tlz.groupby(lambda x: (label_chunks.get(x),), label_chunks.keys())
     chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
 
     if merge:
