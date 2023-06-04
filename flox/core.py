@@ -1623,7 +1623,7 @@ def _convert_expected_groups_to_index(
             out.append(e)
         elif ex is not None:
             e_ = ex
-            if isbin_:
+            if isbin_ and not isinstance(e_, pd.Index):  # test
                 out.append(pd.IntervalIndex.from_breaks(e_))
             else:
                 if sort:
