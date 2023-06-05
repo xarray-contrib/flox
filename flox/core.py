@@ -1621,17 +1621,17 @@ def _convert_expected_groups_to_index(
                 e = e.sort_values()
             out.append(e)
         elif ex is not None:
-            if not isinstance(ex, (np.ndarray, pd.Index)):
-                e_ = pd.Index(ex)
-            else:
+            if isinstance(ex, pd.Index):
                 e_ = ex
+            else:
+                e_ = pd.Index(ex)
 
             if isbin_:
                 out.append(pd.IntervalIndex.from_breaks(e_))
             else:
                 if sort:
                     e_ = np.sort(e_)
-                out.append(pd.Index(e_))
+                out.append(e_)
         else:
             assert ex is None
             out.append(None)
