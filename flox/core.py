@@ -1624,7 +1624,7 @@ def _convert_expected_groups_to_index(
             e_ = ex
             if isbin_:  # test
                 reveal_type(e_)
-                if isinstance(e_, pd.Index):
+                if isinstance(e_, (np.ndarray, pd.Index)):
                     e__ = e_
                     reveal_type(e__)
                     out.append(pd.IntervalIndex.from_breaks(e__))
