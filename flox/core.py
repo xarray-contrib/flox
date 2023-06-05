@@ -1622,7 +1622,7 @@ def _convert_expected_groups_to_index(
             out.append(e)
         elif ex is not None:
             if not isinstance(ex, (np.ndarray, pd.Index)):
-                e_: np.ndarray | pd.Index = pd.Index(ex)
+                e_ = pd.Index(ex)
             else:
                 e_ = ex
 
