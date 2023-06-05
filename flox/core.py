@@ -1623,6 +1623,7 @@ def _convert_expected_groups_to_index(
         elif ex is not None:
             e_ = ex
             if isbin_:  # test
+                reveal_type(e_)
                 if isinstance(e_, pd.Index):
                     e__ = e_
                     reveal_type(e__)
