@@ -6,7 +6,7 @@ import pytest
 xr = pytest.importorskip("xarray")
 # isort: on
 
-from flox.xarray import rechunk_for_blockwise, resample_reduce, xarray_reduce
+from flox.xarray import rechunk_for_blockwise, xarray_reduce
 
 from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
@@ -245,48 +245,6 @@ def test_xarray_reduce_errors():
             xarray_reduce(da, by.chunk(), func="mean")
 
 
-@pytest.mark.parametrize("isdask", [True, False])
-@pytest.mark.parametrize("dataarray", [True, False])
-@pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
-def test_xarray_resample(chunklen, isdask, dataarray, engine):
-    if isdask:
-        if not has_dask:
-            pytest.skip()
-        ds = xr.tutorial.open_dataset("air_temperature", chunks={"time": chunklen})
-    else:
-        ds = xr.tutorial.open_dataset("air_temperature")
-
-    if dataarray:
-        ds = ds.air
-
-    resampler = ds.resample(time="M")
-    with pytest.warns(DeprecationWarning):
-        actual = resample_reduce(resampler, "mean", engine=engine)
-    expected = resampler.mean()
-    xr.testing.assert_allclose(actual, expected)
-
-    with xr.set_options(use_flox=True):
-        actual = resampler.mean()
-    xr.testing.assert_allclose(actual, expected)
-
-
-@requires_dask
-def test_xarray_resample_dataset_multiple_arrays(engine):
-    # regression test for #35
-    times = pd.date_range("2000", periods=5)
-    foo = xr.DataArray(range(5), dims=["time"], coords=[times], name="foo")
-    bar = xr.DataArray(range(1, 6), dims=["time"], coords=[times], name="bar")
-    ds = xr.merge([foo, bar]).chunk({"time": 4})
-
-    resampler = ds.resample(time="4D")
-    # The separate computes are necessary here to force xarray
-    # to compute all variables in result at the same time.
-    expected = resampler.mean().compute()
-    with pytest.warns(DeprecationWarning):
-        result = resample_reduce(resampler, "mean", engine=engine).compute()
-    xr.testing.assert_allclose(expected, result)
-
-
 @requires_dask
 @pytest.mark.parametrize(
     "inchunks, expected",
@@ -437,20 +395,6 @@ def test_cache():
 
     xarray_reduce(ds, "labels", func="mean", method="blockwise")
     assert len(cache.data) == 2
-
-
-@pytest.mark.parametrize("use_cftime", [True, False])
-@pytest.mark.parametrize("func", ["count", "mean"])
-def test_datetime_array_reduce(use_cftime, func, engine):
-    time = xr.DataArray(
-        xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
-        dims=("time",),
-        name="time",
-    )
-    expected = getattr(time.resample(time="YS"), func)()
-    with pytest.warns(DeprecationWarning):
-        actual = resample_reduce(time.resample(time="YS"), func=func, engine=engine)
-    assert_equal(expected, actual)
 
 
 @requires_dask

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Any, Hashable, Iterable, Sequence, Union
 
 import numpy as np
@@ -21,7 +20,6 @@ from .core import rechunk_for_cohorts as rechunk_array_for_cohorts
 from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
-    from xarray.core.resample import Resample
     from xarray.core.types import T_DataArray, T_Dataset
 
     Dims = Union[str, Iterable[Hashable], None]
@@ -450,7 +448,11 @@ def xarray_reduce(
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
         # an object array of tuples
-        if name in ds_broad.indexes and isinstance(ds_broad.indexes[name], pd.MultiIndex):
+        if (
+            name in ds_broad.indexes
+            and isinstance(ds_broad.indexes[name], pd.MultiIndex)
+            and not isinstance(expect, pd.RangeIndex)
+        ):
             levelnames = ds_broad.indexes[name].names
             expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
             actual[name] = expect
@@ -582,43 +584,3 @@ def _rechunk(func, obj, dim, labels, **kwargs):
             )
 
     return obj
-
-
-def resample_reduce(
-    resampler: Resample,
-    func: str | Aggregation,
-    keep_attrs: bool = True,
-    **kwargs,
-):
-    warnings.warn(
-        "flox.xarray.resample_reduce is now deprecated. Please use Xarray's resample method directly.",
-        DeprecationWarning,
-    )
-
-    obj = resampler._obj
-    dim = resampler._group_dim
-
-    # this creates a label DataArray since resample doesn't do that somehow
-    tostack = []
-    for idx, slicer in enumerate(resampler._group_indices):
-        if slicer.stop is None:
-            stop = resampler._obj.sizes[dim]
-        else:
-            stop = slicer.stop
-        tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
-    by = xr.DataArray(np.hstack(tostack), dims=(dim,), name="__resample_dim__")
-
-    result = (
-        xarray_reduce(
-            obj,
-            by,
-            func=func,
-            method="blockwise",
-            keep_attrs=keep_attrs,
-            **kwargs,
-        )
-        .rename({"__resample_dim__": dim})
-        .transpose(dim, ...)
-    )
-    result[dim] = resampler._unique_coord.data
-    return result
