@@ -329,17 +329,17 @@ def xarray_reduce(
                 "flox does not support binning into an integer number of bins yet."
             )
 
-        expect_: T_ExpectOpt
+        expect1: T_ExpectOpt
         if expect is None:
             if isbin_:
                 raise ValueError(
                     f"Please provided bin edges for group variable {idx} "
                     f"named {group_name} in expected_groups."
                 )
-            expect_ = _get_expected_groups(b_.data, sort=sort)
+            expect1 = _get_expected_groups(b_.data, sort=sort)
         else:
-            expect_ = expect
-        expect_index = _convert_expected_groups_to_index((expect_,), (isbin_,), sort=sort)[0]
+            expect1 = expect
+        expect_index = _convert_expected_groups_to_index((expect1,), (isbin_,), sort=sort)[0]
 
         # The if-check is for type hinting mainly, it narrows down the return
         # type of _convert_expected_groups_to_index to pure pd.Index:
@@ -444,11 +444,15 @@ def xarray_reduce(
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
-    for name, expect__, by_ in zip(group_names, expected_groups_valid_list, by_da):
-        # Can't remove this till xarray handles IntervalIndex
-        if isinstance(expect__, pd.IntervalIndex):
-            # expect__ = expect__.to_tuples()
-            expect__ = expect__.to_numpy()
+    expect3: T_ExpectIndex | np.ndarray
+    for name, expect2, by_ in zip(group_names, expected_groups_valid_list, by_da):
+        # Can't remove this until xarray handles IntervalIndex:
+        if isinstance(expect2, pd.IntervalIndex):
+            # TODO: Only place where expect3 is an ndarray, remove the type if xarray
+            # starts supporting IntervalIndex.
+            expect3 = expect2.to_numpy()
+        else:
+            expect3 = expect2
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
@@ -456,15 +460,15 @@ def xarray_reduce(
         if (
             name in ds_broad.indexes
             and isinstance(ds_broad.indexes[name], pd.MultiIndex)
-            and not isinstance(expect, pd.RangeIndex)
+            and not isinstance(expect3, pd.RangeIndex)
         ):
             levelnames = ds_broad.indexes[name].names
-            expect__ = pd.MultiIndex.from_tuples(expect__.values, names=levelnames)
-            actual[name] = expect__
+            expect3 = pd.MultiIndex.from_tuples(expect3.values, names=levelnames)
+            actual[name] = expect3
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)
         else:
-            actual[name] = expect__
+            actual[name] = expect3
         if keep_attrs:
             actual[name].attrs = by_.attrs
 
