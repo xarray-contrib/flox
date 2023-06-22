@@ -31,6 +31,7 @@ from . import (
     has_dask,
     raise_if_dask_computes,
     requires_dask,
+    requires_pint,
 )
 
 labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
@@ -1420,6 +1421,45 @@ def test_negative_index_factorize_race_condition():
         for f in func
     ]
     [dask.compute(out, scheduler="threads") for _ in range(5)]
+
+
+@requires_pint
+@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("chunk", [True, False])
+def test_pint(chunk, func, engine):
+    import pint
+
+    if func in ["prod", "nanprod"]:
+        pytest.skip()
+
+    if chunk:
+        d = dask.array.array([1, 2, 3])
+    else:
+        d = np.array([1, 2, 3])
+    q = pint.Quantity(d, units="m")
+
+    actual, _ = groupby_reduce(q, [0, 0, 1], func=func)
+    expected, _ = groupby_reduce(q.magnitude, [0, 0, 1], func=func)
+
+    units = None if func in ["count", "all", "any"] or "arg" in func else getattr(np, func)(q).units
+    if units is not None:
+        expected = pint.Quantity(expected, units=units)
+    assert_equal(expected, actual)
+
+
+@requires_pint
+@pytest.mark.parametrize("chunk", [True, False])
+def test_pint_prod_error(chunk):
+    import pint
+
+    if chunk:
+        d = dask.array.array([1, 2, 3])
+    else:
+        d = np.array([1, 2, 3])
+    q = pint.Quantity(d, units="m")
+
+    with pytest.raises(ValueError):
+        groupby_reduce(q, [0, 0, 1], func="prod")
 
 
 @pytest.mark.parametrize("sort", [True, False])

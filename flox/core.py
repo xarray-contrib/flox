@@ -35,6 +35,7 @@ from .aggregations import (
     generic_aggregate,
 )
 from .cache import memoize
+from .pint_compat import _reattach_units, _strip_units
 from .xrutils import is_duck_array, is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
@@ -1825,6 +1826,8 @@ def groupby_reduce(
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
     any_by_dask = any(by_is_dask)
 
+    array, bys, units = _strip_units(array, *bys)
+
     if method in ["split-reduce", "cohorts"] and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
 
@@ -1949,7 +1952,9 @@ def groupby_reduce(
         fill_value = np.nan
 
     kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
-    agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count, finalize_kwargs)
+    agg = _initialize_aggregation(
+        func, dtype, array.dtype, fill_value, units[0], min_count, finalize_kwargs
+    )
 
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
@@ -2015,4 +2020,7 @@ def groupby_reduce(
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
         result = result.astype(bool)
+
+    units[0] = agg.units
+    result, *groups = _reattach_units(result, *groups, units=units)
     return (result, *groups)  # type: ignore[return-value]  # Unpack not in mypy yet
