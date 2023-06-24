@@ -1620,11 +1620,10 @@ def _convert_expected_groups_to_index(
             reveal_type(ex)
             if sort:
                 reveal_type(ex)
-                ex = ex.sort_values()
+                out.append(ex.sort_values())
+            else:
                 reveal_type(ex)
-            reveal_type(ex)
-
-            out.append(ex)
+                out.append(ex)
 
         elif ex is not None:
             if isbin_:
