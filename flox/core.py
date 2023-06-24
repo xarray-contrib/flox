@@ -35,7 +35,8 @@ from .aggregations import (
     generic_aggregate,
 )
 from .cache import memoize
-from .xrutils import is_duck_array, is_duck_dask_array, isnull
+from .duck_array_ops import reshape
+from .xrutils import is_duck_array, is_duck_dask_array, is_chunked_array, isnull
 
 if TYPE_CHECKING:
     try:
@@ -764,7 +765,7 @@ def chunk_reduce(
             group_idx = np.broadcast_to(group_idx, array.shape[-by.ndim :])
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by.ndim] + (math.prod(array.shape[-by.ndim :]),)
-    array = array.reshape(newshape)
+    array = reshape(array, newshape)
     group_idx = group_idx.reshape(-1)
 
     assert group_idx.ndim == 1
@@ -1295,6 +1296,10 @@ def dask_groupby_agg(
     import dask.array
     from dask.array.core import slices_from_chunks
 
+    from xarray.core.parallelcompat import get_chunked_array_type
+
+    chunkmanager = get_chunked_array_type(array)
+
     # I think _tree_reduce expects this
     assert isinstance(axis, Sequence)
     assert all(ax >= 0 for ax in axis)
@@ -1314,14 +1319,18 @@ def dask_groupby_agg(
     # Unifying chunks is necessary for argreductions.
     # We need to rechunk before zipping up with the index
     # let's always do it anyway
-    if not is_duck_dask_array(by):
+    if not is_chunked_array(by):
         # chunk numpy arrays like the input array
         # This removes an extra rechunk-merge layer that would be
         # added otherwise
         chunks = tuple(array.chunks[ax] if by.shape[ax] != 1 else (1,) for ax in range(-by.ndim, 0))
 
-        by = dask.array.from_array(by, chunks=chunks)
-    _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
+        by = chunkmanager.from_array(
+            by,
+            chunks=chunks,
+            spec=array.spec,  # cubed needs all arguments to blockwise to have same Spec
+        )
+    _, (array, by) = chunkmanager.unify_chunks(array, inds, by, inds[-by.ndim :])
 
     # preprocess the array:
     #   - for argreductions, this zips the index together with the array block
@@ -1363,7 +1372,7 @@ def dask_groupby_agg(
             blockwise_method = tlz.compose(_expand_dims, blockwise_method)
 
     # apply reduction on chunk
-    intermediate = dask.array.blockwise(
+    intermediate = chunkmanager.blockwise(
         partial(
             blockwise_method,
             axis=axis,
@@ -1381,9 +1390,9 @@ def dask_groupby_agg(
         inds[-by.ndim :],
         concatenate=False,
         dtype=array.dtype,  # this is purely for show
-        meta=array._meta,
+        #meta=array._meta,
         align_arrays=False,
-        name=f"{name}-chunk-{token}",
+        #name=f"{name}-chunk-{token}",
     )
 
     group_chunks: tuple[tuple[int | float, ...]]
@@ -1397,9 +1406,12 @@ def dask_groupby_agg(
             combine = partial(_grouped_combine, engine=engine, sort=sort)
             combine_name = "grouped-combine"
 
+        #raise NotImplementedError("reached _tree_reduce call")
+
         tree_reduce = partial(
-            dask.array.reductions._tree_reduce,
-            name=f"{name}-reduce-{method}-{combine_name}",
+            chunkmanager.reduction,
+            func=lambda x: x,
+            #name=f"{name}-reduce-{method}-{combine_name}",
             dtype=array.dtype,
             axis=axis,
             keepdims=True,
@@ -1479,7 +1491,7 @@ def dask_groupby_agg(
         reduced = _collapse_blocks_along_axes(reduced, axis, group_chunks)
 
     # Can't use map_blocks because it forces concatenate=True along drop_axes,
-    result = dask.array.blockwise(
+    result = chunkmanager.blockwise(
         _extract_result,
         out_inds,
         reduced,
@@ -1889,7 +1901,7 @@ def groupby_reduce(
         axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
     nax = len(axis_)
 
-    has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
+    has_dask = is_chunked_array(array) or is_duck_dask_array(by_)
 
     if _is_first_last_reduction(func):
         if has_dask and nax != 1:
