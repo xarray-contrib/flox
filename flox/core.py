@@ -1406,8 +1406,6 @@ def dask_groupby_agg(
             combine = partial(_grouped_combine, engine=engine, sort=sort)
             combine_name = "grouped-combine"
 
-        #raise NotImplementedError("reached _tree_reduce call")
-
         tree_reduce = partial(
             chunkmanager.reduction,
             func=lambda x: x,
