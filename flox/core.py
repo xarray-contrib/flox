@@ -1615,10 +1615,14 @@ def _convert_expected_groups_to_index(
 ) -> T_ExpectIndexOptTuple:
     out: list[T_ExpectIndexOpt] = []
     for ex, isbin_ in zip(expected_groups, isbin):
+        reveal_type(ex)
         if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin_):
+            reveal_type(ex)
             e = ex
+            reveal_type(e)
             if sort:
                 e = e.sort_values()
+            reveal_type(e)
             out.append(e)
         elif ex is not None:
             if isbin_:
