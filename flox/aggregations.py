@@ -11,6 +11,7 @@ from numpy.typing import DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
+from .duck_array_ops import asarray
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
@@ -64,7 +65,7 @@ def generic_aggregate(
             f"Expected engine to be one of ['flox', 'numpy', 'numba']. Received {engine} instead."
         )
 
-    group_idx = np.asarray(group_idx, like=array)
+    group_idx = asarray(group_idx, like=array)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
