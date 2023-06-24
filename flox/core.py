@@ -36,7 +36,7 @@ from .aggregations import (
 )
 from .cache import memoize
 from .duck_array_ops import reshape
-from .xrutils import is_duck_array, is_duck_dask_array, is_chunked_array, isnull
+from .xrutils import is_chunked_array, is_duck_array, is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
     try:
@@ -1295,7 +1295,6 @@ def dask_groupby_agg(
 ) -> tuple[DaskArray, tuple[np.ndarray | DaskArray]]:
     import dask.array
     from dask.array.core import slices_from_chunks
-
     from xarray.core.parallelcompat import get_chunked_array_type
 
     chunkmanager = get_chunked_array_type(array)
@@ -1390,9 +1389,9 @@ def dask_groupby_agg(
         inds[-by.ndim :],
         concatenate=False,
         dtype=array.dtype,  # this is purely for show
-        #meta=array._meta,
+        # meta=array._meta,
         align_arrays=False,
-        #name=f"{name}-chunk-{token}",
+        # name=f"{name}-chunk-{token}",
     )
 
     group_chunks: tuple[tuple[int | float, ...]]
@@ -1401,15 +1400,13 @@ def dask_groupby_agg(
         combine: Callable[..., IntermediateDict]
         if do_simple_combine:
             combine = partial(_simple_combine, reindex=reindex)
-            combine_name = "simple-combine"
         else:
             combine = partial(_grouped_combine, engine=engine, sort=sort)
-            combine_name = "grouped-combine"
 
         tree_reduce = partial(
             chunkmanager.reduction,
             func=lambda x: x,
-            #name=f"{name}-reduce-{method}-{combine_name}",
+            # name=f"{name}-reduce-{method}-{combine_name}",
             dtype=array.dtype,
             axis=axis,
             keepdims=True,
