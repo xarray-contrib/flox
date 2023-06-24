@@ -1618,12 +1618,14 @@ def _convert_expected_groups_to_index(
         reveal_type(ex)
         if isinstance(ex, pd.IntervalIndex) or (isinstance(ex, pd.Index) and not isbin_):
             reveal_type(ex)
-            e = ex
-            reveal_type(e)
             if sort:
-                e = e.sort_values()
-            reveal_type(e)
-            out.append(e)
+                reveal_type(ex)
+                ex = ex.sort_values()
+                reveal_type(ex)
+            reveal_type(ex)
+
+            out.append(ex)
+
         elif ex is not None:
             if isbin_:
                 out.append(pd.IntervalIndex.from_breaks(ex))  # type: ignore [arg-type] # TODO: what do we want here?
