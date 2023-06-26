@@ -65,7 +65,7 @@ def generic_aggregate(
             f"Expected engine to be one of ['flox', 'numpy', 'numba']. Received {engine} instead."
         )
 
-    group_idx = asarray(group_idx, like=array)
+    group_idx = np.asarray(group_idx, like=array)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
