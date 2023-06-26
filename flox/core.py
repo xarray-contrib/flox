@@ -1387,7 +1387,7 @@ def dask_groupby_agg(
         inds,
         by,
         inds[-by.ndim :],
-        #concatenate=False,
+        # concatenate=False,
         dtype=array.dtype,  # this is purely for show
         # meta=array._meta,
         align_arrays=False,
@@ -1413,7 +1413,7 @@ def dask_groupby_agg(
             dtype=array.dtype,
             axis=axis,
             keepdims=True,
-            #concatenate=False,
+            # concatenate=False,
         )
         aggregate = partial(_aggregate, combine=combine, agg=agg, fill_value=fill_value)
 
@@ -1498,7 +1498,7 @@ def dask_groupby_agg(
         dtype=agg.dtype["final"],
         key=agg.name,
         name=f"{name}-{token}",
-        #concatenate=False,
+        # concatenate=False,
     )
 
     return (result, groups)
@@ -2018,9 +2018,7 @@ def groupby_reduce(
         # nan group labels are factorized to -1, and preserved
         # now we get rid of them by reindexing
         # This also handles bins with no data
-        reindexed = reindex_(
-            result, from_=groups[0], to=expected_groups, fill_value=fill_value
-        )
+        reindexed = reindex_(result, from_=groups[0], to=expected_groups, fill_value=fill_value)
         result = reshape(reindexed, reindexed.shape[:-1] + grp_shape)
         groups = final_groups
 

@@ -11,7 +11,6 @@ from numpy.typing import DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
-from .duck_array_ops import asarray
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
