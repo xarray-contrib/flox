@@ -1387,7 +1387,7 @@ def dask_groupby_agg(
         inds,
         by,
         inds[-by.ndim :],
-        concatenate=False,
+        #concatenate=False,
         dtype=array.dtype,  # this is purely for show
         # meta=array._meta,
         align_arrays=False,
@@ -1403,14 +1403,17 @@ def dask_groupby_agg(
         else:
             combine = partial(_grouped_combine, engine=engine, sort=sort)
 
+        def identity(x, axis, keepdims):
+            return x
+
         tree_reduce = partial(
             chunkmanager.reduction,
-            func=lambda x: x,
+            func=identity,
             # name=f"{name}-reduce-{method}-{combine_name}",
             dtype=array.dtype,
             axis=axis,
             keepdims=True,
-            concatenate=False,
+            #concatenate=False,
         )
         aggregate = partial(_aggregate, combine=combine, agg=agg, fill_value=fill_value)
 
@@ -1422,8 +1425,8 @@ def dask_groupby_agg(
         if method == "map-reduce":
             reduced = tree_reduce(
                 intermediate,
-                combine=partial(combine, agg=agg),
-                aggregate=partial(aggregate, expected_groups=expected_groups, reindex=reindex),
+                combine_func=partial(combine, agg=agg),
+                aggregate_func=partial(aggregate, expected_groups=expected_groups, reindex=reindex),
             )
             if is_duck_dask_array(by_input) and expected_groups is None:
                 groups = _extract_unknown_groups(reduced, dtype=by.dtype)
@@ -1495,7 +1498,7 @@ def dask_groupby_agg(
         dtype=agg.dtype["final"],
         key=agg.name,
         name=f"{name}-{token}",
-        concatenate=False,
+        #concatenate=False,
     )
 
     return (result, groups)
@@ -2015,9 +2018,10 @@ def groupby_reduce(
         # nan group labels are factorized to -1, and preserved
         # now we get rid of them by reindexing
         # This also handles bins with no data
-        result = reindex_(
+        reindexed = reindex_(
             result, from_=groups[0], to=expected_groups, fill_value=fill_value
-        ).reshape(result.shape[:-1] + grp_shape)
+        )
+        result = reshape(reindexed, reindexed.shape[:-1] + grp_shape)
         groups = final_groups
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
