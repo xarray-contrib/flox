@@ -43,8 +43,8 @@ class Combine1d(Combine):
     this is for reducting along a single dimension
     """
 
-    def setup(self, *args, **kwargs):
-        def construct_member(groups):
+    def setup(self, *args, **kwargs) -> None:
+        def construct_member(groups) -> dict[str, Any]:
             return {
                 "groups": groups,
                 "intermediates": [
@@ -69,7 +69,7 @@ class Combine1d(Combine):
         ]
         self.kwargs = {
             "agg": flox.aggregations._initialize_aggregation(
-                "sum", "float64", np.float64, 0, None, {}
+                "sum", "float64", np.float64, 0, 0, {}
             ),
             "axis": (3,),
         }
