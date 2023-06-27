@@ -862,7 +862,7 @@ def _finalize_results(
     """
     squeezed = _squeeze_results(results, axis)
 
-    min_count = agg.min_count if agg.min_count is not None else 0
+    min_count = agg.min_count
     if min_count > 0:
         counts = squeezed["intermediates"][-1]
         squeezed["intermediates"] = squeezed["intermediates"][:-1]
@@ -1753,7 +1753,7 @@ def groupby_reduce(
     axis: T_AxesOpt = None,
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
-    min_count: int | None = None,
+    min_count: int = 0,
     method: T_Method = "map-reduce",
     engine: T_Engine = "numpy",
     reindex: bool | None = None,
@@ -1787,7 +1787,7 @@ def groupby_reduce(
         Value to assign when a label in ``expected_groups`` is not present.
     dtype : data-type , optional
         DType for the output. Can be anything that is accepted by ``np.dtype``.
-    min_count : int, default: None
+    min_count : int, default: 0
         The required number of valid values to perform the operation. If
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
@@ -1970,17 +1970,11 @@ def groupby_reduce(
     # fill_value applies to all-NaN groups as well as labels in expected_groups that are not found.
     #     The only way to do this consistently is mask out using min_count
     #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
-    if min_count is None:
-        if nax < by_.ndim or fill_value is not None:
-            min_count = 1
+    if nax < by_.ndim or fill_value is not None:
+        min_count = 1
 
     # TODO: set in xarray?
-    if (
-        min_count is not None
-        and min_count > 0
-        and func in ["nansum", "nanprod"]
-        and fill_value is None
-    ):
+    if min_count > 0 and func in ["nansum", "nanprod"] and fill_value is None:
         # nansum, nanprod have fill_value=0, 1
         # overwrite than when min_count is set
         fill_value = np.nan
