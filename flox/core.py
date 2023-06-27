@@ -1976,7 +1976,7 @@ def groupby_reduce(
         else:
             min_count_ = 0
     else:
-        min_count_ = 0
+        min_count_ = min_count
 
     # TODO: set in xarray?
     if min_count_ > 0 and func in ["nansum", "nanprod"] and fill_value is None:
