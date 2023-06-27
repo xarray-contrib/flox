@@ -151,7 +151,7 @@ def xarray_reduce(
         skips missing values for float dtypes; other dtypes either do not
         have a sentinel missing value (int) or ``skipna=True`` has not been
         implemented (object, datetime64 or timedelta64).
-    min_count : int: 0
+    min_count : int, default: None
         The required number of valid values to perform the operation. If
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
@@ -426,7 +426,7 @@ def xarray_reduce(
             "sort": sort,
             "fill_value": fill_value,
             "method": method,
-            "min_count": min_count if min_count is not None else 0,
+            "min_count": min_count,
             "skipna": skipna,
             "engine": engine,
             "reindex": reindex,
