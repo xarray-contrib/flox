@@ -1787,7 +1787,7 @@ def groupby_reduce(
         Value to assign when a label in ``expected_groups`` is not present.
     dtype : data-type , optional
         DType for the output. Can be anything that is accepted by ``np.dtype``.
-    min_count : int, default: 0
+    min_count : int, default: None
         The required number of valid values to perform the operation. If
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
