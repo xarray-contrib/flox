@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Any
 
 import numpy as np
 
