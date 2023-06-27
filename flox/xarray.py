@@ -75,7 +75,7 @@ def xarray_reduce(
     engine: str = "numpy",
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
-    min_count: int | None = 0,
+    min_count: int | None = None,
     reindex: bool | None = None,
     **finalize_kwargs,
 ):

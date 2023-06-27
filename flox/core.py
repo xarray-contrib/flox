@@ -1753,7 +1753,7 @@ def groupby_reduce(
     axis: T_AxesOpt = None,
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
-    min_count: int | None = 0,
+    min_count: int | None = None,
     method: T_Method = "map-reduce",
     engine: T_Engine = "numpy",
     reindex: bool | None = None,
