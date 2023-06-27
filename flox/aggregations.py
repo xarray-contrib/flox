@@ -207,7 +207,7 @@ class Aggregation:
 
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
-        self.min_count: int | None = None
+        self.min_count: int = 0
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
