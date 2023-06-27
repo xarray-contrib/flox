@@ -1971,11 +1971,10 @@ def groupby_reduce(
     #     The only way to do this consistently is mask out using min_count
     #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
     if min_count is None:
-        min_count_ = 0
-    else:
-        min_count_ = min_count
-    if nax < by_.ndim or fill_value is not None:
-        min_count_ = 1
+        if nax < by_.ndim or fill_value is not None:
+            min_count_: int = 1
+        else:
+            min_count_ = 0
 
     # TODO: set in xarray?
     if min_count_ > 0 and func in ["nansum", "nanprod"] and fill_value is None:
