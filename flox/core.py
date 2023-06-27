@@ -1753,7 +1753,7 @@ def groupby_reduce(
     axis: T_AxesOpt = None,
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
-    min_count: int = 0,
+    min_count: int | None = 0,
     method: T_Method = "map-reduce",
     engine: T_Engine = "numpy",
     reindex: bool | None = None,
@@ -1970,17 +1970,21 @@ def groupby_reduce(
     # fill_value applies to all-NaN groups as well as labels in expected_groups that are not found.
     #     The only way to do this consistently is mask out using min_count
     #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
+    if min_count is None:
+        min_count_ = 0
+    else:
+        min_count_ = min_count
     if nax < by_.ndim or fill_value is not None:
-        min_count = 1
+        min_count_ = 1
 
     # TODO: set in xarray?
-    if min_count > 0 and func in ["nansum", "nanprod"] and fill_value is None:
+    if min_count_ > 0 and func in ["nansum", "nanprod"] and fill_value is None:
         # nansum, nanprod have fill_value=0, 1
         # overwrite than when min_count is set
         fill_value = np.nan
 
     kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
-    agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count, finalize_kwargs)
+    agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count_, finalize_kwargs)
 
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:

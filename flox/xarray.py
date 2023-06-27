@@ -75,7 +75,7 @@ def xarray_reduce(
     engine: str = "numpy",
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
-    min_count: int = 0,
+    min_count: int | None = 0,
     reindex: bool | None = None,
     **finalize_kwargs,
 ):
@@ -426,7 +426,7 @@ def xarray_reduce(
             "sort": sort,
             "fill_value": fill_value,
             "method": method,
-            "min_count": min_count,
+            "min_count": min_count if min_count is not None else 0,
             "skipna": skipna,
             "engine": engine,
             "reindex": reindex,
