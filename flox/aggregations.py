@@ -504,7 +504,7 @@ def _initialize_aggregation(
     dtype,
     array_dtype,
     fill_value,
-    min_count: int | None,
+    min_count: int,
     finalize_kwargs: dict[Any, Any] | None,
 ) -> Aggregation:
     if not isinstance(func, Aggregation):
@@ -558,9 +558,6 @@ def _initialize_aggregation(
     if finalize_kwargs is not None:
         assert isinstance(finalize_kwargs, dict)
         agg.finalize_kwargs = finalize_kwargs
-
-    if min_count is None:
-        min_count = 0
 
     # This is needed for the dask pathway.
     # Because we use intermediate fill_value since a group could be
