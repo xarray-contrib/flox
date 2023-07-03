@@ -546,7 +546,7 @@ def factorize_(
                 right = expect.closed_right
                 idx = np.digitize(
                     flat,
-                    bins=bins.view(np.intp) if bins.dtype.kind == "M" else bins,
+                    bins=bins.view(np.int64) if bins.dtype.kind == "M" else bins,
                     right=right,
                 )
                 idx -= 1
