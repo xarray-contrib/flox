@@ -22,6 +22,8 @@ from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_nu
 if TYPE_CHECKING:
     from xarray.core.types import T_DataArray, T_Dataset
 
+    from .core import T_ExpectedGroupsOpt, T_ExpectIndex, T_ExpectOpt
+
     Dims = Union[str, Iterable[Hashable], None]
 
 
@@ -63,7 +65,7 @@ def xarray_reduce(
     obj: T_Dataset | T_DataArray,
     *by: T_DataArray | Hashable,
     func: str | Aggregation,
-    expected_groups=None,
+    expected_groups: T_ExpectedGroupsOpt = None,
     isbin: bool | Sequence[bool] = False,
     sort: bool = True,
     dim: Dims | ellipsis = None,
@@ -215,7 +217,7 @@ def xarray_reduce(
     else:
         isbins = (isbin,) * nby
 
-    expected_groups = _validate_expected_groups(nby, expected_groups)
+    expected_groups_valid = _validate_expected_groups(nby, expected_groups)
 
     if not sort:
         raise NotImplementedError("sort must be True for xarray_reduce")
@@ -313,10 +315,10 @@ def xarray_reduce(
 
     # Set expected_groups and convert to index since we need coords, sizes
     # for output xarray objects
-    expected_groups = list(expected_groups)
+    expected_groups_valid_list: list[T_ExpectIndex] = []
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
-    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups, isbins)):
+    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups_valid, isbins)):
         group_name = (
             f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
         )
@@ -326,21 +328,23 @@ def xarray_reduce(
             raise NotImplementedError(
                 "flox does not support binning into an integer number of bins yet."
             )
+
+        expect1: T_ExpectOpt
         if expect is None:
             if isbin_:
                 raise ValueError(
                     f"Please provided bin edges for group variable {idx} "
                     f"named {group_name} in expected_groups."
                 )
-            expect_ = _get_expected_groups(b_.data, sort=sort)
+            expect1 = _get_expected_groups(b_.data, sort=sort)
         else:
-            expect_ = expect
-        expect_index = _convert_expected_groups_to_index((expect_,), (isbin_,), sort=sort)[0]
+            expect1 = expect
+        expect_index = _convert_expected_groups_to_index((expect1,), (isbin_,), sort=sort)[0]
 
         # The if-check is for type hinting mainly, it narrows down the return
         # type of _convert_expected_groups_to_index to pure pd.Index:
         if expect_index is not None:
-            expected_groups[idx] = expect_index
+            expected_groups_valid_list.append(expect_index)
             group_sizes[group_name] = len(expect_index)
         else:
             # This will never be reached
@@ -426,7 +430,7 @@ def xarray_reduce(
             "skipna": skipna,
             "engine": engine,
             "reindex": reindex,
-            "expected_groups": tuple(expected_groups),
+            "expected_groups": tuple(expected_groups_valid_list),
             "isbin": isbins,
             "finalize_kwargs": finalize_kwargs,
             "dtype": dtype,
@@ -440,10 +444,15 @@ def xarray_reduce(
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
-    for name, expect, by_ in zip(group_names, expected_groups, by_da):
-        # Can't remove this till xarray handles IntervalIndex
-        if isinstance(expect, pd.IntervalIndex):
-            expect = expect.to_numpy()
+    expect3: T_ExpectIndex | np.ndarray
+    for name, expect2, by_ in zip(group_names, expected_groups_valid_list, by_da):
+        # Can't remove this until xarray handles IntervalIndex:
+        if isinstance(expect2, pd.IntervalIndex):
+            # TODO: Only place where expect3 is an ndarray, remove the type if xarray
+            # starts supporting IntervalIndex.
+            expect3 = expect2.to_numpy()
+        else:
+            expect3 = expect2
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
@@ -451,15 +460,18 @@ def xarray_reduce(
         if (
             name in ds_broad.indexes
             and isinstance(ds_broad.indexes[name], pd.MultiIndex)
-            and not isinstance(expect, pd.RangeIndex)
+            and not isinstance(expect3, pd.RangeIndex)
         ):
             levelnames = ds_broad.indexes[name].names
-            expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
-            actual[name] = expect
+            if isinstance(expect3, np.ndarray):
+                # TODO: workaoround for IntervalIndex issue.
+                raise NotImplementedError
+            expect3 = pd.MultiIndex.from_tuples(expect3.values, names=levelnames)
+            actual[name] = expect3
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)
         else:
-            actual[name] = expect
+            actual[name] = expect3
         if keep_attrs:
             actual[name].attrs = by_.attrs
 

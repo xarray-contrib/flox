@@ -185,7 +185,7 @@ class Aggregation:
         # how to aggregate results after first round of reduction
         self.combine: FuncTuple = _atleast_1d(combine)
         # simpler reductions used with the "simple combine" algorithm
-        self.simple_combine = None
+        self.simple_combine: tuple[Callable, ...] = ()
         # final aggregation
         self.aggregate: Callable | str = aggregate if aggregate else self.combine[0]
         # finalize results (see mean)
@@ -207,7 +207,7 @@ class Aggregation:
 
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
-        self.min_count: int | None = None
+        self.min_count: int = 0
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
@@ -504,7 +504,7 @@ def _initialize_aggregation(
     dtype,
     array_dtype,
     fill_value,
-    min_count: int | None,
+    min_count: int,
     finalize_kwargs: dict[Any, Any] | None,
 ) -> Aggregation:
     if not isinstance(func, Aggregation):
@@ -559,9 +559,6 @@ def _initialize_aggregation(
         assert isinstance(finalize_kwargs, dict)
         agg.finalize_kwargs = finalize_kwargs
 
-    if min_count is None:
-        min_count = 0
-
     # This is needed for the dask pathway.
     # Because we use intermediate fill_value since a group could be
     # absent in one block, but present in another block
@@ -579,7 +576,7 @@ def _initialize_aggregation(
     else:
         agg.min_count = 0
 
-    simple_combine = []
+    simple_combine: list[Callable] = []
     for combine in agg.combine:
         if isinstance(combine, str):
             if combine in ["nanfirst", "nanlast"]:
