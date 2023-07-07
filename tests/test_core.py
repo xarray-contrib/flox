@@ -992,7 +992,7 @@ def test_map_reduce_blockwise_mixed() -> None:
         dask.array.from_array(data.values, chunks=365),
         t.dt.month,
         func="mean",
-        method="split-reduce",
+        method="map-reduce",
     )
     expected, _ = groupby_reduce(data, t.dt.month, func="mean")
     assert_equal(expected, actual)
