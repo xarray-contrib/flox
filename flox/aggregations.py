@@ -433,6 +433,19 @@ any_ = Aggregation(
 # median = Aggregation("median", chunk=None, combine=None, fill_value=None)
 # nanmedian = Aggregation("nanmedian", chunk=None, combine=None, fill_value=None)
 
+# Cumulatives:
+cumsum_ = Aggregation(
+    "cumsum",
+    chunk="cumsum",
+    combine="sum",
+    fill_value=0,
+    final_fill_value=0,
+    # dtypes=bool,
+    # final_dtype=bool,
+)
+# sum_ = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
+
+
 aggregations = {
     "any": any_,
     "all": all_,
@@ -459,6 +472,7 @@ aggregations = {
     "nanfirst": nanfirst,
     "last": last,
     "nanlast": nanlast,
+    "cumsum": cumsum_,
 }
 
 
