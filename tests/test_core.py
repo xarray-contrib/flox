@@ -1356,14 +1356,15 @@ def test_validate_reindex_map_reduce(
 
 
 def test_validate_reindex() -> None:
-    method: T_Method
-    for method in ["map-reduce", "cohorts"]:
+    methods: list[T_Method] = ["map-reduce", "cohorts"]
+    for method in methods:
         with pytest.raises(NotImplementedError):
             _validate_reindex(
                 True, "argmax", method, expected_groups=None, any_by_dask=False, is_dask_array=True
             )
 
-    for method in ["blockwise", "cohorts"]:
+    methods: list[T_Method] = ["blockwise", "cohorts"]
+    for method in methods:
         with pytest.raises(ValueError):
             _validate_reindex(
                 True, "sum", method, expected_groups=None, any_by_dask=False, is_dask_array=True
