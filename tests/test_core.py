@@ -1464,6 +1464,7 @@ def test_method_check_numpy():
     )
     assert_equal(actual, expected)
 
+
 def test_cumsum() -> None:
     import numpy_groupies as npg
 
