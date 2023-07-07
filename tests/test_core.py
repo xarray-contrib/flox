@@ -999,7 +999,7 @@ def test_map_reduce_blockwise_mixed() -> None:
 
 
 @requires_dask
-@pytest.mark.parametrize("method", ["split-reduce", "blockwise", "map-reduce", "cohorts"])
+@pytest.mark.parametrize("method", ["blockwise", "map-reduce", "cohorts"])
 def test_group_by_datetime(engine, method):
     kwargs = dict(
         func="mean",
