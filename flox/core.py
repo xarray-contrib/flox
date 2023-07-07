@@ -832,9 +832,7 @@ def chunk_reduce(
                 # remove NaN group label which should be last
                 result = result[..., :-1]
 
-            if is_cumreduction:
-                result = result
-            else:
+            if not is_cumreduction:
                 result = result.reshape(final_array_shape[:-1] + found_groups_shape)
         results["intermediates"].append(result)
 
