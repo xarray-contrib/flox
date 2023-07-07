@@ -746,10 +746,9 @@ def chunk_reduce(
     is_cumreduction = "cumsum" in funcs
     if is_cumreduction:
         final_array_shape = array.shape
-        final_groups_shape = (1,) * (nax - 1)
     else:
         final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
-        final_groups_shape = (1,) * (nax - 1)
+    final_groups_shape = (1,) * (nax - 1)
 
     if 1 < nax < by.ndim:
         # when axis is a tuple
