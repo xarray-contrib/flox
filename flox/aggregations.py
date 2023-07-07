@@ -473,7 +473,7 @@ any_ = Aggregation(
 # Cumulatives:
 cumsum_ = Aggregation(
     "cumsum",
-    chunk="cumsum",
+    chunk=None,
     combine="sum",
     kind="accumulate",
     # fill_value=0,
