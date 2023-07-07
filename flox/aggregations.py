@@ -476,6 +476,8 @@ cumsum_ = Aggregation(
     chunk="cumsum",
     combine="sum",
     reduction_type="accumulate",
+    # fill_value=0,
+    # final_fill_value=0,
     # dtypes=bool,
     # final_dtype=bool,
 )
