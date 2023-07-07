@@ -104,7 +104,7 @@ known-third-party = [
 
 [tool.mypy]
 allow_redefinition = true
-exclude = "properties|asv_bench|doc|tests|flycheck"
+exclude = "properties|asv_bench|doc|flycheck"
 files = "flox/*.py"
 show_error_codes = true
 warn_unused_ignores = true
