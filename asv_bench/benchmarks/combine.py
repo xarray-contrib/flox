@@ -70,7 +70,7 @@ class Combine1d(Combine):
         ]
         self.kwargs = {
             "agg": flox.aggregations._initialize_aggregation(
-                "sum", "float64", np.float64, 0, None, {}
+                "sum", "float64", np.float64, 0, 0, {}
             ),
             "axis": (3,),
         }
