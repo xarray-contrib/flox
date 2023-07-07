@@ -2054,9 +2054,10 @@ def groupby_reduce(
         # nan group labels are factorized to -1, and preserved
         # now we get rid of them by reindexing
         # This also handles bins with no data
-        result = reindex_(
-            result, from_=groups[0], to=expected_groups, fill_value=fill_value
-        ).reshape(result.shape[:-1] + grp_shape)
+        result = reindex_(result, from_=groups[0], to=expected_groups, fill_value=fill_value)
+        is_cumreduction = func == "cumsum"
+        if not is_cumreduction:
+            result = result.reshape(result.shape[:-1] + grp_shape)
         groups = final_groups
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
