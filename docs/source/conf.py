@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # complexity documentation build configuration file, created by
 # sphinx-quickstart on Tue Jul  9 22:26:36 2013.
@@ -40,11 +39,14 @@ extensions = [
     "numpydoc",
     "sphinx.ext.napoleon",
     "myst_nb",
+    "sphinx_codeautolink",
 ]
 
+codeautolink_concat_default = True
+
 extlinks = {
-    "issue": ("https://github.com/xarray-contrib/flox/issues/%s", "GH#"),
-    "pr": ("https://github.com/xarray-contrib/flox/pull/%s", "GH#"),
+    "issue": ("https://github.com/xarray-contrib/flox/issues/%s", "GH#%s"),
+    "pr": ("https://github.com/xarray-contrib/flox/pull/%s", "PR#%s"),
 }
 
 templates_path = ["_templates"]
@@ -61,6 +63,7 @@ author = "Deepak Cherian"
 # Myst_nb options
 nb_execution_excludepatterns = ["climatology-hourly.ipynb"]
 nb_execution_raise_on_error = True
+nb_execution_mode = "cache"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -95,12 +98,33 @@ exclude_patterns = ["_build"]
 # show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = "sphinx"
+pygments_style = "igor"
 
 
 # -- Options for HTML output ---------------------------------------------------
 
 html_theme = "furo"
+
+# Theme options are theme-specific and customize the look and feel of a theme
+# further.  For a list of options available for each theme, see the
+# documentation.
+css_vars = {
+    "admonition-font-size": "0.9rem",
+    "font-size--small": "92%",
+    "font-size--small--2": "87.5%",
+}
+html_theme_options = dict(
+    sidebar_hide_name=True,
+    light_css_variables=css_vars,
+    dark_css_variables=css_vars,
+)
+
+html_context = {
+    "github_user": "xarray-contrib",
+    "github_repo": "flox",
+    "github_version": "main",
+    "doc_path": "doc",
+}
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -174,7 +198,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     #    "numba": ("https://numba.pydata.org/numba-doc/latest", None),
     "dask": ("https://docs.dask.org/en/latest", None),
-    "xarray": ("http://xarray.pydata.org/en/stable/", None),
+    "xarray": ("https://docs.xarray.dev/en/stable/", None),
 }
 
 autosummary_generate = True

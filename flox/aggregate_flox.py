@@ -77,7 +77,6 @@ nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
 
 
 def sum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
-
     return sum(
         group_idx,
         array**2,
@@ -107,7 +106,8 @@ def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     if fill_value is None:
         fill_value = 0
     out = sum(group_idx, array, axis=axis, size=size, dtype=dtype, fill_value=fill_value)
-    out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
 
 
@@ -115,5 +115,6 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     if fill_value is None:
         fill_value = 0
     out = nansum(group_idx, array, size=size, axis=axis, dtype=dtype, fill_value=fill_value)
-    out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
