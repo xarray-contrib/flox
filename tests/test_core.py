@@ -1203,3 +1203,15 @@ def test_1d_blockwise_sort_optimization():
         array, time.dt.dayofyear.values[::-1], sort=False, method="blockwise", func="count"
     )
     assert all("getitem" not in k for k in actual.dask.layers)
+
+
+def test_cumsum():
+    import numpy_groupies as npg
+
+    group_idx = np.array([4, 3, 3, 4, 4, 1, 1, 1, 7, 8, 7, 4, 3, 3, 1, 1])
+    a = np.array([3, 4, 1, 3, 9, 9, 6, 7, 7, 0, 8, 2, 1, 8, 9, 8])
+    b = npg.aggregate(group_idx, a, func="cumsum")
+
+    bb = groupby_reduce(a, group_idx, func="cumsum", engine="numpy")
+
+    np.testing.assert_allclose(b, bb)
