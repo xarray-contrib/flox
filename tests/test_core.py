@@ -1359,18 +1359,33 @@ def test_validate_reindex() -> None:
     for method in ["map-reduce", "cohorts"]:
         with pytest.raises(NotImplementedError):
             _validate_reindex(
-                True, "argmax", method, expected_groups=None, any_by_dask=False, is_dask_array=True
+                True,
+                "argmax",
+                method,  # type: ignore [arg-type] # Error testing.
+                expected_groups=None,
+                any_by_dask=False,
+                is_dask_array=True,
             )
 
     for method in ["blockwise", "cohorts"]:
         with pytest.raises(ValueError):
             _validate_reindex(
-                True, "sum", method, expected_groups=None, any_by_dask=False, is_dask_array=True
+                True,
+                "sum",
+                method,  # type: ignore [arg-type] # Error testing.
+                expected_groups=None,
+                any_by_dask=False,
+                is_dask_array=True,
             )
 
         for func in ["sum", "argmax"]:
             actual = _validate_reindex(
-                None, func, method, expected_groups=None, any_by_dask=False, is_dask_array=True
+                None,
+                func,
+                method,  # type: ignore [arg-type] # Lazy
+                expected_groups=None,
+                any_by_dask=False,
+                is_dask_array=True,
             )
             assert actual is False
 
