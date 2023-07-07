@@ -19,6 +19,8 @@ from flox.core import (
     _validate_reindex,
     factorize_,
     find_group_cohorts,
+    groupby_accumulate,
+    groupby_aggregate,
     groupby_reduce,
     rechunk_for_cohorts,
     reindex_,
