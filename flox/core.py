@@ -647,8 +647,13 @@ def chunk_reduce(
     else:
         nax = by.ndim
 
-    final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
-    final_groups_shape = (1,) * (nax - 1)
+    is_cumreduction = "cumsum" in funcs
+    if is_cumreduction:
+        final_array_shape = array.shape
+        final_groups_shape = (1,) * (nax - 1)
+    else:
+        final_array_shape = array.shape[:-nax] + (1,) * (nax - 1)
+        final_groups_shape = (1,) * (nax - 1)
 
     # when axis is a tuple
     # collapse and move reduction dimensions to the end
@@ -692,7 +697,8 @@ def chunk_reduce(
         # if not is_arg_reduction:
         group_idx, array = _prepare_for_flox(group_idx, array)
 
-    final_array_shape += results["groups"].shape
+    if not is_cumreduction:
+        final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
 
     # we commonly have func=(..., "nanlen", "nanlen") when
@@ -721,7 +727,11 @@ def chunk_reduce(
             if np.any(props.nanmask):
                 # remove NaN group label which should be last
                 result = result[..., :-1]
-            result = result.reshape(final_array_shape[:-1] + found_groups_shape)
+
+            if is_cumreduction:
+                result = result
+            else:
+                result = result.reshape(final_array_shape[:-1] + found_groups_shape)
         results["intermediates"].append(result)
 
     results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
