@@ -1464,6 +1464,7 @@ def test_method_check_numpy():
     )
     assert_equal(actual, expected)
 
+
 def test_cumsum() -> None:
     import numpy_groupies as npg
 
@@ -1471,6 +1472,6 @@ def test_cumsum() -> None:
     a = np.array([3, 4, 1, 3, 9, 9, 6, 7, 7, 0, 8, 2, 1, 8, 9, 8])
     b = npg.aggregate(group_idx, a, func="cumsum")
 
-    bb = groupby_reduce(a, group_idx, func="cumsum", engine="numpy")
+    bb = groupby_reduce(a, group_idx, func="cumsum", engine="numpy")[0]
 
     np.testing.assert_allclose(b, bb)
