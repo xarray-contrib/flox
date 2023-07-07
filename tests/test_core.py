@@ -78,7 +78,7 @@ ALL_FUNCS = (
 )
 
 if TYPE_CHECKING:
-    from flox.core import T_Engine, T_ExpectedGroupsOpt, T_Func2
+    from flox.core import T_Engine, T_ExpectedGroupsOpt, T_Agg, T_Method
 
 
 def _get_array_func(func: str) -> Callable:
@@ -135,7 +135,7 @@ def test_alignment_error():
 )
 def test_groupby_reduce(
     engine: T_Engine,
-    func: T_Func2,
+    func: T_Agg,
     array: np.ndarray,
     by: np.ndarray,
     expected: list[float],
@@ -1356,36 +1356,22 @@ def test_validate_reindex_map_reduce(
 
 
 def test_validate_reindex() -> None:
+    method: T_Method
     for method in ["map-reduce", "cohorts"]:
         with pytest.raises(NotImplementedError):
             _validate_reindex(
-                True,
-                "argmax",
-                method,  # type: ignore [arg-type] # Error testing.
-                expected_groups=None,
-                any_by_dask=False,
-                is_dask_array=True,
+                True, "argmax", method, expected_groups=None, any_by_dask=False, is_dask_array=True
             )
 
     for method in ["blockwise", "cohorts"]:
         with pytest.raises(ValueError):
             _validate_reindex(
-                True,
-                "sum",
-                method,  # type: ignore [arg-type] # Error testing.
-                expected_groups=None,
-                any_by_dask=False,
-                is_dask_array=True,
+                True, "sum", method, expected_groups=None, any_by_dask=False, is_dask_array=True
             )
 
         for func in ["sum", "argmax"]:
             actual = _validate_reindex(
-                None,
-                func,
-                method,  # type: ignore [arg-type] # Lazy
-                expected_groups=None,
-                any_by_dask=False,
-                is_dask_array=True,
+                None, func, method, expected_groups=None, any_by_dask=False, is_dask_array=True
             )
             assert actual is False
 
