@@ -115,6 +115,7 @@ module=[
     "cftime",
     "dask.*",
     "importlib_metadata",
+    "numba",
     "numpy_groupies",
     "matplotlib.*",
     "pandas",
