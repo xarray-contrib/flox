@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import warnings
 from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
 
 import numpy as np
 import numpy_groupies as npg
@@ -130,7 +130,7 @@ class Aggregation:
         final_fill_value=dtypes.NA,
         dtypes=None,
         final_dtype: DTypeLike | None = None,
-        reduction_type="reduce",
+        reduction_type: Literal["reduce", "argreduce", "accumulate"] = "reduce",
     ):
         """
         Blueprint for computing grouped aggregations.
@@ -475,8 +475,7 @@ cumsum_ = Aggregation(
     "cumsum",
     chunk="cumsum",
     combine="sum",
-    fill_value=0,
-    final_fill_value=0,
+    reduction_type="accumulate",
     # dtypes=bool,
     # final_dtype=bool,
 )
