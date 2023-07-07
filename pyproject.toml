@@ -116,7 +116,7 @@ module=[
     "dask.*",
     "importlib_metadata",
     "numba",
-    "numpy_groupies",
+    "numpy_groupies.*",
     "matplotlib.*",
     "pandas",
     "setuptools",
