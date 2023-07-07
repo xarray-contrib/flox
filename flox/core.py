@@ -87,7 +87,7 @@ DUMMY_AXIS = -2
 def _is_arg_reduction(func: T_Agg) -> bool:
     if isinstance(func, str) and func in ["argmin", "argmax", "nanargmax", "nanargmin"]:
         return True
-    if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
+    if isinstance(func, Aggregation) and func.kind == "argreduce":
         return True
     return False
 
@@ -110,15 +110,15 @@ def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
     return _convert_expected_groups_to_index((expected,), isbin=(False,), sort=sort)[0]
 
 
-def _get_chunk_reduction(reduction_type: Literal["reduce", "argreduce", "accumulate"]) -> Callable:
-    if reduction_type == "reduce":
+def _get_chunk_aggregation(kind: Literal["reduce", "argreduce", "accumulate"]) -> Callable:
+    if kind == "reduce":
         return chunk_reduce
-    elif reduction_type == "argreduce":
+    elif kind == "argreduce":
         return chunk_argreduce
-    elif reduction_type == "accumulate":
+    elif kind == "accumulate":
         return chunk_accumulate
     else:
-        raise ValueError(f"Unknown reduction type: {reduction_type}")
+        raise ValueError(f"Unknown aggregation kind: {kind}")
 
 
 def is_nanlen(reduction: T_Func) -> bool:
@@ -1046,7 +1046,7 @@ def _grouped_combine(
 
     groups = _conc2(x_chunk, "groups", axis=neg_axis)
 
-    if agg.reduction_type == "argreduce":
+    if agg.kind == "argreduce":
         # If "nanlen" was added for masking later, we need to account for that
         if agg.chunk[-1] == "nanlen":
             slicer = slice(None, -1)
@@ -1098,7 +1098,7 @@ def _grouped_combine(
                     )["intermediates"][0]
                 )
 
-    elif agg.reduction_type == "reduce":
+    elif agg.kind == "reduce":
         # Here we reduce the intermediates individually
         results = {"groups": None, "intermediates": []}
         for idx, (combine, fv, dtype) in enumerate(
@@ -1365,7 +1365,7 @@ def dask_groupby_agg(
     else:
         # choose `chunk_reduce` or `chunk_argreduce`
         blockwise_method = partial(
-            _get_chunk_reduction(agg.reduction_type),
+            _get_chunk_aggregation(agg.kind),
             func=agg.chunk,
             fill_value=agg.fill_value["intermediate"],
             dtype=agg.dtype["intermediate"],
