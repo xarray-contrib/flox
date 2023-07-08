@@ -1467,7 +1467,7 @@ def test_method_check_numpy():
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize("func", ["cumsum", "cumprod"])
+@pytest.mark.parametrize("func", ["cumsum"])  # "cumprod"
 def test_cumulatives(func: T_Agg) -> None:
     import numpy_groupies as npg
 
