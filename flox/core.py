@@ -2271,9 +2271,6 @@ def _accumulate_blockwise(
         reindex=reindex,
     )
 
-    if _is_arg_reduction(agg):
-        results["intermediates"][0] = np.unravel_index(results["intermediates"][0], array.shape)[-1]
-
     result = _finalize_results(
         results, agg, axis, expected_groups, fill_value=fill_value, reindex=reindex
     )
@@ -2388,22 +2385,13 @@ def groupby_accumulate(
     xarray.xarray_reduce
     """
 
-    if engine == "flox" and _is_arg_reduction(func):
-        raise NotImplementedError(
-            "argreductions not supported for engine='flox' yet."
-            "Try engine='numpy' or engine='numba' instead."
-        )
-
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
     any_by_dask = any(by_is_dask)
 
-    if method in ["split-reduce", "cohorts"] and any_by_dask:
+    if method in ["cohorts"] and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
-
-    if method == "split-reduce":
-        method = "cohorts"
 
     reindex = _validate_reindex(
         reindex, func, method, expected_groups, any_by_dask, is_duck_dask_array(array)
@@ -2465,19 +2453,6 @@ def groupby_accumulate(
 
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
 
-    if _is_first_last_reduction(func):
-        if has_dask and nax != 1:
-            raise ValueError(
-                "For dask arrays: first, last, nanfirst, nanlast reductions are "
-                "only supported along a single axis. Please reshape appropriately."
-            )
-
-        elif nax not in [1, by_.ndim]:
-            raise ValueError(
-                "first, last, nanfirst, nanlast reductions are only supported "
-                "along a single axis or when reducing across all dimensions of `by`."
-            )
-
     # TODO: make sure expected_groups is unique
     if nax == 1 and by_.ndim > 1 and expected_groups is None:
         if not any_by_dask:
@@ -2514,12 +2489,6 @@ def groupby_accumulate(
             min_count_ = 0
     else:
         min_count_ = min_count
-
-    # TODO: set in xarray?
-    if min_count_ > 0 and func in ["nansum", "nanprod"] and fill_value is None:
-        # nansum, nanprod have fill_value=0, 1
-        # overwrite than when min_count is set
-        fill_value = np.nan
 
     kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
     agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count_, finalize_kwargs)
@@ -2584,8 +2553,6 @@ def groupby_accumulate(
         result = reindex_(result, from_=groups[0], to=expected_groups, fill_value=fill_value)
         groups = final_groups
 
-    if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
-        result = result.astype(bool)
     return (result, *groups)  # type: ignore[return-value]  # Unpack not in mypy yet
 
 
