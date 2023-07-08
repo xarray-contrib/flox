@@ -14,6 +14,7 @@ from . import xrdtypes as dtypes
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
+    T_Kind = Literal["reduce", "argreduce", "cumulate"]
 
 
 def _is_arg_reduction(func: str | Aggregation) -> bool:
@@ -130,7 +131,7 @@ class Aggregation:
         final_fill_value=dtypes.NA,
         dtypes=None,
         final_dtype: DTypeLike | None = None,
-        kind: Literal["reduce", "argreduce", "cumulate"] = "reduce",
+        kind: T_Kind = "reduce",
     ):
         """
         Blueprint for computing grouped aggregations.

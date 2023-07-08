@@ -48,6 +48,8 @@ if TYPE_CHECKING:
 
     import dask.array.Array as DaskArray
 
+    from .aggregations import T_Kind
+
     T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
@@ -110,7 +112,7 @@ def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
     return _convert_expected_groups_to_index((expected,), isbin=(False,), sort=sort)[0]
 
 
-def _get_chunk_aggregation(kind: Literal["reduce", "argreduce", "accumulate"]) -> Callable:
+def _get_chunk_aggregation(kind: T_Kind) -> Callable:
     if kind == "reduce":
         return chunk_reduce
     elif kind == "argreduce":
