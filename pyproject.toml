@@ -104,8 +104,7 @@ known-third-party = [
 
 [tool.mypy]
 allow_redefinition = true
-exclude = "properties|asv_bench|doc|tests|flycheck"
-files = "flox/*.py"
+files = "**/*.py"
 show_error_codes = true
 warn_unused_ignores = true
 
@@ -115,7 +114,8 @@ module=[
     "cftime",
     "dask.*",
     "importlib_metadata",
-    "numpy_groupies",
+    "numba",
+    "numpy_groupies.*",
     "matplotlib.*",
     "pandas",
     "setuptools",
