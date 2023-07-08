@@ -2595,6 +2595,7 @@ def groupby_aggregate(
             dtype=dtype,
             min_count=min_count,
             method=method,
+            engine=engine,
             reindex=reindex,
             finalize_kwargs=finalize_kwargs,
         )
@@ -2611,6 +2612,7 @@ def groupby_aggregate(
             dtype=dtype,
             min_count=min_count,
             method=method,
+            engine=engine,
             reindex=reindex,
             finalize_kwargs=finalize_kwargs,
         )

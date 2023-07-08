@@ -515,7 +515,7 @@ aggregations = {
     "nanlast": nanlast,
     # Cumulatives:
     "cumsum": cumsum_,
-    # "cumprod": cumprod_,
+    "cumprod": cumprod_,
 }
 
 
