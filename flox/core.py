@@ -117,7 +117,7 @@ def _get_chunk_aggregation(kind: T_Kind) -> Callable:
         return chunk_reduce
     elif kind == "argreduce":
         return chunk_argreduce
-    elif kind == "accumulate":
+    elif kind == "cumulate":
         return chunk_cumulate
     else:
         raise ValueError(f"Unknown aggregation kind: {kind}")
