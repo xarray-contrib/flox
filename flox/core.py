@@ -2062,7 +2062,7 @@ def groupby_reduce(
 def _is_arg_cumulative(func: T_Agg) -> bool:
     if isinstance(func, str) and func in ("cumsum", "cumprod"):
         return True
-    if isinstance(func, Aggregation) and func.kind == "accumulate":
+    if isinstance(func, Aggregation) and func.kind == "cumulate":
         return True
     return False
 

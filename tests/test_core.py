@@ -80,7 +80,7 @@ ALL_FUNCS = (
 )
 
 if TYPE_CHECKING:
-    from flox.core import T_Engine, T_ExpectedGroupsOpt, T_Func2
+    from flox.core import T_Engine, T_ExpectedGroupsOpt, T_Agg
 
 
 def _get_array_func(func: str) -> Callable:
@@ -137,7 +137,7 @@ def test_alignment_error():
 )
 def test_groupby_reduce(
     engine: T_Engine,
-    func: T_Func2,
+    func: T_Agg,
     array: np.ndarray,
     by: np.ndarray,
     expected: list[float],
@@ -1467,16 +1467,17 @@ def test_method_check_numpy():
     assert_equal(actual, expected)
 
 
-def test_cumsum() -> None:
+@pytest.mark.parametrize("func", ["cumsum", "cumprod"])
+def test_cumulatives(func: T_Agg) -> None:
     import numpy_groupies as npg
 
     group_idx = np.array([4, 3, 3, 4, 4, 1, 1, 1, 7, 8, 7, 4, 3, 3, 1, 1])
     a = np.array([3, 4, 1, 3, 9, 9, 6, 7, 7, 0, 8, 2, 1, 8, 9, 8])
-    b = npg.aggregate(group_idx, a, func="cumsum")
+    expected = npg.aggregate(group_idx, a, func=func)
 
-    bb = groupby_accumulate(a, group_idx, func="cumsum", engine="numpy")[0]
+    actual = groupby_accumulate(a, group_idx, func=func, engine="numpy")[0]
 
-    np.testing.assert_allclose(b, bb)
+    np.testing.assert_allclose(expected, actual)
 
 
 def test_groupby_aggregate() -> None:
@@ -1484,8 +1485,8 @@ def test_groupby_aggregate() -> None:
 
     group_idx = np.array([4, 3, 3, 4, 4, 1, 1, 1, 7, 8, 7, 4, 3, 3, 1, 1])
     a = np.array([3, 4, 1, 3, 9, 9, 6, 7, 7, 0, 8, 2, 1, 8, 9, 8])
-    b = npg.aggregate(group_idx, a, func="cumsum")
+    expected = npg.aggregate(group_idx, a, func="cumsum")
 
-    bb = groupby_aggregate(a, group_idx, func="cumsum", engine="numpy")[0]
+    actual = groupby_aggregate(a, group_idx, func="cumsum", engine="numpy")[0]
 
-    np.testing.assert_allclose(b, bb)
+    np.testing.assert_allclose(expected, actual)

@@ -130,7 +130,7 @@ class Aggregation:
         final_fill_value=dtypes.NA,
         dtypes=None,
         final_dtype: DTypeLike | None = None,
-        kind: Literal["reduce", "argreduce", "accumulate"] = "reduce",
+        kind: Literal["reduce", "argreduce", "cumulate"] = "reduce",
     ):
         """
         Blueprint for computing grouped aggregations.
@@ -475,16 +475,18 @@ cumsum_ = Aggregation(
     "cumsum",
     chunk=None,
     combine="sum",
-    kind="accumulate",
-    # fill_value=0,
-    # final_fill_value=0,
-    # dtypes=bool,
-    # final_dtype=bool,
+    kind="cumulate",
 )
-# sum_ = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
+cumprod_ = Aggregation(
+    "cumprod",
+    chunk=None,
+    combine="prod",
+    kind="cumulate",
+)
 
 
 aggregations = {
+    # Reductions:
     "any": any_,
     "all": all_,
     "count": count,
@@ -510,7 +512,9 @@ aggregations = {
     "nanfirst": nanfirst,
     "last": last,
     "nanlast": nanlast,
+    # Cumulatives:
     "cumsum": cumsum_,
+    "cumprod": cumprod_,
 }
 
 
