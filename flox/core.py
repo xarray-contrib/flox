@@ -2058,7 +2058,7 @@ def groupby_reduce(
     return (result, *groups)  # type: ignore[return-value]  # Unpack not in mypy yet
 
 
-# %% Accumulate
+# %% Cumulate
 def _is_arg_cumulative(func: T_Agg) -> bool:
     if isinstance(func, str) and func in ("cumsum", "cumprod"):
         return True
@@ -2067,7 +2067,7 @@ def _is_arg_cumulative(func: T_Agg) -> bool:
     return False
 
 
-def chunk_accumulate(
+def chunk_cumulate(
     array: np.ndarray,
     by: np.ndarray,
     func: T_Funcs,
@@ -2234,7 +2234,7 @@ def chunk_accumulate(
     return results
 
 
-def _accumulate_blockwise(
+def _cumulate_blockwise(
     array,
     by,
     agg: Aggregation,
@@ -2262,7 +2262,7 @@ def _accumulate_blockwise(
         finalize_kwargs_ = agg.finalize_kwargs
     finalize_kwargs_ += ({},) + ({},)
 
-    results = chunk_accumulate(
+    results = chunk_cumulate(
         array,
         by,
         func=agg.numpy,
@@ -2503,7 +2503,7 @@ def groupby_accumulate(
 
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
-        results = _accumulate_blockwise(
+        results = _cumulate_blockwise(
             array, by_, agg, expected_groups=expected_groups, reindex=reindex, sort=sort, **kwargs
         )
         groups = (results["groups"],)
