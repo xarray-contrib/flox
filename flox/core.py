@@ -2059,6 +2059,14 @@ def groupby_reduce(
 
 
 # %% Accumulate
+def _is_arg_cumulative(func: T_Agg) -> bool:
+    if isinstance(func, str) and func in ("cumsum", "cumprod"):
+        return True
+    if isinstance(func, Aggregation) and func.kind == "accumulate":
+        return True
+    return False
+
+
 def chunk_accumulate(
     array: np.ndarray,
     by: np.ndarray,
@@ -2573,8 +2581,7 @@ def groupby_aggregate(
     reindex: bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
 ) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy
-    is_accumulator = "cumsum" == func
-    if is_accumulator:
+    if _is_arg_cumulative(func):
         return groupby_accumulate(
             array,
             *by,
