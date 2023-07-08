@@ -80,7 +80,7 @@ ALL_FUNCS = (
 )
 
 if TYPE_CHECKING:
-    from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt
+    from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt, T_Method
 
 
 def _get_array_func(func: str) -> Callable:
@@ -994,14 +994,14 @@ def test_map_reduce_blockwise_mixed() -> None:
         dask.array.from_array(data.values, chunks=365),
         t.dt.month,
         func="mean",
-        method="split-reduce",
+        method="map-reduce",
     )
     expected, _ = groupby_reduce(data, t.dt.month, func="mean")
     assert_equal(expected, actual)
 
 
 @requires_dask
-@pytest.mark.parametrize("method", ["split-reduce", "blockwise", "map-reduce", "cohorts"])
+@pytest.mark.parametrize("method", ["blockwise", "map-reduce", "cohorts"])
 def test_group_by_datetime(engine, method):
     kwargs = dict(
         func="mean",
@@ -1358,13 +1358,15 @@ def test_validate_reindex_map_reduce(
 
 
 def test_validate_reindex() -> None:
-    for method in ["map-reduce", "cohorts"]:
+    methods: list[T_Method] = ["map-reduce", "cohorts"]
+    for method in methods:
         with pytest.raises(NotImplementedError):
             _validate_reindex(
                 True, "argmax", method, expected_groups=None, any_by_dask=False, is_dask_array=True
             )
 
-    for method in ["blockwise", "cohorts"]:
+    methods: list[T_Method] = ["blockwise", "cohorts"]
+    for method in methods:
         with pytest.raises(ValueError):
             _validate_reindex(
                 True, "sum", method, expected_groups=None, any_by_dask=False, is_dask_array=True
