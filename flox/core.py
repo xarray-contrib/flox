@@ -2290,7 +2290,7 @@ def groupby_accumulate(
     array: np.ndarray | DaskArray,
     *by: T_By,
     func: T_Agg,
-    expected_groups: T_ExpectedGroupsOpt = None, #TODO: think about this one
+    expected_groups: T_ExpectedGroupsOpt = None,  # TODO: think about this one
     isbin: T_IsBins = False,
     axis: T_AxesOpt = None,
     dtype: np.typing.DTypeLike = None,
