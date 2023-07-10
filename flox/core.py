@@ -2074,6 +2074,7 @@ def chunk_cumulate(
     func: T_Funcs,
     expected_groups: pd.Index | None,
     axis: T_AxesOpt = None,
+    fill_value=None,
     dtype: T_Dtypes = None,
     engine: T_Engine = "numpy",
 ) -> IntermediateDict:
@@ -2188,7 +2189,7 @@ def chunk_cumulate(
     # counts are needed for the final result as well as for masking
     # optimize that out.
     for aggregation, dt in zip(funcs, dtypes):
-        kw_func = dict(size=size, dtype=dt)
+        kw_func = dict(size=size, dtype=dt, fill_value=fill_value)
 
         if callable(aggregation):
             # passing a custom aggregation for npg to apply per-group is really slow!
@@ -2227,6 +2228,7 @@ def _cumulate_blockwise(
         func=agg.numpy,
         axis=axis,
         expected_groups=expected_groups,
+        fill_value=agg.fill_value["numpy"],
         dtype=agg.dtype["numpy"],
         engine=engine,
     )
