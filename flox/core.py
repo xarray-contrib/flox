@@ -2246,7 +2246,7 @@ def _cumulate_blockwise(
     return result
 
 
-def groupby_accumulate(
+def groupby_cumulate(
     array: np.ndarray | DaskArray,
     *by: T_By,
     func: T_Agg,
