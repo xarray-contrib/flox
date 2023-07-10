@@ -2390,12 +2390,8 @@ def groupby_accumulate(
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
     any_by_dask = any(by_is_dask)
 
-    if method in ["cohorts"] and any_by_dask:
-        raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
-
-    reindex = _validate_reindex(
-        reindex, func, method, expected_groups, any_by_dask, is_duck_dask_array(array)
-    )
+    _sort = False  # TODO: needed?
+    _fill_value = None  # TODO: needed?
 
     if not is_duck_array(array):
         array = np.asarray(array)
@@ -2412,14 +2408,14 @@ def groupby_accumulate(
     expected_groups = _validate_expected_groups(nby, expected_groups)
 
     for idx, (expect, is_dask) in enumerate(zip(expected_groups, by_is_dask)):
-        if is_dask and (reindex or nby > 1) and expect is None:
+        if is_dask and (nby > 1) and expect is None:
             raise ValueError(
                 f"`expected_groups` for array {idx} in `by` cannot be None since it is a dask.array."
             )
 
     # We convert to pd.Index since that lets us know if we are binning or not
     # (pd.IntervalIndex or not)
-    expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, sort)
+    expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, _sort)
 
     # Don't factorize "early only when
     # grouping by dask arrays, and not having expected_groups
@@ -2436,7 +2432,7 @@ def groupby_accumulate(
             # reindex controls what's actually allocated in chunk_reduce
             # At this point, we care about an accurate conversion to codes.
             reindex=True,
-            sort=sort,
+            sort=_sort,
         )
         expected_groups = (pd.RangeIndex(math.prod(grp_shape)),)
 
@@ -2456,7 +2452,7 @@ def groupby_accumulate(
     # TODO: make sure expected_groups is unique
     if nax == 1 and by_.ndim > 1 and expected_groups is None:
         if not any_by_dask:
-            expected_groups = _get_expected_groups(by_, sort)
+            expected_groups = _get_expected_groups(by_, _sort)
         else:
             # When we reduce along all axes, we are guaranteed to see all
             # groups in the final combine stage, so everything works.
@@ -2476,27 +2472,13 @@ def groupby_accumulate(
         axis_ = tuple(array.ndim + np.arange(-nax, 0))
         nax = len(axis_)
 
-    # When axis is a subset of possible values; then npg will
-    # apply it to groups that don't exist along a particular axis (for e.g.)
-    # since these count as a group that is absent. thoo!
-    # fill_value applies to all-NaN groups as well as labels in expected_groups that are not found.
-    #     The only way to do this consistently is mask out using min_count
-    #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
-    if min_count is None:
-        if nax < by_.ndim or fill_value is not None:
-            min_count_: int = 1
-        else:
-            min_count_ = 0
-    else:
-        min_count_ = min_count
-
-    kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
-    agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count_, finalize_kwargs)
+    kwargs = dict(axis=axis_, fill_value=_fill_value, engine=engine)
+    agg = _initialize_aggregation(func, dtype, array.dtype, _fill_value, None, None)
 
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
         results = _cumulate_blockwise(
-            array, by_, agg, expected_groups=expected_groups, reindex=reindex, sort=sort, **kwargs
+            array, by_, agg, expected_groups=expected_groups, reindex=False, sort=_sort, **kwargs
         )
         groups = (results["groups"],)
         result = results[agg.name]
@@ -2525,32 +2507,32 @@ def groupby_accumulate(
 
         partial_agg = partial(dask_groupby_agg, **kwargs)
 
-        if method == "blockwise" and by_.ndim == 1:
-            array = rechunk_for_blockwise(array, axis=-1, labels=by_)
+        # if method == "blockwise" and by_.ndim == 1:
+        #     array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
         result, groups = partial_agg(
             array,
             by_,
-            expected_groups=None if method == "blockwise" else expected_groups,
+            expected_groups=expected_groups,
             agg=agg,
-            reindex=reindex,
-            method=method,
-            sort=sort,
+            reindex=False,
+            method="",  # TODO: ?
+            sort=_sort,
         )
 
-        if sort and method != "map-reduce":
-            assert len(groups) == 1
-            sorted_idx = np.argsort(groups[0])
-            # This optimization helps specifically with resampling
-            if not (sorted_idx[:-1] <= sorted_idx[1:]).all():
-                result = result[..., sorted_idx]
-                groups = (groups[0][sorted_idx],)
+        # if sort and method != "map-reduce":
+        #     assert len(groups) == 1
+        #     sorted_idx = np.argsort(groups[0])
+        #     # This optimization helps specifically with resampling
+        #     if not (sorted_idx[:-1] <= sorted_idx[1:]).all():
+        #         result = result[..., sorted_idx]
+        #         groups = (groups[0][sorted_idx],)
 
     if factorize_early:
         # nan group labels are factorized to -1, and preserved
         # now we get rid of them by reindexing
         # This also handles bins with no data
-        result = reindex_(result, from_=groups[0], to=expected_groups, fill_value=fill_value)
+        result = reindex_(result, from_=groups[0], to=expected_groups, fill_value=_fill_value)
         groups = final_groups
 
     return result
@@ -2579,16 +2561,10 @@ def groupby_aggregate(
             *by,
             func=func,
             expected_groups=expected_groups,
-            sort=sort,
             isbin=isbin,
             axis=axis,
-            fill_value=fill_value,
             dtype=dtype,
-            min_count=min_count,
-            method=method,
             engine=engine,
-            reindex=reindex,
-            finalize_kwargs=finalize_kwargs,
         )
     else:
         return groupby_reduce(
