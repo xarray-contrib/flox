@@ -2166,17 +2166,13 @@ def chunk_cumulate(
     group_idx = group_idx.reshape(-1)
 
     assert group_idx.ndim == 1
-    empty = np.all(props.nanmask)
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
     if _reindex and expected_groups is not None:
         # TODO: what happens with binning here?
         results["groups"] = expected_groups.to_numpy()
     else:
-        if empty:
-            results["groups"] = np.array([np.nan])
-        else:
-            results["groups"] = groups
+        results["groups"] = groups
 
     # npg's argmax ensures that index of first "max" is returned assuming there
     # are many elements equal to the "max". Sorting messes this up totally.
@@ -2192,22 +2188,19 @@ def chunk_cumulate(
     # counts are needed for the final result as well as for masking
     # optimize that out.
     for aggregation, dt in zip(funcs, dtypes):
-        if empty:  # TODO: Can ever be empty?
-            result = np.full(shape=final_array_shape)
-        else:
-            kw_func = dict(size=size, dtype=dt)
+        kw_func = dict(size=size, dtype=dt)
 
-            if callable(aggregation):
-                # passing a custom aggregation for npg to apply per-group is really slow!
-                # So this `aggregation` has to do the groupby-aggregation
-                result = aggregation(group_idx, array, **kw_func)
-            else:
-                result = generic_aggregate(
-                    group_idx, array, axis=-1, engine=engine, func=aggregation, **kw_func
-                ).astype(dt, copy=False)
-            if np.any(props.nanmask):
-                # remove NaN group label which should be last
-                result = result[..., :-1]
+        if callable(aggregation):
+            # passing a custom aggregation for npg to apply per-group is really slow!
+            # So this `aggregation` has to do the groupby-aggregation
+            result = aggregation(group_idx, array, **kw_func)
+        else:
+            result = generic_aggregate(
+                group_idx, array, axis=-1, engine=engine, func=aggregation, **kw_func
+            ).astype(dt, copy=False)
+        if np.any(props.nanmask):
+            # remove NaN group label which should be last
+            result = result[..., :-1]
 
         results["intermediates"].append(result)
 
