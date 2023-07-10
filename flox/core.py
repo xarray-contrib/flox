@@ -2284,7 +2284,7 @@ def groupby_accumulate(
     axis: T_AxesOpt = None,
     dtype: np.typing.DTypeLike = None,
     engine: T_Engine = "numpy",
-) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy yet
+) -> DaskArray
     """
     GroupBy reductions using tree reductions for dask.array
 
