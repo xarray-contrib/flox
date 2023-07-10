@@ -2240,18 +2240,6 @@ def _cumulate_blockwise(
     Blockwise groupby reduction that produces the final result. This code path is
     also used for non-dask array aggregations.
     """
-    # for pure numpy grouping, we just use npg directly and avoid "finalizing"
-    # (agg.finalize = None). We still need to do the reindexing step in finalize
-    # so that everything matches the dask version.
-    agg.finalize = None
-
-    assert agg.finalize_kwargs is not None
-    if isinstance(agg.finalize_kwargs, Mapping):
-        finalize_kwargs_: tuple[dict[Any, Any], ...] = (agg.finalize_kwargs,)
-    else:
-        finalize_kwargs_ = agg.finalize_kwargs
-    finalize_kwargs_ += ({},) + ({},)
-
     results = chunk_cumulate(
         array,
         by,
@@ -2263,7 +2251,6 @@ def _cumulate_blockwise(
         # (see below)
         fill_value=agg.fill_value["numpy"],
         dtype=agg.dtype["numpy"],
-        kwargs=finalize_kwargs_,
         engine=engine,
     )
 
