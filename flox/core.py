@@ -2210,9 +2210,6 @@ def chunk_cumulate(
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
         else:
-            if is_nanlen(reduction) and is_nanlen(previous_reduction):
-                result = results["intermediates"][-1]
-
             # fill_value here is necessary when reducing with "offset" groups
             kw_func = dict(size=size, dtype=dt, fill_value=fv)
             kw_func.update(kw)
@@ -2509,17 +2506,17 @@ def groupby_accumulate(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
-        if agg.chunk[0] is None and method != "blockwise":
-            raise NotImplementedError(
-                f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
-                f"\n\n Received: {func}"
-            )
+        # if agg.chunk[0] is None and method != "blockwise":
+        #     raise NotImplementedError(
+        #         f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
+        #         f"\n\n Received: {func}"
+        #     )
 
-        if method in ["blockwise", "cohorts"] and nax != by_.ndim:
-            raise NotImplementedError(
-                "Must reduce along all dimensions of `by` when method != 'map-reduce'."
-                f"Received method={method!r}"
-            )
+        # if method in ["blockwise", "cohorts"] and nax != by_.ndim:
+        #     raise NotImplementedError(
+        #         "Must reduce along all dimensions of `by` when method != 'map-reduce'."
+        #         f"Received method={method!r}"
+        #     )
 
         # TODO: just do this in dask_groupby_agg
         # we always need some fill_value (see above) so choose the default if needed
