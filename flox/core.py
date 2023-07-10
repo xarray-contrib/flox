@@ -2421,13 +2421,12 @@ def groupby_accumulate(
         axis_ = tuple(array.ndim + np.arange(-nax, 0))
         nax = len(axis_)
 
-    kwargs_ = dict(axis=axis_, fill_value=_fill_value, engine=engine)
     agg = _initialize_aggregation(func, dtype, array.dtype, _fill_value, 0, None)
 
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
         results = _cumulate_blockwise(
-            array, by_, agg, expected_groups=expected_groups, reindex=False, sort=_sort, **kwargs_
+            array, by_, agg, axis=axis_, expected_groups=expected_groups, engine=engine
         )
         groups = (results["groups"],)
         result = results[agg.name]
@@ -2451,10 +2450,10 @@ def groupby_accumulate(
 
         # TODO: just do this in dask_groupby_agg
         # we always need some fill_value (see above) so choose the default if needed
-        if kwargs_["fill_value"] is None:
-            kwargs_["fill_value"] = agg.fill_value[agg.name]
+        if _fill_value is None:
+            _fill_value = agg.fill_value[agg.name]
 
-        partial_agg = partial(dask_groupby_agg, **kwargs_)
+        partial_agg = partial(dask_groupby_agg, axis=axis_, fill_value=_fill_value, engine=engine)
 
         # if method == "blockwise" and by_.ndim == 1:
         #     array = rechunk_for_blockwise(array, axis=-1, labels=by_)
