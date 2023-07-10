@@ -2290,17 +2290,11 @@ def groupby_accumulate(
     array: np.ndarray | DaskArray,
     *by: T_By,
     func: T_Agg,
-    expected_groups: T_ExpectedGroupsOpt = None,
-    sort: bool = True,
+    expected_groups: T_ExpectedGroupsOpt = None,  # TODO: think about this one
     isbin: T_IsBins = False,
     axis: T_AxesOpt = None,
-    fill_value=None,
     dtype: np.typing.DTypeLike = None,
-    min_count: int | None = None,
-    method: T_Method = "map-reduce",
     engine: T_Engine = "numpy",
-    reindex: bool | None = None,
-    finalize_kwargs: dict[Any, Any] | None = None,
 ) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy yet
     """
     GroupBy reductions using tree reductions for dask.array
@@ -2562,7 +2556,7 @@ def groupby_accumulate(
         result = reindex_(result, from_=groups[0], to=expected_groups, fill_value=fill_value)
         groups = final_groups
 
-    return (result, *groups)  # type: ignore[return-value]  # Unpack not in mypy yet
+    return result
 
 
 # %% Aggregate
