@@ -2130,7 +2130,6 @@ def chunk_cumulate(
 
     assert by.ndim <= array.ndim
 
-    final_array_shape = array.shape
     final_groups_shape = (1,) * (nax - 1)
 
     if 1 < nax < by.ndim:
