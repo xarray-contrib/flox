@@ -4,8 +4,7 @@
 from . import cache
 from .aggregations import Aggregation  # noqa
 from .core import (
-    groupby_accumulate,
-    groupby_aggregate,
+    groupby_cumulate,
     groupby_reduce,
     rechunk_for_blockwise,
     rechunk_for_cohorts,

@@ -19,7 +19,7 @@ from flox.core import (
     _validate_reindex,
     factorize_,
     find_group_cohorts,
-    groupby_accumulate,
+    groupby_cumulate,
     groupby_aggregate,
     groupby_reduce,
     rechunk_for_cohorts,
@@ -1477,6 +1477,6 @@ def test_cumulatives(func: T_Agg) -> None:
     a = np.array([3, 4, 1, 3, 9, 9, 6, 7, 7, 0, 8, 2, 1, 8, 9, 8])
     expected = npg.aggregate(group_idx, a, func=func)
 
-    actual = groupby_accumulate(a, group_idx, func=func, engine="numpy")
+    actual = groupby_cumulate(a, group_idx, func=func, engine="numpy")
 
     np.testing.assert_allclose(expected, actual)
