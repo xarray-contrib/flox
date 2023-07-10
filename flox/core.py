@@ -2238,10 +2238,7 @@ def _cumulate_blockwise(
     *,
     axis: T_Axes,
     expected_groups,
-    fill_value,
     engine: T_Engine,
-    sort,
-    reindex,
 ) -> FinalResultsDict:
     """
     Blockwise groupby reduction that produces the final result. This code path is
@@ -2272,13 +2269,9 @@ def _cumulate_blockwise(
         dtype=agg.dtype["numpy"],
         kwargs=finalize_kwargs_,
         engine=engine,
-        sort=sort,
-        reindex=reindex,
     )
 
-    result = _finalize_results(
-        results, agg, axis, expected_groups, fill_value=fill_value, reindex=reindex
-    )
+    result = _finalize_results(results, agg, axis, expected_groups, fill_value=None, reindex=False)
     return result
 
 
@@ -2308,49 +2301,12 @@ def groupby_accumulate(
         Expected unique labels.
     isbin : bool, optional
         Are ``expected_groups`` bin edges?
-    sort : bool, optional
-        Whether groups should be returned in sorted order. Only applies for dask
-        reductions when ``method`` is not ``"map-reduce"``. For ``"map-reduce"``, the groups
-        are always sorted.
     axis : None or int or Sequence[int], optional
         If None, reduce across all dimensions of by
         Else, reduce across corresponding axes of array
         Negative integers are normalized using array.ndim
-    fill_value : Any
-        Value to assign when a label in ``expected_groups`` is not present.
     dtype : data-type , optional
         DType for the output. Can be anything that is accepted by ``np.dtype``.
-    min_count : int, default: None
-        The required number of valid values to perform the operation. If
-        fewer than min_count non-NA values are present the result will be
-        NA. Only used if skipna is set to True or defaults to True for the
-        array's dtype.
-    method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
-        Strategy for reduction of dask arrays only:
-          * ``"map-reduce"``:
-            First apply the reduction blockwise on ``array``, then
-            combine a few newighbouring blocks, apply the reduction.
-            Continue until finalizing. Usually, ``func`` will need
-            to be an Aggregation instance for this method to work.
-            Common aggregations are implemented.
-          * ``"blockwise"``:
-            Only reduce using blockwise and avoid aggregating blocks
-            together. Useful for resampling-style reductions where group
-            members are always together. If  `by` is 1D,  `array` is automatically
-            rechunked so that chunk boundaries line up with group boundaries
-            i.e. each block contains all members of any group present
-            in that block. For nD `by`, you must make sure that all members of a group
-            are present in a single block.
-          * ``"cohorts"``:
-            Finds group labels that tend to occur together ("cohorts"),
-            indexes out cohorts and reduces that subset using "map-reduce",
-            repeat for all cohorts. This works well for many time groupings
-            where the group labels repeat at regular intervals like 'hour',
-            'month', dayofyear' etc. Optimize chunking ``array`` for this
-            method by first rechunking using ``rechunk_for_cohorts``
-            (for 1D ``by`` only).
-          * ``"split-reduce"``:
-            Same as "cohorts" and will be removed soon.
     engine : {"flox", "numpy", "numba"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
@@ -2363,12 +2319,6 @@ def groupby_accumulate(
             for a reduction that is not yet implemented.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
-    reindex : bool, optional
-        Whether to "reindex" the blockwise results to ``expected_groups`` (possibly automatically detected).
-        If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
-        and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
-        boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
-        original block size. Avoid that by using ``method="cohorts"``. By default, it is turned off for argreductions.
     finalize_kwargs : dict, optional
         Kwargs passed to finalize the reduction such as ``ddof`` for var, std.
 
@@ -2553,7 +2503,7 @@ def groupby_aggregate(
     engine: T_Engine = "numpy",
     reindex: bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
-) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy
+) -> DaskArray:
     if _is_arg_cumulative(func):
         return groupby_accumulate(
             array,
@@ -2581,4 +2531,4 @@ def groupby_aggregate(
             engine=engine,
             reindex=reindex,
             finalize_kwargs=finalize_kwargs,
-        )
+        )[0]

@@ -1477,7 +1477,7 @@ def test_cumulatives(func: T_Agg) -> None:
     a = np.array([3, 4, 1, 3, 9, 9, 6, 7, 7, 0, 8, 2, 1, 8, 9, 8])
     expected = npg.aggregate(group_idx, a, func=func)
 
-    actual = groupby_accumulate(a, group_idx, func=func, engine="numpy")[0]
+    actual = groupby_accumulate(a, group_idx, func=func, engine="numpy")
 
     np.testing.assert_allclose(expected, actual)
 
@@ -1489,6 +1489,6 @@ def test_groupby_aggregate() -> None:
     a = np.array([3, 4, 1, 3, 9, 9, 6, 7, 7, 0, 8, 2, 1, 8, 9, 8])
     expected = npg.aggregate(group_idx, a, func="cumsum")
 
-    actual = groupby_aggregate(a, group_idx, func="cumsum", engine="numpy")[0]
+    actual = groupby_aggregate(a, group_idx, func="cumsum", engine="numpy")
 
     np.testing.assert_allclose(expected, actual)
