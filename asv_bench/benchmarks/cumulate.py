@@ -26,7 +26,7 @@ class ChunkCumulate:
 
     @parameterized("func, engine, expected_groups", [funcs, engines, expected_groups])
     def time_cumulate(self, func, engine, expected_groups):
-        flox.groupby_reduce(
+        flox.groupby_cumulate(
             self.array,
             self.labels,
             func=func,
@@ -37,7 +37,7 @@ class ChunkCumulate:
 
     @parameterized("func, engine, expected_groups", [funcs, engines, expected_groups])
     def peakmem_cumulate(self, func, engine, expected_groups):
-        flox.groupby_reduce(
+        flox.groupby_cumulate(
             self.array,
             self.labels,
             func=func,
