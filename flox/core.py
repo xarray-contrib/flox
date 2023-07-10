@@ -2074,12 +2074,8 @@ def chunk_cumulate(
     func: T_Funcs,
     expected_groups: pd.Index | None,
     axis: T_AxesOpt = None,
-    fill_value: T_FillValues = None,
     dtype: T_Dtypes = None,
-    reindex: bool = False,
     engine: T_Engine = "numpy",
-    kwargs: Sequence[dict] | None = None,
-    sort: bool = True,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
