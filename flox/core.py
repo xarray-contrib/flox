@@ -2234,10 +2234,6 @@ def _cumulate_blockwise(
         func=agg.numpy,
         axis=axis,
         expected_groups=expected_groups,
-        # This fill_value should only apply to groups that only contain NaN observations
-        # BUT there is funkiness when axis is a subset of all possible values
-        # (see below)
-        fill_value=agg.fill_value["numpy"],
         dtype=agg.dtype["numpy"],
         engine=engine,
     )
