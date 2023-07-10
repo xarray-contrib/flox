@@ -2118,18 +2118,6 @@ def chunk_cumulate(
         dtypes = (dtype,) * nfuncs
     assert len(dtypes) >= nfuncs
 
-    if isinstance(fill_value, Sequence):
-        fill_values = fill_value
-    else:
-        fill_values = (fill_value,) * nfuncs
-    assert len(fill_values) >= nfuncs
-
-    if isinstance(kwargs, Sequence):
-        kwargss = kwargs
-    else:
-        kwargss = ({},) * nfuncs
-    assert len(kwargss) >= nfuncs
-
     if isinstance(axis, Sequence):
         axes: T_Axes = axis
         nax = len(axes)
@@ -2158,8 +2146,10 @@ def chunk_cumulate(
     # avoid by factorizing again so indices=[2,2,2] is changed to
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
+    _reindex = False  # TODO: Needed?
+    _sort = False  # TODO: Needed?
     group_idx, grps, found_groups_shape, _, size, props = factorize_(
-        (by,), axes, expected_groups=(expected_groups,), reindex=reindex, sort=sort
+        (by,), axes, expected_groups=(expected_groups,), reindex=_reindex, sort=_sort
     )
     groups = grps[0]
 
@@ -2179,7 +2169,7 @@ def chunk_cumulate(
     empty = np.all(props.nanmask)
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
-    if reindex and expected_groups is not None:
+    if _reindex and expected_groups is not None:
         # TODO: what happens with binning here?
         results["groups"] = expected_groups.to_numpy()
     else:
@@ -2201,21 +2191,19 @@ def chunk_cumulate(
     # we commonly have func=(..., "nanlen", "nanlen") when
     # counts are needed for the final result as well as for masking
     # optimize that out.
-    for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
-        if empty:
-            result = np.full(shape=final_array_shape, fill_value=fv)
+    for aggregation, dt in zip(funcs, dtypes):
+        if empty:  # TODO: Can ever be empty?
+            result = np.full(shape=final_array_shape)
         else:
-            # fill_value here is necessary when reducing with "offset" groups
-            kw_func = dict(size=size, dtype=dt, fill_value=fv)
-            kw_func.update(kw)
+            kw_func = dict(size=size, dtype=dt)
 
-            if callable(reduction):
-                # passing a custom reduction for npg to apply per-group is really slow!
-                # So this `reduction` has to do the groupby-aggregation
-                result = reduction(group_idx, array, **kw_func)
+            if callable(aggregation):
+                # passing a custom aggregation for npg to apply per-group is really slow!
+                # So this `aggregation` has to do the groupby-aggregation
+                result = aggregation(group_idx, array, **kw_func)
             else:
                 result = generic_aggregate(
-                    group_idx, array, axis=-1, engine=engine, func=reduction, **kw_func
+                    group_idx, array, axis=-1, engine=engine, func=aggregation, **kw_func
                 ).astype(dt, copy=False)
             if np.any(props.nanmask):
                 # remove NaN group label which should be last
@@ -2467,50 +2455,3 @@ def groupby_accumulate(
         groups = final_groups
 
     return result
-
-
-# %% Aggregate
-def groupby_aggregate(
-    array: np.ndarray | DaskArray,
-    *by: T_By,
-    func: T_Agg,
-    expected_groups: T_ExpectedGroupsOpt = None,
-    sort: bool = True,
-    isbin: T_IsBins = False,
-    axis: T_AxesOpt = None,
-    fill_value=None,
-    dtype: np.typing.DTypeLike = None,
-    min_count: int | None = None,
-    method: T_Method = "map-reduce",
-    engine: T_Engine = "numpy",
-    reindex: bool | None = None,
-    finalize_kwargs: dict[Any, Any] | None = None,
-) -> DaskArray:
-    if _is_arg_cumulative(func):
-        return groupby_accumulate(
-            array,
-            *by,
-            func=func,
-            expected_groups=expected_groups,
-            isbin=isbin,
-            axis=axis,
-            dtype=dtype,
-            engine=engine,
-        )
-    else:
-        return groupby_reduce(
-            array,
-            *by,
-            func=func,
-            expected_groups=expected_groups,
-            sort=sort,
-            isbin=isbin,
-            axis=axis,
-            fill_value=fill_value,
-            dtype=dtype,
-            min_count=min_count,
-            method=method,
-            engine=engine,
-            reindex=reindex,
-            finalize_kwargs=finalize_kwargs,
-        )[0]
