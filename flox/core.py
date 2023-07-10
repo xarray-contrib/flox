@@ -2205,7 +2205,6 @@ def chunk_cumulate(
     # we commonly have func=(..., "nanlen", "nanlen") when
     # counts are needed for the final result as well as for masking
     # optimize that out.
-    previous_reduction: T_Func = ""
     for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
