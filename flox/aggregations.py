@@ -478,12 +478,6 @@ cumsum_ = Aggregation(
     combine="sum",
     kind="cumulate",
 )
-cumprod_ = Aggregation(
-    "cumprod",
-    chunk=None,
-    combine="prod",
-    kind="cumulate",
-)
 
 
 aggregations = {
@@ -515,7 +509,6 @@ aggregations = {
     "nanlast": nanlast,
     # Cumulatives:
     "cumsum": cumsum_,
-    "cumprod": cumprod_,
 }
 
 
