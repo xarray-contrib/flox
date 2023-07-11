@@ -2082,25 +2082,25 @@ def chunk_cumulate(
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
     mD ``by``.
 
-    Core groupby reduction using numpy_groupies. Uses ``pandas.factorize`` to factorize
+    Core groupby xynykRUIBA using numpy_groupies. Uses ``pandas.factorize`` to factorize
     ``by``. Offsets the groups if not reducing along all dimensions of ``by``.
     Always ravels ``by`` to 1D, flattens appropriate dimensions of array.
 
-    When dask arrays are passed to groupby_reduce, this function is called on every
+    When dask arrays are passed to groupby_cumulate, this function is called on every
     block.
 
     Parameters
     ----------
     array : numpy.ndarray
-        Array of values to reduced
+        Array of values to cumulated
     by : numpy.ndarray
         Array to group by.
     func : str or Callable or Sequence[str] or Sequence[Callable]
-        Name of reduction or function, passed to numpy_groupies.
-        Supports multiple reductions.
+        Name of cumulation or function, passed to numpy_groupies.
+        Supports multiple cumulations.
     axis : (optional) int or Sequence[int]
-        If None, reduce along all dimensions of array.
-        Else reduce along specified axes.
+        If None, cumulate along all dimensions of array.
+        Else cumulate along specified axes.
 
     Returns
     -------
@@ -2218,7 +2218,7 @@ def _cumulate_blockwise(
     engine: T_Engine,
 ) -> FinalResultsDict:
     """
-    Blockwise groupby reduction that produces the final result. This code path is
+    Blockwise groupby cumulation that produces the final result. This code path is
     also used for non-dask array aggregations.
     """
     results = chunk_cumulate(
@@ -2247,7 +2247,7 @@ def groupby_cumulate(
     engine: T_Engine = "numpy",
 ) -> DaskArray:
     """
-    GroupBy reductions using tree reductions for dask.array
+    GroupBy cumulations
 
     Parameters
     ----------
@@ -2287,8 +2287,6 @@ def groupby_cumulate(
     -------
     result
         Aggregated result
-    *groups
-        Group labels
 
     See Also
     --------
@@ -2397,27 +2395,12 @@ def groupby_cumulate(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
-        # if agg.chunk[0] is None and method != "blockwise":
-        #     raise NotImplementedError(
-        #         f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
-        #         f"\n\n Received: {func}"
-        #     )
-
-        # if method in ["blockwise", "cohorts"] and nax != by_.ndim:
-        #     raise NotImplementedError(
-        #         "Must reduce along all dimensions of `by` when method != 'map-reduce'."
-        #         f"Received method={method!r}"
-        #     )
-
         # TODO: just do this in dask_groupby_agg
         # we always need some fill_value (see above) so choose the default if needed
         if _fill_value is None:
             _fill_value = agg.fill_value[agg.name]
 
         partial_agg = partial(dask_groupby_agg, axis=axis_, fill_value=_fill_value, engine=engine)
-
-        # if method == "blockwise" and by_.ndim == 1:
-        #     array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
         result, groups = partial_agg(
             array,
@@ -2428,14 +2411,6 @@ def groupby_cumulate(
             method="",  # TODO: ?
             sort=_sort,
         )
-
-        # if sort and method != "map-reduce":
-        #     assert len(groups) == 1
-        #     sorted_idx = np.argsort(groups[0])
-        #     # This optimization helps specifically with resampling
-        #     if not (sorted_idx[:-1] <= sorted_idx[1:]).all():
-        #         result = result[..., sorted_idx]
-        #         groups = (groups[0][sorted_idx],)
 
     if factorize_early:
         # nan group labels are factorized to -1, and preserved
