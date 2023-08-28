@@ -34,12 +34,13 @@ jobs:
         run: |
           echo "PYTHON_VERSION=${{ matrix.python-version }}" >> $GITHUB_ENV
       - name: Set up conda environment
-        uses: mamba-org/provision-with-micromamba@v15
+        uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ci/environment.yml
           environment-name: flox-tests
-          cache-env: true
-          extra-specs: |
+          init-shell: bash
+          cache-environment: true
+          create-args: |
             python="${{ matrix.python-version }}"
       - name: Install flox
         run: |
@@ -77,12 +78,13 @@ jobs:
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set up conda environment
-        uses: mamba-org/provision-with-micromamba@v15
+        uses: mamba-org/setup-micromamba@v1
         with:
-          environment-file: ci/${{ matrix.env }}.yml
+          environment-file: ci/environment.yml
           environment-name: flox-tests
-          cache-env: true
-          extra-specs: |
+          init-shell: bash
+          cache-environment: true
+          create-args: |
             python="${{ matrix.python-version }}"
       - name: Install flox
         run: |
@@ -111,12 +113,13 @@ jobs:
           repository: 'pydata/xarray'
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set up conda environment
-        uses: mamba-org/provision-with-micromamba@v15
+        uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ci/requirements/environment.yml
           environment-name: xarray-tests
-          cache-env: true
-          extra-specs: |
+          init-shell: bash
+          cache-environment: true
+          create-args: |
             python="3.10"
       - name: Install xarray
         run: |
