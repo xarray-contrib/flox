@@ -42,7 +42,7 @@ jobs:
           init-shell: bash
           cache-environment: true
           create-args: |
-            python="${{ matrix.python-version }}"
+            python=${{ matrix.python-version }}
             pytest-reportlog
       - name: Install flox
         run: |
