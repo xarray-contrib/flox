@@ -35,11 +35,13 @@ jobs:
         run: |
           echo "PYTHON_VERSION=${{ matrix.python-version }}" >> $GITHUB_ENV
       - name: Set up conda environment
-        uses: mamba-org/provision-with-micromamba@v15
+        uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ci/upstream-dev-env.yml
           environment-name: flox-tests
-          extra-specs: |
+          init-shell: bash
+          cache-environment: true
+          create-args: |
             python="${{ matrix.python-version }}"
             pytest-reportlog
       - name: Install flox
