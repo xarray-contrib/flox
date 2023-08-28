@@ -53,14 +53,15 @@ jobs:
           echo "TODAY=$(date  +'%Y-%m-%d')" >> $GITHUB_ENV
 
       - name: Setup micromamba
-        uses: mamba-org/provision-with-micromamba@v15
+        uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ${{env.CONDA_ENV_FILE}}
           environment-name: flox-tests
-          extra-specs: |
-            python=${{env.PYTHON_VERSION}}
-          cache-env: true
+          init-shell: bash
+          cache-environment: true
           cache-env-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
+          create-args: |
+            python="${{ env.PYTHON_VERSION }}"
 
       - name: Install flox
         run: |
@@ -102,14 +103,15 @@ jobs:
         run: |
           echo "TODAY=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
       - name: Setup micromamba
-        uses: mamba-org/provision-with-micromamba@v15
+        uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ${{env.CONDA_ENV_FILE}}
           environment-name: flox-tests
-          extra-specs: |
-            python=${{env.PYTHON_VERSION}}
-          cache-env: true
+          init-shell: bash
+          cache-environment: true
           cache-env-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
+          create-args: |
+            python=${{env.PYTHON_VERSION}}
       - name: Install flox
         run: |
           python -m pip install --no-deps -e .
