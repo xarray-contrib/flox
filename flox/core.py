@@ -1622,7 +1622,7 @@ def _convert_expected_groups_to_index(
                 out.append(ex)
         elif ex is not None:
             if isbin_:
-                out.append(pd.IntervalIndex.from_breaks(ex))  # type: ignore [arg-type] # TODO: what do we want here?
+                out.append(pd.IntervalIndex.from_breaks(ex))
             else:
                 if sort:
                     ex = np.sort(ex)
