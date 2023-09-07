@@ -374,8 +374,8 @@ def xarray_reduce(
                 # xarray always uses np.datetime64[ns] for np.datetime64 data
                 dtype = "timedelta64[ns]"
                 array = datetime_to_numeric(array, offset)
-            elif _contains_cftime_datetimes(array):
-                offset = min(array)
+            elif is_cftime:
+                offset = array.min()
                 array = datetime_to_numeric(array, offset, datetime_unit="us")
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)

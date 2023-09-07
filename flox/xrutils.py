@@ -157,7 +157,7 @@ def datetime_to_numeric(array, offset=None, datetime_unit=None, dtype=float):
         if array.dtype.kind in "Mm":
             offset = _datetime_nanmin(array)
         else:
-            offset = min(array)
+            offset = array.min()
 
     # Compute timedelta object.
     # For np.datetime64, this can silently yield garbage due to overflow.
