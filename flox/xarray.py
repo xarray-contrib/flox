@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Any, Hashable, Iterable, Sequence, Union
 
 import numpy as np
@@ -13,31 +12,19 @@ from .aggregations import Aggregation, _atleast_1d
 from .core import (
     _convert_expected_groups_to_index,
     _get_expected_groups,
+    _validate_expected_groups,
     groupby_reduce,
-    rechunk_for_blockwise as rechunk_array_for_blockwise,
-    rechunk_for_cohorts as rechunk_array_for_cohorts,
 )
+from .core import rechunk_for_blockwise as rechunk_array_for_blockwise
+from .core import rechunk_for_cohorts as rechunk_array_for_cohorts
 from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
-    from xarray.core.resample import Resample
     from xarray.core.types import T_DataArray, T_Dataset
 
+    from .core import T_ExpectedGroupsOpt, T_ExpectIndex, T_ExpectOpt
+
     Dims = Union[str, Iterable[Hashable], None]
-
-
-def _get_input_core_dims(group_names, dim, ds, grouper_dims):
-    input_core_dims = [[], []]
-    for g in group_names:
-        if g in dim:
-            continue
-        if g in ds.dims:
-            input_core_dims[0].extend([g])
-        if g in grouper_dims:
-            input_core_dims[1].extend([g])
-    input_core_dims[0].extend(dim)
-    input_core_dims[1].extend(dim)
-    return input_core_dims
 
 
 def _restore_dim_order(result, obj, by):
@@ -54,11 +41,31 @@ def _restore_dim_order(result, obj, by):
     return result.transpose(*new_order)
 
 
+def _broadcast_size_one_dims(*arrays, core_dims):
+    """Broadcast by adding size-1 dimensions in the right place.
+
+    Workaround because apply_ufunc doesn't support this yet.
+    https://github.com/pydata/xarray/issues/3032#issuecomment-503337637
+
+    Specialized to the groupby problem.
+    """
+    array_dims = set(core_dims[0])
+    broadcasted = [arrays[0]]
+    for dims, array in zip(core_dims[1:], arrays[1:]):
+        assert set(dims).issubset(array_dims)
+        order = [dims.index(d) for d in core_dims[0] if d in dims]
+        array = array.transpose(*order)
+        axis = [core_dims[0].index(d) for d in core_dims[0] if d not in dims]
+        broadcasted.append(np.expand_dims(array, axis))
+
+    return broadcasted
+
+
 def xarray_reduce(
     obj: T_Dataset | T_DataArray,
     *by: T_DataArray | Hashable,
     func: str | Aggregation,
-    expected_groups=None,
+    expected_groups: T_ExpectedGroupsOpt = None,
     isbin: bool | Sequence[bool] = False,
     sort: bool = True,
     dim: Dims | ellipsis = None,
@@ -97,7 +104,7 @@ def xarray_reduce(
     fill_value
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
-    dtype: data-type, optional
+    dtype : data-type, optional
         DType for the output. Can be anything accepted by ``np.dtype``.
     method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
         Strategy for reduction of dask arrays only:
@@ -155,7 +162,7 @@ def xarray_reduce(
         and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
-    **finalize_kwargs :
+    **finalize_kwargs
         kwargs passed to the finalize function, like ``ddof`` for var, std.
 
     Returns
@@ -210,19 +217,13 @@ def xarray_reduce(
     else:
         isbins = (isbin,) * nby
 
-    if expected_groups is None:
-        expected_groups = (None,) * nby
-    if isinstance(expected_groups, (np.ndarray, list)):  # TODO: test for list
-        if nby == 1:
-            expected_groups = (expected_groups,)
-        else:
-            raise ValueError("Needs better message.")
+    expected_groups_valid = _validate_expected_groups(nby, expected_groups)
 
     if not sort:
-        raise NotImplementedError
+        raise NotImplementedError("sort must be True for xarray_reduce")
 
     # eventually drop the variables we are grouping by
-    maybe_drop = [b for b in by if isinstance(b, Hashable)]
+    maybe_drop = {b for b in by if isinstance(b, Hashable)}
     unindexed_dims = tuple(
         b
         for b, isbin_ in zip(by, isbins)
@@ -242,7 +243,19 @@ def xarray_reduce(
     else:
         ds = obj._to_temp_dataset()
 
-    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
+    try:
+        from xarray.indexes import PandasMultiIndex
+    except ImportError:
+        PandasMultiIndex = tuple()  # type: ignore
+
+    more_drop = set()
+    for var in maybe_drop:
+        maybe_midx = ds._indexes.get(var, None)
+        if isinstance(maybe_midx, PandasMultiIndex):
+            idx_coord_names = set(maybe_midx.index.names + [maybe_midx.dim])
+            idx_other_names = idx_coord_names - set(maybe_drop)
+            more_drop.update(idx_other_names)
+    maybe_drop.update(more_drop)
 
     if dim is Ellipsis:
         if nby > 1:
@@ -255,23 +268,28 @@ def xarray_reduce(
     elif dim is not None:
         dim_tuple = _atleast_1d(dim)
     else:
-        dim_tuple = tuple()
+        dim_tuple = tuple(grouper_dims)
 
-    # broadcast all variables against each other along all dimensions in `by` variables
-    # don't exclude `dim` because it need not be a dimension in any of the `by` variables!
-    # in the case where dim is Ellipsis, and by.ndim < obj.ndim
-    # then we also broadcast `by` to all `obj.dims`
-    # TODO: avoid this broadcasting
+    # broadcast to make sure grouper dimensions are present in the array.
     exclude_dims = tuple(d for d in ds.dims if d not in grouper_dims and d not in dim_tuple)
-    ds_broad, *by_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)
-
-    # all members of by_broad have the same dimensions
-    # so we just pull by_broad[0].dims if dim is None
-    if not dim_tuple:
-        dim_tuple = tuple(by_broad[0].dims)
 
     if any(d not in grouper_dims and d not in obj.dims for d in dim_tuple):
         raise ValueError(f"Cannot reduce over absent dimensions {dim}.")
+
+    try:
+        xr.align(ds, *by_da, join="exact", copy=False)
+    except ValueError as e:
+        raise ValueError(
+            "Object being grouped must be exactly aligned with every array in `by`."
+        ) from e
+
+    needs_broadcast = any(
+        not set(grouper_dims).issubset(set(variable.dims)) for variable in ds.data_vars.values()
+    )
+    if needs_broadcast:
+        ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
+    else:
+        ds_broad = ds
 
     dims_not_in_groupers = tuple(d for d in dim_tuple if d not in grouper_dims)
     if dims_not_in_groupers == tuple(dim_tuple) and not any(isbins):
@@ -291,44 +309,52 @@ def xarray_reduce(
         else:
             return result
 
+    ds = ds.drop_vars([var for var in maybe_drop if var in ds.variables])
+
     axis = tuple(range(-len(dim_tuple), 0))
 
     # Set expected_groups and convert to index since we need coords, sizes
     # for output xarray objects
-    expected_groups = list(expected_groups)
+    expected_groups_valid_list: list[T_ExpectIndex] = []
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
-    for idx, (b_, expect, isbin_) in enumerate(zip(by_broad, expected_groups, isbins)):
-        group_name = b_.name if not isbin_ else f"{b_.name}_bins"
+    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups_valid, isbins)):
+        group_name = (
+            f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
+        )
         group_names += (group_name,)
 
         if isbin_ and isinstance(expect, int):
             raise NotImplementedError(
                 "flox does not support binning into an integer number of bins yet."
             )
+
+        expect1: T_ExpectOpt
         if expect is None:
             if isbin_:
                 raise ValueError(
                     f"Please provided bin edges for group variable {idx} "
                     f"named {group_name} in expected_groups."
                 )
-            expect_ = _get_expected_groups(b_.data, sort=sort)
+            expect1 = _get_expected_groups(b_.data, sort=sort)
         else:
-            expect_ = expect
-        expect_index = _convert_expected_groups_to_index((expect_,), (isbin_,), sort=sort)[0]
+            expect1 = expect
+        expect_index = _convert_expected_groups_to_index((expect1,), (isbin_,), sort=sort)[0]
 
         # The if-check is for type hinting mainly, it narrows down the return
         # type of _convert_expected_groups_to_index to pure pd.Index:
         if expect_index is not None:
-            expected_groups[idx] = expect_index
+            expected_groups_valid_list.append(expect_index)
             group_sizes[group_name] = len(expect_index)
         else:
             # This will never be reached
             raise ValueError("expect_index cannot be None")
 
-    def wrapper(array, *by, func, skipna, **kwargs):
+    def wrapper(array, *by, func, skipna, core_dims, **kwargs):
+        array, *by = _broadcast_size_one_dims(array, *by, core_dims=core_dims)
+
         # Handle skipna here because I need to know dtype to make a good default choice.
-        # We cannnot handle this easily for xarray Datasets in xarray_reduce
+        # We cannot handle this easily for xarray Datasets in xarray_reduce
         if skipna and func in ["all", "any", "count"]:
             raise ValueError(f"skipna cannot be truthy for {func} reductions.")
 
@@ -348,8 +374,8 @@ def xarray_reduce(
                 # xarray always uses np.datetime64[ns] for np.datetime64 data
                 dtype = "timedelta64[ns]"
                 array = datetime_to_numeric(array, offset)
-            elif _contains_cftime_datetimes(array):
-                offset = min(array)
+            elif is_cftime:
+                offset = array.min()
                 array = datetime_to_numeric(array, offset, datetime_unit="us")
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
@@ -374,17 +400,21 @@ def xarray_reduce(
             if is_missing_dim:
                 missing_dim[k] = v
 
-    input_core_dims = _get_input_core_dims(group_names, dim_tuple, ds_broad, grouper_dims)
-    input_core_dims += [input_core_dims[-1]] * (nby - 1)
+    # dim_tuple contains dimensions we are reducing over. These need to be the last
+    # core dimensions to be synchronized with axis.
+    input_core_dims = [[d for d in grouper_dims if d not in dim_tuple] + list(dim_tuple)]
+    input_core_dims += [list(b.dims) for b in by_da]
 
+    output_core_dims = [d for d in input_core_dims[0] if d not in dim_tuple]
+    output_core_dims.extend(group_names)
     actual = xr.apply_ufunc(
         wrapper,
         ds_broad.drop_vars(tuple(missing_dim)).transpose(..., *grouper_dims),
-        *by_broad,
+        *by_da,
         input_core_dims=input_core_dims,
         # for xarray's test_groupby_duplicate_coordinate_labels
         exclude_dims=set(dim_tuple),
-        output_core_dims=[group_names],
+        output_core_dims=[output_core_dims],
         dask="allowed",
         dask_gufunc_kwargs=dict(
             output_sizes=group_sizes, output_dtypes=[dtype] if dtype is not None else None
@@ -400,35 +430,48 @@ def xarray_reduce(
             "skipna": skipna,
             "engine": engine,
             "reindex": reindex,
-            "expected_groups": tuple(expected_groups),
+            "expected_groups": tuple(expected_groups_valid_list),
             "isbin": isbins,
             "finalize_kwargs": finalize_kwargs,
             "dtype": dtype,
+            "core_dims": input_core_dims,
         },
     )
 
     # restore non-dim coord variables without the core dimension
     # TODO: shouldn't apply_ufunc handle this?
-    for var in set(ds_broad.variables) - set(ds_broad.dims):
+    for var in set(ds_broad._coord_names) - set(ds_broad._indexes) - set(ds_broad.dims):
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
-    for name, expect, by_ in zip(group_names, expected_groups, by_broad):
-        # Can't remove this till xarray handles IntervalIndex
-        if isinstance(expect, pd.IntervalIndex):
-            expect = expect.to_numpy()
+    expect3: T_ExpectIndex | np.ndarray
+    for name, expect2, by_ in zip(group_names, expected_groups_valid_list, by_da):
+        # Can't remove this until xarray handles IntervalIndex:
+        if isinstance(expect2, pd.IntervalIndex):
+            # TODO: Only place where expect3 is an ndarray, remove the type if xarray
+            # starts supporting IntervalIndex.
+            expect3 = expect2.to_numpy()
+        else:
+            expect3 = expect2
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
         # an object array of tuples
-        if name in ds_broad.indexes and isinstance(ds_broad.indexes[name], pd.MultiIndex):
+        if (
+            name in ds_broad.indexes
+            and isinstance(ds_broad.indexes[name], pd.MultiIndex)
+            and not isinstance(expect3, pd.RangeIndex)
+        ):
             levelnames = ds_broad.indexes[name].names
-            expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
-            actual[name] = expect
+            if isinstance(expect3, np.ndarray):
+                # TODO: workaoround for IntervalIndex issue.
+                raise NotImplementedError
+            expect3 = pd.MultiIndex.from_tuples(expect3.values, names=levelnames)
+            actual[name] = expect3
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)
         else:
-            actual[name] = expect
+            actual[name] = expect3
         if keep_attrs:
             actual[name].attrs = by_.attrs
 
@@ -443,7 +486,7 @@ def xarray_reduce(
                 template = obj
 
             if actual[var].ndim > 1:
-                actual[var] = _restore_dim_order(actual[var], template, by_broad[0])
+                actual[var] = _restore_dim_order(actual[var], template, by_da[0])
 
     if missing_dim:
         for k, v in missing_dim.items():
@@ -487,7 +530,7 @@ def rechunk_for_cohorts(
         Labels at which we always start a new chunk. For
         the example ``labels`` array, this would be `1`.
     chunksize : int, optional
-        nominal chunk size. Chunk size is exceded when the label
+        nominal chunk size. Chunk size is exceeded when the label
         in ``force_new_chunk_at`` is less than ``chunksize//2`` elements away.
         If None, uses median chunksize along ``dim``.
 
@@ -511,7 +554,7 @@ def rechunk_for_cohorts(
 def rechunk_for_blockwise(obj: T_DataArray | T_Dataset, dim: str, labels: T_DataArray):
     """
     Rechunks array so that group boundaries line up with chunk boundaries, allowing
-    embarassingly parallel group reductions.
+    embarrassingly parallel group reductions.
 
     This only works when the groups are sequential
     (e.g. labels = ``[0,0,0,1,1,1,1,2,2]``).
@@ -553,44 +596,3 @@ def _rechunk(func, obj, dim, labels, **kwargs):
             )
 
     return obj
-
-
-def resample_reduce(
-    resampler: Resample,
-    func: str | Aggregation,
-    keep_attrs: bool = True,
-    **kwargs,
-):
-
-    warnings.warn(
-        "flox.xarray.resample_reduce is now deprecated. Please use Xarray's resample method directly.",
-        DeprecationWarning,
-    )
-
-    obj = resampler._obj
-    dim = resampler._group_dim
-
-    # this creates a label DataArray since resample doesn't do that somehow
-    tostack = []
-    for idx, slicer in enumerate(resampler._group_indices):
-        if slicer.stop is None:
-            stop = resampler._obj.sizes[dim]
-        else:
-            stop = slicer.stop
-        tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
-    by = xr.DataArray(np.hstack(tostack), dims=(dim,), name="__resample_dim__")
-
-    result = (
-        xarray_reduce(
-            obj,
-            by,
-            func=func,
-            method="blockwise",
-            keep_attrs=keep_attrs,
-            **kwargs,
-        )
-        .rename({"__resample_dim__": dim})
-        .transpose(dim, ...)
-    )
-    result[dim] = resampler._unique_coord.data
-    return result

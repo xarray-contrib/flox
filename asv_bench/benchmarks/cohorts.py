@@ -42,9 +42,9 @@ class Cohorts:
         )[0]
         return len(result.dask.layers)
 
-    track_num_tasks.unit = "tasks"
-    track_num_tasks_optimized.unit = "tasks"
-    track_num_layers.unit = "layers"
+    track_num_tasks.unit = "tasks"  # type: ignore[attr-defined] # Lazy
+    track_num_tasks_optimized.unit = "tasks"  # type: ignore[attr-defined] # Lazy
+    track_num_layers.unit = "layers"  # type: ignore[attr-defined] # Lazy
 
 
 class NWMMidwest(Cohorts):
@@ -92,8 +92,8 @@ class ERA5MonthHour(ERA5Dataset, Cohorts):
         by = (self.time.dt.month.values, self.time.dt.hour.values)
         ret = flox.core._factorize_multiple(
             by,
-            expected_groups=(pd.Index(np.arange(1, 13)), pd.Index(np.arange(1, 25))),
-            by_is_dask=False,
+            (pd.Index(np.arange(1, 13)), pd.Index(np.arange(1, 25))),
+            False,
             reindex=False,
         )
         # Add one so the rechunk code is simpler and makes sense

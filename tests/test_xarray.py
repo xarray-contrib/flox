@@ -6,16 +6,14 @@ import pytest
 xr = pytest.importorskip("xarray")
 # isort: on
 
-from flox.xarray import rechunk_for_blockwise, resample_reduce, xarray_reduce
+from flox.xarray import rechunk_for_blockwise, xarray_reduce
 
-from . import assert_equal, engine, has_dask, raise_if_dask_computes, requires_dask
+from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
-# isort: off
 if has_dask:
     import dask
 
     dask.config.set(scheduler="sync")
-# isort: on
 
 try:
     # Should test against legacy xarray implementation
@@ -168,17 +166,26 @@ def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
 
 
 @requires_dask
-def test_dask_groupers_error():
+@pytest.mark.parametrize(
+    "expected_groups",
+    (None, (None, None), [[1, 2], [1, 2]]),
+)
+def test_validate_expected_groups(expected_groups):
     da = xr.DataArray(
         [1.0, 2.0], dims="x", coords={"labels": ("x", [1, 2]), "labels2": ("x", [1, 2])}
     )
     with pytest.raises(ValueError):
-        xarray_reduce(da.chunk({"x": 2, "z": 1}), "labels", "labels2", func="count")
+        xarray_reduce(
+            da.chunk({"x": 1}),
+            "labels",
+            "labels2",
+            func="count",
+            expected_groups=expected_groups,
+        )
 
 
 @requires_dask
 def test_xarray_reduce_single_grouper(engine):
-
     # DataArray
     ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", engine=engine)
@@ -223,7 +230,6 @@ def test_xarray_reduce_single_grouper(engine):
 
 
 def test_xarray_reduce_errors():
-
     da = xr.DataArray(np.ones((12,)), dims="x")
     by = xr.DataArray(np.ones((12,)), dims="x")
 
@@ -237,47 +243,6 @@ def test_xarray_reduce_errors():
     if has_dask:
         with pytest.raises(ValueError, match="provide expected_groups"):
             xarray_reduce(da, by.chunk(), func="mean")
-
-
-@pytest.mark.parametrize("isdask", [True, False])
-@pytest.mark.parametrize("dataarray", [True, False])
-@pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
-def test_xarray_resample(chunklen, isdask, dataarray, engine):
-    if isdask:
-        if not has_dask:
-            pytest.skip()
-        ds = xr.tutorial.open_dataset("air_temperature", chunks={"time": chunklen})
-    else:
-        ds = xr.tutorial.open_dataset("air_temperature")
-
-    if dataarray:
-        ds = ds.air
-
-    resampler = ds.resample(time="M")
-    with pytest.warns(DeprecationWarning):
-        actual = resample_reduce(resampler, "mean", engine=engine)
-    expected = resampler.mean()
-    xr.testing.assert_allclose(actual, expected)
-
-    with xr.set_options(use_flox=True):
-        actual = resampler.mean()
-    xr.testing.assert_allclose(actual, expected)
-
-
-@requires_dask
-def test_xarray_resample_dataset_multiple_arrays(engine):
-    # regression test for #35
-    times = pd.date_range("2000", periods=5)
-    foo = xr.DataArray(range(5), dims=["time"], coords=[times], name="foo")
-    bar = xr.DataArray(range(1, 6), dims=["time"], coords=[times], name="bar")
-    ds = xr.merge([foo, bar]).chunk({"time": 4})
-
-    resampler = ds.resample(time="4D")
-    # The separate computes are necessary here to force xarray
-    # to compute all variables in result at the same time.
-    expected = resampler.mean().compute()
-    result = resample_reduce(resampler, "mean", engine=engine).compute()
-    xr.testing.assert_allclose(expected, result)
 
 
 @requires_dask
@@ -336,6 +301,8 @@ def test_multi_index_groupby_sum(engine):
     expected = ds.sum("z")
     stacked = ds.stack(space=["x", "y"])
     actual = xarray_reduce(stacked, "space", dim="z", func="sum", engine=engine)
+    expected_xarray = stacked.groupby("space").sum("z")
+    assert_equal(expected_xarray, actual)
     assert_equal(expected, actual.unstack("space"))
 
     actual = xarray_reduce(stacked.foo, "space", dim="z", func="sum", engine=engine)
@@ -430,22 +397,9 @@ def test_cache():
     assert len(cache.data) == 2
 
 
-@pytest.mark.parametrize("use_cftime", [True, False])
-@pytest.mark.parametrize("func", ["count", "mean"])
-def test_datetime_array_reduce(use_cftime, func, engine):
-
-    time = xr.DataArray(
-        xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
-        dims=("time",),
-        name="time",
-    )
-    expected = getattr(time.resample(time="YS"), func)()
-    actual = resample_reduce(time.resample(time="YS"), func=func, engine=engine)
-    assert_equal(expected, actual)
-
-
 @requires_dask
-def test_groupby_bins_indexed_coordinate():
+@pytest.mark.parametrize("method", ["cohorts", "map-reduce"])
+def test_groupby_bins_indexed_coordinate(method):
     ds = (
         xr.tutorial.open_dataset("air_temperature")
         .isel(time=slice(100))
@@ -460,7 +414,17 @@ def test_groupby_bins_indexed_coordinate():
         expected_groups=([40, 50, 60, 70],),
         isbin=(True,),
         func="mean",
-        method="split-reduce",
+        method=method,
+    )
+    xr.testing.assert_allclose(expected, actual)
+
+    actual = xarray_reduce(
+        ds,
+        ds.lat,
+        dim=ds.air.dims,
+        expected_groups=pd.IntervalIndex.from_breaks([40, 50, 60, 70]),
+        func="mean",
+        method=method,
     )
     xr.testing.assert_allclose(expected, actual)
 
@@ -497,6 +461,12 @@ def test_mixed_grouping(chunk):
         fill_value=0,
     )
     assert (r.sel(v1=[3, 4, 5]) == 0).all().data
+
+
+def test_alignment_error():
+    da = xr.DataArray(np.arange(10), dims="x", coords={"x": np.arange(10)})
+    with pytest.raises(ValueError):
+        xarray_reduce(da, da.x.sel(x=slice(5)), func="count")
 
 
 @pytest.mark.parametrize("add_nan", [True, False])
@@ -570,3 +540,34 @@ def test_dtype_accumulation(use_flox, chunk):
         assert np.issubdtype(actual.dtype, np.float64)
         assert np.issubdtype(actual.compute().dtype, np.float64)
         xr.testing.assert_allclose(expected, actual, **tolerance64)
+
+
+def test_preserve_multiindex():
+    """Regression test for GH issue #215"""
+
+    vort = xr.DataArray(
+        name="vort",
+        data=np.random.uniform(size=(4, 2)),
+        dims=["i", "face"],
+        coords={"i": ("i", np.arange(4)), "face": ("face", np.arange(2))},
+    )
+
+    vort = (
+        vort.coarsen(i=2)
+        .construct(i=("i_region_coarse", "i_region"))
+        .stack(region=["face", "i_region_coarse"])
+    )
+
+    bins = [np.linspace(0, 1, 10)]
+    bin_intervals = tuple(pd.IntervalIndex.from_breaks(b) for b in bins)
+
+    hist = xarray_reduce(
+        xr.DataArray(1),  # weights
+        vort,  # variables we want to bin
+        func="count",  # count occurrences falling in bins
+        expected_groups=bin_intervals,  # bins for each variable
+        dim=["i_region"],  # broadcast dimensions
+        fill_value=0,  # fill empty bins with 0 counts
+    )
+
+    assert "region" in hist.coords

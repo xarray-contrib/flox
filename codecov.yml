@@ -5,6 +5,7 @@ codecov:
 comment: false
 
 ignore:
+  - 'benchmarks/*.py'
   - 'tests/*.py'
   - 'setup.py'
 

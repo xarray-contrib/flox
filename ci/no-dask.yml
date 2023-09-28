@@ -9,11 +9,12 @@ dependencies:
   - pip
   - pytest
   - pytest-cov
+  - pytest-pretty
   - pytest-xdist
   - xarray
   - numpydoc
   - pre-commit
-  - numpy_groupies>=0.9.15
+  - numpy_groupies>=0.9.19
   - pooch
   - toolz
   - numba
