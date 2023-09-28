@@ -5,7 +5,6 @@ from numbagg.grouped import group_nanmean, group_nansum
 def nansum_of_squares(
     group_idx, array, *, axis=-1, func="sum", size=None, fill_value=None, dtype=None
 ):
-
     return group_nansum(
         array**2,
         group_idx,
