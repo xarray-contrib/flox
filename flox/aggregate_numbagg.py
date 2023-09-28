@@ -51,14 +51,3 @@ def nanlen(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None)
 sum = nansum
 mean = nanmean
 sum_of_squares = nansum_of_squares
-
-# def nanprod(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
-#     return npg.aggregate_numpy.aggregate(
-#         group_idx,
-#         np.where(np.isnan(array), 1, array),
-#         axis=axis,
-#         func="prod",
-#         size=size,
-#         fill_value=fill_value,
-#         dtype=dtype,
-#     )
