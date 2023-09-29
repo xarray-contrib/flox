@@ -72,7 +72,7 @@ def xarray_reduce(
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
     method: str = "map-reduce",
-    engine: str = "numpy",
+    engine: str = None,
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,

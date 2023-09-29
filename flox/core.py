@@ -1755,7 +1755,7 @@ def groupby_reduce(
     dtype: np.typing.DTypeLike = None,
     min_count: int | None = None,
     method: T_Method = "map-reduce",
-    engine: T_Engine = "numpy",
+    engine: T_Engine = None,
     reindex: bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
 ) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy yet
@@ -1851,16 +1851,26 @@ def groupby_reduce(
     xarray.xarray_reduce
     """
 
+    bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
+    nby = len(bys)
+    by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
+    any_by_dask = any(by_is_dask)
+
+    if engine is None:
+        # choose numpy per default
+        engine = "numpy"
+
+        if nby == 1 and not any_by_dask and bys[0].ndim == 1:
+            # maybe move to helper function
+            issorted = lambda arr: (arr[:-1] <= arr[1:]).all()
+            if not _is_arg_reduction(func) and issorted(bys[0]):
+                engine = "flox"
+
     if engine == "flox" and _is_arg_reduction(func):
         raise NotImplementedError(
             "argreductions not supported for engine='flox' yet."
             "Try engine='numpy' or engine='numba' instead."
         )
-
-    bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
-    nby = len(bys)
-    by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
-    any_by_dask = any(by_is_dask)
 
     if method in ["split-reduce", "cohorts"] and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")

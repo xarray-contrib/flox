@@ -1,7 +1,7 @@
 import pytest
 
 
-@pytest.fixture(scope="module", params=["flox", "numpy", "numba"])
+@pytest.fixture(scope="module", params=[None, "flox", "numpy", "numba"])
 def engine(request):
     if request.param == "numba":
         try:
