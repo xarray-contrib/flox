@@ -635,9 +635,6 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     ],
 )
 def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engine):
-
-    print(chunks)
-
     def _maybe_chunk(arr):
         if chunks:
             return da.from_array(arr, chunks=chunks)
