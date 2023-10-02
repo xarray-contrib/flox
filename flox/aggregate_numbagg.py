@@ -16,6 +16,8 @@ def nansum_of_squares(
 
 
 def nansum(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+    if np.issubdtype(array.dtype, np.bool_):
+        array = array.astype(np.in64)
     return group_nansum(
         array,
         group_idx,
@@ -27,6 +29,8 @@ def nansum(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None)
 
 
 def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+    if np.issubdtype(array.dtype, np.int_):
+        array = array.astype(np.float64)
     return group_nanmean(
         array,
         group_idx,
