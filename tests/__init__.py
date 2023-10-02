@@ -1,5 +1,5 @@
 import importlib
-from contextlib import contextmanager
+from contextlib import nullcontext
 
 import numpy as np
 import packaging.version
@@ -46,6 +46,8 @@ def LooseVersion(vstring):
 
 
 has_dask, requires_dask = _importorskip("dask")
+has_numba, requires_numba = _importorskip("numba")
+has_numbagg, requires_numbagg = _importorskip("numbagg")
 has_xarray, requires_xarray = _importorskip("xarray")
 
 
@@ -67,15 +69,10 @@ class CountingScheduler:
         return dask.get(dsk, keys, **kwargs)
 
 
-@contextmanager
-def dummy_context():
-    yield None
-
-
 def raise_if_dask_computes(max_computes=0):
     # return a dummy context manager so that this can be used for non-dask objects
     if not has_dask:
-        return dummy_context()
+        return nullcontext()
     scheduler = CountingScheduler(max_computes)
     return dask.config.set(scheduler=scheduler)
 
