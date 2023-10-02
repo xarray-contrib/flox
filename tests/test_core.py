@@ -1243,6 +1243,9 @@ def test_custom_aggregation_blockwise():
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 def test_dtype(func, dtype, engine):
+    if engine == "numbagg":
+        # https://github.com/numbagg/numbagg/issues/121
+        pytest.skip()
     if "arg" in func or func in ["any", "all"]:
         pytest.skip()
     arr = np.ones((4, 12), dtype=dtype)
