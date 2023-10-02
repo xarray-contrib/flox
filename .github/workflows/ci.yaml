@@ -27,7 +27,7 @@ jobs:
         os: ["ubuntu-latest", "windows-latest"]
         python-version: ["3.8", "3.10"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set environment variables
@@ -74,7 +74,7 @@ jobs:
             "minimal-requirements",
           ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set up conda environment
@@ -108,7 +108,7 @@ jobs:
       run:
         shell: bash -l {0}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: 'pydata/xarray'
           fetch-depth: 0 # Fetch all history for all branches and tags.
