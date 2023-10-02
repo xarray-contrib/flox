@@ -991,6 +991,8 @@ def test_datetime_binning():
 
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_bool_reductions(func, engine):
+    if func == "nanmean" and engine == "numbagg":
+        pytest.xfail(reason="https://github.com/numbagg/numbagg/issues/131")
     if "arg" in func and engine == "flox":
         pytest.skip()
     groups = np.array([1, 1, 1])
