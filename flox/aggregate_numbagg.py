@@ -48,6 +48,6 @@ def nanlen(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None)
     )
 
 
-sum = nansum
-mean = nanmean
-sum_of_squares = nansum_of_squares
+# sum = nansum
+# mean = nanmean
+# sum_of_squares = nansum_of_squares
