@@ -751,7 +751,7 @@ def test_npg_nanarg_bug(func):
 @pytest.mark.parametrize("method", ["cohorts", "map-reduce"])
 @pytest.mark.parametrize("chunk_labels", [False, True])
 @pytest.mark.parametrize(
-    "chunks", ((), pytest.param((1,), marks=requires_dask), pytest.param((2,), marks=requires_dask))
+    "chunks", ((), pytest.param((1,), marks=requires_dask), pytest.param((2,), marks=requires_dask),)
 )
 def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
     array = [1, 1, 1, 1, 1, 1]
