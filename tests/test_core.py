@@ -105,7 +105,7 @@ def test_alignment_error():
 
 
 @pytest.mark.parametrize("dtype", (float, int))
-@pytest.mark.parametrize("chunk", [False, True])
+@pytest.mark.parametrize("chunk", [False, pytest.param(True, marks=requires_dask)])
 # TODO: make this intp when python 3.8 is dropped
 @pytest.mark.parametrize("expected_groups", [None, [0, 1, 2], np.array([0, 1, 2], dtype=np.int64)])
 @pytest.mark.parametrize(
@@ -145,7 +145,7 @@ def test_groupby_reduce(
 ) -> None:
     array = array.astype(dtype)
     if chunk:
-        if not has_dask or expected_groups is None:
+        if expected_groups is None:
             pytest.skip()
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
         by = da.from_array(by, chunks=(3,) if by.ndim == 1 else (1, 3))
@@ -166,7 +166,7 @@ def test_groupby_reduce(
         engine=engine,
     )
     # we use pd.Index(expected_groups).to_numpy() which is always int64
-    # for the values in this tests
+    # for the values in this test
     if expected_groups is None:
         g_dtype = by.dtype
     elif isinstance(expected_groups, np.ndarray):
@@ -191,14 +191,20 @@ def gen_array_by(size, func):
     return array, by
 
 
-@pytest.mark.parametrize("chunks", [None, -1, 3, 4])
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        None,
+        pytest.param(-1, marks=requires_dask),
+        pytest.param(3, marks=requires_dask),
+        pytest.param(4, marks=requires_dask),
+    ],
+)
 @pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("size", ((12,), (12, 9)))
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
-    if chunks is not None and not has_dask:
-        pytest.skip()
     if "arg" in func and engine == "flox":
         pytest.skip()
 
@@ -390,15 +396,15 @@ def test_numpy_reduce_nd_md():
 def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtype, engine, reindex):
     """Tests groupby_reduce with dask arrays against groupby_reduce with numpy arrays"""
 
-    rng = np.random.default_rng(12345)
-    array = dask.array.from_array(rng.random(shape), chunks=array_chunks).astype(dtype)
-    array = dask.array.ones(shape, chunks=array_chunks)
-
     if func in ["first", "last"]:
         pytest.skip()
 
     if "arg" in func and (engine == "flox" or reindex):
         pytest.skip()
+
+    rng = np.random.default_rng(12345)
+    array = dask.array.from_array(rng.random(shape), chunks=array_chunks).astype(dtype)
+    array = dask.array.ones(shape, chunks=array_chunks)
 
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
     if add_nan:
@@ -612,7 +618,14 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     assert_equal(actual, expected, tolerance)
 
 
-@pytest.mark.parametrize("reindex,chunks", [(None, None), (False, (2, 2, 3)), (True, (2, 2, 3))])
+@pytest.mark.parametrize(
+    "reindex, chunks",
+    [
+        (None, None),
+        pytest.param(False, (2, 2, 3), marks=requires_dask),
+        pytest.param(True, (2, 2, 3), marks=requires_dask),
+    ],
+)
 @pytest.mark.parametrize(
     "axis, groups, expected_shape",
     [
@@ -624,8 +637,6 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
 def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engine):
     def _maybe_chunk(arr):
         if chunks:
-            if not has_dask:
-                pytest.skip()
             return da.from_array(arr, chunks=chunks)
         else:
             return arr
@@ -739,7 +750,14 @@ def test_npg_nanarg_bug(func):
 )
 @pytest.mark.parametrize("method", ["cohorts", "map-reduce"])
 @pytest.mark.parametrize("chunk_labels", [False, True])
-@pytest.mark.parametrize("chunks", ((), (1,), (2,)))
+@pytest.mark.parametrize(
+    "chunks",
+    (
+        (),
+        pytest.param((1,), marks=requires_dask),
+        pytest.param((2,), marks=requires_dask),
+    ),
+)
 def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
     array = [1, 1, 1, 1, 1, 1]
     labels = [0.2, 1.5, 1.9, 2, 3, 20]
@@ -748,8 +766,6 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
         pytest.xfail()
 
     if chunks:
-        if not has_dask:
-            pytest.skip()
         array = dask.array.from_array(array, chunks=chunks)
         if chunk_labels:
             labels = dask.array.from_array(labels, chunks=chunks)
@@ -825,15 +841,13 @@ def test_rechunk_for_cohorts(chunk_at, expected):
     assert rechunked.chunks == expected
 
 
-@pytest.mark.parametrize("chunks", [None, 3])
+@pytest.mark.parametrize("chunks", [None, pytest.param(3, marks=requires_dask)])
 @pytest.mark.parametrize("fill_value", [123, np.nan])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_fill_value_behaviour(func, chunks, fill_value, engine):
     # fill_value = np.nan tests promotion of int counts to float
     # This is used by xarray
     if func in ["all", "any"] or "arg" in func:
-        pytest.skip()
-    if chunks is not None and not has_dask:
         pytest.skip()
 
     npfunc = _get_array_func(func)
@@ -1050,11 +1064,8 @@ def test_factorize_values_outside_bins():
     assert_equal(expected, actual)
 
 
-@pytest.mark.parametrize("chunk", [True, False])
+@pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
 def test_multiple_groupers_bins(chunk) -> None:
-    if chunk and not has_dask:
-        pytest.skip()
-
     xp = dask.array if chunk else np
     array_kwargs = {"chunks": 2} if chunk else {}
     array = xp.ones((5, 2), **array_kwargs, dtype=np.int64)
@@ -1087,9 +1098,9 @@ def test_multiple_groupers_bins(chunk) -> None:
         np.arange(2, 4).reshape(1, 2),
     ],
 )
-@pytest.mark.parametrize("chunk", [True, False])
+@pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
 def test_multiple_groupers(chunk, by1, by2, expected_groups) -> None:
-    if chunk and (not has_dask or expected_groups is None):
+    if chunk and expected_groups is None:
         pytest.skip()
 
     xp = dask.array if chunk else np
@@ -1233,7 +1244,7 @@ def test_dtype(func, dtype, engine):
         pytest.skip()
     arr = np.ones((4, 12), dtype=dtype)
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
-    actual, _ = groupby_reduce(arr, labels, func=func, dtype=np.float64)
+    actual, _ = groupby_reduce(arr, labels, func=func, dtype=np.float64, engine=engine)
     assert actual.dtype == np.dtype("float64")
 
 
