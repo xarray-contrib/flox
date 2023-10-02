@@ -7,16 +7,14 @@ import operator
 import sys
 import warnings
 from collections import namedtuple
+from collections.abc import Mapping, Sequence
 from functools import partial, reduce
 from numbers import Integral
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
     Literal,
-    Mapping,
-    Sequence,
     Union,
     overload,
 )
@@ -74,8 +72,8 @@ if TYPE_CHECKING:
     T_IsBins = Union[bool | Sequence[bool]]
 
 
-IntermediateDict = Dict[Union[str, Callable], Any]
-FinalResultsDict = Dict[str, Union["DaskArray", np.ndarray]]
+IntermediateDict = dict[Union[str, Callable], Any]
+FinalResultsDict = dict[str, Union["DaskArray", np.ndarray]]
 FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 
 # This dummy axis is inserted using np.expand_dims
