@@ -1857,6 +1857,14 @@ def groupby_reduce(
             "Try engine='numpy' or engine='numba' instead."
         )
 
+    if engine == "numbagg" and dtype is not None:
+        raise NotImplementedError(
+            "numbagg does not support the `dtype` kwarg. Either cast your "
+            "input arguments to `dtype` or use a different `engine`: "
+            "'flox' or 'numpy' or 'numba'. "
+            "See https://github.com/numbagg/numbagg/issues/121."
+        )
+
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)

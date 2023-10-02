@@ -854,6 +854,9 @@ def test_fill_value_behaviour(func, chunks, fill_value, engine):
 @pytest.mark.parametrize("func", ["mean", "sum"])
 @pytest.mark.parametrize("dtype", ["float32", "float64", "int32", "int64"])
 def test_dtype_preservation(dtype, func, engine):
+    if engine == "numbagg":
+        # https://github.com/numbagg/numbagg/issues/121
+        pytest.skip()
     if func == "sum" or (func == "mean" and "float" in dtype):
         expected = np.dtype(dtype)
     elif func == "mean" and "int" in dtype:
