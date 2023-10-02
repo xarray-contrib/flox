@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Hashable, Iterable, Sequence, Union
+from collections.abc import Hashable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 import pandas as pd
