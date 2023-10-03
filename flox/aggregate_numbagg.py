@@ -60,6 +60,10 @@ nanfirst = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanfirst
 nanlast = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanlast)
 nanargmax = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmax)
 nanargmin = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmin)
+nanmax = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanmax)
+nanmin = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanmin)
+# nanvar = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmax)
+nanstd = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanstd)
 
 # sum = nansum
 # mean = nanmean
