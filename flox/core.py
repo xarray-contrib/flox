@@ -1307,9 +1307,6 @@ def dask_groupby_agg(
     assert isinstance(axis, Sequence)
     assert all(ax >= 0 for ax in axis)
 
-    if method == "blockwise" and not isinstance(by, np.ndarray):
-        raise NotImplementedError
-
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
     token = dask.base.tokenize(array, by, agg, expected_groups, axis)
@@ -1471,11 +1468,15 @@ def dask_groupby_agg(
         # Here one input chunk → one output chunks
         # find number of groups in each chunk, this is needed for output chunks
         # along the reduced axis
-        slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
-        groups_in_block = tuple(_unique(by_input[slc]) for slc in slices)
-        groups = (np.concatenate(groups_in_block),)
-        ngroups_per_block = tuple(len(grp) for grp in groups_in_block)
-        group_chunks = (ngroups_per_block,)
+        if isinstance(by, dask.array.Array):
+            groups = (expected_groups,)
+            group_chunks = ((len(expected_groups),),)
+        else:
+            slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
+            groups_in_block = tuple(_unique(by_input[slc]) for slc in slices)
+            groups = (np.concatenate(groups_in_block),)
+            ngroups_per_block = tuple(len(grp) for grp in groups_in_block)
+            group_chunks = (ngroups_per_block,)
     else:
         raise ValueError(f"Unknown method={method}.")
 
@@ -1544,6 +1545,7 @@ def _validate_reindex(
     is_dask_array: bool,
 ) -> bool:
     all_numpy = not is_dask_array and not any_by_dask
+
     if reindex is True and not all_numpy:
         if _is_arg_reduction(func):
             raise NotImplementedError
@@ -1562,7 +1564,11 @@ def _validate_reindex(
             # have to do the grouped_combine since there's no good fill_value
             reindex = False
 
-        if method == "blockwise" or _is_arg_reduction(func):
+        if method == "blockwise":
+            # for grouping by dask arrays, we set reindex=True
+            reindex = any_by_dask
+
+        elif _is_arg_reduction(func):
             reindex = False
 
         elif method == "cohorts":
@@ -1835,7 +1841,7 @@ def groupby_reduce(
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using ``method="cohorts"``. By default, it is turned off for argreductions.
     finalize_kwargs : dict, optional
-        Kwargs passed to finalize the reduction such as ``ddof`` for var, std.
+        Kwargs passed to finalize the reduction such as ``ddof`` for var, std or ``q`` for quantile.
 
     Returns
     -------
@@ -2023,7 +2029,7 @@ def groupby_reduce(
         result, groups = partial_agg(
             array,
             by_,
-            expected_groups=None if method == "blockwise" else expected_groups,
+            expected_groups=expected_groups,
             agg=agg,
             reindex=reindex,
             method=method,

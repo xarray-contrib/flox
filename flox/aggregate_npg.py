@@ -100,3 +100,51 @@ def _len(group_idx, array, engine, *, func, axis=-1, size=None, fill_value=None,
 
 len = partial(_len, func="len")
 nanlen = partial(_len, func="nanlen")
+
+
+def median(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        array,
+        func=np.median,
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+
+
+def nanmedian(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        array,
+        func=np.nanmedian,
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+
+
+def quantile(group_idx, array, engine, *, q, axis=-1, size=None, fill_value=None, dtype=None):
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        array,
+        func=partial(np.quantile, q=q),
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+
+
+def nanquantile(group_idx, array, engine, *, q, axis=-1, size=None, fill_value=None, dtype=None):
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        array,
+        func=partial(np.nanquantile, q=q),
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )

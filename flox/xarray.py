@@ -164,7 +164,7 @@ def xarray_reduce(
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
     **finalize_kwargs
-        kwargs passed to the finalize function, like ``ddof`` for var, std.
+        kwargs passed to the finalize function, like ``ddof`` for var, std or ``q`` for quantile.
 
     Returns
     -------

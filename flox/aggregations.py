@@ -467,8 +467,10 @@ any_ = Aggregation(
 
 # numpy_groupies does not support median
 # And the dask version is really hard!
-# median = Aggregation("median", chunk=None, combine=None, fill_value=None)
-# nanmedian = Aggregation("nanmedian", chunk=None, combine=None, fill_value=None)
+median = Aggregation(name="median", fill_value=-1, chunk=None, combine=None)
+nanmedian = Aggregation(name="nanmedian", fill_value=-1, chunk=None, combine=None)
+quantile = Aggregation(name="quantile", fill_value=-1, chunk=None, combine=None)
+nanquantile = Aggregation(name="nanquantile", fill_value=-1, chunk=None, combine=None)
 
 aggregations = {
     "any": any_,
@@ -496,6 +498,10 @@ aggregations = {
     "nanfirst": nanfirst,
     "last": last,
     "nanlast": nanlast,
+    "median": median,
+    "nanmedian": nanmedian,
+    "quantile": quantile,
+    "nanquantile": nanquantile,
 }
 
 
