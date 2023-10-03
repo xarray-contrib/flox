@@ -62,6 +62,8 @@ nanargmax = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargm
 nanargmin = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmin)
 nanmax = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanmax)
 nanmin = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanmin)
+any_ = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanany)
+all_ = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanall)
 # nanvar = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmax)
 nanstd = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanstd)
 
