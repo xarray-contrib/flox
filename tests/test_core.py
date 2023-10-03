@@ -19,6 +19,7 @@ from flox.core import (
     _validate_reindex,
     factorize_,
     find_group_cohorts,
+    groupby_cumulate,
     groupby_reduce,
     rechunk_for_cohorts,
     reindex_,
@@ -1476,3 +1477,16 @@ def test_method_check_numpy():
         ]
     )
     assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("func", ["cumsum"])  # "cumprod"
+def test_cumulatives(func: T_Agg) -> None:
+    import numpy_groupies as npg
+
+    group_idx = np.array([4, 3, 3, 4, 4, 1, 1, 1, 7, 8, 7, 4, 3, 3, 1, 1])
+    a = np.array([3, 4, 1, 3, 9, 9, 6, 7, 7, 0, 8, 2, 1, 8, 9, 8])
+    expected = npg.aggregate(group_idx, a, func=func)
+
+    actual = groupby_cumulate(a, group_idx, func=func, engine="numpy")
+
+    np.testing.assert_allclose(expected, actual)

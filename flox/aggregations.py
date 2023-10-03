@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import warnings
 from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
 
 import numpy as np
 import numpy_groupies as npg
@@ -14,12 +14,13 @@ from . import xrdtypes as dtypes
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
+    T_Kind = Literal["reduce", "argreduce", "cumulate"]
 
 
 def _is_arg_reduction(func: str | Aggregation) -> bool:
     if isinstance(func, str) and func in ["argmin", "argmax", "nanargmax", "nanargmin"]:
         return True
-    if isinstance(func, Aggregation) and func.reduction_type == "argreduce":
+    if isinstance(func, Aggregation) and func.kind == "argreduce":
         return True
     return False
 
@@ -130,7 +131,7 @@ class Aggregation:
         final_fill_value=dtypes.NA,
         dtypes=None,
         final_dtype: DTypeLike | None = None,
-        reduction_type="reduce",
+        kind: T_Kind = "reduce",
     ):
         """
         Blueprint for computing grouped aggregations.
@@ -159,7 +160,7 @@ class Aggregation:
             final result.
         preprocess : callable
             For dask inputs only. Preprocess inputs before ``chunk`` stage.
-        reduction_type : {"reduce", "argreduce"}
+        kind : {"reduce", "argreduce"}
             Type of reduction.
         fill_value : number or tuple(number), optional
             Value to use when a group has no members. If single value will be converted
@@ -178,7 +179,7 @@ class Aggregation:
         # preprocess before blockwise
         self.preprocess = preprocess
         # Use "chunk_reduce" or "chunk_argreduce"
-        self.reduction_type = reduction_type
+        self.kind = kind
         self.numpy: FuncTuple = (numpy,) if numpy else (self.name,)
         # initialize blockwise reduction
         self.chunk: FuncTuple = _atleast_1d(chunk)
@@ -222,7 +223,7 @@ class Aggregation:
             Aggregation,
             self.name,
             self.preprocess,
-            self.reduction_type,
+            self.kind,
             self.numpy,
             self.chunk,
             self.combine,
@@ -394,7 +395,7 @@ argmax = Aggregation(
     preprocess=argreduce_preprocess,
     chunk=("max", "argmax"),  # order is important
     combine=("max", "argmax"),
-    reduction_type="argreduce",
+    kind="argreduce",
     fill_value=(dtypes.NINF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
@@ -407,7 +408,7 @@ argmin = Aggregation(
     preprocess=argreduce_preprocess,
     chunk=("min", "argmin"),  # order is important
     combine=("min", "argmin"),
-    reduction_type="argreduce",
+    kind="argreduce",
     fill_value=(dtypes.INF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
@@ -420,7 +421,7 @@ nanargmax = Aggregation(
     preprocess=argreduce_preprocess,
     chunk=("nanmax", "nanargmax"),  # order is important
     combine=("max", "argmax"),
-    reduction_type="argreduce",
+    kind="argreduce",
     fill_value=(dtypes.NINF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
@@ -433,7 +434,7 @@ nanargmin = Aggregation(
     preprocess=argreduce_preprocess,
     chunk=("nanmin", "nanargmin"),  # order is important
     combine=("min", "argmin"),
-    reduction_type="argreduce",
+    kind="argreduce",
     fill_value=(dtypes.INF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
@@ -470,7 +471,18 @@ any_ = Aggregation(
 # median = Aggregation("median", chunk=None, combine=None, fill_value=None)
 # nanmedian = Aggregation("nanmedian", chunk=None, combine=None, fill_value=None)
 
+# Cumulatives:
+cumsum_ = Aggregation(
+    "cumsum",
+    chunk=None,
+    combine="sum",
+    fill_value=0,
+    kind="cumulate",
+)
+
+
 aggregations = {
+    # Reductions:
     "any": any_,
     "all": all_,
     "count": count,
@@ -496,6 +508,8 @@ aggregations = {
     "nanfirst": nanfirst,
     "last": last,
     "nanlast": nanlast,
+    # Cumulatives:
+    "cumsum": cumsum_,
 }
 
 
