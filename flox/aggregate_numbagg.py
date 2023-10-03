@@ -54,7 +54,7 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
 
 
 nansum_of_squares = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nansum_of_squares)
-nanlen = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_count)
+nanlen = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nancount)
 nanprod = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanprod)
 nanfirst = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanfirst)
 nanlast = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanlast)
