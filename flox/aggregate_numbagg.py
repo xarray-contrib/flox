@@ -53,6 +53,20 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     )
 
 
+def nanvar(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None, ddof=0):
+    if np.issubdtype(array.dtype, np.int_):
+        array = array.astype(np.float64)
+    return numbagg.grouped.group_nanvar(
+        array,
+        group_idx,
+        axis=axis,
+        num_labels=size,
+        ddof=0,
+        # fill_value=fill_value,
+        # dtype=dtype,
+    )
+
+
 def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     if np.issubdtype(array.dtype, np.int_):
         array = array.astype(np.float64)
@@ -61,6 +75,7 @@ def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None)
         group_idx,
         axis=axis,
         num_labels=size,
+        ddof=0,
         # fill_value=fill_value,
         # dtype=dtype,
     )
