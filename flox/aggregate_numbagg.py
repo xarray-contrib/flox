@@ -53,6 +53,19 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     )
 
 
+def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+    if np.issubdtype(array.dtype, np.int_):
+        array = array.astype(np.float64)
+    return numbagg.grouped.group_nanstd(
+        array,
+        group_idx,
+        axis=axis,
+        num_labels=size,
+        # fill_value=fill_value,
+        # dtype=dtype,
+    )
+
+
 nansum_of_squares = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nansum_of_squares)
 nanlen = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nancount)
 nanprod = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanprod)
@@ -65,7 +78,7 @@ nanmin = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanmin)
 any_ = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanany)
 all_ = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanall)
 # nanvar = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmax)
-nanstd = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanstd)
+# nanstd = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanstd)
 
 # sum = nansum
 # mean = nanmean
