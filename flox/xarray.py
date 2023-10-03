@@ -145,6 +145,8 @@ def xarray_reduce(
             for a reduction that is not yet implemented.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
+          * ``"numbagg"``:
+            Use the reductions supported by ``numbagg.grouped``.
     keep_attrs : bool, optional
         Preserve attrs?
     skipna : bool, optional

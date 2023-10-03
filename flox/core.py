@@ -67,7 +67,7 @@ if TYPE_CHECKING:
     T_AxesOpt = Union[T_Axis, T_Axes, None]
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
-    T_Engine = Literal["flox", "numpy", "numba"]
+    T_Engine = Literal["flox", "numpy", "numba", "numbagg"]
     T_Method = Literal["map-reduce", "blockwise", "cohorts"]
     T_IsBins = Union[bool | Sequence[bool]]
 
@@ -1816,7 +1816,7 @@ def groupby_reduce(
             (for 1D ``by`` only).
           * ``"split-reduce"``:
             Same as "cohorts" and will be removed soon.
-    engine : {"flox", "numpy", "numba"}, optional
+    engine : {"flox", "numpy", "numba", "numbagg"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
             Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
@@ -1828,6 +1828,8 @@ def groupby_reduce(
             for a reduction that is not yet implemented.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
+          * ``"numbagg"``:
+            Use the reductions supported by ``numbagg.grouped``.
     reindex : bool, optional
         Whether to "reindex" the blockwise results to ``expected_groups`` (possibly automatically detected).
         If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
