@@ -1467,6 +1467,8 @@ def dask_groupby_agg(
     elif method == "blockwise":
         reduced = intermediate
         if reindex:
+            if TYPE_CHECKING:
+                assert expected_groups is not None
             # TODO: we could have `expected_groups` be a dask array with appropriate chunks
             # for now, we have a numpy array that is interpreted as listing all group labels
             # that are present in every chunk
