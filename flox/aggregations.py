@@ -184,6 +184,8 @@ class Aggregation:
         self.chunk: FuncTuple = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
         self.combine: FuncTuple = _atleast_1d(combine)
+        # simpler reductions used with the "simple combine" algorithm
+        self.simple_combine: tuple[Callable, ...] = ()
         # final aggregation
         self.aggregate: Callable | str = aggregate if aggregate else self.combine[0]
         # finalize results (see mean)
@@ -205,7 +207,7 @@ class Aggregation:
 
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
-        self.min_count: int | None = None
+        self.min_count: int = 0
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
@@ -419,7 +421,7 @@ nanargmax = Aggregation(
     chunk=("nanmax", "nanargmax"),  # order is important
     combine=("max", "argmax"),
     reduction_type="argreduce",
-    fill_value=(dtypes.NINF, -1),
+    fill_value=(dtypes.NINF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
     dtypes=(None, np.intp),
@@ -432,7 +434,7 @@ nanargmin = Aggregation(
     chunk=("nanmin", "nanargmin"),  # order is important
     combine=("min", "argmin"),
     reduction_type="argreduce",
-    fill_value=(dtypes.INF, -1),
+    fill_value=(dtypes.INF, 0),
     final_fill_value=-1,
     finalize=_pick_second,
     dtypes=(None, np.intp),
@@ -502,7 +504,7 @@ def _initialize_aggregation(
     dtype,
     array_dtype,
     fill_value,
-    min_count: int | None,
+    min_count: int,
     finalize_kwargs: dict[Any, Any] | None,
 ) -> Aggregation:
     if not isinstance(func, Aggregation):
@@ -562,7 +564,7 @@ def _initialize_aggregation(
     # absent in one block, but present in another block
     # We set it for numpy to get nansum, nanprod tests to pass
     # where the identity element is 0, 1
-    if min_count is not None:
+    if min_count > 0:
         agg.min_count = min_count
         agg.chunk += ("nanlen",)
         agg.numpy += ("nanlen",)
@@ -571,5 +573,19 @@ def _initialize_aggregation(
         agg.fill_value["numpy"] += (0,)
         agg.dtype["intermediate"] += (np.intp,)
         agg.dtype["numpy"] += (np.intp,)
+    else:
+        agg.min_count = 0
+
+    simple_combine: list[Callable] = []
+    for combine in agg.combine:
+        if isinstance(combine, str):
+            if combine in ["nanfirst", "nanlast"]:
+                simple_combine.append(getattr(xrutils, combine))
+            else:
+                simple_combine.append(getattr(np, combine))
+        else:
+            simple_combine.append(combine)
+
+    agg.simple_combine = tuple(simple_combine)
 
     return agg

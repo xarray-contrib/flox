@@ -1,12 +1,13 @@
 # The functions defined here were copied based on the source code
 # defined in xarray
 
-
 import datetime
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import numpy as np
 import pandas as pd
+from numpy.core.multiarray import normalize_axis_index  # type: ignore[attr-defined]
 
 try:
     import cftime
@@ -157,7 +158,7 @@ def datetime_to_numeric(array, offset=None, datetime_unit=None, dtype=float):
         if array.dtype.kind in "Mm":
             offset = _datetime_nanmin(array)
         else:
-            offset = min(array)
+            offset = array.min()
 
     # Compute timedelta object.
     # For np.datetime64, this can silently yield garbage due to overflow.
@@ -283,3 +284,36 @@ def _contains_cftime_datetimes(array) -> bool:
             return isinstance(sample, cftime.datetime)
         else:
             return False
+
+
+def _select_along_axis(values, idx, axis):
+    other_ind = np.ix_(*[np.arange(s) for s in idx.shape])
+    sl = other_ind[:axis] + (idx,) + other_ind[axis:]
+    return values[sl]
+
+
+def nanfirst(values, axis, keepdims=False):
+    if isinstance(axis, tuple):
+        (axis,) = axis
+    values = np.asarray(values)
+    axis = normalize_axis_index(axis, values.ndim)
+    idx_first = np.argmax(~pd.isnull(values), axis=axis)
+    result = _select_along_axis(values, idx_first, axis)
+    if keepdims:
+        return np.expand_dims(result, axis=axis)
+    else:
+        return result
+
+
+def nanlast(values, axis, keepdims=False):
+    if isinstance(axis, tuple):
+        (axis,) = axis
+    values = np.asarray(values)
+    axis = normalize_axis_index(axis, values.ndim)
+    rev = (slice(None),) * axis + (slice(None, None, -1),)
+    idx_last = -1 - np.argmax(~pd.isnull(values)[rev], axis=axis)
+    result = _select_along_axis(values, idx_last, axis)
+    if keepdims:
+        return np.expand_dims(result, axis=axis)
+    else:
+        return result
