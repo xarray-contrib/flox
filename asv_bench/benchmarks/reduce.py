@@ -33,8 +33,8 @@ class ChunkReduce:
 
         raise NotImplementedError
 
-    @parameterized("func, engine, expected_groups", [funcs, engines, expected_groups])
-    def time_reduce(self, func, engine, expected_groups):
+    @parameterized("func, expected_groups, engine", [funcs, expected_groups, engines])
+    def time_reduce(self, func, expected_groups, engine):
         flox.groupby_reduce(
             self.array,
             self.labels,
@@ -44,8 +44,8 @@ class ChunkReduce:
             expected_groups=expected_groups,
         )
 
-    @parameterized("func, engine, expected_groups", [funcs, engines, expected_groups])
-    def peakmem_reduce(self, func, engine, expected_groups):
+    @parameterized("func, expected_groups, engine", [funcs, expected_groups, engines])
+    def peakmem_reduce(self, func, expected_groups, engine):
         flox.groupby_reduce(
             self.array,
             self.labels,
@@ -70,29 +70,29 @@ class ChunkReduce1DUnsorted(ChunkReduce):
         self.axis = -1
 
 
-class ChunkReduce2D(ChunkReduce):
-    def setup(self, *args, **kwargs):
-        self.array = np.ones((N, N))
-        self.labels = np.repeat(np.arange(N // 5), repeats=5)
-        self.axis = -1
+# class ChunkReduce2D(ChunkReduce):
+#     def setup(self, *args, **kwargs):
+#         self.array = np.ones((N, N))
+#         self.labels = np.repeat(np.arange(N // 5), repeats=5)
+#         self.axis = -1
 
 
-class ChunkReduce2DUnsorted(ChunkReduce):
-    def setup(self, *args, **kwargs):
-        self.array = np.ones((N, N))
-        self.labels = np.random.permutation(np.repeat(np.arange(N // 5), repeats=5))
-        self.axis = -1
+# class ChunkReduce2DUnsorted(ChunkReduce):
+#     def setup(self, *args, **kwargs):
+#         self.array = np.ones((N, N))
+#         self.labels = np.random.permutation(np.repeat(np.arange(N // 5), repeats=5))
+#         self.axis = -1
 
 
-class ChunkReduce2DAllAxes(ChunkReduce):
-    def setup(self, *args, **kwargs):
-        self.array = np.ones((N, N))
-        self.labels = np.repeat(np.arange(N // 5), repeats=5)
-        self.axis = None
+# class ChunkReduce2DAllAxes(ChunkReduce):
+#     def setup(self, *args, **kwargs):
+#         self.array = np.ones((N, N))
+#         self.labels = np.repeat(np.arange(N // 5), repeats=5)
+#         self.axis = None
 
 
-class ChunkReduce2DAllAxesUnsorted(ChunkReduce):
-    def setup(self, *args, **kwargs):
-        self.array = np.ones((N, N))
-        self.labels = np.random.permutation(np.repeat(np.arange(N // 5), repeats=5))
-        self.axis = None
+# class ChunkReduce2DAllAxesUnsorted(ChunkReduce):
+#     def setup(self, *args, **kwargs):
+#         self.array = np.ones((N, N))
+#         self.labels = np.random.permutation(np.repeat(np.arange(N // 5), repeats=5))
+#         self.axis = None
