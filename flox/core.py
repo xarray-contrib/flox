@@ -1545,7 +1545,6 @@ def _validate_reindex(
     is_dask_array: bool,
 ) -> bool:
     all_numpy = not is_dask_array and not any_by_dask
-
     if reindex is True and not all_numpy:
         if _is_arg_reduction(func):
             raise NotImplementedError
