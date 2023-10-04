@@ -41,7 +41,6 @@ requires = [
     "numpy_groupies>=0.9.19",
     "toolz",
     "setuptools>=61.0.0",
-    "wheel",
     "setuptools_scm[toml]>=7.0",
 ]
 build-backend = "setuptools.build_meta"
@@ -77,6 +76,8 @@ ignore = [
     "E731",
 ]
 select = [
+    # Bugbear
+    "B",
     # Pyflakes
     "F",
     # Pycodestyle
@@ -124,6 +125,8 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 addopts = "--tb=short"
+minversion = "7"
+testpaths = ["tests"]
 
 
 [tool.codespell]
