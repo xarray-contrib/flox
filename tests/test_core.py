@@ -1387,6 +1387,33 @@ def test_validate_reindex() -> None:
             )
             assert actual is False
 
+    with pytest.raises(ValueError):
+        _validate_reindex(
+            True,
+            "sum",
+            method="blockwise",
+            expected_groups=np.array([1, 2, 3]),
+            any_by_dask=False,
+            is_dask_array=True,
+        )
+
+    assert _validate_reindex(
+        True,
+        "sum",
+        method="blockwise",
+        expected_groups=np.array([1, 2, 3]),
+        any_by_dask=True,
+        is_dask_array=True,
+    )
+    assert _validate_reindex(
+        None,
+        "sum",
+        method="blockwise",
+        expected_groups=np.array([1, 2, 3]),
+        any_by_dask=True,
+        is_dask_array=True,
+    )
+
 
 @requires_dask
 def test_1d_blockwise_sort_optimization():

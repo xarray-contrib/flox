@@ -1552,7 +1552,7 @@ def _validate_reindex(
     if reindex is True and not all_numpy:
         if _is_arg_reduction(func):
             raise NotImplementedError
-        if method in ["blockwise", "cohorts"]:
+        if method == "cohorts" or (method == "blockwise" and not any_by_dask):
             raise ValueError(
                 "reindex=True is not a valid choice for method='blockwise' or method='cohorts'."
             )
