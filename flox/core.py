@@ -1313,6 +1313,8 @@ def dask_groupby_agg(
 
     if expected_groups is None and reindex:
         expected_groups = _get_expected_groups(by, sort=sort)
+    if method == "cohorts":
+        assert reindex is False
 
     by_input = by
 
