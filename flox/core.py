@@ -1865,6 +1865,9 @@ def groupby_reduce(
             "Try engine='numpy' or engine='numba' instead."
         )
 
+    if func == "quantile" and "q" not in finalize_kwargs:
+        raise ValueError("Please pass `q` for quantile calculations.")
+
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
