@@ -179,7 +179,7 @@ def _visualize_cohorts(by, cohorts, ax=None):
 
 def visualize_groups_2d(labels, y0=0, **kwargs):
     colors = mpl.cm.tab10_r
-    for i, chunk in enumerate(labels):
+    for _i, chunk in enumerate(labels):
         chunk = np.atleast_2d(chunk)
         draw_mesh(
             *chunk.shape,
