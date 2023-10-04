@@ -63,6 +63,13 @@ class ChunkReduce1D(ChunkReduce):
         self.axis = -1
 
 
+class ChunkReduce1DUnsorted(ChunkReduce):
+    def setup(self, *args, **kwargs):
+        self.array = np.ones((N,))
+        self.labels = np.random.permutation(np.repeat(np.arange(5), repeats=N // 5))
+        self.axis = -1
+
+
 class ChunkReduce2D(ChunkReduce):
     def setup(self, *args, **kwargs):
         self.array = np.ones((N, N))
@@ -70,8 +77,22 @@ class ChunkReduce2D(ChunkReduce):
         self.axis = -1
 
 
+class ChunkReduce2DUnsorted(ChunkReduce):
+    def setup(self, *args, **kwargs):
+        self.array = np.ones((N, N))
+        self.labels = np.random.permutation(np.repeat(np.arange(N // 5), repeats=5))
+        self.axis = -1
+
+
 class ChunkReduce2DAllAxes(ChunkReduce):
     def setup(self, *args, **kwargs):
         self.array = np.ones((N, N))
         self.labels = np.repeat(np.arange(N // 5), repeats=5)
+        self.axis = None
+
+
+class ChunkReduce2DAllAxesUnsorted(ChunkReduce):
+    def setup(self, *args, **kwargs):
+        self.array = np.ones((N, N))
+        self.labels = np.random.permutation(np.repeat(np.arange(N // 5), repeats=5))
         self.axis = None
