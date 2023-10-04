@@ -1465,13 +1465,17 @@ def dask_groupby_agg(
 
     elif method == "blockwise":
         reduced = intermediate
-        # Here one input chunk → one output chunks
-        # find number of groups in each chunk, this is needed for output chunks
-        # along the reduced axis
         if isinstance(by, dask.array.Array):
+            # TODO: we could have `expected_groups` be a dask array with appropriate chunks
+            # for now, we have a numpy array that is interpreted as listing all group labels
+            # that are present in every chunk
             groups = (expected_groups,)
             group_chunks = ((len(expected_groups),),)
         else:
+            # Here one input chunk → one output chunks
+            # find number of groups in each chunk, this is needed for output chunks
+            # along the reduced axis
+            # TODO: this logic is very specialized for the resampling case
             slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
             groups_in_block = tuple(_unique(by_input[slc]) for slc in slices)
             groups = (np.concatenate(groups_in_block),)
