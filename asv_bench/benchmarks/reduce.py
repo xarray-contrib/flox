@@ -6,8 +6,8 @@ import flox
 
 from . import parameterized
 
-N = 1000
-funcs = ["sum", "nansum", "mean", "nanmean", "max", "var", "nanvar", "count"]
+N = 3000
+funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "var", "nanvar", "count", "all"]
 engines = ["flox", "numpy", "numbagg"]
 expected_groups = [None, pd.IntervalIndex.from_breaks([1, 2, 4])]
 
