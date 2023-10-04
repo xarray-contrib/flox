@@ -1346,7 +1346,6 @@ def dask_groupby_agg(
     #    b. "_grouped_combine": A more general solution where we tree-reduce the groupby reduction.
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
-
     do_simple_combine = not _is_arg_reduction(agg)
 
     if method == "blockwise":
@@ -1372,7 +1371,7 @@ def dask_groupby_agg(
         partial(
             blockwise_method,
             axis=axis,
-            expected_groups=None if method == "cohorts" else expected_groups,
+            expected_groups=expected_groups if reindex else None,
             engine=engine,
             sort=sort,
         ),
@@ -1465,7 +1464,7 @@ def dask_groupby_agg(
 
     elif method == "blockwise":
         reduced = intermediate
-        if isinstance(by, dask.array.Array):
+        if reindex:
             # TODO: we could have `expected_groups` be a dask array with appropriate chunks
             # for now, we have a numpy array that is interpreted as listing all group labels
             # that are present in every chunk
