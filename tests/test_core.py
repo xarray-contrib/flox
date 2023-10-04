@@ -75,6 +75,8 @@ ALL_FUNCS = (
     "nanlast",
     pytest.param("median", marks=(pytest.mark.skip,)),
     pytest.param("nanmedian", marks=(pytest.mark.skip,)),
+    pytest.param("quantile", marks=(pytest.mark.skip,)),
+    pytest.param("nanquantile", marks=(pytest.mark.skip,)),
 )
 
 if TYPE_CHECKING:
