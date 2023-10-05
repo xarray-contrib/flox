@@ -51,6 +51,8 @@ else:
         return None
 
 
+SCIPY_STATS_FUNCS = ("mode", "nanmode")
+BLOCKWISE_FUNCS = ("median", "nanmedian", "quantile", "nanquantile") + SCIPY_STATS_FUNCS
 ALL_FUNCS = (
     # "sum",
     # "nansum",
@@ -78,11 +80,7 @@ ALL_FUNCS = (
     "nanmedian",
     "quantile",
     "nanquantile",
-    pytest.param("mode", marks=requires_scipy),
-    pytest.param("nanmode", marks=requires_scipy),
-)
-BLOCKWISE_FUNCS = ("median", "nanmedian", "quantile", "nanquantile", "mode", "nanmode")
-SCIPY_STATS_FUNCS = ("mode", "nanmode")
+) + tuple(pytest.param(func, marks=requires_scipy) for func in SCIPY_STATS_FUNCS)
 
 if TYPE_CHECKING:
     from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt, T_Method
@@ -225,11 +223,8 @@ def gen_array_by(size, func):
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
-    if "arg" in func and engine == "flox":
+    if ("arg" in func and engine == "flox") or (func in BLOCKWISE_FUNCS and chunks != -1):
         pytest.skip()
-    if func in BLOCKWISE_FUNCS:
-        if chunks != -1:
-            pytest.skip()
 
     array, by = gen_array_by(size, func)
     if chunks:
