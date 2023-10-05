@@ -109,7 +109,7 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 module=[
-    "asv_core.*",
+    "asv_runner.*",
     "cachey",
     "cftime",
     "dask.*",
