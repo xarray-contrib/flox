@@ -51,6 +51,7 @@ else:
         return None
 
 
+DEFAULT_QUANTILE = 0.9
 SCIPY_STATS_FUNCS = ("mode", "nanmode")
 BLOCKWISE_FUNCS = ("median", "nanmedian", "quantile", "nanquantile") + SCIPY_STATS_FUNCS
 ALL_FUNCS = (
@@ -93,12 +94,13 @@ if TYPE_CHECKING:
 def _get_array_func(func: str) -> Callable:
     if func == "count":
 
-        def npfunc(x):
+        def npfunc(x, **kwargs):
             x = np.asarray(x)
             return (~np.isnan(x)).sum()
 
     elif func in ["nanfirst", "nanlast"]:
         npfunc = getattr(xrutils, func)
+
     elif func in SCIPY_STATS_FUNCS:
         import scipy.stats
 
@@ -247,7 +249,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         fill_value = np.nan
         tolerance = {"rtol": 1e-14, "atol": 1e-16}
     elif "quantile" in func:
-        finalize_kwargs = [{"q": 0.5}]
+        finalize_kwargs = [{"q": DEFAULT_QUANTILE}]
         fill_value = None
         tolerance = None
     else:
@@ -958,7 +960,7 @@ def test_cohorts_nd_by(func, method, axis, engine):
 
     kwargs = dict(func=func, engine=engine, method=method, axis=axis, fill_value=fill_value)
     if "quantile" in func:
-        kwargs["finalize_kwargs"] = {"q": 0.9}
+        kwargs["finalize_kwargs"] = {"q": DEFAULT_QUANTILE}
     actual, groups = groupby_reduce(array, by, **kwargs)
     expected, sorted_groups = groupby_reduce(array.compute(), by, **kwargs)
     assert_equal(groups, sorted_groups)
@@ -1275,7 +1277,7 @@ def test_dtype(func, dtype, engine):
     if "arg" in func or func in ["any", "all"]:
         pytest.skip()
 
-    finalize_kwargs = {"q": 0.6} if "quantile" in func else {}
+    finalize_kwargs = {"q": DEFAULT_QUANTILE} if "quantile" in func else {}
 
     arr = np.ones((4, 12), dtype=dtype)
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
