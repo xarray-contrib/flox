@@ -88,8 +88,11 @@ def xarray_reduce(
         Xarray object to reduce
     *by : DataArray or iterable of str or iterable of DataArray
         Variables with which to group by ``obj``
-    func : str or Aggregation
-        Reduction method
+    func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
+            "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
+            "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
+            "first", "nanfirst", "last", "nanlast"} or Aggregation
+        Single function name or an Aggregation instance
     expected_groups : str or sequence
         expected group labels corresponding to each `by` variable
     isbin : iterable of bool

@@ -1779,7 +1779,10 @@ def groupby_reduce(
     *by : ndarray or DaskArray
         Array of labels to group over. Must be aligned with ``array`` so that
         ``array.shape[-by.ndim :] == by.shape``
-    func : str or Aggregation
+    func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
+            "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
+            "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
+            "first", "nanfirst", "last", "nanlast"} or Aggregation
         Single function name or an Aggregation instance
     expected_groups : (optional) Sequence
         Expected unique labels.
