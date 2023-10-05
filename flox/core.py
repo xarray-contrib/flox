@@ -1829,7 +1829,8 @@ def groupby_reduce(
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
           * ``"numbagg"``:
-            Use the reductions supported by ``numbagg.grouped``.
+            Use the reductions supported by ``numbagg.grouped``. This will fall back to ``numpy_groupies.aggregate_numpy``
+            for a reduction that is not yet implemented.
     reindex : bool, optional
         Whether to "reindex" the blockwise results to ``expected_groups`` (possibly automatically detected).
         If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
