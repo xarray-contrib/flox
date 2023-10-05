@@ -22,5 +22,6 @@ dependencies:
   - pooch
   - toolz
   - numba
+  - scipy
   - pip:
     - git+https://github.com/numbagg/numbagg

@@ -11,8 +11,11 @@ the `func` kwarg:
 - `"std"`, `"nanstd"`
 - `"argmin"`
 - `"argmax"`
-- `"first"`
-- `"last"`
+- `"first"`, `"nanfirst"`
+- `"last"`, `"nanlast"`
+- `"median"`, `"nanmedian"`
+- `"mode"`, `"nanmode"`
+- `"quantile"`, `"nanquantile"`
 
 ```{tip}
 We would like to add support for `cumsum`, `cumprod` ([issue](https://github.com/xarray-contrib/flox/issues/91)). Contributions are welcome!

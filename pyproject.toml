@@ -120,7 +120,8 @@ module=[
     "matplotlib.*",
     "pandas",
     "setuptools",
-    "toolz"
+    "scipy.*",
+    "toolz",
 ]
 ignore_missing_imports = true
 
