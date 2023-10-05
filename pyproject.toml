@@ -109,6 +109,7 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 module=[
+    "asv_core.*",
     "cachey",
     "cftime",
     "dask.*",
