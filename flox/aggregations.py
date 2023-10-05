@@ -465,12 +465,14 @@ any_ = Aggregation(
     final_dtype=bool,
 )
 
-# numpy_groupies does not support median
-# And the dask version is really hard!
-median = Aggregation(name="median", fill_value=-1, chunk=None, combine=None)
-nanmedian = Aggregation(name="nanmedian", fill_value=-1, chunk=None, combine=None)
-quantile = Aggregation(name="quantile", fill_value=-1, chunk=None, combine=None)
-nanquantile = Aggregation(name="nanquantile", fill_value=-1, chunk=None, combine=None)
+# Support statistical quantities only blockwise
+# The parallel versions will be approximate and are hard to implement!
+median = Aggregation(name="median", fill_value=dtypes.NA, chunk=None, combine=None)
+nanmedian = Aggregation(name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None)
+quantile = Aggregation(name="quantile", fill_value=dtypes.NA, chunk=None, combine=None)
+nanquantile = Aggregation(name="nanquantile", fill_value=dtypes.NA, chunk=None, combine=None)
+mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
+nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
 
 aggregations = {
     "any": any_,
@@ -502,6 +504,8 @@ aggregations = {
     "nanmedian": nanmedian,
     "quantile": quantile,
     "nanquantile": nanquantile,
+    "mode": mode,
+    "nanmode": nanmode,
 }
 
 

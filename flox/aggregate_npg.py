@@ -148,3 +148,36 @@ def nanquantile(group_idx, array, engine, *, q, axis=-1, size=None, fill_value=N
         fill_value=fill_value,
         dtype=dtype,
     )
+
+
+def mode_(array, nan_policy, dtype):
+    from scipy.stats import mode
+
+    # npg splits `array` into object arrays for each group
+    # scipy.stats.mode does not like that
+    # here we cast back
+    return mode(array.astype(dtype, copy=False), nan_policy=nan_policy, axis=-1).mode
+
+
+def mode(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        array,
+        func=partial(mode_, nan_policy="propagate", dtype=array.dtype),
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+
+
+def nanmode(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
+    return npg.aggregate_numpy.aggregate(
+        group_idx,
+        array,
+        func=partial(mode_, nan_policy="omit", dtype=array.dtype),
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
