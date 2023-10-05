@@ -88,8 +88,11 @@ def xarray_reduce(
         Xarray object to reduce
     *by : DataArray or iterable of str or iterable of DataArray
         Variables with which to group by ``obj``
-    func : str or Aggregation
-        Reduction method
+    func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
+            "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
+            "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
+            "first", "nanfirst", "last", "nanlast"} or Aggregation
+        Single function name or an Aggregation instance
     expected_groups : str or sequence
         expected group labels corresponding to each `by` variable
     isbin : iterable of bool
@@ -164,7 +167,7 @@ def xarray_reduce(
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
     **finalize_kwargs
-        kwargs passed to the finalize function, like ``ddof`` for var, std.
+        kwargs passed to the finalize function, like ``ddof`` for var, std or ``q`` for quantile.
 
     Returns
     -------

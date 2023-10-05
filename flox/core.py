@@ -1307,15 +1307,14 @@ def dask_groupby_agg(
     assert isinstance(axis, Sequence)
     assert all(ax >= 0 for ax in axis)
 
-    if method == "blockwise" and not isinstance(by, np.ndarray):
-        raise NotImplementedError
-
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
     token = dask.base.tokenize(array, by, agg, expected_groups, axis)
 
     if expected_groups is None and reindex:
         expected_groups = _get_expected_groups(by, sort=sort)
+    if method == "cohorts":
+        assert reindex is False
 
     by_input = by
 
@@ -1349,7 +1348,6 @@ def dask_groupby_agg(
     #    b. "_grouped_combine": A more general solution where we tree-reduce the groupby reduction.
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
-
     do_simple_combine = not _is_arg_reduction(agg)
 
     if method == "blockwise":
@@ -1375,7 +1373,7 @@ def dask_groupby_agg(
         partial(
             blockwise_method,
             axis=axis,
-            expected_groups=None if method == "cohorts" else expected_groups,
+            expected_groups=expected_groups if reindex else None,
             engine=engine,
             sort=sort,
         ),
@@ -1468,14 +1466,24 @@ def dask_groupby_agg(
 
     elif method == "blockwise":
         reduced = intermediate
-        # Here one input chunk → one output chunks
-        # find number of groups in each chunk, this is needed for output chunks
-        # along the reduced axis
-        slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
-        groups_in_block = tuple(_unique(by_input[slc]) for slc in slices)
-        groups = (np.concatenate(groups_in_block),)
-        ngroups_per_block = tuple(len(grp) for grp in groups_in_block)
-        group_chunks = (ngroups_per_block,)
+        if reindex:
+            if TYPE_CHECKING:
+                assert expected_groups is not None
+            # TODO: we could have `expected_groups` be a dask array with appropriate chunks
+            # for now, we have a numpy array that is interpreted as listing all group labels
+            # that are present in every chunk
+            groups = (expected_groups,)
+            group_chunks = ((len(expected_groups),),)
+        else:
+            # Here one input chunk → one output chunks
+            # find number of groups in each chunk, this is needed for output chunks
+            # along the reduced axis
+            # TODO: this logic is very specialized for the resampling case
+            slices = slices_from_chunks(tuple(array.chunks[ax] for ax in axis))
+            groups_in_block = tuple(_unique(by_input[slc]) for slc in slices)
+            groups = (np.concatenate(groups_in_block),)
+            ngroups_per_block = tuple(len(grp) for grp in groups_in_block)
+            group_chunks = (ngroups_per_block,)
     else:
         raise ValueError(f"Unknown method={method}.")
 
@@ -1547,7 +1555,7 @@ def _validate_reindex(
     if reindex is True and not all_numpy:
         if _is_arg_reduction(func):
             raise NotImplementedError
-        if method in ["blockwise", "cohorts"]:
+        if method == "cohorts" or (method == "blockwise" and not any_by_dask):
             raise ValueError(
                 "reindex=True is not a valid choice for method='blockwise' or method='cohorts'."
             )
@@ -1562,7 +1570,11 @@ def _validate_reindex(
             # have to do the grouped_combine since there's no good fill_value
             reindex = False
 
-        if method == "blockwise" or _is_arg_reduction(func):
+        if method == "blockwise":
+            # for grouping by dask arrays, we set reindex=True
+            reindex = any_by_dask
+
+        elif _is_arg_reduction(func):
             reindex = False
 
         elif method == "cohorts":
@@ -1767,7 +1779,10 @@ def groupby_reduce(
     *by : ndarray or DaskArray
         Array of labels to group over. Must be aligned with ``array`` so that
         ``array.shape[-by.ndim :] == by.shape``
-    func : str or Aggregation
+    func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
+            "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
+            "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
+            "first", "nanfirst", "last", "nanlast"} or Aggregation
         Single function name or an Aggregation instance
     expected_groups : (optional) Sequence
         Expected unique labels.
@@ -1835,7 +1850,7 @@ def groupby_reduce(
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using ``method="cohorts"``. By default, it is turned off for argreductions.
     finalize_kwargs : dict, optional
-        Kwargs passed to finalize the reduction such as ``ddof`` for var, std.
+        Kwargs passed to finalize the reduction such as ``ddof`` for var, std or ``q`` for quantile.
 
     Returns
     -------
@@ -1854,6 +1869,9 @@ def groupby_reduce(
             "argreductions not supported for engine='flox' yet."
             "Try engine='numpy' or engine='numba' instead."
         )
+
+    if func == "quantile" and (finalize_kwargs is None or "q" not in finalize_kwargs):
+        raise ValueError("Please pass `q` for quantile calculations.")
 
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
@@ -2023,7 +2041,7 @@ def groupby_reduce(
         result, groups = partial_agg(
             array,
             by_,
-            expected_groups=None if method == "blockwise" else expected_groups,
+            expected_groups=expected_groups,
             agg=agg,
             reindex=reindex,
             method=method,

@@ -47,6 +47,7 @@ def LooseVersion(vstring):
 
 has_dask, requires_dask = _importorskip("dask")
 has_numba, requires_numba = _importorskip("numba")
+has_scipy, requires_scipy = _importorskip("scipy")
 has_xarray, requires_xarray = _importorskip("xarray")
 
 
