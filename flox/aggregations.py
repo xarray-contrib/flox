@@ -467,10 +467,18 @@ any_ = Aggregation(
 
 # Support statistical quantities only blockwise
 # The parallel versions will be approximate and are hard to implement!
-median = Aggregation(name="median", fill_value=dtypes.NA, chunk=None, combine=None)
-nanmedian = Aggregation(name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None)
-quantile = Aggregation(name="quantile", fill_value=dtypes.NA, chunk=None, combine=None)
-nanquantile = Aggregation(name="nanquantile", fill_value=dtypes.NA, chunk=None, combine=None)
+median = Aggregation(
+    name="median", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+nanmedian = Aggregation(
+    name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+quantile = Aggregation(
+    name="quantile", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+nanquantile = Aggregation(
+    name="nanquantile", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
 
