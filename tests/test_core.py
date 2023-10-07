@@ -1546,14 +1546,8 @@ def test_choose_engine():
     has_numbagg = False  # TODO: delete
     default = "numbagg" if has_numbagg else "numpy"
     # sorted by -> flox
-    assert _choose_engine(bys=(np.array([1, 1, 2, 2]),), func="mean") == "flox"
+    assert _choose_engine(np.array([1, 1, 2, 2]), func="mean") == "flox"
     # unsorted by -> numpy
-    assert _choose_engine(bys=(np.array([3, 1, 1]),), func="mean") == default
-    # by is dask, not flox
-    assert _choose_engine((dask.array.ones(3),), func="mean") == default
-    # nD by
-    assert _choose_engine(bys=(np.ones((2, 2)),), func="mean") == default
-    # nby == `
-    assert _choose_engine(bys=(np.ones((2,)), np.ones((2,))), func="mean") == default
+    assert _choose_engine(np.array([3, 1, 1]), func="mean") == default
     # argmax does not give engine="flox"
-    assert _choose_engine(bys=(np.array([1, 1, 2, 2]),), func="argmax") == "numpy"
+    assert _choose_engine(np.array([1, 1, 2, 2]), func="argmax") == "numpy"

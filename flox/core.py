@@ -782,6 +782,10 @@ def chunk_reduce(
     group_idx = group_idx.reshape(-1)
 
     assert group_idx.ndim == 1
+
+    if engine is None:
+        engine = _choose_engine(by, func)
+
     empty = np.all(props.nanmask)
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
@@ -1760,7 +1764,7 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
     return expected_groups
 
 
-def _choose_engine(bys, func):
+def _choose_engine(by, func):
     # choose numpy per default
     HAS_NUMBAGG = False  # TODO: delete
     if HAS_NUMBAGG and not _is_arg_reduction(func):
@@ -1768,13 +1772,8 @@ def _choose_engine(bys, func):
     else:
         engine = "numpy"
 
-    nby = len(bys)
-    by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
-    any_by_dask = any(by_is_dask)
-
-    if nby == 1 and not any_by_dask and bys[0].ndim == 1:
-        if not _is_arg_reduction(func) and _issorted(bys[0]):
-            engine = "flox"
+    if not _is_arg_reduction(func) and _issorted(by):
+        engine = "flox"
 
     return engine
 
@@ -1894,9 +1893,6 @@ def groupby_reduce(
         raise ValueError("Please pass `q` for quantile calculations.")
 
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
-
-    if engine is None:
-        engine = _choose_engine(bys, func)
 
     if engine == "flox" and _is_arg_reduction(func):
         raise NotImplementedError(

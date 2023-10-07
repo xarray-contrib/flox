@@ -11,7 +11,6 @@ from xarray.core.duck_array_ops import _datetime_nanmin
 
 from .aggregations import Aggregation, _atleast_1d
 from .core import (
-    _choose_engine,
     _convert_expected_groups_to_index,
     _get_expected_groups,
     _validate_expected_groups,
@@ -366,9 +365,6 @@ def xarray_reduce(
         if skipna or (skipna is None and isinstance(func, str) and array.dtype.kind in "cfO"):
             if "nan" not in func and func not in ["all", "any", "count"]:
                 func = f"nan{func}"
-
-        if kwargs.get("engine", None) is None:
-            kwargs["engine"] = _choose_engine(by, func)
 
         # Flox's count works with non-numeric and its faster than converting.
         requires_numeric = func not in ["count", "any", "all"] or (
