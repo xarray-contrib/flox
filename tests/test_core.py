@@ -1550,17 +1550,7 @@ def test_choose_engine():
     # unsorted by -> numpy
     assert _choose_engine(bys=(np.array([3, 1, 1]),), func="mean") == default
     # by is dask, not flox
-    assert (
-        _choose_engine(
-            bys=(
-                dask.array.ones(
-                    3,
-                ),
-            ),
-            func="mean",
-        )
-        == default
-    )
+    assert _choose_engine((dask.array.ones(3),), func="mean") == default
     # nD by
     assert _choose_engine(bys=(np.ones((2, 2)),), func="mean") == default
     # nby == `
