@@ -54,6 +54,7 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
 
 
 def nanvar(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None, ddof=0):
+    assert ddof != 0
     if np.issubdtype(array.dtype, np.int_):
         array = array.astype(np.float64)
     return numbagg.grouped.group_nanvar(
@@ -61,13 +62,14 @@ def nanvar(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None,
         group_idx,
         axis=axis,
         num_labels=size,
-        ddof=0,
+        # ddof=0,
         # fill_value=fill_value,
         # dtype=dtype,
     )
 
 
-def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None, ddof=0):
+    assert ddof != 0
     if np.issubdtype(array.dtype, np.int_):
         array = array.astype(np.float64)
     return numbagg.grouped.group_nanstd(
@@ -75,7 +77,7 @@ def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None)
         group_idx,
         axis=axis,
         num_labels=size,
-        ddof=0,
+        # ddof=0,
         # fill_value=fill_value,
         # dtype=dtype,
     )
@@ -86,14 +88,12 @@ nanlen = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nancount)
 nanprod = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanprod)
 nanfirst = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanfirst)
 nanlast = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanlast)
-nanargmax = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmax)
-nanargmin = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmin)
+# nanargmax = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmax)
+# nanargmin = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanargmin)
 nanmax = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanmax)
 nanmin = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanmin)
 any = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanany)
 all = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanall)
-# nanvar = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanvar)
-# nanstd = partial(_numbagg_wrapper, numbagg_func=numbagg.grouped.group_nanstd)
 
 # sum = nansum
 # mean = nanmean

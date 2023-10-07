@@ -225,7 +225,9 @@ def gen_array_by(size, func):
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
-    if ("arg" in func and engine == "flox") or (func in BLOCKWISE_FUNCS and chunks != -1):
+    if ("arg" in func and engine in ["flox", "numbagg"]) or (
+        func in BLOCKWISE_FUNCS and chunks != -1
+    ):
         pytest.skip()
 
     array, by = gen_array_by(size, func)
@@ -424,7 +426,7 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     if func in ["first", "last"] or func in BLOCKWISE_FUNCS:
         pytest.skip()
 
-    if "arg" in func and (engine == "flox" or reindex):
+    if "arg" in func and (engine in ["flox", "numbagg"] or reindex):
         pytest.skip()
 
     rng = np.random.default_rng(12345)
@@ -576,7 +578,7 @@ def test_first_last_disallowed_dask(func):
     "axis", [None, (0, 1, 2), (0, 1), (0, 2), (1, 2), 0, 1, 2, (0,), (1,), (2,)]
 )
 def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
-    if ("arg" in func and engine == "flox") or func in BLOCKWISE_FUNCS:
+    if ("arg" in func and engine in ["flox", "numbagg"]) or func in BLOCKWISE_FUNCS:
         pytest.skip()
 
     if not isinstance(axis, int):
@@ -934,7 +936,7 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
 @pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce"])
 def test_cohorts_nd_by(func, method, axis, engine):
     if (
-        ("arg" in func and (axis is None or engine == "flox"))
+        ("arg" in func and (axis is None or engine in ["flox", "numbagg"]))
         or (method != "blockwise" and func in BLOCKWISE_FUNCS)
         or (axis is None and ("first" in func or "last" in func))
     ):

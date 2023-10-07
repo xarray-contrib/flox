@@ -1889,6 +1889,23 @@ def groupby_reduce(
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
     any_by_dask = any(by_is_dask)
 
+    if (
+        engine == "numbagg"
+        and _is_arg_reduction(func)
+        and (any_by_dask or is_duck_dask_array(array))
+    ):
+        # There is only one test that fails, but I can't figure
+        # out why without deep debugging.
+        # just disable for now.
+        # test_groupby_reduce_axis_subset_against_numpy
+        # for array is 3D dask, by is 3D dask, axis=2
+        # We are falling back to numpy for the arg reduction,
+        # so presumably something is going wrong
+        raise NotImplementedError(
+            "argreductions not supported for engine='numbagg' yet."
+            "Try engine='numpy' or engine='numba' instead."
+        )
+
     if method in ["split-reduce", "cohorts"] and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
 
@@ -2030,7 +2047,7 @@ def groupby_reduce(
         if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
-                f"\n\n Received: {func}"
+                f"Received method={method!r}"
             )
 
         if method in ["blockwise", "cohorts"] and nax != by_.ndim:

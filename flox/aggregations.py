@@ -66,7 +66,15 @@ def generic_aggregate(
         from . import aggregate_numbagg
 
         try:
-            method = getattr(aggregate_numbagg, func)
+            if (
+                # numabgg hardcodes ddof=1
+                ("var" in func or "std" in func)
+                and kwargs.get("ddof", 0) == 0
+            ):
+                method = get_npg_aggregation(func, engine="numpy")
+
+            else:
+                method = getattr(aggregate_numbagg, func)
         except AttributeError:
             method = get_npg_aggregation(func, engine="numpy")
 
