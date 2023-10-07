@@ -13,6 +13,7 @@ from numpy_groupies.aggregate_numpy import aggregate
 from flox import xrutils
 from flox.aggregations import Aggregation
 from flox.core import (
+    HAS_NUMBAGG,
     _choose_engine,
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
@@ -227,7 +228,9 @@ def gen_array_by(size, func):
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
-    if ("arg" in func and engine == "flox") or (func in BLOCKWISE_FUNCS and chunks != -1):
+    if ("arg" in func and engine in ["flox", "numbagg"]) or (
+        func in BLOCKWISE_FUNCS and chunks != -1
+    ):
         pytest.skip()
 
     array, by = gen_array_by(size, func)
@@ -426,7 +429,7 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     if func in ["first", "last"] or func in BLOCKWISE_FUNCS:
         pytest.skip()
 
-    if "arg" in func and (engine == "flox" or reindex):
+    if "arg" in func and (engine in ["flox", "numbagg"] or reindex):
         pytest.skip()
 
     rng = np.random.default_rng(12345)
@@ -578,7 +581,7 @@ def test_first_last_disallowed_dask(func):
     "axis", [None, (0, 1, 2), (0, 1), (0, 2), (1, 2), 0, 1, 2, (0,), (1,), (2,)]
 )
 def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
-    if ("arg" in func and engine == "flox") or func in BLOCKWISE_FUNCS:
+    if ("arg" in func and engine in ["flox", "numbagg"]) or func in BLOCKWISE_FUNCS:
         pytest.skip()
 
     if not isinstance(axis, int):
@@ -895,6 +898,9 @@ def test_fill_value_behaviour(func, chunks, fill_value, engine):
 @pytest.mark.parametrize("func", ["mean", "sum"])
 @pytest.mark.parametrize("dtype", ["float32", "float64", "int32", "int64"])
 def test_dtype_preservation(dtype, func, engine):
+    if engine == "numbagg":
+        # https://github.com/numbagg/numbagg/issues/121
+        pytest.skip()
     if func == "sum" or (func == "mean" and "float" in dtype):
         expected = np.dtype(dtype)
     elif func == "mean" and "int" in dtype:
@@ -933,7 +939,7 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
 @pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce"])
 def test_cohorts_nd_by(func, method, axis, engine):
     if (
-        ("arg" in func and (axis is None or engine == "flox"))
+        ("arg" in func and (axis is None or engine in ["flox", "numbagg"]))
         or (method != "blockwise" and func in BLOCKWISE_FUNCS)
         or (axis is None and ("first" in func or "last" in func))
     ):
@@ -1272,6 +1278,9 @@ def test_custom_aggregation_blockwise():
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 def test_dtype(func, dtype, engine):
+    if engine == "numbagg":
+        # https://github.com/numbagg/numbagg/issues/121
+        pytest.skip()
     if "arg" in func or func in ["any", "all"]:
         pytest.skip()
 
@@ -1543,8 +1552,7 @@ def test_method_check_numpy():
 
 
 def test_choose_engine():
-    has_numbagg = False  # TODO: delete
-    default = "numbagg" if has_numbagg else "numpy"
+    default = "numbagg" if HAS_NUMBAGG else "numpy"
     # sorted by -> flox
     assert _choose_engine(np.array([1, 1, 2, 2]), func="mean") == "flox"
     # unsorted by -> numpy

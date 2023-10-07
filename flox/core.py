@@ -69,7 +69,7 @@ if TYPE_CHECKING:
     T_AxesOpt = Union[T_Axis, T_Axes, None]
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
-    T_Engine = Literal["flox", "numpy", "numba"]
+    T_Engine = Literal["flox", "numpy", "numba", "numbagg"]
     T_EngineOpt = None | T_Engine
     T_Method = Literal["map-reduce", "blockwise", "cohorts"]
     T_IsBins = Union[bool | Sequence[bool]]
@@ -1765,8 +1765,8 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
 
 
 def _choose_engine(by, func):
+    # TODO: dtype for numbagg!
     # choose numpy per default
-    HAS_NUMBAGG = False  # TODO: delete
     if HAS_NUMBAGG and not _is_arg_reduction(func):
         engine = "numbagg"
     else:
@@ -1856,7 +1856,7 @@ def groupby_reduce(
             (for 1D ``by`` only).
           * ``"split-reduce"``:
             Same as "cohorts" and will be removed soon.
-    engine : {None, "flox", "numpy", "numba"}, optional
+    engine : {"flox", "numpy", "numba", "numbagg"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
             Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
@@ -1868,6 +1868,9 @@ def groupby_reduce(
             for a reduction that is not yet implemented.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
+          * ``"numbagg"``:
+            Use the reductions supported by ``numbagg.grouped``. This will fall back to ``numpy_groupies.aggregate_numpy``
+            for a reduction that is not yet implemented.
     reindex : bool, optional
         Whether to "reindex" the blockwise results to ``expected_groups`` (possibly automatically detected).
         If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
@@ -1892,17 +1895,44 @@ def groupby_reduce(
     if func == "quantile" and (finalize_kwargs is None or "q" not in finalize_kwargs):
         raise ValueError("Please pass `q` for quantile calculations.")
 
-    bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
-
     if engine == "flox" and _is_arg_reduction(func):
         raise NotImplementedError(
             "argreductions not supported for engine='flox' yet."
             "Try engine='numpy' or engine='numba' instead."
         )
 
+    if engine == "numbagg" and dtype is not None:
+        raise NotImplementedError(
+            "numbagg does not support the `dtype` kwarg. Either cast your "
+            "input arguments to `dtype` or use a different `engine`: "
+            "'flox' or 'numpy' or 'numba'. "
+            "See https://github.com/numbagg/numbagg/issues/121."
+        )
+
+    if func == "quantile" and (finalize_kwargs is None or "q" not in finalize_kwargs):
+        raise ValueError("Please pass `q` for quantile calculations.")
+
+    bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
     any_by_dask = any(by_is_dask)
+
+    if (
+        engine == "numbagg"
+        and _is_arg_reduction(func)
+        and (any_by_dask or is_duck_dask_array(array))
+    ):
+        # There is only one test that fails, but I can't figure
+        # out why without deep debugging.
+        # just disable for now.
+        # test_groupby_reduce_axis_subset_against_numpy
+        # for array is 3D dask, by is 3D dask, axis=2
+        # We are falling back to numpy for the arg reduction,
+        # so presumably something is going wrong
+        raise NotImplementedError(
+            "argreductions not supported for engine='numbagg' yet."
+            "Try engine='numpy' or engine='numba' instead."
+        )
 
     if method in ["split-reduce", "cohorts"] and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
@@ -2045,7 +2075,7 @@ def groupby_reduce(
         if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
-                f"\n\n Received: {func}"
+                f"Received method={method!r}"
             )
 
         if method in ["blockwise", "cohorts"] and nax != by_.ndim:

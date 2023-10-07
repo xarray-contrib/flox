@@ -466,6 +466,10 @@ def test_alignment_error():
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
 def test_dtype(add_nan, chunk, dtype, dtype_out, engine):
+    if engine == "numbagg":
+        # https://github.com/numbagg/numbagg/issues/121
+        pytest.skip()
+
     xp = dask.array if chunk else np
     data = xp.linspace(0, 1, 48, dtype=dtype).reshape((4, 12))
 

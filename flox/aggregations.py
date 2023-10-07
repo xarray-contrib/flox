@@ -62,12 +62,28 @@ def generic_aggregate(
         except AttributeError:
             method = get_npg_aggregation(func, engine="numpy")
 
+    elif engine == "numbagg":
+        from . import aggregate_numbagg
+
+        try:
+            if (
+                # numabgg hardcodes ddof=1
+                ("var" in func or "std" in func)
+                and kwargs.get("ddof", 0) == 0
+            ):
+                method = get_npg_aggregation(func, engine="numpy")
+
+            else:
+                method = getattr(aggregate_numbagg, func)
+        except AttributeError:
+            method = get_npg_aggregation(func, engine="numpy")
+
     elif engine in ["numpy", "numba"]:
         method = get_npg_aggregation(func, engine=engine)
 
     else:
         raise ValueError(
-            f"Expected engine to be one of ['flox', 'numpy', 'numba']. Received {engine} instead."
+            f"Expected engine to be one of ['flox', 'numpy', 'numba', 'numbagg']. Received {engine} instead."
         )
 
     group_idx = np.asarray(group_idx, like=array)

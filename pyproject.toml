@@ -31,7 +31,7 @@ repository = "https://github.com/xarray-contrib/flox.git"
 changelog = "https://github.com/xarray-contrib/flox/releases"
 
 [project.optional-dependencies]
-all = ["cachey", "dask", "numba", "xarray"]
+all = ["cachey", "dask", "numba", "numbagg", "xarray"]
 test = ["netCDF4"]
 
 [build-system]
@@ -109,11 +109,13 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 module=[
+    "asv_runner.*",
     "cachey",
     "cftime",
     "dask.*",
     "importlib_metadata",
     "numba",
+    "numbagg.*",
     "numpy_groupies.*",
     "matplotlib.*",
     "pandas",
