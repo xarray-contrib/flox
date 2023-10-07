@@ -2,6 +2,7 @@
 # defined in xarray
 
 import datetime
+import importlib
 from typing import Any, Iterable
 
 import numpy as np
@@ -316,3 +317,21 @@ def nanlast(values, axis, keepdims=False):
         return np.expand_dims(result, axis=axis)
     else:
         return result
+
+
+def module_available(module: str) -> bool:
+    """Checks whether a module is installed without importing it.
+
+    Use this for a lightweight check and lazy imports.
+
+    Parameters
+    ----------
+    module : str
+        Name of the module.
+
+    Returns
+    -------
+    available : bool
+        Whether the module is installed.
+    """
+    return importlib.util.find_spec(module) is not None

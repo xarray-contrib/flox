@@ -35,7 +35,9 @@ from .aggregations import (
     generic_aggregate,
 )
 from .cache import memoize
-from .xrutils import is_duck_array, is_duck_dask_array, isnull
+from .xrutils import is_duck_array, is_duck_dask_array, isnull, module_available
+
+HAS_NUMBAGG = module_available("numbagg")
 
 if TYPE_CHECKING:
     try:
@@ -70,6 +72,7 @@ if TYPE_CHECKING:
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
     T_Engine = Literal["flox", "numpy", "numba"]
+    T_EngineOpt = None | T_Engine
     T_Method = Literal["map-reduce", "blockwise", "cohorts"]
     T_IsBins = Union[bool | Sequence[bool]]
 
@@ -1747,6 +1750,25 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
     return expected_groups
 
 
+def _choose_engine(bys, func):
+    # choose numpy per default
+    HAS_NUMBAGG = False  # TODO: delete
+    if HAS_NUMBAGG and not _is_arg_reduction(func):
+        engine = "numbagg"
+    else:
+        engine = "numpy"
+
+    nby = len(bys)
+    by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
+    any_by_dask = any(by_is_dask)
+
+    if nby == 1 and not any_by_dask and bys[0].ndim == 1:
+        if not _is_arg_reduction(func) and _issorted(bys[0]):
+            engine = "flox"
+
+    return engine
+
+
 def groupby_reduce(
     array: np.ndarray | DaskArray,
     *by: T_By,
@@ -1759,7 +1781,7 @@ def groupby_reduce(
     dtype: np.typing.DTypeLike = None,
     min_count: int | None = None,
     method: T_Method = "map-reduce",
-    engine: T_Engine = None,
+    engine: T_EngineOpt = None,
     reindex: bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
 ) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy yet
@@ -1822,7 +1844,7 @@ def groupby_reduce(
             (for 1D ``by`` only).
           * ``"split-reduce"``:
             Same as "cohorts" and will be removed soon.
-    engine : {"flox", "numpy", "numba"}, optional
+    engine : {None, "flox", "numpy", "numba"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
             Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
@@ -1861,12 +1883,7 @@ def groupby_reduce(
     any_by_dask = any(by_is_dask)
 
     if engine is None:
-        # choose numpy per default
-        engine = "numpy"
-
-        if nby == 1 and not any_by_dask and bys[0].ndim == 1:
-            if not _is_arg_reduction(func) and _issorted(bys[0]):
-                engine = "flox"
+        engine = _choose_engine(bys, func)
 
     if engine == "flox" and _is_arg_reduction(func):
         raise NotImplementedError(

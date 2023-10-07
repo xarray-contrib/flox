@@ -8,7 +8,7 @@ from . import parameterized
 
 N = 1000
 funcs = ["sum", "nansum", "mean", "nanmean", "max", "var", "nanvar", "count"]
-engines = ["flox", "numpy"]
+engines = [None, "flox", "numpy"]
 expected_groups = [None, pd.IntervalIndex.from_breaks([1, 2, 4])]
 
 

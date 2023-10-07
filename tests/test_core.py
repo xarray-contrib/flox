@@ -13,6 +13,7 @@ from numpy_groupies.aggregate_numpy import aggregate
 from flox import xrutils
 from flox.aggregations import Aggregation
 from flox.core import (
+    _choose_engine,
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
     _normalize_indexes,
@@ -29,6 +30,7 @@ from . import (
     assert_equal,
     assert_equal_tuple,
     has_dask,
+    # has_numbagg,
     raise_if_dask_computes,
     requires_dask,
 )
@@ -1465,3 +1467,30 @@ def test_method_check_numpy():
         ]
     )
     assert_equal(actual, expected)
+
+
+def test_choose_engine():
+    has_numbagg = False  # TODO: delete
+    default = "numbagg" if has_numbagg else "numpy"
+    # sorted by -> flox
+    assert _choose_engine(bys=(np.array([1, 1, 2, 2]),), func="mean") == "flox"
+    # unsorted by -> numpy
+    assert _choose_engine(bys=(np.array([3, 1, 1]),), func="mean") == default
+    # by is dask, not flox
+    assert (
+        _choose_engine(
+            bys=(
+                dask.array.ones(
+                    3,
+                ),
+            ),
+            func="mean",
+        )
+        == default
+    )
+    # nD by
+    assert _choose_engine(bys=(np.ones((2, 2)),), func="mean") == default
+    # nby == `
+    assert _choose_engine(bys=(np.ones((2,)), np.ones((2,))), func="mean") == default
+    # argmax does not give engine="flox"
+    assert _choose_engine(bys=(np.array([1, 1, 2, 2]),), func="argmax") == "numpy"
