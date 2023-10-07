@@ -6,7 +6,6 @@ from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 import numpy as np
-import numpy_groupies as npg
 from numpy.typing import DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
@@ -35,6 +34,16 @@ class AggDtype(TypedDict):
     intermediate: tuple[np.dtype | type[np.intp], ...]
 
 
+def get_npg_aggregation(func, *, engine):
+    try:
+        method_ = getattr(aggregate_npg, func)
+        method = partial(method_, engine=engine)
+    except AttributeError:
+        aggregate = aggregate_npg._get_aggregate(engine).aggregate
+        method = partial(aggregate, func=func)
+    return method
+
+
 def generic_aggregate(
     group_idx,
     array,
@@ -51,14 +60,11 @@ def generic_aggregate(
         try:
             method = getattr(aggregate_flox, func)
         except AttributeError:
-            method = partial(npg.aggregate_numpy.aggregate, func=func)
+            method = get_npg_aggregation(func, engine="numpy")
+
     elif engine in ["numpy", "numba"]:
-        try:
-            method_ = getattr(aggregate_npg, func)
-            method = partial(method_, engine=engine)
-        except AttributeError:
-            aggregate = aggregate_npg._get_aggregate(engine).aggregate
-            method = partial(aggregate, func=func)
+        method = get_npg_aggregation(func, engine=engine)
+
     else:
         raise ValueError(
             f"Expected engine to be one of ['flox', 'numpy', 'numba']. Received {engine} instead."
@@ -465,10 +471,22 @@ any_ = Aggregation(
     final_dtype=bool,
 )
 
-# numpy_groupies does not support median
-# And the dask version is really hard!
-# median = Aggregation("median", chunk=None, combine=None, fill_value=None)
-# nanmedian = Aggregation("nanmedian", chunk=None, combine=None, fill_value=None)
+# Support statistical quantities only blockwise
+# The parallel versions will be approximate and are hard to implement!
+median = Aggregation(
+    name="median", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+nanmedian = Aggregation(
+    name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+quantile = Aggregation(
+    name="quantile", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+nanquantile = Aggregation(
+    name="nanquantile", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
+nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
 
 aggregations = {
     "any": any_,
@@ -496,6 +514,12 @@ aggregations = {
     "nanfirst": nanfirst,
     "last": last,
     "nanlast": nanlast,
+    "median": median,
+    "nanmedian": nanmedian,
+    "quantile": quantile,
+    "nanquantile": nanquantile,
+    "mode": mode,
+    "nanmode": nanmode,
 }
 
 

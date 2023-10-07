@@ -1,11 +1,10 @@
 import pytest
 
+from . import requires_numba
 
-@pytest.fixture(scope="module", params=[None, "flox", "numpy", "numba"])
+
+@pytest.fixture(
+    scope="module", params=["flox", "numpy", pytest.param("numba", marks=requires_numba)]
+)
 def engine(request):
-    if request.param == "numba":
-        try:
-            import numba  # noqa
-        except ImportError:
-            pytest.xfail()
     return request.param

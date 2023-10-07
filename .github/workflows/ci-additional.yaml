@@ -22,7 +22,7 @@ jobs:
     outputs:
       triggered: ${{ steps.detect-trigger.outputs.trigger-found }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
       - uses: xarray-contrib/ci-trigger@v1.2
@@ -41,10 +41,10 @@ jobs:
 
     env:
       CONDA_ENV_FILE: ci/environment.yml
-      PYTHON_VERSION: "3.10"
+      PYTHON_VERSION: "3.11"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags.
 
@@ -92,10 +92,10 @@ jobs:
         shell: bash -l {0}
     env:
       CONDA_ENV_FILE: ci/environment.yml
-      PYTHON_VERSION: "3.10"
+      PYTHON_VERSION: "3.11"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags.
 
