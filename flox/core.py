@@ -84,6 +84,10 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 DUMMY_AXIS = -2
 
 
+def _issorted(arr):
+    return (arr[:-1] <= arr[1:]).all()
+
+
 def _is_arg_reduction(func: T_Agg) -> bool:
     if isinstance(func, str) and func in ["argmin", "argmax", "nanargmax", "nanargmin"]:
         return True
@@ -1861,9 +1865,7 @@ def groupby_reduce(
         engine = "numpy"
 
         if nby == 1 and not any_by_dask and bys[0].ndim == 1:
-            # maybe move to helper function
-            issorted = lambda arr: (arr[:-1] <= arr[1:]).all()
-            if not _is_arg_reduction(func) and issorted(bys[0]):
+            if not _is_arg_reduction(func) and _issorted(bys[0]):
                 engine = "flox"
 
     if engine == "flox" and _is_arg_reduction(func):
@@ -2046,7 +2048,7 @@ def groupby_reduce(
             assert len(groups) == 1
             sorted_idx = np.argsort(groups[0])
             # This optimization helps specifically with resampling
-            if not (sorted_idx[:-1] <= sorted_idx[1:]).all():
+            if not _issorted(sorted_idx).all():
                 result = result[..., sorted_idx]
                 groups = (groups[0][sorted_idx],)
 
