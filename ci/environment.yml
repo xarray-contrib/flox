@@ -24,4 +24,4 @@ dependencies:
   - numba
   - scipy
   - pip:
-    - git+https://github.com/numbagg/numbagg
+    - numbagg>=0.3
