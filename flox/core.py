@@ -238,7 +238,11 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
 
     chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
 
-    if merge:
+    # If our dataset has chunksize one along the axis,
+    # then no merging is possible.
+    single_chunks = all((ac == 1).all() for ac in array_chunks)
+
+    if merge and not single_chunks:
         # First sort by number of chunks occupied by cohort
         sorted_chunks_cohorts = dict(
             sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
