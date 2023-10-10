@@ -175,8 +175,8 @@ def _unique(a: np.ndarray) -> np.ndarray:
     return np.sort(pd.unique(a.reshape(-1)))
 
 
-def get_chunk_shape(array_chunks, index):
-    index = tuple(slice(k, k + 1) for k in index)  # type: ignore
+def get_chunk_shape(array_chunks, index: tuple[int, ...]) -> tuple[int, ...]:
+    index = tuple(slice(k, k + 1) for k in index)
     chunks = tuple(c[i] for c, i in zip(array_chunks, index))
     chunkshape = tuple(itertools.chain(*chunks))
     return chunkshape
