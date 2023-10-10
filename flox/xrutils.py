@@ -4,7 +4,7 @@
 import datetime
 import importlib
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -321,7 +321,7 @@ def nanlast(values, axis, keepdims=False):
         return result
 
 
-def module_available(module: str, minversion: str | None = None) -> bool:
+def module_available(module: str, minversion: Optional[str] = None) -> bool:
     """Checks whether a module is installed without importing it.
 
     Use this for a lightweight check and lazy imports.
