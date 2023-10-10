@@ -222,7 +222,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     shape = tuple(array.blocks.shape[ax] for ax in axis)
     blocks = np.empty(math.prod(shape), dtype=object)
     array_chunks = tuple(np.array(c) for c in array.chunks)
-    for idx, blockindex in enumerate(np.ndindex(array.shape)):
+    for idx, blockindex in enumerate(np.ndindex(array.numblocks)):
         chunkshape = get_chunk_shape(array_chunks, blockindex)
         blocks[idx] = np.full(chunkshape, idx)
     which_chunk = np.block(blocks.reshape(shape).tolist()).reshape(-1)
