@@ -1551,11 +1551,14 @@ def test_method_check_numpy():
     assert_equal(actual, expected)
 
 
-def test_choose_engine():
-    default = "numbagg" if HAS_NUMBAGG else "numpy"
+@pytest.mark.parametrize("dtype", [None, np.float64])
+def test_choose_engine(dtype):
+    numbagg_possible = HAS_NUMBAGG and dtype is None
+    default = "numbagg" if numbagg_possible else "numpy"
     # sorted by -> flox
-    assert _choose_engine(np.array([1, 1, 2, 2]), func="mean") == "flox"
+    sorted_engine = _choose_engine(np.array([1, 1, 2, 2]), func="mean", dtype=dtype)
+    assert sorted_engine == ("numbagg" if numbagg_possible else "flox")
     # unsorted by -> numpy
-    assert _choose_engine(np.array([3, 1, 1]), func="mean") == default
+    assert _choose_engine(np.array([3, 1, 1]), func="mean", dtype=dtype) == default
     # argmax does not give engine="flox"
-    assert _choose_engine(np.array([1, 1, 2, 2]), func="argmax") == "numpy"
+    assert _choose_engine(np.array([1, 1, 2, 2]), func="argmax", dtype=dtype) == "numpy"

@@ -1778,16 +1778,12 @@ def _choose_engine(by, func, dtype):
         if not _is_arg_reduction(func) and (
             dtype is None or (dtype is not None and func == "count")
         ):
-            engine = "numbagg"
-        else:
-            engine = "numpy"
-    else:
-        if not _is_arg_reduction(func) and _issorted(by):
-            engine = "flox"
-        else:
-            engine = "numpy"
+            return "numbagg"
 
-    return engine
+    if not _is_arg_reduction(func) and _issorted(by):
+        return "flox"
+    else:
+        return "numpy"
 
 
 def groupby_reduce(
