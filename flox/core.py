@@ -214,6 +214,8 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     #  Iterate over each block and create a new block of same shape with "chunk number"
     shape = tuple(array.blocks.shape[ax] for ax in axis)
     # Use a numpy object array to enable assignment in the loop
+    # TODO: is it possible to just use a nested list?
+    #       That is what we need for `np.block`
     blocks = np.empty(shape, dtype=object)
     array_chunks = tuple(np.array(c) for c in array.chunks)
     for idx, blockindex in enumerate(np.ndindex(array.numblocks)):
