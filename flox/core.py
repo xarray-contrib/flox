@@ -175,6 +175,22 @@ def _unique(a: np.ndarray) -> np.ndarray:
     return np.sort(pd.unique(a.reshape(-1)))
 
 
+def get_chunk_shape(array_chunks, index):
+    # from dask.array.slicing import normalize_index
+
+    # if not isinstance(index, tuple):
+    #     index = (index,)
+    # if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
+    #     raise ValueError("Can only slice with a single list")
+    # if any(ind is None for ind in index):
+    #     raise ValueError("Slicing with np.newaxis or None is not supported")
+    # index = normalize_index(index, array.numblocks)
+    index = tuple(slice(k, k + 1) for k in index)  # type: ignore
+    chunks = tuple(c[i] for c, i in zip(array_chunks, index))
+    chunkshape = tuple(itertools.chain(*chunks))
+    return chunkshape
+
+
 @memoize
 def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     """
@@ -214,8 +230,10 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     #  Iterate over each block and create a new block of same shape with "chunk number"
     shape = tuple(array.blocks.shape[ax] for ax in axis)
     blocks = np.empty(math.prod(shape), dtype=object)
-    for idx, block in enumerate(array.blocks.ravel()):
-        blocks[idx] = np.full(tuple(block.shape[ax] for ax in axis), idx)
+    array_chunks = tuple(np.array(c) for c in array.chunks)
+    for idx, blockindex in enumerate(np.ndindex(array.shape)):
+        chunkshape = get_chunk_shape(array_chunks, blockindex)
+        blocks[idx] = np.full(chunkshape, idx)
     which_chunk = np.block(blocks.reshape(shape).tolist()).reshape(-1)
 
     raveled = labels.reshape(-1)
