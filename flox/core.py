@@ -1900,9 +1900,6 @@ def groupby_reduce(
     xarray.xarray_reduce
     """
 
-    if func == "quantile" and (finalize_kwargs is None or "q" not in finalize_kwargs):
-        raise ValueError("Please pass `q` for quantile calculations.")
-
     if engine == "flox" and _is_arg_reduction(func):
         raise NotImplementedError(
             "argreductions not supported for engine='flox' yet."
