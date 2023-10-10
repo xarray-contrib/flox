@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from numpy.core.multiarray import normalize_axis_index  # type: ignore[attr-defined]
+from packaging.version import Version
 
 try:
     import cftime
@@ -320,7 +321,7 @@ def nanlast(values, axis, keepdims=False):
         return result
 
 
-def module_available(module: str) -> bool:
+def module_available(module: str, minversion: str | None = None) -> bool:
     """Checks whether a module is installed without importing it.
 
     Use this for a lightweight check and lazy imports.
@@ -335,4 +336,9 @@ def module_available(module: str) -> bool:
     available : bool
         Whether the module is installed.
     """
-    return importlib.util.find_spec(module) is not None
+    has = importlib.util.find_spec(module) is not None
+    if has:
+        mod = importlib.import_module(module)
+        return Version(mod.__version__) < Version(minversion) if minversion is not None else True
+    else:
+        return False

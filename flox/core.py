@@ -35,7 +35,7 @@ from .aggregations import (
 from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull, module_available
 
-HAS_NUMBAGG = module_available("numbagg")
+HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
 
 if TYPE_CHECKING:
     try:
