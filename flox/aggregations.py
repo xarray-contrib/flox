@@ -29,6 +29,7 @@ class AggDtypeInit(TypedDict):
 
 
 class AggDtype(TypedDict):
+    user: DTypeLike | None
     final: np.dtype
     numpy: tuple[np.dtype | type[np.intp], ...]
     intermediate: tuple[np.dtype | type[np.intp], ...]
@@ -569,6 +570,7 @@ def _initialize_aggregation(
 
     final_dtype = _normalize_dtype(dtype_ or agg.dtype_init["final"], array_dtype, fill_value)
     agg.dtype = {
+        "user": dtype,  # Save to automatically choose an engine
         "final": final_dtype,
         "numpy": (final_dtype,),
         "intermediate": tuple(

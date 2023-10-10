@@ -629,6 +629,7 @@ def chunk_argreduce(
     reindex: bool = False,
     engine: T_Engine = "numpy",
     sort: bool = True,
+    user_dtype=None,
 ) -> IntermediateDict:
     """
     Per-chunk arg reduction.
@@ -649,6 +650,7 @@ def chunk_argreduce(
         dtype=dtype,
         engine=engine,
         sort=sort,
+        user_dtype=user_dtype,
     )
     if not isnull(results["groups"]).all():
         idx = np.broadcast_to(idx, array.shape)
@@ -682,6 +684,7 @@ def chunk_reduce(
     engine: T_Engine = "numpy",
     kwargs: Sequence[dict] | None = None,
     sort: bool = True,
+    user_dtype=None,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -783,9 +786,6 @@ def chunk_reduce(
 
     assert group_idx.ndim == 1
 
-    if engine is None:
-        engine = _choose_engine(by, func)
-
     empty = np.all(props.nanmask)
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
@@ -817,6 +817,9 @@ def chunk_reduce(
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
         else:
+            if engine is None:
+                engine = _choose_engine(by, reduction, user_dtype)
+
             if is_nanlen(reduction) and is_nanlen(previous_reduction):
                 result = results["intermediates"][-1]
 
@@ -1101,6 +1104,7 @@ def _grouped_combine(
                         dtype=(np.intp,),
                         engine=engine,
                         sort=sort,
+                        user_dtype=agg.dtype["user"],
                     )["intermediates"][0]
                 )
 
@@ -1130,6 +1134,7 @@ def _grouped_combine(
                     dtype=(dtype,),
                     engine=engine,
                     sort=sort,
+                    user_dtype=agg.dtype["user"],
                 )
                 results["intermediates"].append(*_results["intermediates"])
                 results["groups"] = _results["groups"]
@@ -1179,6 +1184,7 @@ def _reduce_blockwise(
         engine=engine,
         sort=sort,
         reindex=reindex,
+        user_dtype=agg.dtype["user"],
     )
 
     if _is_arg_reduction(agg):
@@ -1374,6 +1380,7 @@ def dask_groupby_agg(
             fill_value=agg.fill_value["intermediate"],
             dtype=agg.dtype["intermediate"],
             reindex=reindex,
+            user_dtype=agg.dtype["user"],
         )
         if do_simple_combine:
             # Add a dummy dimension that then gets reduced over
@@ -1764,16 +1771,21 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
     return expected_groups
 
 
-def _choose_engine(by, func):
+def _choose_engine(by, func, dtype):
     # TODO: dtype for numbagg!
     # choose numpy per default
-    if HAS_NUMBAGG and not _is_arg_reduction(func):
-        engine = "numbagg"
+    if HAS_NUMBAGG:
+        if not _is_arg_reduction(func) and (
+            dtype is None or (dtype is not None and func == "count")
+        ):
+            engine = "numbagg"
+        else:
+            engine = "numpy"
     else:
-        engine = "numpy"
-
-    if not _is_arg_reduction(func) and _issorted(by):
-        engine = "flox"
+        if not _is_arg_reduction(func) and _issorted(by):
+            engine = "flox"
+        else:
+            engine = "numpy"
 
     return engine
 
