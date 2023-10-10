@@ -176,15 +176,6 @@ def _unique(a: np.ndarray) -> np.ndarray:
 
 
 def get_chunk_shape(array_chunks, index):
-    # from dask.array.slicing import normalize_index
-
-    # if not isinstance(index, tuple):
-    #     index = (index,)
-    # if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
-    #     raise ValueError("Can only slice with a single list")
-    # if any(ind is None for ind in index):
-    #     raise ValueError("Slicing with np.newaxis or None is not supported")
-    # index = normalize_index(index, array.numblocks)
     index = tuple(slice(k, k + 1) for k in index)  # type: ignore
     chunks = tuple(c[i] for c, i in zip(array_chunks, index))
     chunkshape = tuple(itertools.chain(*chunks))
