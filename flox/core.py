@@ -175,13 +175,6 @@ def _unique(a: np.ndarray) -> np.ndarray:
     return np.sort(pd.unique(a.reshape(-1)))
 
 
-def get_chunk_shape(array_chunks, index: tuple[int, ...]) -> tuple[int, ...]:
-    index = tuple(slice(k, k + 1) for k in index)
-    chunks = tuple(c[i] for c, i in zip(array_chunks, index))
-    chunkshape = tuple(itertools.chain(*chunks))
-    return chunkshape
-
-
 @memoize
 def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     """
@@ -215,16 +208,17 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     # 1. First subset the array appropriately
     axis = range(-labels.ndim, 0)
     # Easier to create a dask array and use the .blocks property
-    array = dask.array.ones(tuple(sum(c) for c in chunks), chunks=chunks)
+    array = dask.array.empty(tuple(sum(c) for c in chunks), chunks=chunks)
     labels = np.broadcast_to(labels, array.shape[-labels.ndim :])
 
     #  Iterate over each block and create a new block of same shape with "chunk number"
     shape = tuple(array.blocks.shape[ax] for ax in axis)
+    # Use a numpy object array to enable assignment in the loop
     blocks = np.empty(shape, dtype=object)
     array_chunks = tuple(np.array(c) for c in array.chunks)
-    for blockindex in np.ndindex(array.numblocks):
-        chunkshape = get_chunk_shape(array_chunks, blockindex)
-        blocks[blockindex] = np.full(chunkshape, np.ravel_multi_index(blockindex, array.numblocks))
+    for idx, blockindex in enumerate(np.ndindex(array.numblocks)):
+        chunkshape = tuple(c[i] for c, i in zip(array_chunks, blockindex))
+        blocks[blockindex] = np.full(chunkshape, idx)
     which_chunk = np.block(blocks.tolist()).reshape(-1)
 
     raveled = labels.reshape(-1)
