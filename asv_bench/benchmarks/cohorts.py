@@ -14,7 +14,7 @@ class Cohorts:
         raise NotImplementedError
 
     def time_find_group_cohorts(self):
-        flox.core.find_group_cohorts(self.by, self.array.chunks)
+        flox.core.find_group_cohorts(self.by, [self.array.chunks[ax] for ax in self.axis])
         # The cache clear fails dependably in CI
         # Not sure why
         try:
