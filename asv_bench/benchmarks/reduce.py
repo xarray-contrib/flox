@@ -64,8 +64,7 @@ class ChunkReduce:
         flox.aggregations.generic_aggregate(
             self.labels,
             self.array,
-            axis=-1,
-            size=5,
+            axis=self.axis,
             func=func,
             engine=engine,
             fill_value=0,
