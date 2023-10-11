@@ -6,11 +6,11 @@ import flox
 import flox.aggregations
 
 N = 3000
-funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "var", "count", "all"]
+funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "count"]
 engines = ["flox", "numpy", "numbagg"]
 expected_groups = {
     "None": None,
-    "RangeIndex": pd.RangeIndex(5),
+    # "RangeIndex": pd.RangeIndex(5),
     "bins": pd.IntervalIndex.from_breaks([1, 2, 4]),
 }
 expected_names = tuple(expected_groups)
@@ -60,17 +60,6 @@ class ChunkReduce:
             expected_groups=expected_groups[expected_name],
         )
 
-    @parameterize({"func": ["nansum", "nanmean", "nanmax", "count"], "engine": engines})
-    def time_reduce_bare(self, func, engine):
-        flox.aggregations.generic_aggregate(
-            self.labels,
-            self.array,
-            axis=self.axis,
-            func=func,
-            engine=engine,
-            fill_value=0,
-        )
-
     @skip_for_params(numbagg_skip)
     @parameterize({"func": funcs, "expected_name": expected_names, "engine": engines})
     def peakmem_reduce(self, func, expected_name, engine):
@@ -91,6 +80,19 @@ class ChunkReduce1D(ChunkReduce):
         self.axis = -1
         if "numbagg" in args:
             setup_jit()
+
+    @parameterize({"func": ["nansum", "nanmean", "nanmax", "count"], "engine": engines})
+    def time_reduce_bare(self, func, engine):
+        # TODO: migrate to the other test cases, but we'll have to setup labels
+        # appropriately ;(
+        flox.aggregations.generic_aggregate(
+            self.labels,
+            self.array,
+            axis=self.axis,
+            func=func,
+            engine=engine,
+            fill_value=0,
+        )
 
 
 # class ChunkReduce1DUnsorted(ChunkReduce):
