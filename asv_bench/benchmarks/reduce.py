@@ -10,7 +10,6 @@ funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "count"]
 engines = ["flox", "numpy", "numbagg"]
 expected_groups = {
     "None": None,
-    # "RangeIndex": pd.RangeIndex(5),
     "bins": pd.IntervalIndex.from_breaks([1, 2, 4]),
 }
 expected_names = tuple(expected_groups)
@@ -95,19 +94,19 @@ class ChunkReduce1D(ChunkReduce):
         )
 
 
-# class ChunkReduce1DUnsorted(ChunkReduce):
-#     def setup(self, *args, **kwargs):
-#         self.array = np.ones((N,))
-#         self.labels = np.random.permutation(np.repeat(np.arange(5), repeats=N // 5))
-#         self.axis = -1
-#         setup_jit()
-
-
 class ChunkReduce2D(ChunkReduce):
     def setup(self, *args, **kwargs):
         self.array = np.ones((N, N))
         self.labels = np.repeat(np.arange(N // 5), repeats=5)
         self.axis = -1
+        setup_jit()
+
+
+class ChunkReduce2DAllAxes(ChunkReduce):
+    def setup(self, *args, **kwargs):
+        self.array = np.ones((N, N))
+        self.labels = np.repeat(np.arange(N // 5), repeats=5)
+        self.axis = None
         setup_jit()
 
 
@@ -118,13 +117,12 @@ class ChunkReduce2D(ChunkReduce):
 #         self.axis = -1
 #         setup_jit()
 
-
-class ChunkReduce2DAllAxes(ChunkReduce):
-    def setup(self, *args, **kwargs):
-        self.array = np.ones((N, N))
-        self.labels = np.repeat(np.arange(N // 5), repeats=5)
-        self.axis = None
-        setup_jit()
+# class ChunkReduce1DUnsorted(ChunkReduce):
+#     def setup(self, *args, **kwargs):
+#         self.array = np.ones((N,))
+#         self.labels = np.random.permutation(np.repeat(np.arange(5), repeats=N // 5))
+#         self.axis = -1
+#         setup_jit()
 
 
 # class ChunkReduce2DAllAxesUnsorted(ChunkReduce):
