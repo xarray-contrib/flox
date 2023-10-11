@@ -16,10 +16,11 @@ expected_groups = {
 expected_names = tuple(expected_groups)
 
 NUMBAGG_FUNCS = ["nansum", "nanmean", "nanmax", "count", "all"]
-
-numbagg_skip = [
-    (func, expected_names[0], "numbagg") for func in funcs if func not in NUMBAGG_FUNCS
-] + [(func, expected_names[1], "numbagg") for func in funcs if func not in NUMBAGG_FUNCS]
+numbagg_skip = []
+for name in expected_names:
+    numbagg_skip.extend(
+        list((func, expected_names[0], "numbagg") for func in funcs if func not in NUMBAGG_FUNCS)
+    )
 
 
 def setup_jit():
