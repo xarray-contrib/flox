@@ -7,7 +7,7 @@ import flox.aggregations
 
 N = 3000
 funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "var", "count", "all"]
-engines: list[str | None] = [None, "flox", "numpy", "numbagg"]
+engines = [None, "flox", "numpy", "numbagg"]
 expected_groups = {
     "None": None,
     "RangeIndex": pd.RangeIndex(5),
