@@ -7,7 +7,7 @@ import flox.aggregations
 
 N = 3000
 funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "var", "count", "all"]
-engines = ["flox", "numpy", "numbagg"]
+engines: list[str | None] = [None, "flox", "numpy", "numbagg"]
 expected_groups = {
     "None": None,
     "RangeIndex": pd.RangeIndex(5),
@@ -15,11 +15,7 @@ expected_groups = {
 }
 expected_names = tuple(expected_groups)
 
-funcs = ["sum", "nansum", "mean", "nanmean", "max", "var", "nanvar", "count"]
-engines = [None, "flox", "numpy"]
-expected_groups = [None, pd.IntervalIndex.from_breaks([1, 2, 4])]
 NUMBAGG_FUNCS = ["nansum", "nanmean", "nanmax", "count", "all"]
-
 numbagg_skip = [
     (func, expected_names[0], "numbagg") for func in funcs if func not in NUMBAGG_FUNCS
 ] + [(func, expected_names[1], "numbagg") for func in funcs if func not in NUMBAGG_FUNCS]
