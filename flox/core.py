@@ -86,7 +86,7 @@ DUMMY_AXIS = -2
 
 
 def _issorted(arr: np.ndarray) -> bool:
-    return (arr[:-1] <= arr[1:]).all()
+    return bool((arr[:-1] <= arr[1:]).all())
 
 
 def _is_arg_reduction(func: T_Agg) -> bool:
@@ -2122,7 +2122,7 @@ def groupby_reduce(
             assert len(groups) == 1
             sorted_idx = np.argsort(groups[0])
             # This optimization helps specifically with resampling
-            if not _issorted(sorted_idx).all():
+            if not _issorted(sorted_idx):
                 result = result[..., sorted_idx]
                 groups = (groups[0][sorted_idx],)
 
