@@ -1,8 +1,10 @@
 import dask
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 import flox
+from flox.xarray import xarray_reduce
 
 
 class Cohorts:
@@ -12,7 +14,7 @@ class Cohorts:
         raise NotImplementedError
 
     def time_find_group_cohorts(self):
-        flox.core.find_group_cohorts(self.by, self.array.chunks)
+        flox.core.find_group_cohorts(self.by, [self.array.chunks[ax] for ax in self.axis])
         # The cache clear fails dependably in CI
         # Not sure why
         try:
@@ -125,3 +127,13 @@ class PerfectMonthlyRechunked(PerfectMonthly):
     def setup(self, *args, **kwargs):
         super().setup()
         super().rechunk()
+
+
+def time_cohorts_era5_single():
+    TIME = 900  # 92044 in Google ARCO ERA5
+    da = xr.DataArray(
+        dask.array.ones((TIME, 721, 1440), chunks=(1, -1, -1)),
+        dims=("time", "lat", "lon"),
+        coords=dict(time=pd.date_range("1959-01-01", freq="6H", periods=TIME)),
+    )
+    xarray_reduce(da, da.time.dt.day, method="cohorts", func="any")
