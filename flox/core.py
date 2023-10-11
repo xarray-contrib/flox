@@ -85,7 +85,7 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 DUMMY_AXIS = -2
 
 
-def _issorted(arr):
+def _issorted(arr: np.ndarray) -> bool:
     return (arr[:-1] <= arr[1:]).all()
 
 
