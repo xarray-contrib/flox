@@ -31,7 +31,6 @@ from . import (
     assert_equal,
     assert_equal_tuple,
     has_dask,
-    # has_numbagg,
     raise_if_dask_computes,
     requires_dask,
     requires_scipy,
