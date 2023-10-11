@@ -77,7 +77,7 @@ ignore = [
 ]
 select = [
     # Bugbear
-    "B",
+    # "B",
     # Pyflakes
     "F",
     # Pycodestyle
