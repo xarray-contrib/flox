@@ -43,7 +43,7 @@ class ChunkReduce:
     """Time the core reduction function."""
 
     min_run_count = 5
-    warmup_time = 1
+    warmup_time = 0.5
 
     def setup(self, *args, **kwargs):
         raise NotImplementedError
