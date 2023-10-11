@@ -24,7 +24,6 @@ jobs:
       - name: Set up conda environment
         uses: mamba-org/setup-micromamba@v1
         with:
-          environment-file: false
           environment-name: flox-bench
           create-args: >-
             python=3.10
