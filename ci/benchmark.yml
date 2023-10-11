@@ -6,6 +6,7 @@ dependencies:
   - cachey
   - dask-core
   - numpy>=1.20
+  - mamba
   - pip
   - python=3.10
   - xarray
