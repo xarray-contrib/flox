@@ -208,15 +208,20 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     # 1. First subset the array appropriately
     axis = range(-labels.ndim, 0)
     # Easier to create a dask array and use the .blocks property
-    array = dask.array.ones(tuple(sum(c) for c in chunks), chunks=chunks)
+    array = dask.array.empty(tuple(sum(c) for c in chunks), chunks=chunks)
     labels = np.broadcast_to(labels, array.shape[-labels.ndim :])
 
     #  Iterate over each block and create a new block of same shape with "chunk number"
     shape = tuple(array.blocks.shape[ax] for ax in axis)
-    blocks = np.empty(math.prod(shape), dtype=object)
-    for idx, block in enumerate(array.blocks.ravel()):
-        blocks[idx] = np.full(tuple(block.shape[ax] for ax in axis), idx)
-    which_chunk = np.block(blocks.reshape(shape).tolist()).reshape(-1)
+    # Use a numpy object array to enable assignment in the loop
+    # TODO: is it possible to just use a nested list?
+    #       That is what we need for `np.block`
+    blocks = np.empty(shape, dtype=object)
+    array_chunks = tuple(np.array(c) for c in array.chunks)
+    for idx, blockindex in enumerate(np.ndindex(array.numblocks)):
+        chunkshape = tuple(c[i] for c, i in zip(array_chunks, blockindex))
+        blocks[blockindex] = np.full(chunkshape, idx)
+    which_chunk = np.block(blocks.tolist()).reshape(-1)
 
     raveled = labels.reshape(-1)
     # these are chunks where a label is present
@@ -229,7 +234,11 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
 
     chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
 
-    if merge:
+    # If our dataset has chunksize one along the axis,
+    # then no merging is possible.
+    single_chunks = all((ac == 1).all() for ac in array_chunks)
+
+    if merge and not single_chunks:
         # First sort by number of chunks occupied by cohort
         sorted_chunks_cohorts = dict(
             sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
