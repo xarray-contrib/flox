@@ -25,6 +25,7 @@ jobs:
         uses: mamba-org/setup-micromamba@v1
         with:
           init-shell: bash
+          cache-environment: true
           create-args: >-
             python=3.10
             asv
