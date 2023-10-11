@@ -25,7 +25,7 @@ jobs:
         uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ci/benchmark.yml
-          environment-name: flox-tests
+          environment-name: flox-bench
           init-shell: bash
           cache-environment: true
 
@@ -39,13 +39,11 @@ jobs:
           ASV_FACTOR: 1.5
           ASV_SKIP_SLOW: 1
         run: |
-          set -x
+          # set -x
           # ID this runner
           asv machine --yes
           echo "Baseline:  ${{ github.event.pull_request.base.sha }} (${{ github.event.pull_request.base.label }})"
           echo "Contender: ${GITHUB_SHA} (${{ github.event.pull_request.head.label }})"
-          echo "which mamba"
-          which mamba
           # Run benchmarks for current commit against base
           ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
           asv continuous $ASV_OPTIONS ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA} \
