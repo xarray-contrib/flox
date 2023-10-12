@@ -602,12 +602,9 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     rng = np.random.default_rng(12345)
     array = rng.random(by.shape)
-    kwargs = dict(
-        func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value, engine=engine
-    )
-    expected, _ = groupby_reduce(array, by, **kwargs)
+    kwargs = dict(func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value)
+    expected, _ = groupby_reduce(array, by, engine=engine, **kwargs)
     if engine == "flox":
-        kwargs.pop("engine")
         expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
         assert_equal(expected_npg, expected)
 
@@ -624,12 +621,9 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     rng = np.random.default_rng(12345)
     array = rng.random(by.shape)
-    kwargs = dict(
-        func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value, engine=engine
-    )
-    expected, _ = groupby_reduce(array, by, **kwargs)
+    kwargs = dict(func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value)
+    expected, _ = groupby_reduce(array, by, engine=engine, **kwargs)
     if engine == "flox":
-        kwargs.pop("engine")
         expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
         assert_equal(expected_npg, expected)
 
@@ -642,6 +636,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         actual, _ = groupby_reduce(
             da.from_array(array, chunks=(-1, 2, 3)),
             da.from_array(by, chunks=(-1, 2, 2)),
+            engine=engine,
             **kwargs,
         )
     assert_equal(actual, expected, tolerance)

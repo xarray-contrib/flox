@@ -826,9 +826,6 @@ def chunk_reduce(
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
         else:
-            if engine is None:
-                engine = _choose_engine(by, reduction, user_dtype)
-
             if is_nanlen(reduction) and is_nanlen(previous_reduction):
                 result = results["intermediates"][-1]
 
@@ -1780,16 +1777,15 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
     return expected_groups
 
 
-def _choose_engine(by, func, dtype):
-    # TODO: dtype for numbagg!
-    # choose numpy per default
-    if HAS_NUMBAGG:
-        if not _is_arg_reduction(func) and (
-            dtype is None or (dtype is not None and func == "count")
-        ):
+def _choose_engine(by, agg: Aggregation):
+    dtype = agg.dtype["user"]
+
+    not_arg_reduce = not _is_arg_reduction(agg)
+    if HAS_NUMBAGG and "nan" in agg.name:
+        if not_arg_reduce and (dtype is None or (dtype is not None and agg.name == "count")):
             return "numbagg"
 
-    if not _is_arg_reduction(func) and _issorted(by):
+    if not_arg_reduce and _issorted(by):
         return "flox"
     else:
         return "numpy"
@@ -2070,8 +2066,14 @@ def groupby_reduce(
         # overwrite than when min_count is set
         fill_value = np.nan
 
-    kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
+    kwargs = dict(axis=axis_, fill_value=fill_value)
     agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count_, finalize_kwargs)
+
+    # Need to set this early using `agg`
+    # It cannot be done in the core loop of chunk_reduce
+    # since we "prepare" the data for flox.
+    if engine is None:
+        kwargs["engine"] = _choose_engine(by_, agg)
 
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
