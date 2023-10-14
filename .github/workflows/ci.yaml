@@ -59,15 +59,20 @@ jobs:
 
   optional-deps:
     name: ${{ matrix.env }}
-    runs-on: ${{ matrix.os }}
+    runs-on: "ubuntu-latest"
     defaults:
       run:
         shell: bash -l {0}
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest"]
-        env: ["no-xarray", "no-dask", "minimal-requirements"]
+        python-version: ["3.11"]
+        env: ["no-xarray", "no-dask"]
+        include:
+          - env: "no-numba"
+            python-version: "3.12"
+          - env: "minimal-requirements"
+            python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,7 +80,7 @@ jobs:
       - name: Set up conda environment
         uses: mamba-org/setup-micromamba@v1
         with:
-          environment-file: ci/environment.yml
+          environment-file: ci/${{ matrix.env }}.yml
           environment-name: flox-tests
           init-shell: bash
           cache-environment: true
