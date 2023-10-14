@@ -8,8 +8,8 @@ dependencies:
   - dask-core
   - netcdf4
   - pandas
-  - numpy>=1.20
-  - lxml  # for mypy coverage report
+  - numpy>=1.21
+  - lxml # for mypy coverage report
   - matplotlib
   - pip
   - pytest
@@ -18,10 +18,9 @@ dependencies:
   - pytest-xdist
   - xarray
   - pre-commit
+  - numbagg>=0.3
   - numpy_groupies>=0.9.19
   - pooch
   - toolz
   - numba
   - scipy
-  - pip:
-    - numbagg>=0.3

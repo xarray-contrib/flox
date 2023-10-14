@@ -1252,7 +1252,7 @@ def test_custom_aggregation_blockwise():
     expected = np.median(array, axis=-1, keepdims=True)
     assert_equal(expected, actual)
 
-    for method in ["map-reduce", "cohorts", "split-reduce"]:
+    for method in ["map-reduce", "cohorts"]:
         with pytest.raises(NotImplementedError):
             groupby_reduce(
                 dask.array.from_array(array, chunks=(1, -1)),

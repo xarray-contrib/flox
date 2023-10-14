@@ -225,7 +225,7 @@ class Aggregation:
             "final": final_dtype,
             "intermediate": self._normalize_dtype_fill_value(dtypes, "dtype"),
         }
-        self.dtype: AggDtype = None  # type: ignore
+        self.dtype: AggDtype = None  # type: ignore[assignment]
 
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
