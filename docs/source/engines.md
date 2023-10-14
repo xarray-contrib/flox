@@ -16,7 +16,7 @@ See [](arrays) for more details.
 
 ## Tradeoffs
 
-For the common case of reducing a nD array by a 1D array of group labels (e.g. `groupby("time.month")`), `engine="numbagg"` is almost always faster, and `engine="flox"` *can* be faster.
+For the common case of reducing a nD array by a 1D array of group labels (e.g. `groupby("time.month")`), `engine="numbagg"` is almost always faster, and `engine="flox"` _can_ be faster.
 
 The reason is that `numpy_groupies` converts all groupby problems to a 1D problem, this can involve [some overhead](https://github.com/ml31415/numpy-groupies/pull/46).
 It is possible to optimize this a bit in `flox` or `numpy_groupies`, but the work has not been done yet.

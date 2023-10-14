@@ -18,7 +18,7 @@ classifiers = [
 ]
 dependencies = [
     "pandas",
-    "numpy>=1.20",
+    "numpy>=1.22",
     "numpy_groupies>=0.9.19",
     "toolz",
 ]
@@ -108,6 +108,8 @@ allow_redefinition = true
 files = "**/*.py"
 show_error_codes = true
 warn_unused_ignores = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 
 [[tool.mypy.overrides]]
 module=[

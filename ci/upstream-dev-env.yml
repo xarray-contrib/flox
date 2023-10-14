@@ -14,8 +14,8 @@ dependencies:
   - pytest-xdist
   - pip
   - pip:
-    - git+https://github.com/pydata/xarray
-    - git+https://github.com/pandas-dev/pandas
-    - git+https://github.com/dask/dask
-    - git+https://github.com/ml31415/numpy-groupies
-    - git+https://github.com/numbagg/numbagg
+      - git+https://github.com/pydata/xarray
+      - git+https://github.com/pandas-dev/pandas
+      - git+https://github.com/dask/dask
+      - git+https://github.com/ml31415/numpy-groupies
+      - git+https://github.com/numbagg/numbagg
