@@ -5,7 +5,7 @@ dependencies:
   - asv
   - cachey
   - dask-core
-  - numpy>=1.21
+  - numpy>=1.22
   - mamba
   - pip
   - python=3.10

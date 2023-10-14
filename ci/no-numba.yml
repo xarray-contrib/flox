@@ -8,7 +8,7 @@ dependencies:
   - dask-core
   - netcdf4
   - pandas
-  - numpy>=1.21
+  - numpy>=1.22
   - lxml # for mypy coverage report
   - matplotlib
   - pip
