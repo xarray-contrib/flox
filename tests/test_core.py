@@ -11,7 +11,7 @@ import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
 from flox import xrutils
-from flox.aggregations import Aggregation
+from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.core import (
     HAS_NUMBAGG,
     _choose_engine,
@@ -1549,10 +1549,27 @@ def test_method_check_numpy():
 def test_choose_engine(dtype):
     numbagg_possible = HAS_NUMBAGG and dtype is None
     default = "numbagg" if numbagg_possible else "numpy"
+    mean = _initialize_aggregation(
+        "mean",
+        dtype=dtype,
+        array_dtype=np.dtype("int64"),
+        fill_value=0,
+        min_count=0,
+        finalize_kwargs=None,
+    )
+    argmax = _initialize_aggregation(
+        "argmax",
+        dtype=dtype,
+        array_dtype=np.dtype("int64"),
+        fill_value=0,
+        min_count=0,
+        finalize_kwargs=None,
+    )
+
     # sorted by -> flox
-    sorted_engine = _choose_engine(np.array([1, 1, 2, 2]), func="mean", dtype=dtype)
+    sorted_engine = _choose_engine(np.array([1, 1, 2, 2]), agg=mean)
     assert sorted_engine == ("numbagg" if numbagg_possible else "flox")
     # unsorted by -> numpy
-    assert _choose_engine(np.array([3, 1, 1]), func="mean", dtype=dtype) == default
+    assert _choose_engine(np.array([3, 1, 1]), agg=mean) == default
     # argmax does not give engine="flox"
-    assert _choose_engine(np.array([1, 1, 2, 2]), func="argmax", dtype=dtype) == "numpy"
+    assert _choose_engine(np.array([1, 1, 2, 2]), agg=argmax) == "numpy"

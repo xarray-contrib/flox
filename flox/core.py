@@ -1785,7 +1785,7 @@ def _choose_engine(by, agg: Aggregation):
         if not_arg_reduce and (dtype is None or (dtype is not None and agg.name == "count")):
             return "numbagg"
 
-    if not_arg_reduce and _issorted(by):
+    if not_arg_reduce and (not is_duck_dask_array(by) and _issorted(by)):
         return "flox"
     else:
         return "numpy"
