@@ -22,7 +22,7 @@ try:
 
     dask_array_type = dask.array.Array
 except ImportError:
-    dask_array_type = ()  # type: ignore
+    dask_array_type = ()  # type: ignore[assignment, misc]
 
 
 def asarray(data, xp=np):

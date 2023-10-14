@@ -59,20 +59,20 @@ jobs:
 
   optional-deps:
     name: ${{ matrix.env }}
-    runs-on: ${{ matrix.os }}
+    runs-on: "ubuntu-latest"
     defaults:
       run:
         shell: bash -l {0}
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest"]
-        env:
-          [
-            "no-xarray",
-            "no-dask",
-            "minimal-requirements",
-          ]
+        python-version: ["3.11"]
+        env: ["no-xarray", "no-dask"]
+        include:
+          - env: "no-numba"
+            python-version: "3.12"
+          - env: "minimal-requirements"
+            python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -110,7 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: 'pydata/xarray'
+          repository: "pydata/xarray"
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set up conda environment
         uses: mamba-org/setup-micromamba@v1

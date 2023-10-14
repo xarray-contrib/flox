@@ -14,7 +14,7 @@ try:
 
     dask_array_type = da.Array
 except ImportError:
-    dask_array_type = ()  # type: ignore
+    dask_array_type = ()  # type: ignore[assignment, misc]
 
 
 try:
@@ -22,7 +22,7 @@ try:
 
     xr_types = (xr.DataArray, xr.Dataset)
 except ImportError:
-    xr_types = ()  # type: ignore
+    xr_types = ()  # type: ignore[assignment]
 
 
 def _importorskip(modname, minversion=None):

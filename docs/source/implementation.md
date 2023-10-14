@@ -43,7 +43,7 @@ width: 100%
 ---
 ```
 
-The first step is to extract all members of a group, which involves a *lot* of
+The first step is to extract all members of a group, which involves a _lot_ of
 communication and is quite expensive (in dataframe terminology, this is a "shuffle").
 This is fundamentally why many groupby reductions don't work well right now with
 big datasets.
@@ -129,7 +129,7 @@ width: 100%
 ---
 ```
 
-*Tradeoffs*
+_Tradeoffs_
 
 1. Only works for certain groupings.
 1. Group labels must be known at graph construction time, so this only works for numpy arrays
@@ -146,14 +146,14 @@ width: 100%
 The `map-reduce` strategy is quite effective but can involve some unnecessary communication. It can be possible to exploit
 patterns in how group labels are distributed across chunks (similar to `method="blockwise"` above). Two cases are illustrative:
 
-1. Groups labels can be *approximately-periodic*: e.g. `time.dayofyear` (period 365 or 366) or `time.month` (period 12).
+1. Groups labels can be _approximately-periodic_: e.g. `time.dayofyear` (period 365 or 366) or `time.month` (period 12).
    Consider our earlier example, `groupby("time.month")` with monthly frequency data and chunksize of 4 along `time`.
    ![cohorts-schematic](/../diagrams/cohorts-month-chunk4.png)
    Because a chunksize of 4 evenly divides the number of groups (12) all we need to do is index out blocks
    0, 3, 7 and then apply the `"map-reduce"` strategy to form the final result for months Jan-Apr. Repeat for the
    remaining groups of months (May-Aug; Sep-Dec) and then concatenate.
 
-1. Groups can be *spatially localized* like the blockwise case above, for example grouping by country administrative boundaries like
+1. Groups can be _spatially localized_ like the blockwise case above, for example grouping by country administrative boundaries like
    counties or districts. In this case, concatenating the result for the northwesternmost county or district and the southeasternmost
    district can involve a lot of wasteful communication (again depending on chunking).
 
@@ -172,7 +172,7 @@ Consider our earlier example, `groupby("time.month")` with monthly frequency dat
 ![cohorts-schematic](/../diagrams/cohorts-month-chunk4.png)
 
 With `method="map-reduce", reindex=True`, each block will become 3x its original size at the blockwise step: input blocks have 4 timesteps while output block
-has a value for all 12 months. Note that the blockwise groupby-reduction *does not reduce* the data since there is only one element in each
+has a value for all 12 months. Note that the blockwise groupby-reduction _does not reduce_ the data since there is only one element in each
 group. In addition, since `map-reduce` will make the final result have only one chunk of size 12 along the new `month`
 dimension, the final result has chunk sizes 3x that of the input, which may not be ideal.
 
@@ -184,7 +184,7 @@ remaining groups of months (May-Aug; Sep-Dec) and then concatenate. This is the 
 
 We can generalize this idea for more complicated problems (inspired by the `split_out`kwarg in `dask.dataframe.groupby`)
 We first apply the groupby-reduction blockwise, then split and reindex blocks to create a new array with which we complete the reduction
-using `map-reduce`. Because the split or shuffle step occurs after the blockwise reduction, we *sometimes* communicate a significantly smaller
+using `map-reduce`. Because the split or shuffle step occurs after the blockwise reduction, we _sometimes_ communicate a significantly smaller
 amount of data than if we split or shuffled the input array.
 
 ```{image} /../diagrams/new-cohorts-annotated.svg
