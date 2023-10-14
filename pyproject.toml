@@ -107,6 +107,8 @@ allow_redefinition = true
 files = "**/*.py"
 show_error_codes = true
 warn_unused_ignores = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 
 [[tool.mypy.overrides]]
 module=[

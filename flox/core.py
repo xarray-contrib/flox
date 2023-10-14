@@ -7,7 +7,7 @@ import operator
 import sys
 import warnings
 from collections import namedtuple
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from functools import partial, reduce
 from numbers import Integral
 from typing import (
@@ -42,9 +42,10 @@ if TYPE_CHECKING:
         else:
             from typing import Unpack
     except (ModuleNotFoundError, ImportError):
-        Unpack: Any  # type: ignore
+        Unpack: Any  # type: ignore[no-redef]
 
     import dask.array.Array as DaskArray
+    from dask.typing import Graph
 
     T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
     T_By = T_DuckArray
@@ -576,7 +577,7 @@ def factorize_(
                     idx = sorter[(idx,)]
                 idx[mask] = -1
             else:
-                idx, groups = pd.factorize(flat, sort=sort)  # type: ignore # pandas issue?
+                idx, groups = pd.factorize(flat, sort=sort)  # type: ignore[arg-type]
 
             found_groups.append(np.array(groups))
         factorized.append(idx.reshape(groupvar.shape))
@@ -1156,11 +1157,7 @@ def _reduce_blockwise(
     agg.finalize = None
 
     assert agg.finalize_kwargs is not None
-    if isinstance(agg.finalize_kwargs, Mapping):
-        finalize_kwargs_: tuple[dict[Any, Any], ...] = (agg.finalize_kwargs,)
-    else:
-        finalize_kwargs_ = agg.finalize_kwargs
-    finalize_kwargs_ += ({},) + ({},)
+    finalize_kwargs_: tuple[dict[Any, Any], ...] = (agg.finalize_kwargs,) + ({},) + ({},)
 
     results = chunk_reduce(
         array,
@@ -1266,7 +1263,7 @@ def subset_to_blocks(
     chunks = tuple(tuple(np.array(c)[i].tolist()) for c, i in zip(array.chunks, squeezed))
 
     keys = itertools.product(*(range(len(c)) for c in chunks))
-    layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+    layer: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
     graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
 
     return dask.array.Array(graph, name, chunks, meta=array)
@@ -1276,14 +1273,11 @@ def _extract_unknown_groups(reduced, dtype) -> tuple[DaskArray]:
     import dask.array
     from dask.highlevelgraph import HighLevelGraph
 
-    layer: dict[tuple, tuple] = {}
     groups_token = f"group-{reduced.name}"
     first_block = reduced.ndim * (0,)
-    layer[(groups_token, *first_block)] = (
-        operator.getitem,
-        (reduced.name, *first_block),
-        "groups",
-    )
+    layer: Graph = {
+        (groups_token, *first_block): (operator.getitem, (reduced.name, *first_block), "groups")
+    }
     groups: tuple[DaskArray] = (
         dask.array.Array(
             HighLevelGraph.from_collections(groups_token, layer, dependencies=[reduced]),
@@ -1537,6 +1531,7 @@ def _collapse_blocks_along_axes(reduced: DaskArray, axis: T_Axes, group_chunks) 
         inchunk = ochunk[: -len(axis)] + np.unravel_index(ochunk[-1], nblocks)
         layer2[(name, *ochunk)] = (reduced.name, *inchunk)
 
+    layer2: Graph
     return dask.array.Array(
         HighLevelGraph.from_collections(name, layer2, dependencies=[reduced]),
         name,
@@ -1814,7 +1809,7 @@ def groupby_reduce(
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
         array's dtype.
-    method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
+    method : {"map-reduce", "blockwise", "cohorts"}, optional
         Strategy for reduction of dask arrays only:
           * ``"map-reduce"``:
             First apply the reduction blockwise on ``array``, then
@@ -1838,8 +1833,6 @@ def groupby_reduce(
             'month', dayofyear' etc. Optimize chunking ``array`` for this
             method by first rechunking using ``rechunk_for_cohorts``
             (for 1D ``by`` only).
-          * ``"split-reduce"``:
-            Same as "cohorts" and will be removed soon.
     engine : {"flox", "numpy", "numba", "numbagg"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
@@ -1915,11 +1908,8 @@ def groupby_reduce(
             "Try engine='numpy' or engine='numba' instead."
         )
 
-    if method in ["split-reduce", "cohorts"] and any_by_dask:
+    if method == "cohorts" and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
-
-    if method == "split-reduce":
-        method = "cohorts"
 
     reindex = _validate_reindex(
         reindex, func, method, expected_groups, any_by_dask, is_duck_dask_array(array)
@@ -1976,7 +1966,7 @@ def groupby_reduce(
         axis_ = tuple(array.ndim + np.arange(-by_.ndim, 0))
     else:
         # TODO: How come this function doesn't exist according to mypy?
-        axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
+        axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore[attr-defined]
     nax = len(axis_)
 
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
@@ -2053,7 +2043,8 @@ def groupby_reduce(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
-        if agg.chunk[0] is None and method != "blockwise":
+        # TODO: fix typing of FuncTuple in Aggregation
+        if agg.chunk[0] is None and method != "blockwise":  # type: ignore[unreachable]
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"Received method={method!r}"

@@ -67,12 +67,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest"]
-        env:
-          [
-            "no-xarray",
-            "no-dask",
-            "minimal-requirements",
-          ]
+        env: ["no-xarray", "no-dask", "minimal-requirements"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -110,7 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: 'pydata/xarray'
+          repository: "pydata/xarray"
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set up conda environment
         uses: mamba-org/setup-micromamba@v1
