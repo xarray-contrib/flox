@@ -2072,8 +2072,7 @@ def groupby_reduce(
     # Need to set this early using `agg`
     # It cannot be done in the core loop of chunk_reduce
     # since we "prepare" the data for flox.
-    if engine is None:
-        kwargs["engine"] = _choose_engine(by_, agg)
+    kwargs["engine"] = _choose_engine(by_, agg) if engine is None else engine
 
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
