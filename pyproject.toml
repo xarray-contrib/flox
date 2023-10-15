@@ -3,7 +3,7 @@ name = "flox"
 description = "GroupBy operations for dask.array"
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 keywords = ["xarray", "dask", "groupby"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -11,14 +11,14 @@ classifiers = [
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
     "pandas",
-    "numpy>=1.20",
+    "numpy>=1.22",
     "numpy_groupies>=0.9.19",
     "toolz",
 ]
@@ -32,17 +32,16 @@ repository = "https://github.com/xarray-contrib/flox.git"
 changelog = "https://github.com/xarray-contrib/flox/releases"
 
 [project.optional-dependencies]
-all = ["cachey", "dask", "numba", "xarray"]
+all = ["cachey", "dask", "numba", "numbagg", "xarray"]
 test = ["netCDF4"]
 
 [build-system]
 requires = [
     "pandas",
-    "numpy>=1.20",
+    "numpy>=1.22",
     "numpy_groupies>=0.9.19",
     "toolz",
     "setuptools>=61.0.0",
-    "wheel",
     "setuptools_scm[toml]>=7.0",
 ]
 build-backend = "setuptools.build_meta"
@@ -60,10 +59,10 @@ write_to_template= '__version__ = "{version}"'
 
 [tool.black]
 line-length = 100
-target-version = ["py38"]
+target-version = ["py39"]
 
 [tool.ruff]
-target-version = "py38"
+target-version = "py39"
 builtins = ["ellipsis"]
 exclude = [
     ".eggs",
@@ -78,6 +77,8 @@ ignore = [
     "E731",
 ]
 select = [
+    # Bugbear
+    # "B",
     # Pyflakes
     "F",
     # Pycodestyle
@@ -104,27 +105,34 @@ known-third-party = [
 
 [tool.mypy]
 allow_redefinition = true
-exclude = "properties|asv_bench|doc|tests|flycheck"
-files = "flox/*.py"
+files = "**/*.py"
 show_error_codes = true
 warn_unused_ignores = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 
 [[tool.mypy.overrides]]
 module=[
+    "asv_runner.*",
     "cachey",
     "cftime",
     "dask.*",
     "importlib_metadata",
-    "numpy_groupies",
+    "numba",
+    "numbagg.*",
+    "numpy_groupies.*",
     "matplotlib.*",
     "pandas",
     "setuptools",
-    "toolz"
+    "scipy.*",
+    "toolz",
 ]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 addopts = "--tb=short"
+minversion = "7"
+testpaths = ["tests"]
 
 
 [tool.codespell]

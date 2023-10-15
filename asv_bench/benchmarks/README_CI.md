@@ -13,7 +13,7 @@ The `asv` suite can be run for any PR on GitHub Actions (check workflow `.github
 We use `asv continuous` to run the job, which runs a relative performance measurement. This means that there's no state to be saved and that regressions are only caught in terms of performance ratio (absolute numbers are available but they are not useful since we do not use stable hardware over time). `asv continuous` will:
 
 - Compile `scikit-image` for _both_ commits. We use `ccache` to speed up the process, and `mamba` is used to create the build environments.
-- Run the benchmark suite for both commits, _twice_  (since `processes=2` by default).
+- Run the benchmark suite for both commits, _twice_ (since `processes=2` by default).
 - Generate a report table with performance ratios:
   - `ratio=1.0` -> performance didn't change.
   - `ratio<1.0` -> PR made it slower.

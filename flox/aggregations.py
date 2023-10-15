@@ -6,7 +6,6 @@ from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 import numpy as np
-import numpy_groupies as npg
 from numpy.typing import DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
@@ -30,9 +29,20 @@ class AggDtypeInit(TypedDict):
 
 
 class AggDtype(TypedDict):
+    user: DTypeLike | None
     final: np.dtype
     numpy: tuple[np.dtype | type[np.intp], ...]
     intermediate: tuple[np.dtype | type[np.intp], ...]
+
+
+def get_npg_aggregation(func, *, engine):
+    try:
+        method_ = getattr(aggregate_npg, func)
+        method = partial(method_, engine=engine)
+    except AttributeError:
+        aggregate = aggregate_npg._get_aggregate(engine).aggregate
+        method = partial(aggregate, func=func)
+    return method
 
 
 def generic_aggregate(
@@ -51,17 +61,30 @@ def generic_aggregate(
         try:
             method = getattr(aggregate_flox, func)
         except AttributeError:
-            method = partial(npg.aggregate_numpy.aggregate, func=func)
-    elif engine in ["numpy", "numba"]:
+            method = get_npg_aggregation(func, engine="numpy")
+
+    elif engine == "numbagg":
+        from . import aggregate_numbagg
+
         try:
-            method_ = getattr(aggregate_npg, func)
-            method = partial(method_, engine=engine)
+            if (
+                # numabgg hardcodes ddof=1
+                ("var" in func or "std" in func)
+                and kwargs.get("ddof", 0) == 0
+            ):
+                method = get_npg_aggregation(func, engine="numpy")
+
+            else:
+                method = getattr(aggregate_numbagg, func)
         except AttributeError:
-            aggregate = aggregate_npg._get_aggregate(engine).aggregate
-            method = partial(aggregate, func=func)
+            method = get_npg_aggregation(func, engine="numpy")
+
+    elif engine in ["numpy", "numba"]:
+        method = get_npg_aggregation(func, engine=engine)
+
     else:
         raise ValueError(
-            f"Expected engine to be one of ['flox', 'numpy', 'numba']. Received {engine} instead."
+            f"Expected engine to be one of ['flox', 'numpy', 'numba', 'numbagg']. Received {engine} instead."
         )
 
     group_idx = np.asarray(group_idx, like=array)
@@ -185,7 +208,7 @@ class Aggregation:
         # how to aggregate results after first round of reduction
         self.combine: FuncTuple = _atleast_1d(combine)
         # simpler reductions used with the "simple combine" algorithm
-        self.simple_combine = None
+        self.simple_combine: tuple[Callable, ...] = ()
         # final aggregation
         self.aggregate: Callable | str = aggregate if aggregate else self.combine[0]
         # finalize results (see mean)
@@ -203,11 +226,11 @@ class Aggregation:
             "final": final_dtype,
             "intermediate": self._normalize_dtype_fill_value(dtypes, "dtype"),
         }
-        self.dtype: AggDtype = None  # type: ignore
+        self.dtype: AggDtype = None  # type: ignore[assignment]
 
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
-        self.min_count: int | None = None
+        self.min_count: int = 0
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
@@ -465,10 +488,22 @@ any_ = Aggregation(
     final_dtype=bool,
 )
 
-# numpy_groupies does not support median
-# And the dask version is really hard!
-# median = Aggregation("median", chunk=None, combine=None, fill_value=None)
-# nanmedian = Aggregation("nanmedian", chunk=None, combine=None, fill_value=None)
+# Support statistical quantities only blockwise
+# The parallel versions will be approximate and are hard to implement!
+median = Aggregation(
+    name="median", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+nanmedian = Aggregation(
+    name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+quantile = Aggregation(
+    name="quantile", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+nanquantile = Aggregation(
+    name="nanquantile", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+)
+mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
+nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
 
 aggregations = {
     "any": any_,
@@ -496,6 +531,12 @@ aggregations = {
     "nanfirst": nanfirst,
     "last": last,
     "nanlast": nanlast,
+    "median": median,
+    "nanmedian": nanmedian,
+    "quantile": quantile,
+    "nanquantile": nanquantile,
+    "mode": mode,
+    "nanmode": nanmode,
 }
 
 
@@ -504,7 +545,7 @@ def _initialize_aggregation(
     dtype,
     array_dtype,
     fill_value,
-    min_count: int | None,
+    min_count: int,
     finalize_kwargs: dict[Any, Any] | None,
 ) -> Aggregation:
     if not isinstance(func, Aggregation):
@@ -529,6 +570,7 @@ def _initialize_aggregation(
 
     final_dtype = _normalize_dtype(dtype_ or agg.dtype_init["final"], array_dtype, fill_value)
     agg.dtype = {
+        "user": dtype,  # Save to automatically choose an engine
         "final": final_dtype,
         "numpy": (final_dtype,),
         "intermediate": tuple(
@@ -559,9 +601,6 @@ def _initialize_aggregation(
         assert isinstance(finalize_kwargs, dict)
         agg.finalize_kwargs = finalize_kwargs
 
-    if min_count is None:
-        min_count = 0
-
     # This is needed for the dask pathway.
     # Because we use intermediate fill_value since a group could be
     # absent in one block, but present in another block
@@ -579,7 +618,7 @@ def _initialize_aggregation(
     else:
         agg.min_count = 0
 
-    simple_combine = []
+    simple_combine: list[Callable] = []
     for combine in agg.combine:
         if isinstance(combine, str):
             if combine in ["nanfirst", "nanlast"]:
