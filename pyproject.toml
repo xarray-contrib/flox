@@ -18,6 +18,7 @@ classifiers = [
 ]
 dependencies = [
     "pandas",
+    "packaging>=21.3",
     "numpy>=1.22",
     "numpy_groupies>=0.9.19",
     "toolz",
