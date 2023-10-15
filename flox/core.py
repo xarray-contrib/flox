@@ -33,7 +33,9 @@ from .aggregations import (
     generic_aggregate,
 )
 from .cache import memoize
-from .xrutils import is_duck_array, is_duck_dask_array, isnull
+from .xrutils import is_duck_array, is_duck_dask_array, isnull, module_available
+
+HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
 
 if TYPE_CHECKING:
     try:
@@ -69,6 +71,7 @@ if TYPE_CHECKING:
     T_Dtypes = Union[np.typing.DTypeLike, Sequence[np.typing.DTypeLike], None]
     T_FillValues = Union[np.typing.ArrayLike, Sequence[np.typing.ArrayLike], None]
     T_Engine = Literal["flox", "numpy", "numba", "numbagg"]
+    T_EngineOpt = None | T_Engine
     T_Method = Literal["map-reduce", "blockwise", "cohorts"]
     T_IsBins = Union[bool | Sequence[bool]]
 
@@ -81,6 +84,10 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 # and then reduced over during the combine stage by
 # _simple_combine.
 DUMMY_AXIS = -2
+
+
+def _issorted(arr: np.ndarray) -> bool:
+    return bool((arr[:-1] <= arr[1:]).all())
 
 
 def _is_arg_reduction(func: T_Agg) -> bool:
@@ -632,6 +639,7 @@ def chunk_argreduce(
     reindex: bool = False,
     engine: T_Engine = "numpy",
     sort: bool = True,
+    user_dtype=None,
 ) -> IntermediateDict:
     """
     Per-chunk arg reduction.
@@ -652,6 +660,7 @@ def chunk_argreduce(
         dtype=dtype,
         engine=engine,
         sort=sort,
+        user_dtype=user_dtype,
     )
     if not isnull(results["groups"]).all():
         idx = np.broadcast_to(idx, array.shape)
@@ -685,6 +694,7 @@ def chunk_reduce(
     engine: T_Engine = "numpy",
     kwargs: Sequence[dict] | None = None,
     sort: bool = True,
+    user_dtype=None,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -785,6 +795,7 @@ def chunk_reduce(
     group_idx = group_idx.reshape(-1)
 
     assert group_idx.ndim == 1
+
     empty = np.all(props.nanmask)
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
@@ -1100,6 +1111,7 @@ def _grouped_combine(
                         dtype=(np.intp,),
                         engine=engine,
                         sort=sort,
+                        user_dtype=agg.dtype["user"],
                     )["intermediates"][0]
                 )
 
@@ -1129,6 +1141,7 @@ def _grouped_combine(
                     dtype=(dtype,),
                     engine=engine,
                     sort=sort,
+                    user_dtype=agg.dtype["user"],
                 )
                 results["intermediates"].append(*_results["intermediates"])
                 results["groups"] = _results["groups"]
@@ -1174,6 +1187,7 @@ def _reduce_blockwise(
         engine=engine,
         sort=sort,
         reindex=reindex,
+        user_dtype=agg.dtype["user"],
     )
 
     if _is_arg_reduction(agg):
@@ -1366,6 +1380,7 @@ def dask_groupby_agg(
             fill_value=agg.fill_value["intermediate"],
             dtype=agg.dtype["intermediate"],
             reindex=reindex,
+            user_dtype=agg.dtype["user"],
         )
         if do_simple_combine:
             # Add a dummy dimension that then gets reduced over
@@ -1757,6 +1772,23 @@ def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) ->
     return expected_groups
 
 
+def _choose_engine(by, agg: Aggregation):
+    dtype = agg.dtype["user"]
+
+    not_arg_reduce = not _is_arg_reduction(agg)
+
+    # numbagg only supports nan-skipping reductions
+    # without dtype specified
+    if HAS_NUMBAGG and "nan" in agg.name:
+        if not_arg_reduce and dtype is None:
+            return "numbagg"
+
+    if not_arg_reduce and (not is_duck_dask_array(by) and _issorted(by)):
+        return "flox"
+    else:
+        return "numpy"
+
+
 def groupby_reduce(
     array: np.ndarray | DaskArray,
     *by: T_By,
@@ -1769,7 +1801,7 @@ def groupby_reduce(
     dtype: np.typing.DTypeLike = None,
     min_count: int | None = None,
     method: T_Method = "map-reduce",
-    engine: T_Engine = "numpy",
+    engine: T_EngineOpt = None,
     reindex: bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
 ) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy yet
@@ -2027,8 +2059,13 @@ def groupby_reduce(
         # overwrite than when min_count is set
         fill_value = np.nan
 
-    kwargs = dict(axis=axis_, fill_value=fill_value, engine=engine)
+    kwargs = dict(axis=axis_, fill_value=fill_value)
     agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count_, finalize_kwargs)
+
+    # Need to set this early using `agg`
+    # It cannot be done in the core loop of chunk_reduce
+    # since we "prepare" the data for flox.
+    kwargs["engine"] = _choose_engine(by_, agg) if engine is None else engine
 
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
@@ -2080,7 +2117,7 @@ def groupby_reduce(
             assert len(groups) == 1
             sorted_idx = np.argsort(groups[0])
             # This optimization helps specifically with resampling
-            if not (sorted_idx[:-1] <= sorted_idx[1:]).all():
+            if not _issorted(sorted_idx):
                 result = result[..., sorted_idx]
                 groups = (groups[0][sorted_idx],)
 

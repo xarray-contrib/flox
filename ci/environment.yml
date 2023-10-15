@@ -23,4 +23,5 @@ dependencies:
   - pooch
   - toolz
   - numba
+  - numbagg>=0.3
   - scipy

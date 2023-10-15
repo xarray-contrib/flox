@@ -73,7 +73,7 @@ def xarray_reduce(
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
     method: str = "map-reduce",
-    engine: str = "numpy",
+    engine: str | None = None,
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
@@ -369,7 +369,7 @@ def xarray_reduce(
 
         # Flox's count works with non-numeric and its faster than converting.
         requires_numeric = func not in ["count", "any", "all"] or (
-            func == "count" and engine != "flox"
+            func == "count" and kwargs["engine"] != "flox"
         )
         if requires_numeric:
             is_npdatetime = array.dtype.kind in "Mm"

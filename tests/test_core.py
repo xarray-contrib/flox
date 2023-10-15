@@ -11,8 +11,10 @@ import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
 from flox import xrutils
-from flox.aggregations import Aggregation
+from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.core import (
+    HAS_NUMBAGG,
+    _choose_engine,
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
     _normalize_indexes,
@@ -600,12 +602,9 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     rng = np.random.default_rng(12345)
     array = rng.random(by.shape)
-    kwargs = dict(
-        func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value, engine=engine
-    )
-    expected, _ = groupby_reduce(array, by, **kwargs)
+    kwargs = dict(func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value)
+    expected, _ = groupby_reduce(array, by, engine=engine, **kwargs)
     if engine == "flox":
-        kwargs.pop("engine")
         expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
         assert_equal(expected_npg, expected)
 
@@ -622,12 +621,9 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
     by = np.broadcast_to(labels2d, (3, *labels2d.shape))
     rng = np.random.default_rng(12345)
     array = rng.random(by.shape)
-    kwargs = dict(
-        func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value, engine=engine
-    )
-    expected, _ = groupby_reduce(array, by, **kwargs)
+    kwargs = dict(func=func, axis=axis, expected_groups=[0, 2], fill_value=fill_value)
+    expected, _ = groupby_reduce(array, by, engine=engine, **kwargs)
     if engine == "flox":
-        kwargs.pop("engine")
         expected_npg, _ = groupby_reduce(array, by, **kwargs, engine="numpy")
         assert_equal(expected_npg, expected)
 
@@ -640,6 +636,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         actual, _ = groupby_reduce(
             da.from_array(array, chunks=(-1, 2, 3)),
             da.from_array(by, chunks=(-1, 2, 2)),
+            engine=engine,
             **kwargs,
         )
     assert_equal(actual, expected, tolerance)
@@ -1546,3 +1543,33 @@ def test_method_check_numpy():
         ]
     )
     assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("dtype", [None, np.float64])
+def test_choose_engine(dtype):
+    numbagg_possible = HAS_NUMBAGG and dtype is None
+    default = "numbagg" if numbagg_possible else "numpy"
+    mean = _initialize_aggregation(
+        "mean",
+        dtype=dtype,
+        array_dtype=np.dtype("int64"),
+        fill_value=0,
+        min_count=0,
+        finalize_kwargs=None,
+    )
+    argmax = _initialize_aggregation(
+        "argmax",
+        dtype=dtype,
+        array_dtype=np.dtype("int64"),
+        fill_value=0,
+        min_count=0,
+        finalize_kwargs=None,
+    )
+
+    # sorted by -> flox
+    sorted_engine = _choose_engine(np.array([1, 1, 2, 2]), agg=mean)
+    assert sorted_engine == ("numbagg" if numbagg_possible else "flox")
+    # unsorted by -> numpy
+    assert _choose_engine(np.array([3, 1, 1]), agg=mean) == default
+    # argmax does not give engine="flox"
+    assert _choose_engine(np.array([1, 1, 2, 2]), agg=argmax) == "numpy"

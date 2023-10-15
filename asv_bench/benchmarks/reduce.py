@@ -7,7 +7,7 @@ import flox.aggregations
 
 N = 3000
 funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "count"]
-engines = ["flox", "numpy", "numbagg"]
+engines = [None, "flox", "numpy", "numbagg"]
 expected_groups = {
     "None": None,
     "bins": pd.IntervalIndex.from_breaks([1, 2, 4]),
