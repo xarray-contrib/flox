@@ -1776,8 +1776,11 @@ def _choose_engine(by, agg: Aggregation):
     dtype = agg.dtype["user"]
 
     not_arg_reduce = not _is_arg_reduction(agg)
+
+    # numbagg only supports nan-skipping reductions
+    # without dtype specified
     if HAS_NUMBAGG and "nan" in agg.name:
-        if not_arg_reduce and (dtype is None or (dtype is not None and agg.name == "count")):
+        if not_arg_reduce and dtype is None:
             return "numbagg"
 
     if not_arg_reduce and (not is_duck_dask_array(by) and _issorted(by)):
