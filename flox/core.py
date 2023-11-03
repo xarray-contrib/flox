@@ -606,15 +606,15 @@ def factorize_(
                 idx[mask] = -1
             else:
                 if isinstance(flat, np.ndarray):
-                    idx, groups = pd.factorize(flat, sort=sort)
+                    idx, groups = pd.factorize(flat, sort=sort)  # type: ignore[call-overload]
                     groups = np.array(groups)
                 else:
                     assert sort
-                    groups, idx = np.unique(flat, return_inverse=True)  # type: ignore[call-overload]
+                    groups, idx = np.unique(flat, return_inverse=True)
                     idx[np.isnan(flat)] = -1
-                    groups = groups[~np.isnan(groups)]  # type: ignore[index]
+                    groups = groups[~np.isnan(groups)]  # type: ignore[call-overload]
 
-            found_groups.append(groups)
+            found_groups.append(groups)  # type: ignore[arg-type]
         factorized.append(idx.reshape(groupvar.shape))
 
     grp_shape = tuple(len(grp) for grp in found_groups)

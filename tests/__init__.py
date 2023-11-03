@@ -29,7 +29,7 @@ try:
 
     cp_types = (cp.ndarray,)
 except ImportError:
-    cp_types = ()  # type: ignore
+    cp_types = ()  # type: ignore[assignment]
 
 
 def _importorskip(modname, minversion=None):
