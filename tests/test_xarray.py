@@ -6,7 +6,7 @@ import pytest
 xr = pytest.importorskip("xarray")
 # isort: on
 
-from flox.xarray import rechunk_for_blockwise, resample_reduce, xarray_reduce
+from flox.xarray import rechunk_for_blockwise, xarray_reduce
 
 from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
 
@@ -16,7 +16,7 @@ if has_dask:
     dask.config.set(scheduler="sync")
 
 try:
-    # Should test against legacy xarray implementation
+    # test against legacy xarray implementation
     xr.set_options(use_flox=False)
 except ValueError:
     pass
@@ -31,14 +31,14 @@ np.random.seed(123)
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("skipna", [True, False])
 def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
+    if skipna is False and min_count is not None:
+        pytest.skip()
+
     arr = np.ones((4, 12))
 
     if add_nan:
         arr[1, ...] = np.nan
         arr[[0, 2], [3, 4]] = np.nan
-
-    if skipna is False and min_count is not None:
-        pytest.skip()
 
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
     labels = np.array(labels)
@@ -77,11 +77,8 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
 
 # TODO: sort
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
-@pytest.mark.parametrize("chunk", (True, False))
+@pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
 def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
-    if not has_dask and chunk:
-        pytest.skip()
-
     if chunk and pass_expected_groups is False:
         pytest.skip()
 
@@ -126,11 +123,8 @@ def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
 
 
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
-@pytest.mark.parametrize("chunk", (True, False))
+@pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
 def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
-    if not has_dask and chunk:
-        pytest.skip()
-
     if chunk and pass_expected_groups is False:
         pytest.skip()
 
@@ -245,48 +239,6 @@ def test_xarray_reduce_errors():
             xarray_reduce(da, by.chunk(), func="mean")
 
 
-@pytest.mark.parametrize("isdask", [True, False])
-@pytest.mark.parametrize("dataarray", [True, False])
-@pytest.mark.parametrize("chunklen", [27, 4 * 31 + 1, 4 * 31 + 20])
-def test_xarray_resample(chunklen, isdask, dataarray, engine):
-    if isdask:
-        if not has_dask:
-            pytest.skip()
-        ds = xr.tutorial.open_dataset("air_temperature", chunks={"time": chunklen})
-    else:
-        ds = xr.tutorial.open_dataset("air_temperature")
-
-    if dataarray:
-        ds = ds.air
-
-    resampler = ds.resample(time="M")
-    with pytest.warns(DeprecationWarning):
-        actual = resample_reduce(resampler, "mean", engine=engine)
-    expected = resampler.mean()
-    xr.testing.assert_allclose(actual, expected)
-
-    with xr.set_options(use_flox=True):
-        actual = resampler.mean()
-    xr.testing.assert_allclose(actual, expected)
-
-
-@requires_dask
-def test_xarray_resample_dataset_multiple_arrays(engine):
-    # regression test for #35
-    times = pd.date_range("2000", periods=5)
-    foo = xr.DataArray(range(5), dims=["time"], coords=[times], name="foo")
-    bar = xr.DataArray(range(1, 6), dims=["time"], coords=[times], name="bar")
-    ds = xr.merge([foo, bar]).chunk({"time": 4})
-
-    resampler = ds.resample(time="4D")
-    # The separate computes are necessary here to force xarray
-    # to compute all variables in result at the same time.
-    expected = resampler.mean().compute()
-    with pytest.warns(DeprecationWarning):
-        result = resample_reduce(resampler, "mean", engine=engine).compute()
-    xr.testing.assert_allclose(expected, result)
-
-
 @requires_dask
 @pytest.mark.parametrize(
     "inchunks, expected",
@@ -359,14 +311,12 @@ def test_multi_index_groupby_sum(engine):
     assert_equal(expected, actual)
 
 
-@pytest.mark.parametrize("chunks", (None, 2))
+@pytest.mark.parametrize("chunks", (None, pytest.param(2, marks=requires_dask)))
 def test_xarray_groupby_bins(chunks, engine):
     array = xr.DataArray([1, 1, 1, 1, 1], dims="x")
     labels = xr.DataArray([1, 1.5, 1.9, 2, 3], dims="x", name="labels")
 
     if chunks:
-        if not has_dask:
-            pytest.skip()
         array = array.chunk({"x": chunks})
         labels = labels.chunk({"x": chunks})
 
@@ -437,20 +387,6 @@ def test_cache():
 
     xarray_reduce(ds, "labels", func="mean", method="blockwise")
     assert len(cache.data) == 2
-
-
-@pytest.mark.parametrize("use_cftime", [True, False])
-@pytest.mark.parametrize("func", ["count", "mean"])
-def test_datetime_array_reduce(use_cftime, func, engine):
-    time = xr.DataArray(
-        xr.date_range("2009-01-01", "2012-12-31", use_cftime=use_cftime),
-        dims=("time",),
-        name="time",
-    )
-    expected = getattr(time.resample(time="YS"), func)()
-    with pytest.warns(DeprecationWarning):
-        actual = resample_reduce(time.resample(time="YS"), func=func, engine=engine)
-    assert_equal(expected, actual)
 
 
 @requires_dask
@@ -528,9 +464,10 @@ def test_alignment_error():
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("dtype_out", [np.float64, "float64", np.dtype("float64")])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
-@pytest.mark.parametrize("chunk", (True, False))
+@pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
 def test_dtype(add_nan, chunk, dtype, dtype_out, engine):
-    if chunk and not has_dask:
+    if engine == "numbagg":
+        # https://github.com/numbagg/numbagg/issues/121
         pytest.skip()
 
     xp = dask.array if chunk else np
@@ -564,12 +501,9 @@ def test_dtype(add_nan, chunk, dtype, dtype_out, engine):
     xr.testing.assert_allclose(expected, actual.transpose("labels", ...), **tolerance64)
 
 
-@pytest.mark.parametrize("chunk", [True, False])
+@pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
 @pytest.mark.parametrize("use_flox", [True, False])
 def test_dtype_accumulation(use_flox, chunk):
-    if chunk and not has_dask:
-        pytest.skip()
-
     datetimes = pd.date_range("2010-01", "2015-01", freq="6H", inclusive="left")
     samples = 10 + np.cos(2 * np.pi * 0.001 * np.arange(len(datetimes))) * 1
     samples += np.random.randn(len(datetimes))

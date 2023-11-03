@@ -1,6 +1,8 @@
+asv_bench/pkgs/
 docs/source/generated/
 html/
 .asv/
+asv_bench/pkgs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

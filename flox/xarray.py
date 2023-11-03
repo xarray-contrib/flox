@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import warnings
-from typing import TYPE_CHECKING, Any, Hashable, Iterable, Sequence, Union
+from collections.abc import Hashable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 import pandas as pd
@@ -21,8 +21,9 @@ from .core import rechunk_for_cohorts as rechunk_array_for_cohorts
 from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
-    from xarray.core.resample import Resample
     from xarray.core.types import T_DataArray, T_Dataset
+
+    from .core import T_ExpectedGroupsOpt, T_ExpectIndex, T_ExpectOpt
 
     Dims = Union[str, Iterable[Hashable], None]
 
@@ -65,14 +66,14 @@ def xarray_reduce(
     obj: T_Dataset | T_DataArray,
     *by: T_DataArray | Hashable,
     func: str | Aggregation,
-    expected_groups=None,
+    expected_groups: T_ExpectedGroupsOpt = None,
     isbin: bool | Sequence[bool] = False,
     sort: bool = True,
     dim: Dims | ellipsis = None,
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
     method: str = "map-reduce",
-    engine: str = "numpy",
+    engine: str | None = None,
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
@@ -87,8 +88,11 @@ def xarray_reduce(
         Xarray object to reduce
     *by : DataArray or iterable of str or iterable of DataArray
         Variables with which to group by ``obj``
-    func : str or Aggregation
-        Reduction method
+    func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
+            "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
+            "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
+            "first", "nanfirst", "last", "nanlast"} or Aggregation
+        Single function name or an Aggregation instance
     expected_groups : str or sequence
         expected group labels corresponding to each `by` variable
     isbin : iterable of bool
@@ -106,7 +110,7 @@ def xarray_reduce(
         in ``expected_groups`` is not actually present in ``by``.
     dtype : data-type, optional
         DType for the output. Can be anything accepted by ``np.dtype``.
-    method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
+    method : {"map-reduce", "blockwise", "cohorts"}, optional
         Strategy for reduction of dask arrays only:
           * ``"map-reduce"``:
             First apply the reduction blockwise on ``array``, then
@@ -130,8 +134,6 @@ def xarray_reduce(
             'month', dayofyear' etc. Optimize chunking ``array`` for this
             method by first rechunking using ``rechunk_for_cohorts``
             (for 1D ``by`` only).
-          * ``"split-reduce"``:
-            Same as "cohorts" and will be removed soon.
     engine : {"flox", "numpy", "numba"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
@@ -144,6 +146,9 @@ def xarray_reduce(
             for a reduction that is not yet implemented.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
+          * ``"numbagg"``:
+            Use the reductions supported by ``numbagg.grouped``. This will fall back to ``numpy_groupies.aggregate_numpy``
+            for a reduction that is not yet implemented.
     keep_attrs : bool, optional
         Preserve attrs?
     skipna : bool, optional
@@ -163,7 +168,7 @@ def xarray_reduce(
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
     **finalize_kwargs
-        kwargs passed to the finalize function, like ``ddof`` for var, std.
+        kwargs passed to the finalize function, like ``ddof`` for var, std or ``q`` for quantile.
 
     Returns
     -------
@@ -217,7 +222,7 @@ def xarray_reduce(
     else:
         isbins = (isbin,) * nby
 
-    expected_groups = _validate_expected_groups(nby, expected_groups)
+    expected_groups_valid = _validate_expected_groups(nby, expected_groups)
 
     if not sort:
         raise NotImplementedError("sort must be True for xarray_reduce")
@@ -246,7 +251,7 @@ def xarray_reduce(
     try:
         from xarray.indexes import PandasMultiIndex
     except ImportError:
-        PandasMultiIndex = tuple()  # type: ignore
+        PandasMultiIndex = tuple()  # type: ignore[assignment, misc]
 
     more_drop = set()
     for var in maybe_drop:
@@ -315,10 +320,10 @@ def xarray_reduce(
 
     # Set expected_groups and convert to index since we need coords, sizes
     # for output xarray objects
-    expected_groups = list(expected_groups)
+    expected_groups_valid_list: list[T_ExpectIndex] = []
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
-    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups, isbins)):
+    for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups_valid, isbins)):
         group_name = (
             f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
         )
@@ -328,21 +333,23 @@ def xarray_reduce(
             raise NotImplementedError(
                 "flox does not support binning into an integer number of bins yet."
             )
+
+        expect1: T_ExpectOpt
         if expect is None:
             if isbin_:
                 raise ValueError(
                     f"Please provided bin edges for group variable {idx} "
                     f"named {group_name} in expected_groups."
                 )
-            expect_ = _get_expected_groups(b_.data, sort=sort)
+            expect1 = _get_expected_groups(b_.data, sort=sort)
         else:
-            expect_ = expect
-        expect_index = _convert_expected_groups_to_index((expect_,), (isbin_,), sort=sort)[0]
+            expect1 = expect
+        expect_index = _convert_expected_groups_to_index((expect1,), (isbin_,), sort=sort)[0]
 
         # The if-check is for type hinting mainly, it narrows down the return
         # type of _convert_expected_groups_to_index to pure pd.Index:
         if expect_index is not None:
-            expected_groups[idx] = expect_index
+            expected_groups_valid_list.append(expect_index)
             group_sizes[group_name] = len(expect_index)
         else:
             # This will never be reached
@@ -362,7 +369,7 @@ def xarray_reduce(
 
         # Flox's count works with non-numeric and its faster than converting.
         requires_numeric = func not in ["count", "any", "all"] or (
-            func == "count" and engine != "flox"
+            func == "count" and kwargs["engine"] != "flox"
         )
         if requires_numeric:
             is_npdatetime = array.dtype.kind in "Mm"
@@ -372,8 +379,8 @@ def xarray_reduce(
                 # xarray always uses np.datetime64[ns] for np.datetime64 data
                 dtype = "timedelta64[ns]"
                 array = datetime_to_numeric(array, offset)
-            elif _contains_cftime_datetimes(array):
-                offset = min(array)
+            elif is_cftime:
+                offset = array.min()
                 array = datetime_to_numeric(array, offset, datetime_unit="us")
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
@@ -428,7 +435,7 @@ def xarray_reduce(
             "skipna": skipna,
             "engine": engine,
             "reindex": reindex,
-            "expected_groups": tuple(expected_groups),
+            "expected_groups": tuple(expected_groups_valid_list),
             "isbin": isbins,
             "finalize_kwargs": finalize_kwargs,
             "dtype": dtype,
@@ -442,22 +449,34 @@ def xarray_reduce(
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
-    for name, expect, by_ in zip(group_names, expected_groups, by_da):
-        # Can't remove this till xarray handles IntervalIndex
-        if isinstance(expect, pd.IntervalIndex):
-            expect = expect.to_numpy()
+    expect3: T_ExpectIndex | np.ndarray
+    for name, expect2, by_ in zip(group_names, expected_groups_valid_list, by_da):
+        # Can't remove this until xarray handles IntervalIndex:
+        if isinstance(expect2, pd.IntervalIndex):
+            # TODO: Only place where expect3 is an ndarray, remove the type if xarray
+            # starts supporting IntervalIndex.
+            expect3 = expect2.to_numpy()
+        else:
+            expect3 = expect2
         if isinstance(actual, xr.Dataset) and name in actual:
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
         # an object array of tuples
-        if name in ds_broad.indexes and isinstance(ds_broad.indexes[name], pd.MultiIndex):
+        if (
+            name in ds_broad.indexes
+            and isinstance(ds_broad.indexes[name], pd.MultiIndex)
+            and not isinstance(expect3, pd.RangeIndex)
+        ):
             levelnames = ds_broad.indexes[name].names
-            expect = pd.MultiIndex.from_tuples(expect.values, names=levelnames)
-            actual[name] = expect
+            if isinstance(expect3, np.ndarray):
+                # TODO: workaoround for IntervalIndex issue.
+                raise NotImplementedError
+            expect3 = pd.MultiIndex.from_tuples(expect3.values, names=levelnames)
+            actual[name] = expect3
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)
         else:
-            actual[name] = expect
+            actual[name] = expect3
         if keep_attrs:
             actual[name].attrs = by_.attrs
 
@@ -582,43 +601,3 @@ def _rechunk(func, obj, dim, labels, **kwargs):
             )
 
     return obj
-
-
-def resample_reduce(
-    resampler: Resample,
-    func: str | Aggregation,
-    keep_attrs: bool = True,
-    **kwargs,
-):
-    warnings.warn(
-        "flox.xarray.resample_reduce is now deprecated. Please use Xarray's resample method directly.",
-        DeprecationWarning,
-    )
-
-    obj = resampler._obj
-    dim = resampler._group_dim
-
-    # this creates a label DataArray since resample doesn't do that somehow
-    tostack = []
-    for idx, slicer in enumerate(resampler._group_indices):
-        if slicer.stop is None:
-            stop = resampler._obj.sizes[dim]
-        else:
-            stop = slicer.stop
-        tostack.append(idx * np.ones((stop - slicer.start,), dtype=np.int32))
-    by = xr.DataArray(np.hstack(tostack), dims=(dim,), name="__resample_dim__")
-
-    result = (
-        xarray_reduce(
-            obj,
-            by,
-            func=func,
-            method="blockwise",
-            keep_attrs=keep_attrs,
-            **kwargs,
-        )
-        .rename({"__resample_dim__": dim})
-        .transpose(dim, ...)
-    )
-    result[dim] = resampler._unique_coord.data
-    return result
