@@ -612,7 +612,7 @@ def factorize_(
                     assert sort
                     groups, idx = np.unique(flat, return_inverse=True)
                     idx[np.isnan(flat)] = -1
-                    groups = groups[~np.isnan(groups)]  # type: ignore[call-overload]
+                    groups = groups[~np.isnan(groups)]  # type: ignore[call-overload,index]
 
             found_groups.append(groups)  # type: ignore[arg-type]
         factorized.append(idx.reshape(groupvar.shape))
