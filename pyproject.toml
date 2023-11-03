@@ -118,6 +118,7 @@ module=[
     "asv_runner.*",
     "cachey",
     "cftime",
+    "cupy",
     "dask.*",
     "importlib_metadata",
     "numba",
