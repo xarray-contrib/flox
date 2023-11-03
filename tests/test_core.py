@@ -200,14 +200,34 @@ def test_groupby_reduce(
     assert_equal(expected_result, result)
 
 
-def gen_array_by(size, func):
-    by = np.ones(size[-1])
-    rng = np.random.default_rng(12345)
+def maybe_skip_cupy(array_module, func, engine):
+    if array_module is np:
+        return
+
+    import cupy
+
+    assert array_module is cupy
+
+    if engine == "numba":
+        pytest.skip()
+
+    if engine == "numpy" and ("prod" in func or "first" in func or "last" in func):
+        pytest.xfail()
+    elif engine == "flox" and not (
+        "sum" in func or "mean" in func or "std" in func or "var" in func
+    ):
+        pytest.xfail()
+
+
+def gen_array_by(size, func, array_module):
+    xp = array_module
+    by = xp.ones(size[-1])
+    rng = xp.random.default_rng(12345)
     array = rng.random(size)
     if "nan" in func and "nanarg" not in func:
-        array[[1, 4, 5], ...] = np.nan
+        array[[1, 4, 5], ...] = xp.nan
     elif "nanarg" in func and len(size) > 1:
-        array[[1, 4, 5], 1] = np.nan
+        array[[1, 4, 5], 1] = xp.nan
     if func in ["any", "all"]:
         array = array > 0.5
     return array, by
@@ -224,15 +244,17 @@ def gen_array_by(size, func):
 )
 @pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("size", ((12,), (12, 9)))
-@pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
-def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
+@pytest.mark.parametrize("add_nan_by", [True, False])
+def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine, array_module):
     if ("arg" in func and engine in ["flox", "numbagg"]) or (
         func in BLOCKWISE_FUNCS and chunks != -1
     ):
         pytest.skip()
 
-    array, by = gen_array_by(size, func)
+    maybe_skip_cupy(array_module, func, engine)
+
+    array, by = gen_array_by(size, func, array_module)
     if chunks:
         array = dask.array.from_array(array, chunks=chunks)
     by = (by,) * nby
@@ -289,10 +311,12 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         assert expected.ndim == (array.ndim + nby - 1)
         expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
         for actual_group, expect in zip(groups, expected_groups):
-            assert_equal(actual_group, expect)
+            assert_equal(actual_group, array_module.asarray(expect))
         if "arg" in func:
             assert actual.dtype.kind == "i"
-        assert_equal(actual, expected, tolerance)
+        if chunks is not None:
+            assert isinstance(actual._meta, type(array._meta))
+        assert_equal(actual, array_module.asarray(expected), tolerance)
 
         if not has_dask or chunks is None or func in BLOCKWISE_FUNCS:
             continue
@@ -322,6 +346,8 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
+            if chunks is not None:
+                assert isinstance(actual._meta, type(array._meta))
             assert_equal(actual, expected, tolerance)
 
 
@@ -348,18 +374,18 @@ def test_arg_reduction_dtype_is_int(size, func):
     assert actual.dtype.kind == "i"
 
 
-def test_groupby_reduce_count():
-    array = np.array([0, 0, np.nan, np.nan, np.nan, 1, 1])
-    labels = np.array(["a", "b", "b", "b", "c", "c", "c"])
+def test_groupby_reduce_count(array_module):
+    array = array_module.array([0, 0, np.nan, np.nan, np.nan, 1, 1])
+    labels = array_module.array(["a", "b", "b", "b", "c", "c", "c"])
     result, _ = groupby_reduce(array, labels, func="count")
     assert_equal(result, np.array([1, 1, 2], dtype=np.intp))
 
 
-def test_func_is_aggregation():
+def test_func_is_aggregation(array_module):
     from flox.aggregations import mean
 
-    array = np.array([0, 0, np.nan, np.nan, np.nan, 1, 1])
-    labels = np.array(["a", "b", "b", "b", "c", "c", "c"])
+    array = array_module.array([0, 0, np.nan, np.nan, np.nan, 1, 1])
+    labels = array_module.array(["a", "b", "b", "b", "c", "c", "c"])
     expected, _ = groupby_reduce(array, labels, func="mean")
     actual, _ = groupby_reduce(array, labels, func=mean)
     assert_equal(actual, expected)
@@ -821,8 +847,8 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
         [(10,), (10,)],
     ],
 )
-def test_rechunk_for_blockwise(inchunks, expected):
-    labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
+def test_rechunk_for_blockwise(inchunks, expected, array_module):
+    labels = array_module.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
 
 

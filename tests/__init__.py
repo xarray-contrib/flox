@@ -24,6 +24,13 @@ try:
 except ImportError:
     xr_types = ()  # type: ignore[assignment]
 
+try:
+    import cupy as cp
+
+    cp_types = (cp.ndarray,)
+except ImportError:
+    cp_types = ()  # type: ignore[assignment]
+
 
 def _importorskip(modname, minversion=None):
     try:
@@ -78,6 +85,15 @@ def raise_if_dask_computes(max_computes=0):
     return dask.config.set(scheduler=scheduler)
 
 
+def to_numpy(a):
+    a_np = a
+    if isinstance(a_np, dask_array_type):
+        a_np = a_np.compute()
+    if isinstance(a_np, cp_types):
+        a_np = a_np.get()
+    return a_np
+
+
 def assert_equal(a, b, tolerance=None):
     __tracebackhide__ = True
 
@@ -100,16 +116,20 @@ def assert_equal(a, b, tolerance=None):
     else:
         tolerance = {}
 
-    if has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
+    if has_dask and (isinstance(a, dask_array_type) or isinstance(b, dask_array_type)):
         # sometimes it's nice to see values and shapes
         # rather than being dropped into some file in dask
-        np.testing.assert_allclose(a, b, **tolerance)
+        np.testing.assert_allclose(to_numpy(a), to_numpy(b), **tolerance)
         # does some validation of the dask graph
         da.utils.assert_eq(a, b, equal_nan=True)
     else:
         if a.dtype != b.dtype:
             raise AssertionError(f"a and b have different dtypes: (a: {a.dtype}, b: {b.dtype})")
 
+        if isinstance(a, cp_types):
+            a = a.get()
+        if isinstance(b, cp_types):
+            b = b.get()
         np.testing.assert_allclose(a, b, equal_nan=True, **tolerance)
 
 

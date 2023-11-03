@@ -321,6 +321,20 @@ def nanlast(values, axis, keepdims=False):
         return result
 
 
+def to_numpy(a):
+    a_np = a
+    if is_duck_dask_array(a_np):
+        a_np = a_np.compute()
+
+    if module_available("cupy"):
+        import cupy as cp
+
+        cp_types = (cp.ndarray,)
+        if isinstance(a_np, cp_types):
+            a_np = a_np.get()
+    return a_np
+
+
 def module_available(module: str, minversion: Optional[str] = None) -> bool:
     """Checks whether a module is installed without importing it.
 
