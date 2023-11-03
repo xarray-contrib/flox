@@ -189,7 +189,7 @@ def _get_optimal_chunks_for_groups(chunks, labels):
     return tuple(newchunks.tolist())
 
 
-def _unique(a: np.ndarray) -> np.ndarray:
+def _unique(a):
     """Much faster to use pandas unique and sort the results.
     np.unique sorts before uniquifying and is slow."""
     if isinstance(a, np.ndarray):
@@ -606,13 +606,13 @@ def factorize_(
                 idx[mask] = -1
             else:
                 if isinstance(flat, np.ndarray):
-                    idx, groups = pd.factorize(flat, sort=sort)  # type: ignore[arg-type]
+                    idx, groups = pd.factorize(flat, sort=sort)
                     groups = np.array(groups)
                 else:
                     assert sort
-                    groups, idx = np.unique(flat, return_inverse=True)
+                    groups, idx = np.unique(flat, return_inverse=True)  # type: ignore[call-overload]
                     idx[np.isnan(flat)] = -1
-                    groups = groups[~np.isnan(groups)]
+                    groups = groups[~np.isnan(groups)]  # type: ignore[index]
 
             found_groups.append(groups)
         factorized.append(idx.reshape(groupvar.shape))
