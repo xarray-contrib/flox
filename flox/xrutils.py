@@ -339,6 +339,6 @@ def module_available(module: str, minversion: Optional[str] = None) -> bool:
     has = importlib.util.find_spec(module) is not None
     if has:
         mod = importlib.import_module(module)
-        return Version(mod.__version__) < Version(minversion) if minversion is not None else True
+        return Version(mod.__version__) >= Version(minversion) if minversion is not None else True
     else:
         return False
