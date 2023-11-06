@@ -1779,8 +1779,13 @@ def _choose_engine(by, agg: Aggregation):
 
     # numbagg only supports nan-skipping reductions
     # without dtype specified
-    if HAS_NUMBAGG and ("nan" in agg.name or agg.name == "count"):
-        if not_arg_reduce and dtype is None:
+    has_blockwise_nan_skipping = (agg.chunk is None and "nan" in agg.name) or any(
+        "nan" in func for func in agg.chunk
+    )
+    if HAS_NUMBAGG:
+        if agg.name in ["all", "any"] or (
+            not_arg_reduce and has_blockwise_nan_skipping and dtype is None
+        ):
             return "numbagg"
 
     if not_arg_reduce and (not is_duck_dask_array(by) and _issorted(by)):
