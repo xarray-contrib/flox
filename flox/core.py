@@ -1779,7 +1779,7 @@ def _choose_engine(by, agg: Aggregation):
 
     # numbagg only supports nan-skipping reductions
     # without dtype specified
-    if HAS_NUMBAGG and "nan" in agg.name:
+    if HAS_NUMBAGG and ("nan" in agg.name or agg.name == "count"):
         if not_arg_reduce and dtype is None:
             return "numbagg"
 

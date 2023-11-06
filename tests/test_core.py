@@ -1565,6 +1565,18 @@ def test_choose_engine(dtype):
         min_count=0,
         finalize_kwargs=None,
     )
+    count = _initialize_aggregation(
+        "count",
+        dtype=None,
+        array_dtype=dtype,
+        fill_value=0,
+        min_count=0,
+        finalize_kwargs=None,
+    )
+
+    # count_engine
+    count_engine = _choose_engine(np.array([1, 1, 2, 2]), agg=count)
+    assert count_engine == ("numbagg" if numbagg_possible else "flox")
 
     # sorted by -> flox
     sorted_engine = _choose_engine(np.array([1, 1, 2, 2]), agg=mean)
