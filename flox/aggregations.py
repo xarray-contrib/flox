@@ -285,13 +285,7 @@ count = Aggregation(
 sum_ = Aggregation("sum", chunk="sum", combine="sum", fill_value=0)
 nansum = Aggregation("nansum", chunk="nansum", combine="sum", fill_value=0)
 prod = Aggregation("prod", chunk="prod", combine="prod", fill_value=1, final_fill_value=1)
-nanprod = Aggregation(
-    "nanprod",
-    chunk="nanprod",
-    combine="prod",
-    fill_value=1,
-    final_fill_value=dtypes.NA,
-)
+nanprod = Aggregation("nanprod", chunk="nanprod", combine="prod", fill_value=1)
 
 
 def _mean_finalize(sum_, count):
