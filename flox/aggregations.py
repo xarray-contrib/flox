@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import warnings
 from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
 
 import numpy as np
 from numpy.typing import DTypeLike
@@ -13,6 +13,7 @@ from . import xrdtypes as dtypes
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
+    OptionalFuncTuple = tuple[Callable | str | None, ...]
 
 
 def _is_arg_reduction(func: str | Aggregation) -> bool:
@@ -153,7 +154,7 @@ class Aggregation:
         final_fill_value=dtypes.NA,
         dtypes=None,
         final_dtype: DTypeLike | None = None,
-        reduction_type="reduce",
+        reduction_type: Literal["reduce", "argreduce"] = "reduce",
     ):
         """
         Blueprint for computing grouped aggregations.
@@ -204,13 +205,13 @@ class Aggregation:
         self.reduction_type = reduction_type
         self.numpy: FuncTuple = (numpy,) if numpy else (self.name,)
         # initialize blockwise reduction
-        self.chunk: FuncTuple = _atleast_1d(chunk)
+        self.chunk: OptionalFuncTuple = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
-        self.combine: FuncTuple = _atleast_1d(combine)
+        self.combine: OptionalFuncTuple = _atleast_1d(combine)
         # simpler reductions used with the "simple combine" algorithm
-        self.simple_combine: tuple[Callable, ...] = ()
+        self.simple_combine: tuple[Callable | None, ...] = ()
         # final aggregation
-        self.aggregate: Callable | str = aggregate if aggregate else self.combine[0]
+        self.aggregate: Callable | str | None = aggregate if aggregate else self.combine[0]
         # finalize results (see mean)
         self.finalize: Callable | None = finalize
 
@@ -618,7 +619,7 @@ def _initialize_aggregation(
     else:
         agg.min_count = 0
 
-    simple_combine: list[Callable] = []
+    simple_combine: list[Callable | None] = []
     for combine in agg.combine:
         if isinstance(combine, str):
             if combine in ["nanfirst", "nanlast"]:

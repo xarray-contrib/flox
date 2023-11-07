@@ -1044,6 +1044,8 @@ def _grouped_combine(
     """Combine intermediates step of tree reduction."""
     from dask.utils import deepmap
 
+    combine = agg.combine
+
     if isinstance(x_chunk, dict):
         # Only one block at final step; skip one extra groupby
         return x_chunk
@@ -1084,7 +1086,8 @@ def _grouped_combine(
             results = chunk_argreduce(
                 array_idx,
                 groups,
-                func=agg.combine[slicer],  # count gets treated specially next
+                # count gets treated specially next
+                func=combine[slicer],  # type: ignore[arg-type]
                 axis=axis,
                 expected_groups=None,
                 fill_value=agg.fill_value["intermediate"][slicer],
@@ -1118,9 +1121,10 @@ def _grouped_combine(
     elif agg.reduction_type == "reduce":
         # Here we reduce the intermediates individually
         results = {"groups": None, "intermediates": []}
-        for idx, (combine, fv, dtype) in enumerate(
-            zip(agg.combine, agg.fill_value["intermediate"], agg.dtype["intermediate"])
+        for idx, (combine_, fv, dtype) in enumerate(
+            zip(combine, agg.fill_value["intermediate"], agg.dtype["intermediate"])
         ):
+            assert combine_ is not None
             array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis)
             if array.shape[-1] == 0:
                 # all empty when combined
@@ -1134,7 +1138,7 @@ def _grouped_combine(
                 _results = chunk_reduce(
                     array,
                     groups,
-                    func=combine,
+                    func=combine_,
                     axis=axis,
                     expected_groups=None,
                     fill_value=(fv,),
@@ -2085,8 +2089,7 @@ def groupby_reduce(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
-        # TODO: fix typing of FuncTuple in Aggregation
-        if agg.chunk[0] is None and method != "blockwise":  # type: ignore[unreachable]
+        if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"Received method={method!r}"
