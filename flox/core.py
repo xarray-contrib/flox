@@ -2049,7 +2049,7 @@ def groupby_reduce(
         nax = len(axis_)
 
     # When axis is a subset of possible values; then npg will
-    # apply it to groups that don't exist along a particular axis (for e.g.)
+    # apply the fill_value to groups that don't exist along a particular axis (for e.g.)
     # since these count as a group that is absent. thoo!
     # fill_value applies to all-NaN groups as well as labels in expected_groups that are not found.
     #     The only way to do this consistently is mask out using min_count
