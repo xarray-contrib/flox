@@ -96,7 +96,6 @@ def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None,
 
 nansum = partial(_numbagg_wrapper, numbagg_func="nansum")
 nanmean = partial(_numbagg_wrapper, numbagg_func="nanmean")
-nanprod = partial(_numbagg_wrapper, numbagg_func="nanprod")
 nansum_of_squares = partial(_numbagg_wrapper, numbagg_func="nansum_of_squares")
 nanlen = partial(_numbagg_wrapper, numbagg_func="nancount")
 nanprod = partial(_numbagg_wrapper, numbagg_func="nanprod")
