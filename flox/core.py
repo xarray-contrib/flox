@@ -826,10 +826,9 @@ def chunk_reduce(
     for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
         if empty:
             result = np.full(shape=final_array_shape, fill_value=fv)
+        elif is_nanlen(reduction) and is_nanlen(previous_reduction):
+            result = results["intermediates"][-1]
         else:
-            if is_nanlen(reduction) and is_nanlen(previous_reduction):
-                result = results["intermediates"][-1]
-
             # fill_value here is necessary when reducing with "offset" groups
             kw_func = dict(size=size, dtype=dt, fill_value=fv)
             kw_func.update(kw)
@@ -847,6 +846,7 @@ def chunk_reduce(
                 result = result[..., :-1]
             result = result.reshape(final_array_shape[:-1] + found_groups_shape)
         results["intermediates"].append(result)
+        previous_reduction = reduction
 
     results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)
     return results
