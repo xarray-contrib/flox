@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
 import numpy as np
 from numpy.typing import DTypeLike
 
-from . import aggregate_flox, aggregate_npg, xrutils
+from . import aggregate_flox, aggregate_npg, sketches, xrutils
 from . import xrdtypes as dtypes
 
 if TYPE_CHECKING:
@@ -495,6 +495,16 @@ nanquantile = Aggregation(
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
 
+
+quantile_tdigest = Aggregation(
+    "quantile_tdigest",
+    numpy=(sketches.tdigest_aggregate,),
+    chunk=(sketches.tdigest_chunk,),
+    combine=(sketches.tdigest_combine,),
+    finalize=sketches.tdigest_aggregate,
+)
+
+
 aggregations = {
     "any": any_,
     "all": all_,
@@ -527,6 +537,7 @@ aggregations = {
     "nanquantile": nanquantile,
     "mode": mode,
     "nanmode": nanmode,
+    "quantile_tdigest": quantile_tdigest,
 }
 
 
