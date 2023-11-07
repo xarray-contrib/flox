@@ -80,7 +80,12 @@ class ChunkReduce1D(ChunkReduce):
         if "numbagg" in args:
             setup_jit()
 
-    @parameterize({"func": ["nansum", "nanmean", "nanmax", "count"], "engine": engines})
+    @parameterize(
+        {
+            "func": ["nansum", "nanmean", "nanmax", "count"],
+            "engine": [e for e in engines if e is not None],
+        }
+    )
     def time_reduce_bare(self, func, engine):
         # TODO: migrate to the other test cases, but we'll have to setup labels
         # appropriately ;(
