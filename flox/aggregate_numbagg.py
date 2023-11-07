@@ -30,6 +30,8 @@ CAST_TO = {
 }
 
 
+FILLNA = {"nansum": 0, "nanprod": 1}
+
 def _numbagg_wrapper(
     group_idx,
     array,
@@ -48,6 +50,11 @@ def _numbagg_wrapper(
                 array = array.astype(to_)
 
     func_ = getattr(numbagg.grouped, f"group_{numbagg_func}")
+    default_fv = DEFAULT_FILL_VALUE[numbagg_func]
+
+    fillna = FILLNA.get(numbagg_func, None)
+    if fillna:
+        array = np.where(np.isnan(array), fillna, array)
     result = func_(
         array,
         group_idx,
@@ -58,8 +65,10 @@ def _numbagg_wrapper(
         # dtype=dtype,
     )
 
-    default_fv = DEFAULT_FILL_VALUE[numbagg_func]
-    if fill_value is not None and fill_value != default_fv:
+    # The condition needs to be
+    # is len(found_groups) < size; if so we mask with fill_value (?)
+    needs_masking = fill_value is not None and fill_value != default_fv
+    if needs_masking:
         count = numbagg.grouped.group_nancount(array, group_idx, axis=axis, num_labels=size)
         result[count == 0] = fill_value
     return result

@@ -2071,10 +2071,10 @@ def groupby_reduce(
     kwargs = dict(axis=axis_, fill_value=fill_value)
     agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count_, finalize_kwargs)
 
-    # HACK?
-    if min_count_ == 0:
-        agg.fill_value["numpy"] = None
-        agg.fill_value[agg.name] = None
+    # # HACK?
+    # if min_count_ == 0:
+    #     agg.fill_value["numpy"] = None
+    #     agg.fill_value[agg.name] = None
 
     # Need to set this early using `agg`
     # It cannot be done in the core loop of chunk_reduce
