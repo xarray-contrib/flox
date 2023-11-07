@@ -1779,8 +1779,8 @@ def _choose_engine(by, agg: Aggregation):
 
     # numbagg only supports nan-skipping reductions
     # without dtype specified
-    has_blockwise_nan_skipping = (agg.chunk is None and "nan" in agg.name) or any(
-        "nan" in func for func in agg.chunk
+    has_blockwise_nan_skipping = (agg.chunk[0] is None and "nan" in agg.name) or any(
+        (isinstance(func, str) and "nan" in func) for func in agg.chunk
     )
     if HAS_NUMBAGG:
         if agg.name in ["all", "any"] or (
