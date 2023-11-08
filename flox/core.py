@@ -800,7 +800,7 @@ def chunk_reduce(
                 order = "F"
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by.ndim] + (math.prod(array.shape[-by.ndim :]),)
-    array = array.reshape(newshape, order=order)
+    array = array.reshape(newshape, order=order)  # type: ignore[call-overload]
     group_idx = group_idx.reshape(-1)
 
     assert group_idx.ndim == 1
