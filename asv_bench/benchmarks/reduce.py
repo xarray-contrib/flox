@@ -110,7 +110,7 @@ class ChunkReduce2D(ChunkReduce):
 class ChunkReduce2DAllAxes(ChunkReduce):
     def setup(self, *args, **kwargs):
         self.array = np.ones((N, N))
-        self.labels = np.repeat(np.arange(N // 5), repeats=5)
+        self.labels = np.repeat(np.arange(N // 5), repeats=5)[np.newaxis, :]
         self.axis = None
         setup_jit()
 
