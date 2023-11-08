@@ -86,7 +86,7 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 DUMMY_AXIS = -2
 
 
-def _postprocess_numbagg(result, *, func, fill_value, size, found_groups):
+def _postprocess_numbagg(result, *, func, fill_value, size, seen_groups):
     """Account for numbagg not providing a fill_value kwarg."""
     from .aggregate_numbagg import DEFAULT_FILL_VALUE
 
@@ -100,7 +100,7 @@ def _postprocess_numbagg(result, *, func, fill_value, size, found_groups):
     )
     groups = np.arange(size)
     if needs_masking:
-        mask = np.isin(groups, found_groups, assume_unique=True, invert=True)
+        mask = np.isin(groups, seen_groups, assume_unique=True, invert=True)
         if mask.any():
             result[..., groups[mask]] = fill_value
     return result
@@ -802,6 +802,9 @@ def chunk_reduce(
     )
     (groups,) = grps
 
+    # do this *before* possible broadcasting below.
+    # factorize_ has already taken care of offsetting
+    seen_groups = _unique(group_idx)
     if nax > 1:
         needs_broadcast = any(
             group_idx.shape[ax] != array.shape[ax] and group_idx.shape[ax] == 1
@@ -867,7 +870,9 @@ def chunk_reduce(
                     func=reduction,
                     size=size,
                     fill_value=fv,
-                    found_groups=_unique(group_idx),
+                    # Unfortunately, we cannot reuse found_groups, it has not
+                    # been "offset" and is really expected_groups in nearly all cases
+                    seen_groups=seen_groups,
                 )
             if np.any(props.nanmask):
                 # remove NaN group label which should be last
