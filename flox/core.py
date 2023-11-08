@@ -861,10 +861,6 @@ def chunk_reduce(
                 result = generic_aggregate(
                     group_idx, array, axis=-1, engine=engine, func=reduction, **kw_func
                 ).astype(dt, copy=False)
-            if np.any(props.nanmask):
-                # remove NaN group label which should be last
-                result = result[..., :-1]
-            result = result.reshape(final_array_shape[:-1] + found_groups_shape)
             if engine == "numbagg":
                 result = _postprocess_numbagg(
                     result,
@@ -873,6 +869,10 @@ def chunk_reduce(
                     fill_value=fv,
                     found_groups=_unique(group_idx),
                 )
+            if np.any(props.nanmask):
+                # remove NaN group label which should be last
+                result = result[..., :-1]
+            result = result.reshape(final_array_shape[:-1] + found_groups_shape)
         results["intermediates"].append(result)
         previous_reduction = reduction
 
