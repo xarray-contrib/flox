@@ -148,7 +148,6 @@ class Aggregation:
         chunk: str | FuncTuple | None,
         combine: str | FuncTuple | None,
         preprocess: Callable | None = None,
-        aggregate: Callable | None = None,
         finalize: Callable | None = None,
         fill_value=None,
         final_fill_value=dtypes.NA,
@@ -209,9 +208,7 @@ class Aggregation:
         # how to aggregate results after first round of reduction
         self.combine: OptionalFuncTuple = _atleast_1d(combine)
         # simpler reductions used with the "simple combine" algorithm
-        self.simple_combine: tuple[Callable | None, ...] = ()
-        # final aggregation
-        self.aggregate: Callable | str | None = aggregate if aggregate else self.combine[0]
+        self.simple_combine: tuple[Callable, ...] = ()
         # finalize results (see mean)
         self.finalize: Callable | None = finalize
 
@@ -250,7 +247,6 @@ class Aggregation:
             self.numpy,
             self.chunk,
             self.combine,
-            self.aggregate,
             self.finalize,
             self.fill_value,
             self.dtype,
@@ -262,7 +258,6 @@ class Aggregation:
                 f"{self.name!r}, fill: {self.fill_value.values()!r}, dtype: {self.dtype}",
                 f"chunk: {self.chunk!r}",
                 f"combine: {self.combine!r}",
-                f"aggregate: {self.aggregate!r}",
                 f"finalize: {self.finalize!r}",
                 f"min_count: {self.min_count!r}",
             )
