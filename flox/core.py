@@ -795,9 +795,9 @@ def chunk_reduce(
             # Of course we are slower to ravel `array` but we avoid argsorting
             # both `array` *and* `group_idx` in _prepare_for_flox
             group_idx = np.broadcast_to(group_idx, array.shape[-by.ndim :])
-            # if engine == "flox":
-            group_idx = group_idx.reshape(-1, order="F")
-            order = "F"
+            if engine == "flox":
+                group_idx = group_idx.reshape(-1, order="F")
+                order = "F"
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by.ndim] + (math.prod(array.shape[-by.ndim :]),)
     array = array.reshape(newshape, order=order)
