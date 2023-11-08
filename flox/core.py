@@ -86,6 +86,24 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 DUMMY_AXIS = -2
 
 
+def _postprocess_numbagg(result, *, func, fill_value, size, found_groups):
+    """Account for numbagg not providing a fill_value kwarg."""
+    from .aggregate_numbagg import DEFAULT_FILL_VALUE
+
+    if not isinstance(func, str) or func not in DEFAULT_FILL_VALUE:
+        return result
+    # The condition needs to be
+    # len(found_groups) < size; if so we mask with fill_value (?)
+    default_fv = DEFAULT_FILL_VALUE[func]
+    needs_masking = fill_value is not None and not np.array_equal(
+        fill_value, default_fv, equal_nan=True
+    )
+    if needs_masking:
+        mask = np.isin(found_groups, np.arange(size), assume_unique=True, invert=True)
+        result[..., found_groups[mask]] = fill_value
+    return result
+
+
 def _issorted(arr: np.ndarray) -> bool:
     return bool((arr[:-1] <= arr[1:]).all())
 
@@ -780,7 +798,7 @@ def chunk_reduce(
     group_idx, grps, found_groups_shape, _, size, props = factorize_(
         (by,), axes, expected_groups=(expected_groups,), reindex=reindex, sort=sort
     )
-    groups = grps[0]
+    (groups,) = grps
 
     if nax > 1:
         needs_broadcast = any(
@@ -846,6 +864,10 @@ def chunk_reduce(
                 # remove NaN group label which should be last
                 result = result[..., :-1]
             result = result.reshape(final_array_shape[:-1] + found_groups_shape)
+            if engine == "numbagg":
+                result = _postprocess_numbagg(
+                    result, func=func, size=size, fill_value=fill_value, found_groups=groups
+                )
         results["intermediates"].append(result)
 
     results["groups"] = np.broadcast_to(results["groups"], final_groups_shape)

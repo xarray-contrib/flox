@@ -4,8 +4,6 @@ import numbagg
 import numbagg.grouped
 import numpy as np
 
-from .core import _unique
-
 DEFAULT_FILL_VALUE = {
     "nansum": 0,
     "nanmean": np.nan,
@@ -52,11 +50,7 @@ def _numbagg_wrapper(
                 array = array.astype(to_)
 
     func_ = getattr(numbagg.grouped, f"group_{func}")
-    default_fv = DEFAULT_FILL_VALUE[func]
 
-    fillna = FILLNA.get(func, None)
-    if fillna:
-        array = np.where(np.isnan(array), fillna, array)
     result = func_(
         array,
         group_idx,
@@ -67,15 +61,6 @@ def _numbagg_wrapper(
         # dtype=dtype,
     ).astype(dtype, copy=False)
 
-    # The condition needs to be
-    # is len(found_groups) < size; if so we mask with fill_value (?)
-    needs_masking = fill_value is not None and not np.array_equal(
-        fill_value, default_fv, equal_nan=True
-    )
-    if needs_masking:
-        uniques = _unique(group_idx)
-        mask = np.isin(uniques, np.arange(size), assume_unique=True, invert=True)
-        result[..., uniques[mask]] = fill_value
     return result
 
 
