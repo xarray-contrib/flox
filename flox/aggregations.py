@@ -208,7 +208,7 @@ class Aggregation:
         # how to aggregate results after first round of reduction
         self.combine: OptionalFuncTuple = _atleast_1d(combine)
         # simpler reductions used with the "simple combine" algorithm
-        self.simple_combine: tuple[Callable, ...] = ()
+        self.simple_combine: OptionalFuncTuple = ()
         # finalize results (see mean)
         self.finalize: Callable | None = finalize
 
@@ -609,7 +609,7 @@ def _initialize_aggregation(
     else:
         agg.min_count = 0
 
-    simple_combine: list[Callable] = []
+    simple_combine: list[Callable | None] = []
     for combine in agg.combine:
         if isinstance(combine, str):
             if combine in ["nanfirst", "nanlast"]:
