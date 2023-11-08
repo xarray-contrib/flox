@@ -203,7 +203,7 @@ def test_groupby_reduce(
 def gen_array_by(size, func):
     by = np.ones(size[-1])
     rng = np.random.default_rng(12345)
-    array = rng.random(size)
+    array = rng.random(tuple(6 if s == 1 else s for s in size))
     if "nan" in func and "nanarg" not in func:
         array[[1, 4, 5], ...] = np.nan
     elif "nanarg" in func and len(size) > 1:
@@ -222,8 +222,8 @@ def gen_array_by(size, func):
         pytest.param(4, marks=requires_dask),
     ],
 )
+@pytest.mark.parametrize("size", ((1, 12), (12,), (12, 9)))
 @pytest.mark.parametrize("nby", [1, 2, 3])
-@pytest.mark.parametrize("size", ((12,), (12, 9)))
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):

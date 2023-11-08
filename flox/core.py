@@ -819,12 +819,12 @@ def chunk_reduce(
             # Of course we are slower to ravel `array` but we avoid argsorting
             # both `array` *and* `group_idx` in _prepare_for_flox
             group_idx = np.broadcast_to(group_idx, array.shape[-by.ndim :])
-            # if engine == "flox":
-            group_idx = group_idx.reshape(-1, order="F")
-            order = "F"
+            if engine == "flox":
+                group_idx = group_idx.reshape(-1, order="F")
+                order = "F"
     # always reshape to 1D along group dimensions
     newshape = array.shape[: array.ndim - by.ndim] + (math.prod(array.shape[-by.ndim :]),)
-    array = array.reshape(newshape, order=order)
+    array = array.reshape(newshape, order=order)  # type: ignore[call-overload]
     group_idx = group_idx.reshape(-1)
 
     assert group_idx.ndim == 1
@@ -1866,7 +1866,8 @@ def groupby_reduce(
         Array to be reduced, possibly nD
     *by : ndarray or DaskArray
         Array of labels to group over. Must be aligned with ``array`` so that
-        ``array.shape[-by.ndim :] == by.shape``
+        ``array.shape[-by.ndim :] == by.shape`` or any disagreements in that
+        equality check are for dimensions of size 1 in `by`.
     func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
             "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
             "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
