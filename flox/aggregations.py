@@ -612,7 +612,7 @@ def _initialize_aggregation(
     else:
         agg.min_count = 0
 
-    simple_combine: list[Callable | None] = []
+    simple_combine: list[Callable] = []
     for combine in agg.combine:
         if isinstance(combine, str):
             if combine in ["nanfirst", "nanlast"]:
