@@ -23,7 +23,7 @@ DEFAULT_FILL_VALUE = {
 }
 
 CAST_TO = {
-    "nansum": {np.bool_: np.int64},
+    # "nansum": {np.bool_: np.int64},
     "nanmean": {np.int_: np.float64},
     "nanvar": {np.int_: np.float64},
     "nanstd": {np.int_: np.float64},
@@ -46,7 +46,7 @@ def _numbagg_wrapper(
     cast_to = CAST_TO.get(func, None)
     if cast_to:
         for from_, to_ in cast_to.items():
-            if isinstance(array, from_):
+            if np.issubdtype(array.dtype, from_):
                 array = array.astype(to_)
 
     func_ = getattr(numbagg.grouped, f"group_{func}")
