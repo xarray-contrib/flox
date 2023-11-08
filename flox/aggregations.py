@@ -585,9 +585,6 @@ def _initialize_aggregation(
     if _is_arg_reduction(agg):
         # this allows us to unravel_index easily. we have to do that nearly every time.
         agg.fill_value["numpy"] = (0,)
-    # elif min_count == 0 and agg.fill_value["user"] is None:
-    #     # disable filling completely
-    #     agg.fill_value["numpy"] = (None,)
     else:
         agg.fill_value["numpy"] = (fv,)
 
