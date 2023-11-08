@@ -7,7 +7,6 @@ comment: false
 ignore:
   - "asv_bench/benchmarks/*.py"
   - "tests/*.py"
-  - "setup.py"
 
 coverage:
   precision: 2
