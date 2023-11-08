@@ -1823,7 +1823,8 @@ def groupby_reduce(
         Array to be reduced, possibly nD
     *by : ndarray or DaskArray
         Array of labels to group over. Must be aligned with ``array`` so that
-        ``array.shape[-by.ndim :] == by.shape``
+        ``array.shape[-by.ndim :] == by.shape`` or any disagreements in that
+        equality check are for dimensions of size 1 in `by`.
     func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
             "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
             "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
