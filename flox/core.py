@@ -98,9 +98,11 @@ def _postprocess_numbagg(result, *, func, fill_value, size, found_groups):
     needs_masking = fill_value is not None and not np.array_equal(
         fill_value, default_fv, equal_nan=True
     )
+    groups = np.arange(size)
     if needs_masking:
-        mask = np.isin(found_groups, np.arange(size), assume_unique=True, invert=True)
-        result[..., found_groups[mask]] = fill_value
+        mask = np.isin(groups, found_groups, assume_unique=True, invert=True)
+        if mask.any():
+            result[..., groups[mask]] = fill_value
     return result
 
 
@@ -865,7 +867,11 @@ def chunk_reduce(
             result = result.reshape(final_array_shape[:-1] + found_groups_shape)
             if engine == "numbagg":
                 result = _postprocess_numbagg(
-                    result, func=func, size=size, fill_value=fill_value, found_groups=groups
+                    result,
+                    func=reduction,
+                    size=size,
+                    fill_value=fv,
+                    found_groups=_unique(group_idx),
                 )
         results["intermediates"].append(result)
         previous_reduction = reduction
