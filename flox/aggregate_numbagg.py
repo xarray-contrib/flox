@@ -32,27 +32,27 @@ CAST_TO = {
 
 FILLNA = {"nansum": 0, "nanprod": 1}
 
+
 def _numbagg_wrapper(
     group_idx,
     array,
     *,
     axis=-1,
-    func="sum",
+    func=None,
     size=None,
     fill_value=None,
     dtype=None,
-    numbagg_func=None,
 ):
-    cast_to = CAST_TO.get(numbagg_func, None)
+    cast_to = CAST_TO.get(func, None)
     if cast_to:
         for from_, to_ in cast_to.items():
             if isinstance(array, from_):
                 array = array.astype(to_)
 
-    func_ = getattr(numbagg.grouped, f"group_{numbagg_func}")
-    default_fv = DEFAULT_FILL_VALUE[numbagg_func]
+    func_ = getattr(numbagg.grouped, f"group_{func}")
+    default_fv = DEFAULT_FILL_VALUE[func]
 
-    fillna = FILLNA.get(numbagg_func, None)
+    fillna = FILLNA.get(func, None)
     if fillna:
         array = np.where(np.isnan(array), fillna, array)
     result = func_(
@@ -78,11 +78,11 @@ def nanvar(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None,
     assert ddof != 0
 
     return _numbagg_wrapper(
-        array,
         group_idx,
+        array,
         axis=axis,
-        num_labels=size,
-        numbagg_func="nanvar"
+        size=size,
+        func="nanvar",
         # ddof=0,
         # fill_value=fill_value,
         # dtype=dtype,
@@ -92,30 +92,32 @@ def nanvar(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None,
 def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None, ddof=0):
     assert ddof != 0
 
-    return numbagg.grouped.group_nanstd(
-        array,
+    return _numbagg_wrapper(
         group_idx,
+        array,
         axis=axis,
-        num_labels=size,
+        size=size,
+        func="nanstd"
         # ddof=0,
         # fill_value=fill_value,
         # dtype=dtype,
     )
 
 
-nansum = partial(_numbagg_wrapper, numbagg_func="nansum")
-nanmean = partial(_numbagg_wrapper, numbagg_func="nanmean")
-nansum_of_squares = partial(_numbagg_wrapper, numbagg_func="nansum_of_squares")
-nanlen = partial(_numbagg_wrapper, numbagg_func="nancount")
-nanprod = partial(_numbagg_wrapper, numbagg_func="nanprod")
-nanfirst = partial(_numbagg_wrapper, numbagg_func="nanfirst")
-nanlast = partial(_numbagg_wrapper, numbagg_func="nanlast")
-# nanargmax = partial(_numbagg_wrapper, numbagg_func="nanargmax)
-# nanargmin = partial(_numbagg_wrapper, numbagg_func="nanargmin)
-nanmax = partial(_numbagg_wrapper, numbagg_func="nanmax")
-nanmin = partial(_numbagg_wrapper, numbagg_func="nanmin")
-any = partial(_numbagg_wrapper, numbagg_func="nanany")
-all = partial(_numbagg_wrapper, numbagg_func="nanall")
+nansum = partial(_numbagg_wrapper, func="nansum")
+nanmean = partial(_numbagg_wrapper, func="nanmean")
+nanprod = partial(_numbagg_wrapper, func="nanprod")
+nansum_of_squares = partial(_numbagg_wrapper, func="nansum_of_squares")
+nanlen = partial(_numbagg_wrapper, func="nancount")
+nanprod = partial(_numbagg_wrapper, func="nanprod")
+nanfirst = partial(_numbagg_wrapper, func="nanfirst")
+nanlast = partial(_numbagg_wrapper, func="nanlast")
+# nanargmax = partial(_numbagg_wrapper, func="nanargmax)
+# nanargmin = partial(_numbagg_wrapper, func="nanargmin)
+nanmax = partial(_numbagg_wrapper, func="nanmax")
+nanmin = partial(_numbagg_wrapper, func="nanmin")
+any = partial(_numbagg_wrapper, func="nanany")
+all = partial(_numbagg_wrapper, func="nanall")
 
 # sum = nansum
 # mean = nanmean
