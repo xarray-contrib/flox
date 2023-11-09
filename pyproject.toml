@@ -117,6 +117,7 @@ exclude=["asv_bench/pkgs"]
 module=[
     "asv_runner.*",
     "cachey",
+    "crick",
     "cftime",
     "dask.*",
     "importlib_metadata",
