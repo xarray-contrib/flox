@@ -561,3 +561,24 @@ def test_preserve_multiindex():
     )
 
     assert "region" in hist.coords
+
+
+def test_fill_value_xarray_behaviour():
+    times = pd.date_range("2000-01-01", freq="6H", periods=10)
+    ds = xr.Dataset(
+        {
+            "bar": (
+                "time",
+                [1, 2, 3, np.nan, np.nan, np.nan, 4, 5, np.nan, np.nan],
+                {"meta": "data"},
+            ),
+            "time": times,
+        }
+    )
+
+    expected_time = pd.date_range("2000-01-01", freq="3H", periods=19)
+    expected = ds.reindex(time=expected_time)
+    expected = ds.resample(time="3H").sum()
+    with xr.set_options(use_flox=True):
+        actual = ds.resample(time="3H").sum()
+    xr.testing.assert_identical(expected, actual)
