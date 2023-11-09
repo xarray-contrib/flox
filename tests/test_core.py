@@ -1566,6 +1566,19 @@ def test_choose_engine(dtype):
         finalize_kwargs=None,
     )
 
+    # count_engine
+    for method in ["all", "any", "count"]:
+        agg = _initialize_aggregation(
+            method,
+            dtype=None,
+            array_dtype=dtype,
+            fill_value=0,
+            min_count=0,
+            finalize_kwargs=None,
+        )
+        engine = _choose_engine(np.array([1, 1, 2, 2]), agg=agg)
+        assert engine == ("numbagg" if HAS_NUMBAGG else "flox")
+
     # sorted by -> flox
     sorted_engine = _choose_engine(np.array([1, 1, 2, 2]), agg=mean)
     assert sorted_engine == ("numbagg" if numbagg_possible else "flox")
@@ -1573,3 +1586,17 @@ def test_choose_engine(dtype):
     assert _choose_engine(np.array([3, 1, 1]), agg=mean) == default
     # argmax does not give engine="flox"
     assert _choose_engine(np.array([1, 1, 2, 2]), agg=argmax) == "numpy"
+
+
+def test_xarray_fill_value_behaviour():
+    bar = np.array([1, 2, 3, np.nan, np.nan, np.nan, 4, 5, np.nan, np.nan])
+    times = np.arange(0, 20, 2)
+    actual, _ = groupby_reduce(bar, times, func="nansum", expected_groups=(np.arange(19),))
+    nan = np.nan
+    # fmt: off
+    expected = np.array(
+        [ 1., nan,  2., nan,  3., nan,  0., nan,  0.,
+         nan,  0., nan,  4., nan,  5., nan,  0., nan,  0.]
+    )
+    # fmt: on
+    assert_equal(expected, actual)

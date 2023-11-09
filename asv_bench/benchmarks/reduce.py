@@ -18,7 +18,7 @@ NUMBAGG_FUNCS = ["nansum", "nanmean", "nanmax", "count", "all"]
 numbagg_skip = []
 for name in expected_names:
     numbagg_skip.extend(
-        list((func, expected_names[0], "numbagg") for func in funcs if func not in NUMBAGG_FUNCS)
+        list((func, name, "numbagg") for func in funcs if func not in NUMBAGG_FUNCS)
     )
 
 

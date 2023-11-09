@@ -86,6 +86,26 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 DUMMY_AXIS = -2
 
 
+def _postprocess_numbagg(result, *, func, fill_value, size, seen_groups):
+    """Account for numbagg not providing a fill_value kwarg."""
+    from .aggregate_numbagg import DEFAULT_FILL_VALUE
+
+    if not isinstance(func, str) or func not in DEFAULT_FILL_VALUE:
+        return result
+    # The condition needs to be
+    # len(found_groups) < size; if so we mask with fill_value (?)
+    default_fv = DEFAULT_FILL_VALUE[func]
+    needs_masking = fill_value is not None and not np.array_equal(
+        fill_value, default_fv, equal_nan=True
+    )
+    groups = np.arange(size)
+    if needs_masking:
+        mask = np.isin(groups, seen_groups, assume_unique=True, invert=True)
+        if mask.any():
+            result[..., groups[mask]] = fill_value
+    return result
+
+
 def _issorted(arr: np.ndarray) -> bool:
     return bool((arr[:-1] <= arr[1:]).all())
 
@@ -780,7 +800,11 @@ def chunk_reduce(
     group_idx, grps, found_groups_shape, _, size, props = factorize_(
         (by,), axes, expected_groups=(expected_groups,), reindex=reindex, sort=sort
     )
-    groups = grps[0]
+    (groups,) = grps
+
+    # do this *before* possible broadcasting below.
+    # factorize_ has already taken care of offsetting
+    seen_groups = _unique(group_idx)
 
     order = "C"
     if nax > 1:
@@ -850,6 +874,16 @@ def chunk_reduce(
                 result = generic_aggregate(
                     group_idx, array, axis=-1, engine=engine, func=reduction, **kw_func
                 ).astype(dt, copy=False)
+            if engine == "numbagg":
+                result = _postprocess_numbagg(
+                    result,
+                    func=reduction,
+                    size=size,
+                    fill_value=fv,
+                    # Unfortunately, we cannot reuse found_groups, it has not
+                    # been "offset" and is really expected_groups in nearly all cases
+                    seen_groups=seen_groups,
+                )
             if np.any(props.nanmask):
                 # remove NaN group label which should be last
                 result = result[..., :-1]
@@ -1053,6 +1087,8 @@ def _grouped_combine(
     """Combine intermediates step of tree reduction."""
     from dask.utils import deepmap
 
+    combine = agg.combine
+
     if isinstance(x_chunk, dict):
         # Only one block at final step; skip one extra groupby
         return x_chunk
@@ -1093,7 +1129,8 @@ def _grouped_combine(
             results = chunk_argreduce(
                 array_idx,
                 groups,
-                func=agg.combine[slicer],  # count gets treated specially next
+                # count gets treated specially next
+                func=combine[slicer],  # type: ignore[arg-type]
                 axis=axis,
                 expected_groups=None,
                 fill_value=agg.fill_value["intermediate"][slicer],
@@ -1127,9 +1164,10 @@ def _grouped_combine(
     elif agg.reduction_type == "reduce":
         # Here we reduce the intermediates individually
         results = {"groups": None, "intermediates": []}
-        for idx, (combine, fv, dtype) in enumerate(
-            zip(agg.combine, agg.fill_value["intermediate"], agg.dtype["intermediate"])
+        for idx, (combine_, fv, dtype) in enumerate(
+            zip(combine, agg.fill_value["intermediate"], agg.dtype["intermediate"])
         ):
+            assert combine_ is not None
             array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis)
             if array.shape[-1] == 0:
                 # all empty when combined
@@ -1143,7 +1181,7 @@ def _grouped_combine(
                 _results = chunk_reduce(
                     array,
                     groups,
-                    func=combine,
+                    func=combine_,
                     axis=axis,
                     expected_groups=None,
                     fill_value=(fv,),
@@ -1788,8 +1826,13 @@ def _choose_engine(by, agg: Aggregation):
 
     # numbagg only supports nan-skipping reductions
     # without dtype specified
-    if HAS_NUMBAGG and "nan" in agg.name:
-        if not_arg_reduce and dtype is None:
+    has_blockwise_nan_skipping = (agg.chunk[0] is None and "nan" in agg.name) or any(
+        (isinstance(func, str) and "nan" in func) for func in agg.chunk
+    )
+    if HAS_NUMBAGG:
+        if agg.name in ["all", "any"] or (
+            not_arg_reduce and has_blockwise_nan_skipping and dtype is None
+        ):
             return "numbagg"
 
     if not_arg_reduce and (not is_duck_dask_array(by) and _issorted(by)):
@@ -2050,7 +2093,7 @@ def groupby_reduce(
         nax = len(axis_)
 
     # When axis is a subset of possible values; then npg will
-    # apply it to groups that don't exist along a particular axis (for e.g.)
+    # apply the fill_value to groups that don't exist along a particular axis (for e.g.)
     # since these count as a group that is absent. thoo!
     # fill_value applies to all-NaN groups as well as labels in expected_groups that are not found.
     #     The only way to do this consistently is mask out using min_count
@@ -2090,8 +2133,7 @@ def groupby_reduce(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
-        # TODO: fix typing of FuncTuple in Aggregation
-        if agg.chunk[0] is None and method != "blockwise":  # type: ignore[unreachable]
+        if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"Received method={method!r}"
