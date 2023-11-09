@@ -11,7 +11,9 @@ def tdigest_chunk(group_idx, array, *, axis=-1, size=None, fill_value=None, dtyp
         digest.update(arr.astype(array.dtype, copy=False))
         return digest
 
-    result = npg.aggregate_numpy.aggregate(group_idx, array, func=_, axis=axis, dtype=object)
+    result = npg.aggregate_numpy.aggregate(
+        group_idx, array, func=_, size=size, fill_value=fill_value, axis=axis, dtype=object
+    )
     return result
 
 
@@ -23,8 +25,13 @@ def tdigest_combine(digests, axis=-1, keepdims=True):
         t.merge(*arr)
         return np.array([t], dtype=object)
 
-    (axis,) = axis
-    result = np.apply_along_axis(_, axis, digests)
+    if not isinstance(axis, tuple):
+        axis = (axis,)
+
+    # If reducing along multiple axes, we can just keep combining ;)
+    result = digests
+    for ax in axis:
+        result = np.apply_along_axis(_, ax, result)
 
     return result
 
