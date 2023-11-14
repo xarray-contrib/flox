@@ -576,9 +576,25 @@ def test_fill_value_xarray_behaviour():
         }
     )
 
-    expected_time = pd.date_range("2000-01-01", freq="3H", periods=19)
-    expected = ds.reindex(time=expected_time)
-    expected = ds.resample(time="3H").sum()
+    pd.date_range("2000-01-01", freq="3H", periods=19)
+    with xr.set_options(use_flox=False):
+        expected = ds.resample(time="3H").sum()
     with xr.set_options(use_flox=True):
         actual = ds.resample(time="3H").sum()
+    xr.testing.assert_identical(expected, actual)
+
+
+def test_fill_value_xarray_binning():
+    array = np.linspace(0, 10, 5 * 10, dtype=int).reshape(5, 10)
+
+    x = np.array([0, 0, 1, 2, 2])
+    y = np.arange(array.shape[1]) * 3
+    u = np.linspace(0, 1, 5)
+
+    data_array = xr.DataArray(data=array, coords={"x": x, "y": y, "u": ("x", u)}, dims=("x", "y"))
+    with xr.set_options(use_flox=False):
+        expected = data_array.groupby_bins("y", bins=4).mean()
+    with xr.set_options(use_flox=True):
+        actual = data_array.groupby_bins("y", bins=4).mean()
+
     xr.testing.assert_identical(expected, actual)
