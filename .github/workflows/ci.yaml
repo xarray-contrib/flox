@@ -119,8 +119,8 @@ jobs:
           environment-name: xarray-tests
           init-shell: bash
           cache-environment: true
-          create-args: |
-            python=3.10
+          create-args: >-
+            python=3.11
             pint>=0.22
       - name: Install xarray
         run: |
