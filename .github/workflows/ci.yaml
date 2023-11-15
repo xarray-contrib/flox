@@ -147,5 +147,5 @@ jobs:
           set -euo pipefail
           python -m pytest -n auto \
               xarray/tests/test_groupby.py \
-              xarray/tests/test_units.py::TestDataArray.test_computation_objects \
-              xarray/tests/test_units.py::TestDataset.test_computation_objects
+              xarray/tests/test_units.py::TestDataArray::test_computation_objects \
+              xarray/tests/test_units.py::TestDataset::test_computation_objects
