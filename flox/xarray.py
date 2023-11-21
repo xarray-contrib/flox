@@ -28,12 +28,12 @@ if TYPE_CHECKING:
     Dims = Union[str, Iterable[Hashable], None]
 
 
-def _restore_dim_order(result, obj, by, no_groupby_reorder = False):
+def _restore_dim_order(result, obj, by, no_groupby_reorder=False):
     def lookup_order(dimension):
         if dimension == by.name and by.ndim == 1:
             (dimension,) = by.dims
             if no_groupby_reorder:
-                return -1e6 # some arbitrarily low value
+                return -1e6  # some arbitrarily low value
         if dimension in obj.dims:
             axis = obj.get_axis_num(dimension)
         else:
@@ -492,9 +492,13 @@ def xarray_reduce(
             else:
                 template = obj
 
-            if actual[var].ndim > 1 :
-                    no_groupby_reorder = isinstance(obj, xr.Dataset) # do not re-order dataarrays inside datasets                    
-                    actual[var] = _restore_dim_order(actual[var], template, by_da[0], no_groupby_reorder = no_groupby_reorder)
+            if actual[var].ndim > 1:
+                no_groupby_reorder = isinstance(
+                    obj, xr.Dataset
+                )  # do not re-order dataarrays inside datasets
+                actual[var] = _restore_dim_order(
+                    actual[var], template, by_da[0], no_groupby_reorder=no_groupby_reorder
+                )
 
     if missing_dim:
         for k, v in missing_dim.items():
