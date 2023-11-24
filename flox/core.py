@@ -9,6 +9,7 @@ import warnings
 from collections import namedtuple
 from collections.abc import Sequence
 from functools import partial, reduce
+from itertools import product
 from numbers import Integral
 from typing import (
     TYPE_CHECKING,
@@ -203,6 +204,16 @@ def _unique(a: np.ndarray) -> np.ndarray:
     return np.sort(pd.unique(a.reshape(-1)))
 
 
+def slices_from_chunks(chunks):
+    """slightly modified from dask.array.core.slices_from_chunks to be lazy"""
+    cumdims = [tlz.accumulate(operator.add, bds, 0) for bds in chunks]
+    slices = [
+        [slice(s, s + dim) for s, dim in zip(starts, shapes)]
+        for starts, shapes in zip(cumdims, chunks)
+    ]
+    return product(*slices)
+
+
 @memoize
 def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     """
@@ -227,30 +238,16 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     cohorts: dict_values
         Iterable of cohorts
     """
-    import dask
+
+    shape = tuple(sum(c) for c in chunks)
 
     # To do this, we must have values in memory so casting to numpy should be safe
-    labels = np.asarray(labels)
+    labels = np.broadcast_to(labels, shape[-labels.ndim :])
 
-    # Build an array with the shape of labels, but where every element is the "chunk number"
-    # 1. First subset the array appropriately
-    axis = range(-labels.ndim, 0)
-    # Easier to create a dask array and use the .blocks property
-    array = dask.array.empty(tuple(sum(c) for c in chunks), chunks=chunks)
-    labels = np.broadcast_to(labels, array.shape[-labels.ndim :])
-
-    #  Iterate over each block and create a new block of same shape with "chunk number"
-    shape = tuple(array.blocks.shape[ax] for ax in axis)
-    # Use a numpy object array to enable assignment in the loop
-    # TODO: is it possible to just use a nested list?
-    #       That is what we need for `np.block`
-    blocks = np.empty(shape, dtype=object)
-    array_chunks = tuple(np.array(c) for c in array.chunks)
-    for idx, blockindex in enumerate(np.ndindex(array.numblocks)):
-        chunkshape = tuple(c[i] for c, i in zip(array_chunks, blockindex))
-        blocks[blockindex] = np.full(chunkshape, idx)
-    which_chunk = np.block(blocks.tolist()).reshape(-1)
-
+    which_chunk = np.empty(shape, dtype=np.int64)
+    for idx, region in enumerate(slices_from_chunks(chunks)):
+        which_chunk[region] = idx
+    which_chunk = which_chunk.reshape(-1)
     raveled = labels.reshape(-1)
     # these are chunks where a label is present
     label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
@@ -264,7 +261,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
 
     # If our dataset has chunksize one along the axis,
     # then no merging is possible.
-    single_chunks = all((ac == 1).all() for ac in array_chunks)
+    single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
 
     if merge and not single_chunks:
         # First sort by number of chunks occupied by cohort
