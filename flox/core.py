@@ -238,19 +238,29 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     cohorts: dict_values
         Iterable of cohorts
     """
+    # To do this, we must have values in memory so casting to numpy should be safe
+    labels = np.asarray(labels)
 
     shape = tuple(sum(c) for c in chunks)
+    nchunks = math.prod(len(c) for c in chunks)
+    nlabels = labels.max() + 2
 
-    # To do this, we must have values in memory so casting to numpy should be safe
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
 
-    which_chunk = np.empty(shape, dtype=np.int64)
+    bitmask = np.zeros((nchunks, nlabels), dtype=bool)
     for idx, region in enumerate(slices_from_chunks(chunks)):
-        which_chunk[region] = idx
-    which_chunk = which_chunk.reshape(-1)
-    raveled = labels.reshape(-1)
-    # these are chunks where a label is present
-    label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
+        bitmask[idx, labels[region]] = True
+    bitmask = bitmask[:, :-1]
+    chunk = np.arange(nchunks)  # [:, np.newaxis] * bitmask
+    label_chunks = {lab: chunk[bitmask[:, lab]] for lab in range(nlabels - 1)}
+
+    # which_chunk = np.empty(shape, dtype=np.int64)
+    # for idx, region in enumerate(slices_from_chunks(chunks)):
+    #     which_chunk[region] = idx
+    # which_chunk = which_chunk.reshape(-1)
+    # raveled = labels.reshape(-1)
+    # # these are chunks where a label is present
+    # label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
 
     # These invert the label_chunks mapping so we know which labels occur together.
     def invert(x) -> tuple[np.ndarray, ...]:
