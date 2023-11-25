@@ -272,7 +272,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
         items = tuple(sorted_chunks_cohorts.items())
 
         merged_cohorts = {}
-        merged_keys = []
+        merged_keys = set()
 
         # Now we iterate starting with the longest number of chunks,
         # and then merge in cohorts that are present in a subset of those chunks
@@ -287,7 +287,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
                     continue
                 if set(k2).issubset(set(k1)):
                     merged_cohorts[k1].extend(v2)
-                    merged_keys.append(k2)
+                    merged_keys.update((k2,))
 
         # make sure each cohort is sorted after merging
         sorted_merged_cohorts = {k: sorted(v) for k, v in merged_cohorts.items()}
