@@ -244,13 +244,25 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     # To do this, we must have values in memory so casting to numpy should be safe
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
 
-    which_chunk = np.empty(shape, dtype=np.int64)
+    # which_chunk = np.empty(shape, dtype=np.int64)
+    # for idx, region in enumerate(slices_from_chunks(chunks)):
+    #     which_chunk[region] = idx
+    # which_chunk = which_chunk.reshape(-1)
+    # raveled = labels.reshape(-1)
+    # # these are chunks where a label is present
+    # label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
+
+    which_chunk = []
+    unique_labels = []
     for idx, region in enumerate(slices_from_chunks(chunks)):
-        which_chunk[region] = idx
-    which_chunk = which_chunk.reshape(-1)
-    raveled = labels.reshape(-1)
+        uniques = _unique(labels[region].reshape(-1))
+        which_chunk.append([idx] * len(uniques))
+        unique_labels.append(uniques)
+
     # these are chunks where a label is present
-    label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
+    label_chunks = (
+        pd.Series(np.concatenate(which_chunk)).groupby(np.concatenate(unique_labels)).unique()
+    )
 
     # These invert the label_chunks mapping so we know which labels occur together.
     def invert(x) -> tuple[np.ndarray, ...]:
