@@ -1380,7 +1380,6 @@ def dask_groupby_agg(
 
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
-    token = dask.base.tokenize(array, by, agg, expected_groups, axis)
 
     if expected_groups is None and reindex:
         expected_groups = _get_expected_groups(by, sort=sort)
@@ -1400,6 +1399,9 @@ def dask_groupby_agg(
 
         by = dask.array.from_array(by, chunks=chunks)
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
+
+    # tokenize here since by has already been hashed if its numpy
+    token = dask.base.tokenize(array, by, agg, expected_groups, axis)
 
     # preprocess the array:
     #   - for argreductions, this zips the index together with the array block
