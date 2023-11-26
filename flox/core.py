@@ -311,23 +311,25 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
             sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
         )
 
-        items = tuple((k, set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
+        # precompute needed metrics for the quadratic loop below.
+        items = tuple((k, len(k), set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
 
         merged_cohorts = {}
         merged_keys = set()
-
-        # Now we iterate starting with the longest number of chunks,
-        # and then merge in cohorts that are present in a subset of those chunks
-        # I think this is suboptimal and must fail at some point.
-        # But it might work for most cases. There must be a better way...
-        for idx, (k1, set_k1, v1) in enumerate(items):
+        # Now we iterate over cohorts starting with the longest number of chunks,
+        # and then merge in cohorts that overlap with the current cohort
+        # Degree of overlap is measured by "set containment".
+        for idx, (k1, len_k1, set_k1, v1) in enumerate(items):
             if k1 in merged_keys:
                 continue
             merged_cohorts[k1] = copy.deepcopy(v1)
-            for k2, set_k2, v2 in items[idx + 1 :]:
-                if k2 not in merged_keys and set_k2.issubset(set_k1):
-                    merged_cohorts[k1].extend(v2)
-                    merged_keys.update((k2,))
+            # iterate in reverse since we expect small cohorts
+            # to be most likely merged in to larger ones
+            for k2, len_k2, set_k2, v2 in reversed(items[idx + 1 :]):
+                if k2 not in merged_keys:
+                    if (len(set_k2 & set_k1) / len_k2) > 0.75:
+                        merged_cohorts[k1].extend(v2)
+                        merged_keys.update((k2,))
 
         # make sure each cohort is sorted after merging
         sorted_merged_cohorts = {k: sorted(v) for k, v in merged_cohorts.items()}
