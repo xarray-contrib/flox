@@ -1550,7 +1550,7 @@ def dask_groupby_agg(
                 index = pd.Index(cohort)
                 subset = subset_to_blocks(intermediate, blks, array.blocks.shape[-len(axis) :])
                 reindexed = dask.array.map_blocks(
-                    reindex_intermediates, subset, agg=agg, unique_groups=index, meta=subset._meta
+                    reindex_intermediates, subset, agg, index, meta=subset._meta
                 )
                 # now that we have reindexed, we can set reindex=True explicitlly
                 reduced_.append(
