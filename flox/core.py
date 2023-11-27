@@ -24,6 +24,7 @@ import numpy as np
 import numpy_groupies as npg
 import pandas as pd
 import toolz as tlz
+from scipy.sparse import csc_array
 
 from . import xrdtypes
 from .aggregate_flox import _prepare_for_flox
@@ -207,10 +208,10 @@ def _unique(a: np.ndarray) -> np.ndarray:
 def slices_from_chunks(chunks):
     """slightly modified from dask.array.core.slices_from_chunks to be lazy"""
     cumdims = [tlz.accumulate(operator.add, bds, 0) for bds in chunks]
-    slices = [
-        [slice(s, s + dim) for s, dim in zip(starts, shapes)]
+    slices = (
+        (slice(s, s + dim) for s, dim in zip(starts, shapes))
         for starts, shapes in zip(cumdims, chunks)
-    ]
+    )
     return product(*slices)
 
 
@@ -243,16 +244,48 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
 
     shape = tuple(sum(c) for c in chunks)
     nchunks = math.prod(len(c) for c in chunks)
-    nlabels = labels.max() + 2
+
+    # assumes that `labels` are factorized
+    nlabels = labels.max() + 1
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
 
-    bitmask = np.zeros((nchunks, nlabels), dtype=bool)
+    rows = []
+    cols = []
+    # Add one to handle the -1 sentinel value
+    label_is_present = np.zeros((nlabels + 1,), dtype=bool)
+    ilabels = np.arange(nlabels)
     for idx, region in enumerate(slices_from_chunks(chunks)):
-        bitmask[idx, labels[region]] = True
-    bitmask = bitmask[:, :-1]
-    chunk = np.arange(nchunks)  # [:, np.newaxis] * bitmask
-    label_chunks = {lab: chunk[bitmask[:, lab]] for lab in range(nlabels - 1)}
+        # This is a quite fast way to find unique integers, when we know how many there are
+        # inspired by a similar idea in numpy_groupies for first, last
+        # instead of explicitly finding uniques, repeatedly write True to the same location
+        subset = labels[region]
+        # The reshape is not strictly necessary but is about 100ms faster on a test problem.
+        label_is_present[subset.reshape(-1)] = True
+        # skip the -1 sentinel by slicing
+        uniques = ilabels[label_is_present[:-1]]
+        rows.append([idx] * len(uniques))
+        cols.append(uniques)
+        label_is_present[:] = False
+    rows_array = np.concatenate(rows)
+    cols_array = np.concatenate(cols)
+    data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
+    bitmask = csc_array(
+        (data, (rows_array, cols_array)),
+        dtype=bool,
+        shape=(nchunks, nlabels),
+    )
+    label_chunks = {
+        lab: bitmask.indices[slice(bitmask.indptr[lab], bitmask.indptr[lab + 1])]
+        for lab in range(nlabels)
+    }
+
+    # bitmask = np.zeros((nchunks, nlabels), dtype=bool)
+    # for idx, region in enumerate(slices_from_chunks(chunks)):
+    #     bitmask[idx, labels[region]] = True
+    # bitmask = bitmask[:, :-1]
+    # chunk = np.arange(nchunks)  # [:, np.newaxis] * bitmask
+    # label_chunks = {lab: chunk[bitmask[:, lab]] for lab in range(nlabels - 1)}
 
     # which_chunk = np.empty(shape, dtype=np.int64)
     # for idx, region in enumerate(slices_from_chunks(chunks)):

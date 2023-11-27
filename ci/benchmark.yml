@@ -13,3 +13,4 @@ dependencies:
   - numpy_groupies>=0.9.19
   - numbagg>=0.3
   - wheel
+  - scipy
