@@ -10,6 +10,7 @@ dependencies:
   - pytest-pretty
   - pytest-xdist
   - numpy==1.22
+  - scipy
   - numpy_groupies==0.9.19
   - pandas
   - pooch

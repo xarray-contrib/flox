@@ -121,44 +121,44 @@ def get_colormap(N):
     ncolors = len(cmap.colors)
     q = N // ncolors
     r = N % ncolors
-    cmap = mpl.colors.ListedColormap(np.concatenate([cmap.colors] * q + [cmap.colors[:r]]))
-    cmap.set_under(color="w")
+    cmap = mpl.colors.ListedColormap(np.concatenate([cmap.colors] * q + [cmap.colors[: r + 1]]))
+    cmap.set_under(color="k")
     return cmap
 
 
-def factorize_cohorts(by, cohorts):
-    factorized = np.full(by.shape, -1)
+def factorize_cohorts(chunks, cohorts):
+    chunk_grid = tuple(len(c) for c in chunks)
+    nchunks = np.prod(chunk_grid)
+    factorized = np.full((nchunks,), -1, dtype=np.int64)
     for idx, cohort in enumerate(cohorts):
-        factorized[np.isin(by, cohort)] = idx
-    return factorized
+        factorized[list(cohort)] = idx
+    return factorized.reshape(chunk_grid)
 
 
-def visualize_cohorts_2d(by, array):
+def visualize_cohorts_2d(by, chunks):
     assert by.ndim == 2
     print("finding cohorts...")
-    before_merged = find_group_cohorts(
-        by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=False
-    ).values()
-    merged = find_group_cohorts(
-        by, [array.chunks[ax] for ax in range(-by.ndim, 0)], merge=True
-    ).values()
+    chunks = [chunks[ax] for ax in range(-by.ndim, 0)]
+    before_merged = find_group_cohorts(by, chunks, merge=False)
+    merged = find_group_cohorts(by, chunks, merge=True)
     print("finished cohorts...")
 
-    xticks = np.cumsum(array.chunks[-1])
-    yticks = np.cumsum(array.chunks[-2])
+    xticks = np.cumsum(chunks[-1])
+    yticks = np.cumsum(chunks[-2])
 
-    f, ax = plt.subplots(2, 2, constrained_layout=True, sharex=True, sharey=True)
+    f, ax = plt.subplots(1, 3, constrained_layout=True, sharex=False, sharey=False)
     ax = ax.ravel()
-    ax[1].set_visible(False)
-    ax = ax[[0, 2, 3]]
+    # ax[1].set_visible(False)
+    # ax = ax[[0, 2, 3]]
 
     ngroups = len(_unique(by))
-    h0 = ax[0].imshow(by, cmap=get_colormap(ngroups))
-    h1 = _visualize_cohorts(by, before_merged, ax=ax[1])
-    h2 = _visualize_cohorts(by, merged, ax=ax[2])
+    h0 = ax[0].imshow(by, vmin=0, cmap=get_colormap(ngroups))
+    h1 = _visualize_cohorts(chunks, before_merged, ax=ax[1])
+    h2 = _visualize_cohorts(chunks, merged, ax=ax[2])
 
     for axx in ax:
         axx.grid(True, which="both")
+    for axx in ax[:1]:
         axx.set_xticks(xticks)
         axx.set_yticks(yticks)
     for h, axx in zip([h0, h1, h2], ax):
@@ -167,14 +167,15 @@ def visualize_cohorts_2d(by, array):
     ax[0].set_title(f"by: {ngroups} groups")
     ax[1].set_title(f"{len(before_merged)} cohorts")
     ax[2].set_title(f"{len(merged)} merged cohorts")
-    f.set_size_inches((6, 6))
+    f.set_size_inches((12, 6))
 
 
-def _visualize_cohorts(by, cohorts, ax=None):
+def _visualize_cohorts(chunks, cohorts, ax=None):
     if ax is None:
         _, ax = plt.subplots(1, 1)
 
-    ax.imshow(factorize_cohorts(by, cohorts), vmin=0, cmap=get_colormap(len(cohorts)))
+    data = factorize_cohorts(chunks, cohorts)
+    return ax.imshow(data, vmin=0, cmap=get_colormap(len(cohorts)))
 
 
 def visualize_groups_2d(labels, y0=0, **kwargs):

@@ -576,9 +576,56 @@ def test_fill_value_xarray_behaviour():
         }
     )
 
-    expected_time = pd.date_range("2000-01-01", freq="3H", periods=19)
-    expected = ds.reindex(time=expected_time)
-    expected = ds.resample(time="3H").sum()
+    pd.date_range("2000-01-01", freq="3H", periods=19)
+    with xr.set_options(use_flox=False):
+        expected = ds.resample(time="3H").sum()
     with xr.set_options(use_flox=True):
         actual = ds.resample(time="3H").sum()
+    xr.testing.assert_identical(expected, actual)
+
+
+def test_fill_value_xarray_binning():
+    array = np.linspace(0, 10, 5 * 10, dtype=int).reshape(5, 10)
+
+    x = np.array([0, 0, 1, 2, 2])
+    y = np.arange(array.shape[1]) * 3
+    u = np.linspace(0, 1, 5)
+
+    data_array = xr.DataArray(data=array, coords={"x": x, "y": y, "u": ("x", u)}, dims=("x", "y"))
+    with xr.set_options(use_flox=False):
+        expected = data_array.groupby_bins("y", bins=4).mean()
+    with xr.set_options(use_flox=True):
+        actual = data_array.groupby_bins("y", bins=4).mean()
+
+    xr.testing.assert_identical(expected, actual)
+
+
+def test_groupby_2d_dataset():
+    d = {
+        "coords": {
+            "bit_index": {"dims": ("bit_index",), "attrs": {"name": "bit_index"}, "data": [0, 1]},
+            "index": {"dims": ("index",), "data": [0, 6, 8, 10, 14]},
+            "clifford": {"dims": ("index",), "attrs": {}, "data": [1, 1, 4, 10, 4]},
+        },
+        "dims": {"bit_index": 2, "index": 5},
+        "data_vars": {
+            "counts": {
+                "dims": ("bit_index", "index"),
+                "attrs": {
+                    "name": "counts",
+                },
+                "data": [[18, 30, 45, 70, 38], [382, 370, 355, 330, 362]],
+            }
+        },
+    }
+
+    ds = xr.Dataset.from_dict(d)
+
+    with xr.set_options(use_flox=False):
+        expected = ds.groupby("clifford").mean()
+    with xr.set_options(use_flox=True):
+        actual = ds.groupby("clifford").mean()
+    assert (
+        expected.counts.dims == actual.counts.dims
+    )  # https://github.com/pydata/xarray/issues/8292
     xr.testing.assert_identical(expected, actual)

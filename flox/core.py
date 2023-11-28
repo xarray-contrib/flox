@@ -9,6 +9,7 @@ import warnings
 from collections import namedtuple
 from collections.abc import Sequence
 from functools import partial, reduce
+from itertools import product
 from numbers import Integral
 from typing import (
     TYPE_CHECKING,
@@ -23,6 +24,7 @@ import numpy as np
 import numpy_groupies as npg
 import pandas as pd
 import toolz as tlz
+from scipy.sparse import csc_array
 
 from . import xrdtypes
 from .aggregate_flox import _prepare_for_flox
@@ -52,7 +54,7 @@ if TYPE_CHECKING:
     T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
-    T_ExpectIndex = Union[pd.Index]
+    T_ExpectIndex = pd.Index
     T_ExpectIndexTuple = tuple[T_ExpectIndex, ...]
     T_ExpectIndexOpt = Union[T_ExpectIndex, None]
     T_ExpectIndexOptTuple = tuple[T_ExpectIndexOpt, ...]
@@ -203,6 +205,16 @@ def _unique(a: np.ndarray) -> np.ndarray:
     return np.sort(pd.unique(a.reshape(-1)))
 
 
+def slices_from_chunks(chunks):
+    """slightly modified from dask.array.core.slices_from_chunks to be lazy"""
+    cumdims = [tlz.accumulate(operator.add, bds, 0) for bds in chunks]
+    slices = (
+        (slice(s, s + dim) for s, dim in zip(starts, shapes))
+        for starts, shapes in zip(cumdims, chunks)
+    )
+    return product(*slices)
+
+
 @memoize
 def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     """
@@ -215,9 +227,10 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     Parameters
     ----------
     labels : np.ndarray
-        mD Array of group labels
+        mD Array of integer group codes, factorized so that -1
+        represents NaNs.
     chunks : tuple
-        nD array that is being reduced
+        chunks of the array being reduced
     merge : bool, optional
         Attempt to merge cohorts when one cohort's chunks are a subset
         of another cohort's chunks.
@@ -227,33 +240,59 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     cohorts: dict_values
         Iterable of cohorts
     """
-    import dask
-
     # To do this, we must have values in memory so casting to numpy should be safe
     labels = np.asarray(labels)
 
-    # Build an array with the shape of labels, but where every element is the "chunk number"
-    # 1. First subset the array appropriately
-    axis = range(-labels.ndim, 0)
-    # Easier to create a dask array and use the .blocks property
-    array = dask.array.empty(tuple(sum(c) for c in chunks), chunks=chunks)
-    labels = np.broadcast_to(labels, array.shape[-labels.ndim :])
+    shape = tuple(sum(c) for c in chunks)
+    nchunks = math.prod(len(c) for c in chunks)
 
-    #  Iterate over each block and create a new block of same shape with "chunk number"
-    shape = tuple(array.blocks.shape[ax] for ax in axis)
-    # Use a numpy object array to enable assignment in the loop
-    # TODO: is it possible to just use a nested list?
-    #       That is what we need for `np.block`
-    blocks = np.empty(shape, dtype=object)
-    array_chunks = tuple(np.array(c) for c in array.chunks)
-    for idx, blockindex in enumerate(np.ndindex(array.numblocks)):
-        chunkshape = tuple(c[i] for c, i in zip(array_chunks, blockindex))
-        blocks[blockindex] = np.full(chunkshape, idx)
-    which_chunk = np.block(blocks.tolist()).reshape(-1)
+    # assumes that `labels` are factorized
+    nlabels = labels.max() + 1
 
-    raveled = labels.reshape(-1)
-    # these are chunks where a label is present
-    label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
+    labels = np.broadcast_to(labels, shape[-labels.ndim :])
+
+    rows = []
+    cols = []
+    # Add one to handle the -1 sentinel value
+    label_is_present = np.zeros((nlabels + 1,), dtype=bool)
+    ilabels = np.arange(nlabels)
+    for idx, region in enumerate(slices_from_chunks(chunks)):
+        # This is a quite fast way to find unique integers, when we know how many there are
+        # inspired by a similar idea in numpy_groupies for first, last
+        # instead of explicitly finding uniques, repeatedly write True to the same location
+        subset = labels[region]
+        # The reshape is not strictly necessary but is about 100ms faster on a test problem.
+        label_is_present[subset.reshape(-1)] = True
+        # skip the -1 sentinel by slicing
+        uniques = ilabels[label_is_present[:-1]]
+        rows.append([idx] * len(uniques))
+        cols.append(uniques)
+        label_is_present[:] = False
+    rows_array = np.concatenate(rows)
+    cols_array = np.concatenate(cols)
+    data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
+    bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
+    label_chunks = {
+        lab: bitmask.indices[slice(bitmask.indptr[lab], bitmask.indptr[lab + 1])]
+        for lab in range(nlabels)
+    }
+
+    ## numpy bitmask approach, faster than finding uniques, but lots of memory
+    # bitmask = np.zeros((nchunks, nlabels), dtype=bool)
+    # for idx, region in enumerate(slices_from_chunks(chunks)):
+    #     bitmask[idx, labels[region]] = True
+    # bitmask = bitmask[:, :-1]
+    # chunk = np.arange(nchunks)  # [:, np.newaxis] * bitmask
+    # label_chunks = {lab: chunk[bitmask[:, lab]] for lab in range(nlabels - 1)}
+
+    ## Pandas GroupBy approach, quite slow!
+    # which_chunk = np.empty(shape, dtype=np.int64)
+    # for idx, region in enumerate(slices_from_chunks(chunks)):
+    #     which_chunk[region] = idx
+    # which_chunk = which_chunk.reshape(-1)
+    # raveled = labels.reshape(-1)
+    # # these are chunks where a label is present
+    # label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
 
     # These invert the label_chunks mapping so we know which labels occur together.
     def invert(x) -> tuple[np.ndarray, ...]:
@@ -264,33 +303,31 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
 
     # If our dataset has chunksize one along the axis,
     # then no merging is possible.
-    single_chunks = all((ac == 1).all() for ac in array_chunks)
+    single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
 
-    if merge and not single_chunks:
+    if not single_chunks and merge:
         # First sort by number of chunks occupied by cohort
         sorted_chunks_cohorts = dict(
             sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
         )
 
-        items = tuple(sorted_chunks_cohorts.items())
+        items = tuple((k, set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
 
         merged_cohorts = {}
-        merged_keys = []
+        merged_keys: set[tuple] = set()
 
         # Now we iterate starting with the longest number of chunks,
         # and then merge in cohorts that are present in a subset of those chunks
         # I think this is suboptimal and must fail at some point.
         # But it might work for most cases. There must be a better way...
-        for idx, (k1, v1) in enumerate(items):
+        for idx, (k1, set_k1, v1) in enumerate(items):
             if k1 in merged_keys:
                 continue
             merged_cohorts[k1] = copy.deepcopy(v1)
-            for k2, v2 in items[idx + 1 :]:
-                if k2 in merged_keys:
-                    continue
-                if set(k2).issubset(set(k1)):
+            for k2, set_k2, v2 in items[idx + 1 :]:
+                if k2 not in merged_keys and set_k2.issubset(set_k1):
                     merged_cohorts[k1].extend(v2)
-                    merged_keys.append(k2)
+                    merged_keys.update((k2,))
 
         # make sure each cohort is sorted after merging
         sorted_merged_cohorts = {k: sorted(v) for k, v in merged_cohorts.items()}
@@ -1373,7 +1410,6 @@ def dask_groupby_agg(
 
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
-    token = dask.base.tokenize(array, by, agg, expected_groups, axis)
 
     if expected_groups is None and reindex:
         expected_groups = _get_expected_groups(by, sort=sort)
@@ -1393,6 +1429,9 @@ def dask_groupby_agg(
 
         by = dask.array.from_array(by, chunks=chunks)
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
+
+    # tokenize here since by has already been hashed if its numpy
+    token = dask.base.tokenize(array, by, agg, expected_groups, axis)
 
     # preprocess the array:
     #   - for argreductions, this zips the index together with the array block
@@ -1510,7 +1549,7 @@ def dask_groupby_agg(
                 index = pd.Index(cohort)
                 subset = subset_to_blocks(intermediate, blks, array.blocks.shape[-len(axis) :])
                 reindexed = dask.array.map_blocks(
-                    reindex_intermediates, subset, agg=agg, unique_groups=index, meta=subset._meta
+                    reindex_intermediates, subset, agg, index, meta=subset._meta
                 )
                 # now that we have reindexed, we can set reindex=True explicitlly
                 reduced_.append(
@@ -1856,7 +1895,7 @@ def groupby_reduce(
     engine: T_EngineOpt = None,
     reindex: bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
-) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy yet
+) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:
     """
     GroupBy reductions using tree reductions for dask.array
 
@@ -2184,4 +2223,4 @@ def groupby_reduce(
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
         result = result.astype(bool)
-    return (result, *groups)  # type: ignore[return-value]  # Unpack not in mypy yet
+    return (result, *groups)

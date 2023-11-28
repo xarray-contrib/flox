@@ -1,10 +1,8 @@
 import dask
 import numpy as np
 import pandas as pd
-import xarray as xr
 
 import flox
-from flox.xarray import xarray_reduce
 
 
 class Cohorts:
@@ -129,11 +127,10 @@ class PerfectMonthlyRechunked(PerfectMonthly):
         super().rechunk()
 
 
-def time_cohorts_era5_single():
-    TIME = 900  # 92044 in Google ARCO ERA5
-    da = xr.DataArray(
-        dask.array.ones((TIME, 721, 1440), chunks=(1, -1, -1)),
-        dims=("time", "lat", "lon"),
-        coords=dict(time=pd.date_range("1959-01-01", freq="6H", periods=TIME)),
-    )
-    xarray_reduce(da, da.time.dt.day, method="cohorts", func="any")
+class ERA5Google(Cohorts):
+    def setup(self, *args, **kwargs):
+        TIME = 900  # 92044 in Google ARCO ERA5
+        self.time = pd.Series(pd.date_range("1959-01-01", freq="6H", periods=TIME))
+        self.axis = (2,)
+        self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 1))
+        self.by = self.time.dt.day.values

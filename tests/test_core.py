@@ -179,7 +179,7 @@ def test_groupby_reduce(
     elif func == "count":
         expected_result = np.array(expected, dtype=np.intp)
 
-    (result, groups) = groupby_reduce(
+    (result, *groups) = groupby_reduce(
         array,
         by,
         func=func,
@@ -187,6 +187,7 @@ def test_groupby_reduce(
         fill_value=123,
         engine=engine,
     )
+    (groups_array,) = groups
     # we use pd.Index(expected_groups).to_numpy() which is always int64
     # for the values in this test
     if expected_groups is None:
@@ -196,7 +197,7 @@ def test_groupby_reduce(
     else:
         g_dtype = np.int64
 
-    assert_equal(groups, np.array([0, 1, 2], g_dtype))
+    assert_equal(groups_array, np.array([0, 1, 2], g_dtype))
     assert_equal(expected_result, result)
 
 
@@ -795,11 +796,14 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
             labels = dask.array.from_array(labels, chunks=chunks)
 
     with raise_if_dask_computes():
-        actual, groups = groupby_reduce(
+        actual, *groups = groupby_reduce(
             array, labels, func="count", fill_value=0, engine=engine, method=method, **kwargs
         )
+    (groups_array,) = groups
     expected = np.array([3, 1, 0], dtype=np.intp)
-    for left, right in zip(groups, pd.IntervalIndex.from_arrays([1, 2, 4], [2, 4, 5]).to_numpy()):
+    for left, right in zip(
+        groups_array, pd.IntervalIndex.from_arrays([1, 2, 4], [2, 4, 5]).to_numpy()
+    ):
         assert left == right
     assert_equal(actual, expected)
 
@@ -830,12 +834,12 @@ def test_rechunk_for_blockwise(inchunks, expected):
 @pytest.mark.parametrize(
     "expected, labels, chunks, merge",
     [
-        [[[1, 2, 3, 4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), True],
-        [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 4), False],
-        [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), False],
-        [[[1], [2], [3], [4]], [1, 2, 3, 1, 2, 3, 4], (2, 2, 2, 1), True],
-        [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), True],
-        [[[1, 2, 3], [4]], [1, 2, 3, 1, 2, 3, 4], (3, 3, 1), False],
+        [[[0, 1, 2, 3]], [0, 1, 2, 0, 1, 2, 3], (3, 4), True],
+        [[[0, 1, 2], [3]], [0, 1, 2, 0, 1, 2, 3], (3, 4), False],
+        [[[0], [1], [2], [3]], [0, 1, 2, 0, 1, 2, 3], (2, 2, 2, 1), False],
+        [[[0], [1], [2], [3]], [0, 1, 2, 0, 1, 2, 3], (2, 2, 2, 1), True],
+        [[[0, 1, 2], [3]], [0, 1, 2, 0, 1, 2, 3], (3, 3, 1), True],
+        [[[0, 1, 2], [3]], [0, 1, 2, 0, 1, 2, 3], (3, 3, 1), False],
         [
             [[0], [1, 2, 3, 4], [5]],
             np.repeat(np.arange(6), [4, 4, 12, 2, 3, 4]),
@@ -1034,13 +1038,13 @@ def test_bool_reductions(func, engine):
 def test_map_reduce_blockwise_mixed() -> None:
     t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()
     data = t.dt.dayofyear
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         dask.array.from_array(data.values, chunks=365),
         t.dt.month,
         func="mean",
         method="map-reduce",
     )
-    expected, _ = groupby_reduce(data, t.dt.month, func="mean")
+    expected, *_ = groupby_reduce(data, t.dt.month, func="mean")
     assert_equal(expected, actual)
 
 

@@ -119,8 +119,9 @@ jobs:
           environment-name: xarray-tests
           init-shell: bash
           cache-environment: true
-          create-args: |
-            python=3.10
+          create-args: >-
+            python=3.11
+            pint>=0.22
       - name: Install xarray
         run: |
           python -m pip install --no-deps .
@@ -144,4 +145,7 @@ jobs:
         id: status
         run: |
           set -euo pipefail
-          python -m pytest -n auto xarray/tests/test_groupby.py
+          python -m pytest -n auto \
+              xarray/tests/test_groupby.py \
+              xarray/tests/test_units.py::TestDataArray::test_computation_objects \
+              xarray/tests/test_units.py::TestDataset::test_computation_objects
