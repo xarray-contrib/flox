@@ -59,7 +59,7 @@ jobs:
           environment-name: flox-tests
           init-shell: bash
           cache-environment: true
-          cache-env-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
+          cache-environment-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
           create-args: |
             python=${{ env.PYTHON_VERSION }}
 
@@ -112,7 +112,7 @@ jobs:
           environment-name: flox-tests
           init-shell: bash
           cache-environment: true
-          cache-env-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
+          cache-environment-key: "${{runner.os}}-${{runner.arch}}-py${{env.PYTHON_VERSION}}-${{env.TODAY}}-${{hashFiles(env.CONDA_ENV_FILE)}}"
           create-args: |
             python=${{ env.PYTHON_VERSION }}
       - name: Install flox

@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
-    T_ExpectIndex = Union[pd.Index]
+    T_ExpectIndex = pd.Index
     T_ExpectIndexTuple = tuple[T_ExpectIndex, ...]
     T_ExpectIndexOpt = Union[T_ExpectIndex, None]
     T_ExpectIndexOptTuple = tuple[T_ExpectIndexOpt, ...]
@@ -315,11 +315,13 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
         items = tuple((k, len(k), set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
 
         merged_cohorts = {}
-        merged_keys = set()
-        # Now we iterate over cohorts starting with the longest number of chunks,
-        # and then merge in cohorts that overlap with the current cohort
-        # Degree of overlap is measured by "set containment".
-        for idx, (k1, len_k1, set_k1, v1) in enumerate(items):
+        merged_keys: set[tuple] = set()
+
+        # Now we iterate starting with the longest number of chunks,
+        # and then merge in cohorts that are present in a subset of those chunks
+        # I think this is suboptimal and must fail at some point.
+        # But it might work for most cases. There must be a better way...
+        for idx, (k1, set_k1, v1) in enumerate(items):
             if k1 in merged_keys:
                 continue
             merged_cohorts[k1] = copy.deepcopy(v1)
@@ -1897,7 +1899,7 @@ def groupby_reduce(
     engine: T_EngineOpt = None,
     reindex: bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
-) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:  # type: ignore[misc]  # Unpack not in mypy yet
+) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:
     """
     GroupBy reductions using tree reductions for dask.array
 
@@ -2225,4 +2227,4 @@ def groupby_reduce(
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
         result = result.astype(bool)
-    return (result, *groups)  # type: ignore[return-value]  # Unpack not in mypy yet
+    return (result, *groups)
