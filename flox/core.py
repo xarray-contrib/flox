@@ -321,7 +321,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
         # and then merge in cohorts that are present in a subset of those chunks
         # I think this is suboptimal and must fail at some point.
         # But it might work for most cases. There must be a better way...
-        for idx, (k1, set_k1, v1) in enumerate(items):
+        for idx, (k1, len_k1, set_k1, v1) in enumerate(items):
             if k1 in merged_keys:
                 continue
             merged_cohorts[k1] = copy.deepcopy(v1)
