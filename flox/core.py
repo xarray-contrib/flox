@@ -227,9 +227,10 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     Parameters
     ----------
     labels : np.ndarray
-        mD Array of group labels
+        mD Array of integer group codes, factorized so that -1
+        represents NaNs.
     chunks : tuple
-        nD array that is being reduced
+        chunks of the array being reduced
     merge : bool, optional
         Attempt to merge cohorts when one cohort's chunks are a subset
         of another cohort's chunks.
@@ -270,16 +271,13 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     rows_array = np.concatenate(rows)
     cols_array = np.concatenate(cols)
     data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
-    bitmask = csc_array(
-        (data, (rows_array, cols_array)),
-        dtype=bool,
-        shape=(nchunks, nlabels),
-    )
+    bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
     label_chunks = {
         lab: bitmask.indices[slice(bitmask.indptr[lab], bitmask.indptr[lab + 1])]
         for lab in range(nlabels)
     }
 
+    ## numpy bitmask approach, faster than finding uniques, but lots of memory
     # bitmask = np.zeros((nchunks, nlabels), dtype=bool)
     # for idx, region in enumerate(slices_from_chunks(chunks)):
     #     bitmask[idx, labels[region]] = True
@@ -287,6 +285,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     # chunk = np.arange(nchunks)  # [:, np.newaxis] * bitmask
     # label_chunks = {lab: chunk[bitmask[:, lab]] for lab in range(nlabels - 1)}
 
+    ## Pandas GroupBy approach, quite slow!
     # which_chunk = np.empty(shape, dtype=np.int64)
     # for idx, region in enumerate(slices_from_chunks(chunks)):
     #     which_chunk[region] = idx
@@ -306,7 +305,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     # then no merging is possible.
     single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
 
-    if merge and not single_chunks:
+    if not single_chunks and merge:
         # First sort by number of chunks occupied by cohort
         sorted_chunks_cohorts = dict(
             sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
