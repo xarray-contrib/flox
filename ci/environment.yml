@@ -9,6 +9,7 @@ dependencies:
   - netcdf4
   - pandas
   - numpy>=1.22
+  - scipy
   - lxml # for mypy coverage report
   - matplotlib
   - pip
@@ -24,4 +25,3 @@ dependencies:
   - toolz
   - numba
   - numbagg>=0.3
-  - scipy

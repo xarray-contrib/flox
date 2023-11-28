@@ -6,6 +6,7 @@ dependencies:
   - pip
   - xarray
   - numpy>=1.22
+  - scipy
   - numpydoc
   - numpy_groupies>=0.9.19
   - toolz

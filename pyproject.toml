@@ -41,6 +41,7 @@ requires = [
     "pandas",
     "numpy>=1.22",
     "numpy_groupies>=0.9.19",
+    "scipy",
     "toolz",
     "setuptools>=61.0.0",
     "setuptools_scm[toml]>=7.0",
@@ -101,6 +102,7 @@ known-third-party = [
     "pkg_resources",
     "pytest",
     "setuptools",
+    "scipy",
     "xarray"
 ]
 
