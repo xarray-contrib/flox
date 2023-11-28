@@ -215,7 +215,7 @@ def slices_from_chunks(chunks):
     return product(*slices)
 
 
-# @memoize
+@memoize
 def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     """
     Finds groups labels that occur together aka "cohorts"
