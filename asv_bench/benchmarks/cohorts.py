@@ -43,8 +43,11 @@ class Cohorts:
         return len(result.dask.layers)
 
     track_num_tasks.unit = "tasks"  # type: ignore[attr-defined] # Lazy
+    track_num_tasks.repeat = 1  # type: ignore[attr-defined] # Lazy
     track_num_tasks_optimized.unit = "tasks"  # type: ignore[attr-defined] # Lazy
+    track_num_tasks_optimized.repeat = 1  # type: ignore[attr-defined] # Lazy
     track_num_layers.unit = "layers"  # type: ignore[attr-defined] # Lazy
+    track_num_layers.repeat = 1  # type: ignore[attr-defined] # Lazy
 
 
 class NWMMidwest(Cohorts):
