@@ -86,7 +86,7 @@ class ERA5DayOfYear(ERA5Dataset, Cohorts):
 class ERA5DayOfYearRechunked(ERA5DayOfYear, Cohorts):
     def setup(self, *args, **kwargs):
         super().setup()
-        super().rechunk()
+        self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 24))
 
 
 class ERA5MonthHour(ERA5Dataset, Cohorts):

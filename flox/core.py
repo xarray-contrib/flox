@@ -303,8 +303,8 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     # If our dataset has chunksize one along the axis,
     # then no merging is possible.
     single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
-
-    if not single_chunks and merge:
+    one_group_per_chunk = (bitmask.sum(axis=1) == 1).all()
+    if not one_group_per_chunk and not single_chunks and merge:
         # First sort by number of chunks occupied by cohort
         sorted_chunks_cohorts = dict(
             sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
