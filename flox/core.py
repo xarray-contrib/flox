@@ -335,7 +335,7 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
                         merged_keys.update((k2,))
             sorted_ = sorted(new_value)
             merged_cohorts[tuple(sorted(new_key))] = sorted_
-            if idx == 0 and (len(sorted_) == nlabels) and (sorted_ == ilabels).all():
+            if idx == 0 and (len(sorted_) == nlabels) and (np.array(sorted_) == ilabels).all():
                 break
 
         # sort by first label in cohort
