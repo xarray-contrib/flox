@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import itertools
 import math
 import operator
@@ -324,21 +323,25 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
         for idx, (k1, len_k1, set_k1, v1) in enumerate(items):
             if k1 in merged_keys:
                 continue
-            merged_cohorts[k1] = copy.deepcopy(v1)
+            new_key = set_k1
+            new_value = v1
             # iterate in reverse since we expect small cohorts
             # to be most likely merged in to larger ones
             for k2, len_k2, set_k2, v2 in reversed(items[idx + 1 :]):
                 if k2 not in merged_keys:
-                    if (len(set_k2 & set_k1) / len_k2) > 0.75:
-                        merged_cohorts[k1].extend(v2)
+                    if (len(set_k2 & new_key) / len_k2) > 0.75:
+                        new_key |= set_k2
+                        new_value += v2
                         merged_keys.update((k2,))
+            sorted_ = sorted(new_value)
+            merged_cohorts[tuple(sorted(new_key))] = sorted_
+            if idx == 0 and (len(sorted_) == nlabels) and (sorted_ == ilabels).all():
+                break
 
-        # make sure each cohort is sorted after merging
-        sorted_merged_cohorts = {k: sorted(v) for k, v in merged_cohorts.items()}
         # sort by first label in cohort
         # This will help when sort=True (default)
         # and we have to resort the dask array
-        return dict(sorted(sorted_merged_cohorts.items(), key=lambda kv: kv[1][0]))
+        return dict(sorted(merged_cohorts.items(), key=lambda kv: kv[1][0]))
 
     else:
         return chunks_cohorts
