@@ -214,34 +214,8 @@ def slices_from_chunks(chunks):
     return product(*slices)
 
 
-@memoize
-def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
-    """
-    Finds groups labels that occur together aka "cohorts"
-
-    If available, results are cached in a 1MB cache managed by `cachey`.
-    This allows us to be quick when repeatedly calling groupby_reduce
-    for arrays with the same chunking (e.g. an xarray Dataset).
-
-    Parameters
-    ----------
-    labels : np.ndarray
-        mD Array of integer group codes, factorized so that -1
-        represents NaNs.
-    chunks : tuple
-        chunks of the array being reduced
-    merge : bool, optional
-        Attempt to merge cohorts when one cohort's chunks are a subset
-        of another cohort's chunks.
-
-    Returns
-    -------
-    cohorts: dict_values
-        Iterable of cohorts
-    """
-    # To do this, we must have values in memory so casting to numpy should be safe
-    labels = np.asarray(labels)
-
+def _compute_label_chunk_bitmask(labels, chunks):
+    assert isinstance(labels, np.ndarray)
     shape = tuple(sum(c) for c in chunks)
     nchunks = math.prod(len(c) for c in chunks)
 
@@ -271,6 +245,47 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     cols_array = np.concatenate(cols)
     data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
     bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
+
+    return bitmask, nlabels, ilabels
+
+
+@memoize
+def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
+    """
+    Finds groups labels that occur together aka "cohorts"
+
+    If available, results are cached in a 1MB cache managed by `cachey`.
+    This allows us to be quick when repeatedly calling groupby_reduce
+    for arrays with the same chunking (e.g. an xarray Dataset).
+
+    Parameters
+    ----------
+    labels : np.ndarray
+        mD Array of integer group codes, factorized so that -1
+        represents NaNs.
+    chunks : tuple
+        chunks of the array being reduced
+    merge : bool, optional
+        Attempt to merge cohorts when one cohort's chunks are a subset
+        of another cohort's chunks.
+
+    Returns
+    -------
+    cohorts: dict_values
+        Iterable of cohorts
+    """
+    if not is_duck_array(labels):
+        labels = np.asarray(labels)
+
+    if is_duck_dask_array(labels):
+        import dask
+
+        ((bitmask, nlabels, ilabels),) = dask.compute(
+            dask.delayed(_compute_label_chunk_bitmask)(labels, chunks)
+        )
+    else:
+        bitmask, nlabels, ilabels = _compute_label_chunk_bitmask(labels, chunks)
+
     label_chunks = {
         lab: bitmask.indices[slice(bitmask.indptr[lab], bitmask.indptr[lab + 1])]
         for lab in range(nlabels)
@@ -2039,9 +2054,6 @@ def groupby_reduce(
             "Try engine='numpy' or engine='numba' instead."
         )
 
-    if method == "cohorts" and any_by_dask:
-        raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
-
     reindex = _validate_reindex(
         reindex, func, method, expected_groups, any_by_dask, is_duck_dask_array(array)
     )
@@ -2076,6 +2088,12 @@ def groupby_reduce(
         # can't do it if we are grouping by dask array but don't have expected_groups
         any(is_dask and ex_ is None for is_dask, ex_ in zip(by_is_dask, expected_groups))
     )
+
+    if method == "cohorts" and not factorize_early:
+        raise ValueError(
+            "method='cohorts' can only be used when grouping by dask arrays if `expected_groups` is provided."
+        )
+
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
             bys,
