@@ -329,7 +329,7 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
     rows_array = np.repeat(np.arange(nchunks), tuple(len(col) for col in cols))
     cols_array = np.concatenate(cols)
 
-    return make_bitmask(rows_array, cols_array)
+    return make_bitmask(rows_array, cols_array), nlabels, ilabels
 
 
 # @memoize
@@ -362,8 +362,17 @@ def find_group_cohorts(
     cohorts: dict_values
         Iterable of cohorts
     """
-    # To do this, we must have values in memory so casting to numpy should be safe
-    labels = np.asarray(labels)
+    if not is_duck_array(labels):
+        labels = np.asarray(labels)
+
+    if is_duck_dask_array(labels):
+        import dask
+
+        ((bitmask, nlabels, ilabels),) = dask.compute(
+            dask.delayed(_compute_label_chunk_bitmask)(labels, chunks)
+        )
+    else:
+        bitmask, nlabels, ilabels = _compute_label_chunk_bitmask(labels, chunks)
 
     shape = tuple(sum(c) for c in chunks)
     nchunks = math.prod(len(c) for c in chunks)
@@ -2409,9 +2418,6 @@ def groupby_reduce(
             "Try engine='numpy' or engine='numba' instead."
         )
 
-    if method == "cohorts" and any_by_dask:
-        raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
-
     reindex = _validate_reindex(
         reindex, func, method, expected_groups, any_by_dask, is_duck_dask_array(array)
     )
@@ -2443,6 +2449,12 @@ def groupby_reduce(
         # can't do it if we are grouping by dask array but don't have expected_groups
         any(is_dask and ex_ is None for is_dask, ex_ in zip(by_is_dask, expected_groups))
     )
+
+    if method == "cohorts" and not factorize_early:
+        raise ValueError(
+            "method='cohorts' can only be used when grouping by dask arrays if `expected_groups` is provided."
+        )
+
     expected_: pd.RangeIndex | None
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
