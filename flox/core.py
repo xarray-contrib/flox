@@ -651,19 +651,30 @@ def factorize_(
 
             found_groups.append(np.array(expect))
         else:
+            idx, groups = pd.factorize(flat, sort=sort)  # type: ignore[arg-type]
             if expect is not None and reindex:
-                sorter = np.argsort(expect)
-                groups = expect[(sorter,)] if sort else expect
-                idx = np.searchsorted(expect, flat, sorter=sorter)
-                mask = ~np.isin(flat, expect) | isnull(flat) | (idx == len(expect))
-                if not sort:
-                    # idx is the index in to the sorted array.
-                    # if we didn't want sorting, unsort it back
-                    idx[(idx == len(expect),)] = -1
-                    idx = sorter[(idx,)]
-                idx[mask] = -1
-            else:
-                idx, groups = pd.factorize(flat, sort=sort)  # type: ignore[arg-type]
+                assert sort
+                # https://stackoverflow.com/questions/5036816/numpy-lookup-map-or-point/5036900#5036900
+                # sorter = np.argsort(expect)
+                # groups = expect[(sorter,)] if sort else expect
+                #ii = np.argsort(groups)
+                #C = np.digitize(idx, groups[ii]) - 1
+                #idx = ii[C]
+                # key=np.argsort(groups)
+                # idx=key[groups[key].searchsorted(idx)]
+                inds = np.searchsorted(expect, groups)
+                # print(groups, inds)
+                mask = ~np.isin(groups, expect) | (inds == len(expect))
+                codes_to_nan_out = np.arange(len(groups))[mask]
+                print(codes_to_nan_out, groupvar.shape, len(groups))
+                # codes_to_nan_out, groups, groups[codes_to_nan_out]
+                # key=np.argsort(expect)
+                # key = np.arange(len(expect))
+                # idx=key[groups[key].searchsorted(idx)]
+                idx = idx[]
+                idx[np.isin(idx, codes_to_nan_out)] = -1
+                print(np.unique(idx))
+
 
             found_groups.append(np.array(groups))
         factorized.append(idx.reshape(groupvar.shape))
