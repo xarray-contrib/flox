@@ -59,17 +59,17 @@ class ChunkReduce:
             expected_groups=expected_groups[expected_name],
         )
 
-    @skip_for_params(numbagg_skip)
-    @parameterize({"func": funcs, "expected_name": expected_names, "engine": engines})
-    def peakmem_reduce(self, func, expected_name, engine):
-        flox.groupby_reduce(
-            self.array,
-            self.labels,
-            func=func,
-            engine=engine,
-            axis=self.axis,
-            expected_groups=expected_groups[expected_name],
-        )
+    # @skip_for_params(numbagg_skip)
+    # @parameterize({"func": funcs, "expected_name": expected_names, "engine": engines})
+    # def peakmem_reduce(self, func, expected_name, engine):
+    #     flox.groupby_reduce(
+    #         self.array,
+    #         self.labels,
+    #         func=func,
+    #         engine=engine,
+    #         axis=self.axis,
+    #         expected_groups=expected_groups[expected_name],
+    #     )
 
 
 class ChunkReduce1D(ChunkReduce):
