@@ -47,8 +47,8 @@ class Cohorts:
     track_num_layers.unit = "layers"  # type: ignore[attr-defined] # Lazy
     for f in [track_num_tasks, track_num_tasks_optimized, track_num_layers]:
         f.repeat = 1  # type: ignore[attr-defined] # Lazy
-        f.rounds = 1
-        f.number = 1
+        f.rounds = 1  # type: ignore[attr-defined] # Lazy
+        f.number = 1  # type: ignore[attr-defined] # Lazy
 
 
 class NWMMidwest(Cohorts):
