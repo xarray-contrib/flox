@@ -848,16 +848,16 @@ def test_rechunk_for_blockwise(inchunks, expected):
         ],
     ],
 )
-def test_find_group_cohorts(expected, labels, chunks, merge):
+def test_find_group_cohorts(expected, labels, chunks: tuple[int], merge: bool) -> None:
     actual = list(find_group_cohorts(labels, (chunks,), merge).values())
     assert actual == expected, (actual, expected)
 
 
 @pytest.mark.parametrize("chunksize", [12, 13, 14, 24, 36, 48, 72, 71])
-def test_verify_complex_cohorts(chunksize):
+def test_verify_complex_cohorts(chunksize: int) -> None:
     time = pd.Series(pd.date_range("2016-01-01", "2018-12-31 23:59", freq="H"))
     chunks = (chunksize,) * (len(time) // chunksize)
-    by = time.dt.dayofyear.values
+    by = np.array(time.dt.dayofyear.values)
 
     if len(by) != sum(chunks):
         chunks += (len(by) - sum(chunks),)
