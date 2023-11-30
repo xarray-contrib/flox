@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import itertools
 import math
 import operator
@@ -304,14 +303,15 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     # If our dataset has chunksize one along the axis,
     # then no merging is possible.
     single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
-
-    if not single_chunks and merge:
+    one_group_per_chunk = (bitmask.sum(axis=1) == 1).all()
+    if not one_group_per_chunk and not single_chunks and merge:
         # First sort by number of chunks occupied by cohort
         sorted_chunks_cohorts = dict(
             sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
         )
 
-        items = tuple((k, set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
+        # precompute needed metrics for the quadratic loop below.
+        items = tuple((k, len(k), set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
 
         merged_cohorts = {}
         merged_keys: set[tuple] = set()
@@ -320,21 +320,28 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
         # and then merge in cohorts that are present in a subset of those chunks
         # I think this is suboptimal and must fail at some point.
         # But it might work for most cases. There must be a better way...
-        for idx, (k1, set_k1, v1) in enumerate(items):
+        for idx, (k1, len_k1, set_k1, v1) in enumerate(items):
             if k1 in merged_keys:
                 continue
-            merged_cohorts[k1] = copy.deepcopy(v1)
-            for k2, set_k2, v2 in items[idx + 1 :]:
-                if k2 not in merged_keys and set_k2.issubset(set_k1):
-                    merged_cohorts[k1].extend(v2)
-                    merged_keys.update((k2,))
+            new_key = set_k1
+            new_value = v1
+            # iterate in reverse since we expect small cohorts
+            # to be most likely merged in to larger ones
+            for k2, len_k2, set_k2, v2 in reversed(items[idx + 1 :]):
+                if k2 not in merged_keys:
+                    if (len(set_k2 & new_key) / len_k2) > 0.75:
+                        new_key |= set_k2
+                        new_value += v2
+                        merged_keys.update((k2,))
+            sorted_ = sorted(new_value)
+            merged_cohorts[tuple(sorted(new_key))] = sorted_
+            if idx == 0 and (len(sorted_) == nlabels) and (np.array(sorted_) == ilabels).all():
+                break
 
-        # make sure each cohort is sorted after merging
-        sorted_merged_cohorts = {k: sorted(v) for k, v in merged_cohorts.items()}
         # sort by first label in cohort
         # This will help when sort=True (default)
         # and we have to resort the dask array
-        return dict(sorted(sorted_merged_cohorts.items(), key=lambda kv: kv[1][0]))
+        return dict(sorted(merged_cohorts.items(), key=lambda kv: kv[1][0]))
 
     else:
         return chunks_cohorts

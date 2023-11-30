@@ -45,6 +45,10 @@ class Cohorts:
     track_num_tasks.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_tasks_optimized.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_layers.unit = "layers"  # type: ignore[attr-defined] # Lazy
+    for f in [track_num_tasks, track_num_tasks_optimized, track_num_layers]:
+        f.repeat = 1  # type: ignore[attr-defined] # Lazy
+        f.rounds = 1  # type: ignore[attr-defined] # Lazy
+        f.number = 1  # type: ignore[attr-defined] # Lazy
 
 
 class NWMMidwest(Cohorts):
@@ -83,7 +87,7 @@ class ERA5DayOfYear(ERA5Dataset, Cohorts):
 class ERA5DayOfYearRechunked(ERA5DayOfYear, Cohorts):
     def setup(self, *args, **kwargs):
         super().setup()
-        super().rechunk()
+        self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 24))
 
 
 class ERA5MonthHour(ERA5Dataset, Cohorts):
