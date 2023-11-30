@@ -22,6 +22,7 @@ dependencies = [
     "numpy>=1.22",
     "numpy_groupies>=0.9.19",
     "toolz",
+    "scipy",
 ]
 dynamic=["version"]
 
