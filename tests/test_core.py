@@ -853,6 +853,21 @@ def test_find_group_cohorts(expected, labels, chunks, merge):
     assert actual == expected, (actual, expected)
 
 
+@pytest.mark.parametrize("chunksize", [12, 13, 14, 24, 36, 48, 72, 71])
+def test_verify_complex_cohorts(chunksize):
+    time = pd.Series(pd.date_range("2016-01-01", "2018-12-31 23:59", freq="H"))
+    chunks = (chunksize,) * (len(time) // chunksize)
+    by = time.dt.dayofyear.values
+
+    if len(by) != sum(chunks):
+        chunks += (len(by) - sum(chunks),)
+    chunk_cohorts = find_group_cohorts(by - 1, (chunks,))
+    chunks_ = np.sort(np.concatenate(tuple(chunk_cohorts.keys())))
+    groups = np.sort(np.concatenate(tuple(chunk_cohorts.values())))
+    assert_equal(np.unique(chunks_), np.arange(len(chunks), dtype=int))
+    assert_equal(groups, np.arange(366, dtype=int))
+
+
 @requires_dask
 @pytest.mark.parametrize(
     "chunk_at,expected",
