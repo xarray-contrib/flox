@@ -2164,11 +2164,10 @@ def _factorize_multiple(
         for by_, expect in zip(by, expected_groups):
             if expect is None:
                 if is_duck_dask_array(by_):
-                    raise ValueError(
-                        "Please provide expected_groups when grouping by a dask array."
-                    )
-
-                found_group = pd.unique(by_.reshape(-1))
+                    # could be remote dataset, execute remotely in that case
+                    found_group = np.unique(by_.reshape(-1)).compute()
+                else:
+                    found_group = pd.unique(by_.reshape(-1))
             else:
                 found_group = expect.to_numpy()
 
@@ -2475,15 +2474,14 @@ def groupby_reduce(
 
     # Don't factorize early only when
     # grouping by dask arrays, and not having expected_groups
+    # except for cohorts
     factorize_early = not (
         # can't do it if we are grouping by dask array but don't have expected_groups
-        any(is_dask and ex_ is None for is_dask, ex_ in zip(by_is_dask, expected_groups))
-    )
-
-    if method == "cohorts" and not factorize_early:
-        raise ValueError(
-            "method='cohorts' can only be used when grouping by dask arrays if `expected_groups` is provided."
+        any(
+            is_dask and ex_ is None and method != "cohorts"
+            for is_dask, ex_ in zip(by_is_dask, expected_groups)
         )
+    )
 
     expected_: pd.RangeIndex | None
     if factorize_early:
