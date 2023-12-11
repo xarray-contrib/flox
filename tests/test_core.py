@@ -862,9 +862,6 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
     array = [1, 1, 1, 1, 1, 1]
     labels = [0.2, 1.5, 1.9, 2, 3, 20]
 
-    if method == "cohorts" and chunk_labels:
-        pytest.xfail()
-
     if chunks:
         array = dask.array.from_array(array, chunks=chunks)
         if chunk_labels:
