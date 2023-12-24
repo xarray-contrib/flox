@@ -138,3 +138,24 @@ class ERA5Google(Cohorts):
         self.axis = (2,)
         self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 1))
         self.by = self.time.dt.day.values
+
+
+def codes_for_resampling(group_as_index, freq):
+    s = pd.Series(np.arange(group_as_index.size), group_as_index)
+    grouped = s.groupby(pd.Grouper(freq=freq))
+    first_items = grouped.first()
+    counts = grouped.count()
+    codes = np.repeat(np.arange(len(first_items)), counts)
+    return codes
+
+
+class PerfectBlockwiseResampling(Cohorts):
+    """Perfectly chunked for blockwise resampling."""
+
+    def setup(self, *args, **kwargs):
+        index = pd.date_range("1959-01-01", freq="D", end="1962-12-31")
+        self.time = pd.Series(index)
+        TIME = len(self.time)
+        self.axis = (2,)
+        self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 10))
+        self.by = codes_for_resampling(index, freq="5D")
