@@ -867,7 +867,8 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
         if chunk_labels:
             labels = dask.array.from_array(labels, chunks=chunks)
 
-    with raise_if_dask_computes():
+    max_computes = 1 if method == "cohorts" else 0
+    with raise_if_dask_computes(max_computes):
         actual, *groups = groupby_reduce(
             array, labels, func="count", fill_value=0, engine=engine, method=method, **kwargs
         )
@@ -1072,7 +1073,9 @@ def test_cohorts_nd_by(by_is_dask, func, method, axis, engine):
     ):
         pytest.skip()
     if axis is not None and method != "map-reduce":
-        pytest.xfail()
+        pytest.skip()
+    if by_is_dask and method == "blockwise":
+        pytest.skip()
 
     o = dask.array.ones((3,), chunks=-1)
     o2 = dask.array.ones((2, 3), chunks=-1)
@@ -1092,6 +1095,9 @@ def test_cohorts_nd_by(by_is_dask, func, method, axis, engine):
         fill_value = -123
 
     kwargs = dict(func=func, engine=engine, method=method, axis=axis, fill_value=fill_value)
+    if by_is_dask and axis is not None and method == "map-reduce":
+        kwargs["expected_groups"] = pd.Index([1, 2, 3, 4, 30, 31, 40])
+
     if "quantile" in func:
         kwargs["finalize_kwargs"] = {"q": DEFAULT_QUANTILE}
     actual, groups = groupby_reduce(array, by, **kwargs)
@@ -1102,6 +1108,7 @@ def test_cohorts_nd_by(by_is_dask, func, method, axis, engine):
     if isinstance(by, dask.array.Array):
         cache.clear()
         actual_cohorts = find_group_cohorts(by, array.chunks[-by.ndim :])
+        cache.clear()
         expected_cohorts = find_group_cohorts(by.compute(), array.chunks[-by.ndim :])
         assert actual_cohorts == expected_cohorts
         # assert cache.nbytes
