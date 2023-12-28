@@ -215,7 +215,7 @@ def slices_from_chunks(chunks):
 
 
 @memoize
-def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
+def find_group_cohorts(labels, chunks, merge: bool = True, expected_groups: None | pd.RangeIndex = None) -> dict:
     """
     Finds groups labels that occur together aka "cohorts"
 
@@ -246,7 +246,10 @@ def find_group_cohorts(labels, chunks, merge: bool = True) -> dict:
     nchunks = math.prod(len(c) for c in chunks)
 
     # assumes that `labels` are factorized
-    nlabels = labels.max() + 1
+    if expected_groups is None:
+        nlabels = labels.max() + 1
+    else:
+        nlabels = expected_groups[-1] + 1
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
 
@@ -1547,7 +1550,7 @@ def dask_groupby_agg(
 
         elif method == "cohorts":
             chunks_cohorts = find_group_cohorts(
-                by_input, [array.chunks[ax] for ax in axis], merge=True
+                by_input, [array.chunks[ax] for ax in axis], merge=True, expected_groups=expected_groups,
             )
             reduced_ = []
             groups_ = []
