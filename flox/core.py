@@ -1507,17 +1507,15 @@ def dask_groupby_agg(
     group_chunks: tuple[tuple[int | float, ...]]
 
     if method in ["map-reduce", "cohorts"]:
-        combine: Callable[..., IntermediateDict]
-        if do_simple_combine:
-            combine = partial(_simple_combine, reindex=reindex)
-            combine_name = "simple-combine"
-        else:
-            combine = partial(_grouped_combine, engine=engine, sort=sort)
-            combine_name = "grouped-combine"
+        combine: Callable[..., IntermediateDict] = (
+            partial(_simple_combine, reindex=reindex)
+            if do_simple_combine
+            else partial(_grouped_combine, engine=engine, sort=sort)
+        )
 
         tree_reduce = partial(
             dask.array.reductions._tree_reduce,
-            name=f"{name}-reduce-{method}-{combine_name}",
+            name=f"{name}-reduce-{method}",
             dtype=array.dtype,
             axis=axis,
             keepdims=True,
