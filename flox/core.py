@@ -276,9 +276,18 @@ def find_group_cohorts(
     cols_array = np.concatenate(cols)
     data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
     bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
+    CHUNK_AXIS, LABEL_AXIS = 0, 1
+
+    chunks_per_label = bitmask.sum(axis=CHUNK_AXIS)
+    # can happen when `expected_groups` is passed but not all labels are present
+    # (binning, resampling)
+    present_labels = chunks_per_label != 0
+    if not present_labels.all():
+        bitmask = bitmask[..., present_labels]
+
     label_chunks = {
         lab: bitmask.indices[slice(bitmask.indptr[lab], bitmask.indptr[lab + 1])]
-        for lab in range(nlabels)
+        for lab in range(bitmask.shape[-1])
     }
 
     ## numpy bitmask approach, faster than finding uniques, but lots of memory
@@ -308,9 +317,9 @@ def find_group_cohorts(
     # If our dataset has chunksize one along the axis,
     # then no merging is possible.
     single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
-    one_group_per_chunk = (bitmask.sum(axis=1) == 1).all()
+    one_group_per_chunk = (bitmask.sum(axis=LABEL_AXIS) == 1).all()
     # every group is contained to one block, we should be using blockwise here.
-    every_group_one_block = (bitmask.sum(axis=0) == 1).all()
+    every_group_one_block = (chunks_per_label == 1).all()
     if every_group_one_block or one_group_per_chunk or single_chunks or not merge:
         return chunks_cohorts
 
