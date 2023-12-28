@@ -246,6 +246,7 @@ def find_group_cohorts(
 
     shape = tuple(sum(c) for c in chunks)
     nchunks = math.prod(len(c) for c in chunks)
+    numblocks = tuple(len(c) for c in chunks)
 
     # assumes that `labels` are factorized
     if expected_groups is None:
@@ -314,12 +315,14 @@ def find_group_cohorts(
 
     chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
 
-    # If our dataset has chunksize one along the axis,
-    # then no merging is possible.
+    # No merging is possible when
+    # 1. Our dataset has chunksize one along the axis,
     single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
+    # 2. Every chunk only has a single group, but that group might extend across multiple chunks
     one_group_per_chunk = (bitmask.sum(axis=LABEL_AXIS) == 1).all()
-    # every group is contained to one block, we should be using blockwise here.
+    # 3. Every group is contained to one block, we should be using blockwise here.
     every_group_one_block = (chunks_per_label == 1).all()
+
     if every_group_one_block or one_group_per_chunk or single_chunks or not merge:
         return chunks_cohorts
 
@@ -328,29 +331,43 @@ def find_group_cohorts(
         sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
     )
 
-    # precompute needed metrics for the quadratic loop below.
+    # precompute needed metrics for merging loop below
     items = tuple((k, len(k), set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
 
-    merged_cohorts = {}
-    merged_keys: set[tuple] = set()
+    # build an IntervalIndex for the bounding box along each axis for each cohort
+    # We will use this to reduce the search space for overlapping cohorts
+    edges = {iax: [] for iax in range(len(numblocks))}
+    for ch, coh in sorted_chunks_cohorts.items():
+        vals = np.unravel_index(ch, numblocks)
+        for iaxis, val in enumerate(vals):
+            # The +1, -1 is because we might only have one block.
+            edges[iaxis].append((val.min() - 1, val.max() + 1))
+    intervals = [pd.IntervalIndex.from_tuples(tup, closed="both") for tup in edges.values()]
 
-    # Now we iterate starting with the longest number of chunks,
-    # and then merge in cohorts that are present in a subset of those chunks
-    # I think this is suboptimal and must fail at some point.
-    # But it might work for most cases. There must be a better way...
+    # Now we iterate and  merge in cohorts that are present in a subset of those chunks
+    merged_cohorts = {}
+    merged_keys: set[int] = set()
+    overlap_mask = np.zeros((len(items),), dtype=bool)
     for idx, (k1, len_k1, set_k1, v1) in enumerate(items):
-        if k1 in merged_keys:
+        if idx in merged_keys:
             continue
+        all_overlaps = tuple(int.overlaps(int[idx]) for int in intervals)
+        if len(numblocks) == 1:
+            overlap_mask[:] = all_overlaps[0]
+        else:
+            reduce(partial(np.logical_or, out=overlap_mask), all_overlaps)
+        overlap_mask[idx] = False
+        overlapping_cohorts = np.nonzero(overlap_mask)[0]
+        overlap_mask[:] = False
+
         new_key = set_k1
         new_value = v1
-        # iterate in reverse since we expect small cohorts
-        # to be most likely merged in to larger ones
-        for k2, len_k2, set_k2, v2 in reversed(items[idx + 1 :]):
-            if k2 not in merged_keys:
-                if (len(set_k2 & new_key) / len_k2) > 0.75:
-                    new_key |= set_k2
-                    new_value += v2
-                    merged_keys.update((k2,))
+        for idx_overlap in set(overlapping_cohorts) - merged_keys:
+            k2, len_k2, set_k2, v2 = items[idx_overlap]
+            if (len(set_k2 & new_key) / len_k2) > 0.75:
+                new_key |= set_k2
+                new_value += v2
+                merged_keys.add(idx_overlap)
         sorted_ = sorted(new_value)
         merged_cohorts[tuple(sorted(new_key))] = sorted_
         if idx == 0 and (len(sorted_) == nlabels) and (np.array(sorted_) == ilabels).all():
