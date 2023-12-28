@@ -4,12 +4,14 @@ import itertools
 import warnings
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Callable
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
 import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
+import flox
 from flox import xrutils
 from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.core import (
@@ -303,6 +305,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         if chunks == -1:
             params.extend([("blockwise", None)])
 
+        combine_error = RuntimeError("This combine should not have been called.")
         for method, reindex in params:
             call = partial(
                 groupby_reduce, array, *by, method=method, reindex=reindex, **flox_kwargs
@@ -312,13 +315,22 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 with pytest.raises(NotImplementedError):
                     call()
                 continue
-            actual, *groups = call()
-            if method != "blockwise":
+
+            if method == "blockwise":
+                # no combine necessary
+                mocks = {
+                    "_simple_combine": MagicMock(side_effect=combine_error),
+                    "_grouped_combine": MagicMock(side_effect=combine_error),
+                }
+            else:
                 if "arg" not in func:
                     # make sure we use simple combine
-                    assert any("simple-combine" in key for key in actual.dask.layers.keys())
+                    mocks = {"_grouped_combine": MagicMock(side_effect=combine_error)}
                 else:
-                    assert any("grouped-combine" in key for key in actual.dask.layers.keys())
+                    mocks = {"_simple_combine": MagicMock(side_effect=combine_error)}
+
+            with patch.multiple(flox.core, **mocks):
+                actual, *groups = call()
             for actual_group, expect in zip(groups, expected_groups):
                 assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
