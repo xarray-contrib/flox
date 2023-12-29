@@ -354,6 +354,7 @@ def find_group_cohorts(
     def get_overlaps(axis: int, interval: pd.Interval):
         return intervals[axis].overlaps(interval)  # type: ignore[attr-defined]
 
+    print(intervals)
     # Now we iterate and  merge in cohorts that are present in a subset of those chunks
     merged_cohorts = {}
     merged_keys: set[int] = set()
@@ -388,6 +389,7 @@ def find_group_cohorts(
         if len(merged_keys) == len(items):
             break
 
+    print(get_overlaps.cache_info())
     actual_ngroups = np.concatenate(tuple(merged_cohorts.values())).size
     expected_ngroups = bitmask.shape[-1]
     assert expected_ngroups == actual_ngroups, (expected_ngroups, actual_ngroups)
