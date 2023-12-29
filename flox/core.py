@@ -7,7 +7,7 @@ import sys
 import warnings
 from collections import namedtuple
 from collections.abc import Sequence
-from functools import partial, reduce
+from functools import lru_cache, partial, reduce
 from itertools import product
 from numbers import Integral
 from typing import (
@@ -54,6 +54,8 @@ if TYPE_CHECKING:
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
     T_ExpectIndex = pd.Index
+    T_ExpectRange = pd.RangeIndex
+    T_ExpectRangeOpt = None | pd.RangeIndex
     T_ExpectIndexTuple = tuple[T_ExpectIndex, ...]
     T_ExpectIndexOpt = Union[T_ExpectIndex, None]
     T_ExpectIndexOptTuple = tuple[T_ExpectIndexOpt, ...]
@@ -214,9 +216,9 @@ def slices_from_chunks(chunks):
     return product(*slices)
 
 
-@memoize
+# @memoize
 def find_group_cohorts(
-    labels, chunks, merge: bool = True, expected_groups: None | pd.RangeIndex = None
+    labels, chunks, merge: bool = True, expected_groups: T_ExpectRangeOpt = None
 ) -> dict:
     """
     Finds groups labels that occur together aka "cohorts"
@@ -245,6 +247,7 @@ def find_group_cohorts(
     labels = np.asarray(labels)
 
     shape = tuple(sum(c) for c in chunks)
+    ndim = len(shape)
     nchunks = math.prod(len(c) for c in chunks)
     numblocks = tuple(len(c) for c in chunks)
 
@@ -254,6 +257,8 @@ def find_group_cohorts(
     else:
         nlabels = expected_groups[-1] + 1
 
+    # TODO: consider broadcasting after building the bitmask
+    # This will require some trickery and is applicable to the dim=... case
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
 
     rows = []
@@ -276,17 +281,18 @@ def find_group_cohorts(
     rows_array = np.concatenate(rows)
     cols_array = np.concatenate(cols)
     data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
-    bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
-    CHUNK_AXIS, LABEL_AXIS = 0, 1
 
+    CHUNK_AXIS, LABEL_AXIS = 0, 1
+    bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
     chunks_per_label = bitmask.sum(axis=CHUNK_AXIS)
-    # can happen when `expected_groups` is passed but not all labels are present
-    # (binning, resampling)
+
+    # When `expected_groups` is passed but not all labels are present
+    # (binning, resampling), filter these out
     present_labels = chunks_per_label != 0
     if not present_labels.all():
         bitmask = bitmask[..., present_labels]
 
-    label_chunks = {
+    label_chunks: dict[int, np.ndarray] = {
         lab: bitmask.indices[slice(bitmask.indptr[lab], bitmask.indptr[lab + 1])]
         for lab in range(bitmask.shape[-1])
     }
@@ -310,8 +316,8 @@ def find_group_cohorts(
 
     # These invert the label_chunks mapping so we know which labels occur together.
     def invert(x) -> tuple[np.ndarray, ...]:
-        arr = label_chunks.get(x)
-        return tuple(arr)  # type: ignore [arg-type] # pandas issue?
+        arr = label_chunks[x]
+        return tuple(arr)
 
     chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
 
@@ -335,14 +341,18 @@ def find_group_cohorts(
     items = tuple((k, len(k), set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
 
     # build an IntervalIndex for the bounding box along each axis for each cohort
+    # The bounding box along an axis is the smallest and largest integer "chunk index".
     # We will use this to reduce the search space for overlapping cohorts
-    edges = {iax: [] for iax in range(len(numblocks))}
+    edges: dict[int, list[tuple[int, int]]] = {iax: [] for iax in range(ndim)}
     for ch, coh in sorted_chunks_cohorts.items():
         vals = np.unravel_index(ch, numblocks)
         for iaxis, val in enumerate(vals):
-            # The +1, -1 is because we might only have one block.
-            edges[iaxis].append((val.min() - 1, val.max() + 1))
+            edges[iaxis].append((val.min(), val.max()))
     intervals = [pd.IntervalIndex.from_tuples(tup, closed="both") for tup in edges.values()]
+
+    @lru_cache(maxsize=len(items))
+    def get_overlaps(axis: int, interval: pd.Interval):
+        return intervals[axis].overlaps(interval)  # type: ignore[attr-defined]
 
     # Now we iterate and  merge in cohorts that are present in a subset of those chunks
     merged_cohorts = {}
@@ -351,8 +361,8 @@ def find_group_cohorts(
     for idx, (k1, len_k1, set_k1, v1) in enumerate(items):
         if idx in merged_keys:
             continue
-        all_overlaps = tuple(int.overlaps(int[idx]) for int in intervals)
-        if len(numblocks) == 1:
+        all_overlaps = tuple(get_overlaps(axis, int[idx]) for axis, int in enumerate(intervals))
+        if ndim == 1:
             overlap_mask[:] = all_overlaps[0]
         else:
             reduce(partial(np.logical_or, out=overlap_mask), all_overlaps)
@@ -360,9 +370,12 @@ def find_group_cohorts(
         overlapping_cohorts = np.nonzero(overlap_mask)[0]
         overlap_mask[:] = False
 
+        merged_keys.add(idx)
         new_key = set_k1
         new_value = v1
-        for idx_overlap in set(overlapping_cohorts) - merged_keys:
+        for idx_overlap in overlapping_cohorts:
+            if idx_overlap in merged_keys:
+                continue
             k2, len_k2, set_k2, v2 = items[idx_overlap]
             if (len(set_k2 & new_key) / len_k2) > 0.75:
                 new_key |= set_k2
@@ -372,6 +385,12 @@ def find_group_cohorts(
         merged_cohorts[tuple(sorted(new_key))] = sorted_
         if idx == 0 and (len(sorted_) == nlabels) and (np.array(sorted_) == ilabels).all():
             break
+        if len(merged_keys) == len(items):
+            break
+
+    actual_ngroups = np.concatenate(tuple(merged_cohorts.values())).size
+    expected_ngroups = bitmask.shape[-1]
+    assert expected_ngroups == actual_ngroups, (expected_ngroups, actual_ngroups)
 
     # sort by first label in cohort
     # This will help when sort=True (default)
@@ -1431,7 +1450,7 @@ def dask_groupby_agg(
     array: DaskArray,
     by: T_By,
     agg: Aggregation,
-    expected_groups: T_ExpectIndexOpt,
+    expected_groups: T_ExpectRangeOpt,
     axis: T_Axes = (),
     fill_value: Any = None,
     method: T_Method = "map-reduce",
@@ -1451,7 +1470,7 @@ def dask_groupby_agg(
     name = f"groupby_{agg.name}"
 
     if expected_groups is None and reindex:
-        expected_groups = _get_expected_groups(by, sort=sort)
+        raise ValueError
     if method == "cohorts":
         assert reindex is False
 
