@@ -340,36 +340,54 @@ def find_group_cohorts(
     # precompute needed metrics for merging loop below
     items = tuple((k, len(k), set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
 
-    # build an IntervalIndex for the bounding box along each axis for each cohort
-    # The bounding box along an axis is the smallest and largest integer "chunk index".
-    # We will use this to reduce the search space for overlapping cohorts
-    edges: dict[int, list[tuple[int, int]]] = {iax: [] for iax in range(ndim)}
-    for ch, coh in sorted_chunks_cohorts.items():
-        vals = np.unravel_index(ch, numblocks)
-        for iaxis, val in enumerate(vals):
-            edges[iaxis].append((val.min(), val.max()))
-    intervals = [pd.IntervalIndex.from_tuples(tup, closed="both") for tup in edges.values()]
+    # For geographic patterns, it makes sense to use a bounding box to restrict comparisons.
+    # For periodic time patterns, the bounding box doesn't help us. Try and detect periodicity.
+    maybe_approx_periodic = []
+    for chunks in label_chunks.values():
+        repeat_distances = np.diff(chunks)
+        maybe_approx_periodic.append(
+            np.median(np.diff(repeat_distances)) / np.median(repeat_distances) < 0.1
+        )
+    approx_periodic = np.sum(maybe_approx_periodic) / len(maybe_approx_periodic) > 0.9
+    # repeat_distances = tuple(np.median(np.diff(chunks)) for chunks in label_chunks.values())
+    # approx_periodic = np.median(np.diff(repeat_distances) / np.median(repeat_distances)) * 100 < 10
 
-    @lru_cache(maxsize=len(items))
-    def get_overlaps(axis: int, interval: pd.Interval):
-        return intervals[axis].overlaps(interval)  # type: ignore[attr-defined]
+    if not approx_periodic:
+        # build an IntervalIndex for the bounding box along each axis for each cohort
+        # The bounding box along an axis is the smallest and largest integer "chunk index".
+        # We will use this to reduce the search space for overlapping cohorts.
+        edges: dict[int, list[tuple[int, int]]] = {iax: [] for iax in range(ndim)}
+        for ch, coh in sorted_chunks_cohorts.items():
+            vals = np.unravel_index(ch, numblocks)
+            for iaxis, val in enumerate(vals):
+                edges[iaxis].append((val.min(), val.max()))
+        intervals = [pd.IntervalIndex.from_tuples(tup, closed="both") for tup in edges.values()]
 
-    print(intervals)
+        @lru_cache(maxsize=len(items))
+        def get_overlaps(axis: int, interval: pd.Interval):
+            return intervals[axis].overlaps(interval)  # type: ignore[attr-defined]
+
+        print(intervals)
+
+        overlap_mask = np.zeros((len(items),), dtype=bool)
+
     # Now we iterate and  merge in cohorts that are present in a subset of those chunks
     merged_cohorts = {}
     merged_keys: set[int] = set()
-    overlap_mask = np.zeros((len(items),), dtype=bool)
     for idx, (k1, len_k1, set_k1, v1) in enumerate(items):
         if idx in merged_keys:
             continue
-        all_overlaps = tuple(get_overlaps(axis, int[idx]) for axis, int in enumerate(intervals))
-        if ndim == 1:
-            overlap_mask[:] = all_overlaps[0]
+        if not approx_periodic:
+            all_overlaps = tuple(get_overlaps(axis, int[idx]) for axis, int in enumerate(intervals))
+            if ndim == 1:
+                overlap_mask[:] = all_overlaps[0]
+            else:
+                reduce(partial(np.logical_or, out=overlap_mask), all_overlaps)
+            overlap_mask[idx] = False
+            overlapping_cohorts = np.nonzero(overlap_mask)[0]
+            overlap_mask[:] = False
         else:
-            reduce(partial(np.logical_or, out=overlap_mask), all_overlaps)
-        overlap_mask[idx] = False
-        overlapping_cohorts = np.nonzero(overlap_mask)[0]
-        overlap_mask[:] = False
+            overlapping_cohorts = range(len(items) - 1, idx, -1)
 
         merged_keys.add(idx)
         new_key = set_k1
@@ -389,7 +407,8 @@ def find_group_cohorts(
         if len(merged_keys) == len(items):
             break
 
-    print(get_overlaps.cache_info())
+    if not approx_periodic:
+        print(get_overlaps.cache_info())
     actual_ngroups = np.concatenate(tuple(merged_cohorts.values())).size
     expected_ngroups = bitmask.shape[-1]
     assert expected_ngroups == actual_ngroups, (expected_ngroups, actual_ngroups)
