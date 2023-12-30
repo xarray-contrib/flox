@@ -101,11 +101,11 @@ class ERA5DayOfYear(ERA5Dataset, Cohorts):
         super().setup()
 
 
-class ERA5DayOfYearRechunked(ERA5DayOfYear, Cohorts):
-    def setup(self, *args, **kwargs):
-        super().setup()
-        self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 24))
-        super().setup()
+# class ERA5DayOfYearRechunked(ERA5DayOfYear, Cohorts):
+#     def setup(self, *args, **kwargs):
+#         super().setup()
+#         self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 24))
+#         self.expected = pd.RangeIndex(self.by.max())
 
 
 class ERA5MonthHour(ERA5Dataset, Cohorts):
@@ -145,10 +145,10 @@ class PerfectMonthly(Cohorts):
         )
 
 
-class PerfectMonthlyRechunked(PerfectMonthly):
-    def setup(self, *args, **kwargs):
-        super().setup()
-        super().rechunk()
+# class PerfectMonthlyRechunked(PerfectMonthly):
+#     def setup(self, *args, **kwargs):
+#         super().setup()
+#         super().rechunk()
 
 
 class ERA5Google(Cohorts):
