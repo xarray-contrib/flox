@@ -214,7 +214,40 @@ def slices_from_chunks(chunks):
     return product(*slices)
 
 
-@memoize
+def _compute_label_chunk_bitmask(labels, chunks, nlabels):
+    assert isinstance(labels, np.ndarray)
+    shape = tuple(sum(c) for c in chunks)
+    nchunks = math.prod(len(c) for c in chunks)
+
+    labels = np.broadcast_to(labels, shape[-labels.ndim :])
+
+    rows = []
+    cols = []
+    # Add one to handle the -1 sentinel value
+    label_is_present = np.zeros((nlabels + 1,), dtype=bool)
+    ilabels = np.arange(nlabels)
+    for idx, region in enumerate(slices_from_chunks(chunks)):
+        # This is a quite fast way to find unique integers, when we know how many there are
+        # inspired by a similar idea in numpy_groupies for first, last
+        # instead of explicitly finding uniques, repeatedly write True to the same location
+        subset = labels[region]
+        # The reshape is not strictly necessary but is about 100ms faster on a test problem.
+        label_is_present[subset.reshape(-1)] = True
+        # skip the -1 sentinel by slicing
+        # Faster than np.argwhere by a lot
+        uniques = ilabels[label_is_present[:-1]]
+        rows.append(np.full_like(uniques, idx))
+        cols.append(uniques)
+        label_is_present[:] = False
+    rows_array = np.concatenate(rows)
+    cols_array = np.concatenate(cols)
+    data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
+    bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
+
+    return bitmask
+
+
+# @memoize
 def find_group_cohorts(
     labels, chunks, merge: bool = True, expected_groups: None | pd.RangeIndex = None
 ) -> dict:
@@ -245,7 +278,6 @@ def find_group_cohorts(
     labels = np.asarray(labels)
 
     shape = tuple(sum(c) for c in chunks)
-    nchunks = math.prod(len(c) for c in chunks)
 
     # assumes that `labels` are factorized
     if expected_groups is None:
@@ -254,31 +286,12 @@ def find_group_cohorts(
         nlabels = expected_groups[-1] + 1
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
+    ilabels = np.arange(len(labels))
+    bitmask = _compute_label_chunk_bitmask(labels, chunks, nlabels)
 
-    rows = []
-    cols = []
-    # Add one to handle the -1 sentinel value
-    label_is_present = np.zeros((nlabels + 1,), dtype=bool)
-    ilabels = np.arange(nlabels)
-    for idx, region in enumerate(slices_from_chunks(chunks)):
-        # This is a quite fast way to find unique integers, when we know how many there are
-        # inspired by a similar idea in numpy_groupies for first, last
-        # instead of explicitly finding uniques, repeatedly write True to the same location
-        subset = labels[region]
-        # The reshape is not strictly necessary but is about 100ms faster on a test problem.
-        label_is_present[subset.reshape(-1)] = True
-        # skip the -1 sentinel by slicing
-        uniques = ilabels[label_is_present[:-1]]
-        rows.append([idx] * len(uniques))
-        cols.append(uniques)
-        label_is_present[:] = False
-    rows_array = np.concatenate(rows)
-    cols_array = np.concatenate(cols)
-    data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
-    bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
     CHUNK_AXIS, LABEL_AXIS = 0, 1
-
     chunks_per_label = bitmask.sum(axis=CHUNK_AXIS)
+
     # can happen when `expected_groups` is passed but not all labels are present
     # (binning, resampling)
     present_labels = chunks_per_label != 0
