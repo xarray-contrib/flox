@@ -11,6 +11,17 @@ class Cohorts:
     def setup(self, *args, **kwargs):
         self.expected = pd.RangeIndex(self.by.max())
 
+    def chunks_cohorts(self):
+        return flox.core.find_group_cohorts(
+            self.by,
+            [self.array.chunks[ax] for ax in self.axis],
+            expected_groups=self.expected,
+        )
+
+    def bitmask(self):
+        chunks = [self.array.chunks[ax] for ax in self.axis]
+        return flox.core._compute_label_chunk_bitmask(self.by, chunks, self.expected[-1] + 1)
+
     def time_find_group_cohorts(self):
         flox.core.find_group_cohorts(
             self.by,
