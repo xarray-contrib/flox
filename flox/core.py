@@ -1410,7 +1410,7 @@ def dask_groupby_agg(
     array: DaskArray,
     by: T_By,
     agg: Aggregation,
-    expected_groups: T_ExpectIndexOpt,
+    expected_groups: pd.RangeIndex | None,
     axis: T_Axes = (),
     fill_value: Any = None,
     method: T_Method = "map-reduce",
@@ -1430,7 +1430,7 @@ def dask_groupby_agg(
     name = f"groupby_{agg.name}"
 
     if expected_groups is None and reindex:
-        expected_groups = _get_expected_groups(by, sort=sort)
+        raise ValueError
     if method == "cohorts":
         assert reindex is False
 
