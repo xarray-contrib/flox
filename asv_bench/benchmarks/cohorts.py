@@ -9,7 +9,18 @@ class Cohorts:
     """Time the core reduction function."""
 
     def setup(self, *args, **kwargs):
-        self.expected = pd.RangeIndex(self.by.max())
+        raise NotImplementedError
+
+    def chunks_cohorts(self):
+        return flox.core.find_group_cohorts(
+            self.by,
+            [self.array.chunks[ax] for ax in self.axis],
+            expected_groups=self.expected,
+        )
+
+    def bitmask(self):
+        chunks = [self.array.chunks[ax] for ax in self.axis]
+        return flox.core._compute_label_chunk_bitmask(self.by, chunks, self.expected[-1] + 1)
 
     def time_find_group_cohorts(self):
         flox.core.find_group_cohorts(
@@ -66,7 +77,7 @@ class NWMMidwest(Cohorts):
 
         self.array = dask.array.ones(self.by.shape, chunks=(350, 350))
         self.axis = (-2, -1)
-        super().setup()
+        self.expected = pd.RangeIndex(self.by.max() + 1)
 
 
 class ERA5Dataset:
@@ -86,15 +97,15 @@ class ERA5Dataset:
 class ERA5DayOfYear(ERA5Dataset, Cohorts):
     def setup(self, *args, **kwargs):
         super().__init__()
-        self.by = self.time.dt.dayofyear.values
-        super().setup()
+        self.by = self.time.dt.dayofyear.values - 1
+        self.expected = pd.RangeIndex(self.by.max() + 1)
 
 
-class ERA5DayOfYearRechunked(ERA5DayOfYear, Cohorts):
-    def setup(self, *args, **kwargs):
-        super().setup()
-        self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 24))
-        super().setup()
+# class ERA5DayOfYearRechunked(ERA5DayOfYear, Cohorts):
+#     def setup(self, *args, **kwargs):
+#         super().setup()
+#         self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 24))
+#         self.expected = pd.RangeIndex(self.by.max() + 1)
 
 
 class ERA5MonthHour(ERA5Dataset, Cohorts):
@@ -108,8 +119,8 @@ class ERA5MonthHour(ERA5Dataset, Cohorts):
             reindex=False,
         )
         # Add one so the rechunk code is simpler and makes sense
-        self.by = ret[0][0] + 1
-        super().setup()
+        self.by = ret[0][0]
+        self.expected = pd.RangeIndex(self.by.max() + 1)
 
 
 class ERA5MonthHourRechunked(ERA5MonthHour, Cohorts):
@@ -125,8 +136,8 @@ class PerfectMonthly(Cohorts):
         self.time = pd.Series(pd.date_range("1961-01-01", "2018-12-31 23:59", freq="M"))
         self.axis = (-1,)
         self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 4))
-        self.by = self.time.dt.month.values
-        super().setup()
+        self.by = self.time.dt.month.values - 1
+        self.expected = pd.RangeIndex(self.by.max() + 1)
 
     def rechunk(self):
         self.array = flox.core.rechunk_for_cohorts(
@@ -134,10 +145,10 @@ class PerfectMonthly(Cohorts):
         )
 
 
-class PerfectMonthlyRechunked(PerfectMonthly):
-    def setup(self, *args, **kwargs):
-        super().setup()
-        super().rechunk()
+# class PerfectMonthlyRechunked(PerfectMonthly):
+#     def setup(self, *args, **kwargs):
+#         super().setup()
+#         super().rechunk()
 
 
 class ERA5Google(Cohorts):
@@ -146,8 +157,8 @@ class ERA5Google(Cohorts):
         self.time = pd.Series(pd.date_range("1959-01-01", freq="6H", periods=TIME))
         self.axis = (2,)
         self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 1))
-        self.by = self.time.dt.day.values
-        super().setup()
+        self.by = self.time.dt.day.values - 1
+        self.expected = pd.RangeIndex(self.by.max() + 1)
 
 
 def codes_for_resampling(group_as_index, freq):
@@ -169,4 +180,4 @@ class PerfectBlockwiseResampling(Cohorts):
         self.axis = (2,)
         self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 10))
         self.by = codes_for_resampling(index, freq="5D")
-        super().setup()
+        self.expected = pd.RangeIndex(self.by.max() + 1)
