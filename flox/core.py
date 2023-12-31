@@ -286,7 +286,7 @@ def find_group_cohorts(
         nlabels = expected_groups[-1] + 1
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
-    ilabels = np.arange(len(labels))
+    ilabels = np.arange(nlabels)
     bitmask = _compute_label_chunk_bitmask(labels, chunks, nlabels)
 
     CHUNK_AXIS, LABEL_AXIS = 0, 1
