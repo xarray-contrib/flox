@@ -286,71 +286,44 @@ def find_group_cohorts(
         nlabels = expected_groups[-1] + 1
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
-    ilabels = np.arange(nlabels)
     bitmask = _compute_label_chunk_bitmask(labels, chunks, nlabels)
-
-    CHUNK_AXIS, LABEL_AXIS = 0, 1
-    chunks_per_label = bitmask.sum(axis=CHUNK_AXIS)
 
     # can happen when `expected_groups` is passed but not all labels are present
     # (binning, resampling)
+    CHUNK_AXIS, LABEL_AXIS = 0, 1
+    chunks_per_label = bitmask.sum(axis=CHUNK_AXIS)
     present_labels = chunks_per_label != 0
     if not present_labels.all():
         bitmask = bitmask[..., present_labels]
 
-    label_chunks = {
-        lab: bitmask.indices[slice(bitmask.indptr[lab], bitmask.indptr[lab + 1])]
-        for lab in range(bitmask.shape[-1])
-    }
+    asfloat = bitmask.astype(float)
+    containment = asfloat.T.dot(asfloat) / chunks_per_label[present_labels]
 
-    # These invert the label_chunks mapping so we know which labels occur together.
-    def invert(x) -> tuple[np.ndarray, ...]:
-        arr = label_chunks.get(x)
-        return tuple(arr)  # type: ignore [arg-type] # pandas issue?
-
-    chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
-
-    # If our dataset has chunksize one along the axis,
-    # then no merging is possible.
-    single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
-    one_group_per_chunk = (bitmask.sum(axis=LABEL_AXIS) == 1).all()
-    # every group is contained to one block, we should be using blockwise here.
-    every_group_one_block = (chunks_per_label == 1).all()
-    if every_group_one_block or one_group_per_chunk or single_chunks or not merge:
-        return chunks_cohorts
-
-    # First sort by number of chunks occupied by cohort
-    sorted_chunks_cohorts = dict(
-        sorted(chunks_cohorts.items(), key=lambda kv: len(kv[0]), reverse=True)
-    )
-
-    # precompute needed metrics for the quadratic loop below.
-    items = tuple((k, len(k), set(k), v) for k, v in sorted_chunks_cohorts.items() if k)
+    mask = containment.data > 0.75
+    containment.data = containment.data[mask]
+    containment.row = containment.row[mask]
+    containment.col = containment.col[mask]
 
     merged_cohorts = {}
-    merged_keys: set[tuple] = set()
-
-    # Now we iterate starting with the longest number of chunks,
-    # and then merge in cohorts that are present in a subset of those chunks
-    # I think this is suboptimal and must fail at some point.
-    # But it might work for most cases. There must be a better way...
-    for idx, (k1, len_k1, set_k1, v1) in enumerate(items):
-        if k1 in merged_keys:
+    ichunk = np.arange(bitmask.shape[CHUNK_AXIS])
+    ascsr = containment.tocsr()
+    order = np.argsort(containment.sum(axis=LABEL_AXIS))[::-1]
+    merged_keys = set()
+    for rowidx in order:
+        # import ipdb; ipdb.set_trace()
+        cohort_ = ascsr.indices[slice(ascsr.indptr[rowidx], ascsr.indptr[rowidx + 1])]
+        cohort = [elem for elem in cohort_ if elem not in merged_keys]
+        if not cohort:
             continue
-        new_key = set_k1
-        new_value = v1
-        # iterate in reverse since we expect small cohorts
-        # to be most likely merged in to larger ones
-        for k2, len_k2, set_k2, v2 in reversed(items[idx + 1 :]):
-            if k2 not in merged_keys:
-                if (len(set_k2 & new_key) / len_k2) > 0.75:
-                    new_key |= set_k2
-                    new_value += v2
-                    merged_keys.update((k2,))
-        sorted_ = sorted(new_value)
-        merged_cohorts[tuple(sorted(new_key))] = sorted_
-        if idx == 0 and (len(sorted_) == nlabels) and (np.array(sorted_) == ilabels).all():
-            break
+        merged_keys.update(cohort)
+        extract = bitmask[:, cohort]
+        chunk_mask = extract.sum(axis=LABEL_AXIS).astype(bool)
+        chunk = tuple(ichunk[chunk_mask])
+        merged_cohorts[chunk] = cohort
+
+    actual_ngroups = np.concatenate(tuple(merged_cohorts.values())).size
+    expected_ngroups = bitmask.shape[LABEL_AXIS]
+    assert expected_ngroups == actual_ngroups, (expected_ngroups, actual_ngroups)
 
     # sort by first label in cohort
     # This will help when sort=True (default)
