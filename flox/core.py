@@ -247,7 +247,7 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
     return bitmask
 
 
-# @memoize
+@memoize
 def find_group_cohorts(
     labels, chunks, merge: bool = True, expected_groups: None | pd.RangeIndex = None
 ) -> dict:
