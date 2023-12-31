@@ -247,7 +247,7 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
     return bitmask
 
 
-@memoize
+# @memoize
 def find_group_cohorts(
     labels, chunks, merge: bool = True, expected_groups: None | pd.RangeIndex = None
 ) -> dict:
@@ -305,20 +305,20 @@ def find_group_cohorts(
     containment.col = containment.col[mask]
 
     merged_cohorts = {}
-    ichunk = np.arange(bitmask.shape[CHUNK_AXIS])
     ascsr = containment.tocsr()
     order = np.argsort(containment.sum(axis=LABEL_AXIS))[::-1]
     merged_keys = set()
     for rowidx in order:
-        # import ipdb; ipdb.set_trace()
         cohort_ = ascsr.indices[slice(ascsr.indptr[rowidx], ascsr.indptr[rowidx + 1])]
         cohort = [elem for elem in cohort_ if elem not in merged_keys]
         if not cohort:
             continue
         merged_keys.update(cohort)
-        extract = bitmask[:, cohort]
-        chunk_mask = extract.sum(axis=LABEL_AXIS).astype(bool)
-        chunk = tuple(ichunk[chunk_mask])
+        allchunks = (
+            bitmask.indices[slice(bitmask.indptr[member], bitmask.indptr[member + 1])]
+            for member in cohort
+        )
+        chunk = tuple(set(itertools.chain(*allchunks)))
         merged_cohorts[chunk] = cohort
 
     actual_ngroups = np.concatenate(tuple(merged_cohorts.values())).size
