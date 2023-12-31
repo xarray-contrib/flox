@@ -303,23 +303,6 @@ def find_group_cohorts(
         for lab in range(bitmask.shape[-1])
     }
 
-    ## numpy bitmask approach, faster than finding uniques, but lots of memory
-    # bitmask = np.zeros((nchunks, nlabels), dtype=bool)
-    # for idx, region in enumerate(slices_from_chunks(chunks)):
-    #     bitmask[idx, labels[region]] = True
-    # bitmask = bitmask[:, :-1]
-    # chunk = np.arange(nchunks)  # [:, np.newaxis] * bitmask
-    # label_chunks = {lab: chunk[bitmask[:, lab]] for lab in range(nlabels - 1)}
-
-    ## Pandas GroupBy approach, quite slow!
-    # which_chunk = np.empty(shape, dtype=np.int64)
-    # for idx, region in enumerate(slices_from_chunks(chunks)):
-    #     which_chunk[region] = idx
-    # which_chunk = which_chunk.reshape(-1)
-    # raveled = labels.reshape(-1)
-    # # these are chunks where a label is present
-    # label_chunks = pd.Series(which_chunk).groupby(raveled).unique()
-
     # These invert the label_chunks mapping so we know which labels occur together.
     def invert(x) -> tuple[np.ndarray, ...]:
         arr = label_chunks.get(x)
