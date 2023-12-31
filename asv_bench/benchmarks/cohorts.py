@@ -9,7 +9,7 @@ class Cohorts:
     """Time the core reduction function."""
 
     def setup(self, *args, **kwargs):
-        self.expected = pd.RangeIndex(self.by.max())
+        raise NotImplementedError
 
     def chunks_cohorts(self):
         return flox.core.find_group_cohorts(
