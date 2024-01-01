@@ -288,16 +288,17 @@ def find_group_cohorts(
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
     bitmask = _compute_label_chunk_bitmask(labels, chunks, nlabels)
 
-    # can happen when `expected_groups` is passed but not all labels are present
-    # (binning, resampling)
     CHUNK_AXIS, LABEL_AXIS = 0, 1
     chunks_per_label = bitmask.sum(axis=CHUNK_AXIS)
+
+    # can happen when `expected_groups` is passed but not all labels are present
+    # (binning, resampling)
     present_labels = chunks_per_label != 0
     if not present_labels.all():
         bitmask = bitmask[..., present_labels]
 
-    asfloat = bitmask.astype(float)
-    containment = asfloat.T.dot(asfloat) / chunks_per_label[present_labels]
+    asfloat = bitmask.astype(float).tocsr()
+    containment = (asfloat.T @ asfloat) / chunks_per_label[present_labels]
 
     mask = containment.data > 0.75
     containment.data = containment.data[mask]
