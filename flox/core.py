@@ -302,10 +302,12 @@ def find_group_cohorts(
         for lab in range(bitmask.shape[-1])
     }
 
-    # These invert the label_chunks mapping so we know which labels occur together.
+    # Invert the label_chunks mapping so we know which labels occur together.
     def invert(x) -> tuple[np.ndarray, ...]:
         arr = label_chunks[x]
         return tuple(arr)
+
+    chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
 
     # No merging is possible when
     # 1. Our dataset has chunksize one along the axis,
@@ -315,17 +317,16 @@ def find_group_cohorts(
     # 3. Every group is contained to one block, we should be using blockwise here.
     every_group_one_block = (chunks_per_label == 1).all()
     # 4. Existing cohorts don't overlap, great for time grouping with perfect chunking
-    # no_overlapping_cohorts = (np.bincount(np.concatenate(tuple(chunks_cohorts.keys()))) == 1).all()
+    no_overlapping_cohorts = (np.bincount(np.concatenate(tuple(chunks_cohorts.keys()))) == 1).all()
 
     if (
         every_group_one_block
         or one_group_per_chunk
         or single_chunks
-        # or no_overlapping_cohorts
+        or no_overlapping_cohorts
         or not merge
     ):
         # return chunks_cohorts
-        chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
         return chunks_cohorts
 
     asfloat = bitmask.astype(float).tocsr()
