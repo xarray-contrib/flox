@@ -329,20 +329,20 @@ def find_group_cohorts(
         # return chunks_cohorts
         return chunks_cohorts
 
-    asfloat = bitmask.astype(float).tocsr()
-    containment = (asfloat.T @ asfloat) / chunks_per_label[present_labels]
+    asfloat = bitmask.astype(float)
+    containment = ((asfloat.T @ asfloat) / chunks_per_label[present_labels]).tocsr()
 
-    mask = containment.data > 0.75
-    containment.data = containment.data[mask]
-    containment.row = containment.row[mask]
-    containment.col = containment.col[mask]
+    mask = containment.data < 0.75
+    containment.data[mask] = 0
+    containment.eliminate_zeros()
 
     merged_cohorts = {}
-    ascsr = containment.tocsr()
     order = np.argsort(containment.sum(axis=LABEL_AXIS))[::-1]
     merged_keys = set()
     for rowidx in order:
-        cohort_ = ascsr.indices[slice(ascsr.indptr[rowidx], ascsr.indptr[rowidx + 1])]
+        cohort_ = containment.indices[
+            slice(containment.indptr[rowidx], containment.indptr[rowidx + 1])
+        ]
         cohort = [elem for elem in cohort_ if elem not in merged_keys]
         if not cohort:
             continue
