@@ -297,6 +297,11 @@ def find_group_cohorts(
     if not present_labels.all():
         bitmask = bitmask[..., present_labels]
 
+    label_chunks = {
+        lab: bitmask.indices[slice(bitmask.indptr[lab], bitmask.indptr[lab + 1])]
+        for lab in range(bitmask.shape[-1])
+    }
+
     asfloat = bitmask.astype(float).tocsr()
     containment = (asfloat.T @ asfloat) / chunks_per_label[present_labels]
 
@@ -315,10 +320,7 @@ def find_group_cohorts(
         if not cohort:
             continue
         merged_keys.update(cohort)
-        allchunks = (
-            bitmask.indices[slice(bitmask.indptr[member], bitmask.indptr[member + 1])]
-            for member in cohort
-        )
+        allchunks = (label_chunks[member] for member in cohort)
         chunk = tuple(set(itertools.chain(*allchunks)))
         merged_cohorts[chunk] = cohort
 
