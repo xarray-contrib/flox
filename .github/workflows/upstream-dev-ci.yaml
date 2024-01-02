@@ -44,7 +44,6 @@ jobs:
           init-shell: bash
           cache-environment: true
           create-args: >-
-            mamba
             python=${{ matrix.python-version }}
             pytest-reportlog
 
@@ -58,14 +57,14 @@ jobs:
             numpy \
             scipy \
             pandas
-          mamba env update -f ci/upstream-dev-env.yml
+          micromamba install -f ci/upstream-dev-env.yml
 
       - name: Install flox
         run: |
           python -m pip install --no-deps -e .
       - name: List deps
         run: |
-          mamba list
+          micromamba list
       - name: Run Tests
         if: success()
         id: status
