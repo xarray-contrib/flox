@@ -326,19 +326,25 @@ def find_group_cohorts(
         or no_overlapping_cohorts
         or not merge
     ):
-        # return chunks_cohorts
         return chunks_cohorts
 
+    # Containment = |Q & S| / |Q|
+    #  - |X| is the cardinality of set X
+    #  - Q is the query set being tested
+    #  - S is the existing set
+    MIN_CONTAINMENT = 0.75  # arbitrary
     asfloat = bitmask.astype(float)
     containment = ((asfloat.T @ asfloat) / chunks_per_label[present_labels]).tocsr()
-
-    mask = containment.data < 0.75
+    mask = containment.data < MIN_CONTAINMENT
     containment.data[mask] = 0
     containment.eliminate_zeros()
 
-    merged_cohorts = {}
+    # Iterate over labels, beginning with those with most chunks
     order = np.argsort(containment.sum(axis=LABEL_AXIS))[::-1]
+    merged_cohorts = {}
     merged_keys = set()
+    # TODO: we can optimize this to loop over chunk_cohorts instead
+    #       by zeroing out rows that are already in a cohort
     for rowidx in order:
         cohort_ = containment.indices[
             slice(containment.indptr[rowidx], containment.indptr[rowidx + 1])
