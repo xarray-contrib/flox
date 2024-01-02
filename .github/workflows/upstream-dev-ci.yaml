@@ -44,6 +44,7 @@ jobs:
           init-shell: bash
           cache-environment: true
           create-args: >-
+            mamba
             python=${{ matrix.python-version }}
             pytest-reportlog
 
