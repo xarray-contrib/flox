@@ -39,7 +39,7 @@ from .xrutils import is_duck_array, is_duck_dask_array, isnull, module_available
 try:
     from numpy.lib.array_utils import normalize_axis_tuple
 except ImportError:
-    from numpy.core.numeric import normalize_axis_tuple
+    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
 
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
 
