@@ -40,7 +40,6 @@ jobs:
       - name: Set up conda environment
         uses: mamba-org/setup-micromamba@v1
         with:
-          environment-file: ci/upstream-dev-env.yml
           environment-name: flox-tests
           init-shell: bash
           cache-environment: true
@@ -58,6 +57,7 @@ jobs:
             numpy \
             scipy \
             pandas
+          mamba env update -f ci/upstream-dev-env.yml
 
       - name: Install flox
         run: |
