@@ -36,9 +36,11 @@ from .aggregations import (
 from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull, module_available
 
-try:
-    from numpy.lib.array_utils import normalize_axis_tuple
-except ImportError:
+if module_available("numpy", minversion="2.0.0"):
+    from numpy.lib.array_utils import (
+        normalize_axis_tuple,  # type: ignore[import-not-found]
+    )
+else:
     from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
 
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
