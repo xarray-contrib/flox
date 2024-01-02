@@ -7,6 +7,9 @@ dependencies:
   - netcdf4
   - pooch
   - toolz
+  - numpy
+  - pandas
+  - scipy
   # - numba
   - pytest
   - pytest-cov
