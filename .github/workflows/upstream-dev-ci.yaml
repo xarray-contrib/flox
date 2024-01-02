@@ -44,6 +44,8 @@ jobs:
           init-shell: bash
           # cache-environment: true
           create-args: >-
+            mamba
+            pip
             python=${{ matrix.python-version }}
             pytest-reportlog
 
@@ -65,7 +67,7 @@ jobs:
           python -m pip install --no-deps -e .
       - name: List deps
         run: |
-          micromamba list
+          mamba list
       - name: Run Tests
         if: success()
         id: status
