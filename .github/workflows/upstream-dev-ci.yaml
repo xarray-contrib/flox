@@ -49,6 +49,7 @@ jobs:
 
       - name: Install upstream dev dependencies
         run: |
+          micromamba install -f ci/upstream-dev-env.yml
           python -m pip install \
             -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
             --no-deps \
@@ -57,7 +58,6 @@ jobs:
             numpy \
             scipy \
             pandas
-          micromamba install -f ci/upstream-dev-env.yml
 
       - name: Install flox
         run: |
