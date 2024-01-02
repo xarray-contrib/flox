@@ -44,6 +44,18 @@ jobs:
           create-args: >-
             python=${{ matrix.python-version }}
             pytest-reportlog
+
+      - name: Install upstream dev dependencies
+        run: |
+          python -m pip install \
+            -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
+            --no-deps \
+            --pre \
+            --upgrade \
+            numpy \
+            scipy \
+            pandas
+
       - name: Install flox
         run: |
           python -m pip install --no-deps -e .
