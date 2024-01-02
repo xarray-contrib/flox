@@ -50,6 +50,7 @@ jobs:
       - name: Install upstream dev dependencies
         run: |
           micromamba install -f ci/upstream-dev-env.yml
+          micromamba remove --force numpy scipy pandas
           python -m pip install \
             -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
             --no-deps \
