@@ -10,6 +10,9 @@ dependencies:
   # - numba
   - pytest
   - pytest-cov
+  # for upstream pandas
+  - python-dateutil
+  - pytz
   - pytest-pretty
   - pytest-xdist
   - pip
