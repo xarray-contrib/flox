@@ -54,8 +54,7 @@ jobs:
         run: |
           # install cython for building cftime without build isolation
           micromamba install -f ci/upstream-dev-env.yml
-          micromamba remove --force numpy scipy pandas cftime cython
-          micromamba install "cython>=0.29.20" py-cpuinfo
+          micromamba remove --force numpy scipy pandas cftime
           python -m pip install \
             -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
             --no-deps \
@@ -71,6 +70,10 @@ jobs:
             --upgrade \
             --no-build-isolation \
             git+https://github.com/Unidata/cftime
+          python -m pip install \
+            git+https://github.com/pydata/xarray \
+            git+https://github.com/dask/dask \
+            git+https://github.com/ml31415/numpy-groupies
 
       - name: Install flox
         run: |
