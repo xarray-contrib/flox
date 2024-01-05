@@ -293,13 +293,16 @@ def find_group_cohorts(
 
     # can happen when `expected_groups` is passed but not all labels are present
     # (binning, resampling)
-    present_labels = chunks_per_label != 0
-    if not present_labels.all():
-        bitmask = bitmask[..., present_labels]
+    present_labels = np.arange(bitmask.shape[LABEL_AXIS])
+    present_labels_mask = chunks_per_label != 0
+    if not present_labels_mask.all():
+        present_labels = present_labels[present_labels_mask]
+        bitmask = bitmask[..., present_labels_mask]
+        chunks_per_label = chunks_per_label[present_labels_mask]
 
     label_chunks = {
-        lab: bitmask.indices[slice(bitmask.indptr[lab], bitmask.indptr[lab + 1])]
-        for lab in range(bitmask.shape[-1])
+        present_labels[idx]: bitmask.indices[slice(bitmask.indptr[idx], bitmask.indptr[idx + 1])]
+        for idx in range(bitmask.shape[LABEL_AXIS])
     }
 
     # Invert the label_chunks mapping so we know which labels occur together.
@@ -334,7 +337,7 @@ def find_group_cohorts(
     #  - S is the existing set
     MIN_CONTAINMENT = 0.75  # arbitrary
     asfloat = bitmask.astype(float)
-    containment = ((asfloat.T @ asfloat) / chunks_per_label[present_labels]).tocsr()
+    containment = ((asfloat.T @ asfloat) / chunks_per_label).tocsr()
     mask = containment.data < MIN_CONTAINMENT
     containment.data[mask] = 0
     containment.eliminate_zeros()
