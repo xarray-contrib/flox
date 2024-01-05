@@ -844,21 +844,16 @@ def test_rechunk_for_blockwise(inchunks, expected):
 
 @requires_dask
 @pytest.mark.parametrize(
-    "expected, labels, chunks, merge",
+    "expected, labels, chunks",
     [
-        [[[0, 1, 2, 3]], [0, 1, 2, 0, 1, 2, 3], (3, 4), True],
-        [[[0], [1], [2], [3]], [0, 1, 2, 0, 1, 2, 3], (2, 2, 2, 1), True],
-        [[[0, 1, 2], [3]], [0, 1, 2, 0, 1, 2, 3], (3, 3, 1), True],
-        [
-            [[0], [1, 2, 3, 4], [5]],
-            np.repeat(np.arange(6), [4, 4, 12, 2, 3, 4]),
-            (4, 8, 4, 9, 4),
-            True,
-        ],
+        [[[0, 1, 2, 3]], [0, 1, 2, 0, 1, 2, 3], (3, 4)],
+        [[[0], [1], [2], [3]], [0, 1, 2, 0, 1, 2, 3], (2, 2, 2, 1)],
+        [[[0, 1, 2], [3]], [0, 1, 2, 0, 1, 2, 3], (3, 3, 1)],
+        [[[0], [1, 2, 3, 4], [5]], np.repeat(np.arange(6), [4, 4, 12, 2, 3, 4]), (4, 8, 4, 9, 4)],
     ],
 )
-def test_find_group_cohorts(expected, labels, chunks: tuple[int], merge: bool) -> None:
-    actual = list(find_group_cohorts(labels, (chunks,), merge).values())
+def test_find_group_cohorts(expected, labels, chunks: tuple[int]) -> None:
+    actual = list(find_group_cohorts(labels, (chunks,)).values())
     assert actual == expected, (actual, expected)
 
 
