@@ -248,9 +248,7 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
 
 
 # @memoize
-def find_group_cohorts(
-    labels, chunks, merge: bool = True, expected_groups: None | pd.RangeIndex = None
-) -> dict:
+def find_group_cohorts(labels, chunks, expected_groups: None | pd.RangeIndex = None) -> dict:
     """
     Finds groups labels that occur together aka "cohorts"
 
@@ -265,9 +263,8 @@ def find_group_cohorts(
         represents NaNs.
     chunks : tuple
         chunks of the array being reduced
-    merge : bool, optional
-        Attempt to merge cohorts when one cohort's chunks are a subset
-        of another cohort's chunks.
+    expected_groups: pd.RangeIndex (optional)
+        Used to extract the largest label expected
 
     Returns
     -------
@@ -322,13 +319,7 @@ def find_group_cohorts(
     # 4. Existing cohorts don't overlap, great for time grouping with perfect chunking
     no_overlapping_cohorts = (np.bincount(np.concatenate(tuple(chunks_cohorts.keys()))) == 1).all()
 
-    if (
-        every_group_one_block
-        or one_group_per_chunk
-        or single_chunks
-        or no_overlapping_cohorts
-        or not merge
-    ):
+    if every_group_one_block or one_group_per_chunk or single_chunks or no_overlapping_cohorts:
         return chunks_cohorts
 
     # Containment = |Q & S| / |Q|
@@ -1569,10 +1560,7 @@ def dask_groupby_agg(
 
         elif method == "cohorts":
             chunks_cohorts = find_group_cohorts(
-                by_input,
-                [array.chunks[ax] for ax in axis],
-                merge=True,
-                expected_groups=expected_groups,
+                by_input, [array.chunks[ax] for ax in axis], expected_groups=expected_groups
             )
             reduced_ = []
             groups_ = []
