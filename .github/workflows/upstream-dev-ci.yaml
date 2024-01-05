@@ -62,7 +62,8 @@ jobs:
             --upgrade \
             numpy \
             scipy \
-            pandas
+            pandas \
+            xarray
           # without build isolation for packages compiling against numpy
           # TODO: remove once there are `numpy>=2.0` builds for cftime
           python -m pip install \
@@ -71,7 +72,6 @@ jobs:
             --no-build-isolation \
             git+https://github.com/Unidata/cftime
           python -m pip install \
-            git+https://github.com/pydata/xarray \
             git+https://github.com/dask/dask \
             git+https://github.com/ml31415/numpy-groupies
 

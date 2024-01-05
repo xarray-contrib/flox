@@ -4,12 +4,15 @@ channels:
 dependencies:
   - cachey
   - codecov
-  - netcdf4
+  # - netcdf4
   - pooch
   - toolz
-  - numpy
-  - pandas
-  - scipy
+  # - numpy
+  # - pandas
+  # - scipy
+  - pytest-pretty
+  - pytest-xdist
+  - pip
   # for cftime
   - cython>=0.29.20
   - py-cpuinfo
@@ -19,9 +22,6 @@ dependencies:
   # for upstream pandas
   - python-dateutil
   - pytz
-  - pytest-pretty
-  - pytest-xdist
-  - pip
   # - pip:
   #     - git+https://github.com/pydata/xarray
   #     - git+https://github.com/dask/dask
