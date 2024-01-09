@@ -803,29 +803,11 @@ def chunk_reduce(
     dict
     """
 
-    if not (isinstance(func, str) or callable(func)):
-        funcs = func
-    else:
-        funcs = (func,)
+    funcs = _atleast_1d(func)
     nfuncs = len(funcs)
-
-    if isinstance(dtype, Sequence):
-        dtypes = dtype
-    else:
-        dtypes = (dtype,) * nfuncs
-    assert len(dtypes) >= nfuncs
-
-    if isinstance(fill_value, Sequence):
-        fill_values = fill_value
-    else:
-        fill_values = (fill_value,) * nfuncs
-    assert len(fill_values) >= nfuncs
-
-    if isinstance(kwargs, Sequence):
-        kwargss = kwargs
-    else:
-        kwargss = ({},) * nfuncs
-    assert len(kwargss) >= nfuncs
+    dtypes = _atleast_1d(dtype, nfuncs)
+    fill_values = _atleast_1d(fill_value, nfuncs)
+    kwargss = _atleast_1d({}, nfuncs) if kwargs is None else kwargs
 
     if isinstance(axis, Sequence):
         axes: T_Axes = axis
@@ -2061,10 +2043,7 @@ def groupby_reduce(
     is_bool_array = np.issubdtype(array.dtype, bool)
     array = array.astype(int) if is_bool_array else array
 
-    if isinstance(isbin, Sequence):
-        isbins = isbin
-    else:
-        isbins = (isbin,) * nby
+    isbins = _atleast_1d(isbin, nby)
 
     _assert_by_is_aligned(array.shape, bys)
 
