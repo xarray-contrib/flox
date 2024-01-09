@@ -862,7 +862,8 @@ def chunk_reduce(
 
     # do this *before* possible broadcasting below.
     # factorize_ has already taken care of offsetting
-    seen_groups = _unique(group_idx)
+    if engine == "numbagg":
+        seen_groups = _unique(group_idx)
 
     order = "C"
     if nax > 1:
