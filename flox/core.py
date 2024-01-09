@@ -1551,12 +1551,9 @@ def dask_groupby_agg(
                 groups = _extract_unknown_groups(reduced, dtype=by.dtype)
                 group_chunks = ((np.nan,),)
             else:
-                if expected_groups is None:
-                    expected_groups_ = _get_expected_groups(by_input, sort=sort)
-                else:
-                    expected_groups_ = expected_groups
-                groups = (expected_groups_.to_numpy(),)
-                group_chunks = ((len(expected_groups_),),)
+                assert expected_groups is not None
+                groups = (expected_groups.to_numpy(),)
+                group_chunks = ((len(expected_groups),),)
 
         elif method == "cohorts":
             chunks_cohorts = find_group_cohorts(
