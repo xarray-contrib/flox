@@ -803,29 +803,11 @@ def chunk_reduce(
     dict
     """
 
-    if not (isinstance(func, str) or callable(func)):
-        funcs = func
-    else:
-        funcs = (func,)
+    funcs = _atleast_1d(func)
     nfuncs = len(funcs)
-
-    if isinstance(dtype, Sequence):
-        dtypes = dtype
-    else:
-        dtypes = (dtype,) * nfuncs
-    assert len(dtypes) >= nfuncs
-
-    if isinstance(fill_value, Sequence):
-        fill_values = fill_value
-    else:
-        fill_values = (fill_value,) * nfuncs
-    assert len(fill_values) >= nfuncs
-
-    if isinstance(kwargs, Sequence):
-        kwargss = kwargs
-    else:
-        kwargss = ({},) * nfuncs
-    assert len(kwargss) >= nfuncs
+    dtypes = _atleast_1d(dtype, nfuncs)
+    fill_values = _atleast_1d(fill_value, nfuncs)
+    kwargss = _atleast_1d({}, nfuncs) if kwargs is None else kwargs
 
     if isinstance(axis, Sequence):
         axes: T_Axes = axis
@@ -862,7 +844,8 @@ def chunk_reduce(
 
     # do this *before* possible broadcasting below.
     # factorize_ has already taken care of offsetting
-    seen_groups = _unique(group_idx)
+    if engine == "numbagg":
+        seen_groups = _unique(group_idx)
 
     order = "C"
     if nax > 1:
@@ -1551,12 +1534,9 @@ def dask_groupby_agg(
                 groups = _extract_unknown_groups(reduced, dtype=by.dtype)
                 group_chunks = ((np.nan,),)
             else:
-                if expected_groups is None:
-                    expected_groups_ = _get_expected_groups(by_input, sort=sort)
-                else:
-                    expected_groups_ = expected_groups
-                groups = (expected_groups_.to_numpy(),)
-                group_chunks = ((len(expected_groups_),),)
+                assert expected_groups is not None
+                groups = (expected_groups.to_numpy(),)
+                group_chunks = ((len(expected_groups),),)
 
         elif method == "cohorts":
             chunks_cohorts = find_group_cohorts(
@@ -2063,10 +2043,7 @@ def groupby_reduce(
     is_bool_array = np.issubdtype(array.dtype, bool)
     array = array.astype(int) if is_bool_array else array
 
-    if isinstance(isbin, Sequence):
-        isbins = isbin
-    else:
-        isbins = (isbin,) * nby
+    isbins = _atleast_1d(isbin, nby)
 
     _assert_by_is_aligned(array.shape, bys)
 
