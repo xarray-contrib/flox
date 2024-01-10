@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import logging
 import math
 import operator
 import sys
@@ -86,6 +87,8 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 # and then reduced over during the combine stage by
 # _simple_combine.
 DUMMY_AXIS = -2
+
+logger = logging.getLogger("flox")
 
 
 def _postprocess_numbagg(result, *, func, fill_value, size, seen_groups):
@@ -315,6 +318,7 @@ def find_group_cohorts(
 
     # 1. Every group is contained to one block, use blockwise here.
     if bitmask.shape[CHUNK_AXIS] == 1 or (chunks_per_label == 1).all():
+        logger.info("find_group_cohorts: blockwise is preferred.")
         return "blockwise", chunks_cohorts
 
     # 2. Our dataset has chunksize one along the axis,
@@ -324,6 +328,7 @@ def find_group_cohorts(
     # 4. Existing cohorts don't overlap, great for time grouping with perfect chunking
     no_overlapping_cohorts = (np.bincount(np.concatenate(tuple(chunks_cohorts.keys()))) == 1).all()
     if one_group_per_chunk or single_chunks or no_overlapping_cohorts:
+        logger.info("find_group_cohorts: cohorts is preferred, chunking is perfect.")
         return "cohorts", chunks_cohorts
 
     # Containment = |Q & S| / |Q|
@@ -350,13 +355,16 @@ def find_group_cohorts(
     # 4. When there are no overlaps at all between labels, containment is an identity matrix.
     sparsity = containment.nnz / math.prod(containment.shape)
     if sparsity > 0.8:
+        logger.info("sparsity is {}".format(sparsity))  # noqa
         preferred_method = "map-reduce"
         if not merge:
+            logger.info("find_group_cohorts: merge=False, choosing 'map-reduce'")
             return "map-reduce", {}
     else:
         preferred_method = "cohorts"
 
     # Iterate over labels, beginning with those with most chunks
+    logger.info("find_group_cohorts: merging cohorts")
     order = np.argsort(containment.sum(axis=LABEL_AXIS))[::-1]
     merged_cohorts = {}
     merged_keys = set()
@@ -1679,6 +1687,8 @@ def _validate_reindex(
     any_by_dask: bool,
     is_dask_array: bool,
 ) -> bool | None:
+    logger.info("Entering _validate_reindex: reindex is {}".format(reindex))  # noqa
+
     all_numpy = not is_dask_array and not any_by_dask
     if reindex is True and not all_numpy:
         if _is_arg_reduction(func):
@@ -1692,6 +1702,7 @@ def _validate_reindex(
 
     if reindex is None:
         if method is None:
+            logger.info("Leaving _validate_reindex: method = None, returning None")
             return None
 
         if all_numpy:
@@ -1718,6 +1729,7 @@ def _validate_reindex(
                 reindex = True
 
     assert isinstance(reindex, bool)
+    logger.info("Leaving _validate_reindex: reindex is {}".format(reindex))  # noqa
 
     return reindex
 
@@ -1888,17 +1900,21 @@ def _choose_method(
     method: T_MethodOpt, preferred_method: T_Method, agg: Aggregation, by, nax: int
 ) -> T_Method:
     if method is None:
+        logger.info("_choose_method: method is None")
         if agg.chunk == (None,):
             if preferred_method != "blockwise":
                 raise ValueError(
                     f"Aggregation {agg.name} is only supported for `method='blockwise'`, "
                     "but the chunking is not right."
                 )
+            logger.info("_choose_method: choosing 'blockwise'")
             return "blockwise"
 
         if nax != by.ndim:
+            logger.info("_choose_method: choosing 'map-reduce'")
             return "map-reduce"
 
+        logger.info("_choose_method: choosing preferred_method={}".format(preferred_method))  # noqa
         return preferred_method
     else:
         return method
@@ -1918,11 +1934,14 @@ def _choose_engine(by, agg: Aggregation):
         if agg.name in ["all", "any"] or (
             not_arg_reduce and has_blockwise_nan_skipping and dtype is None
         ):
+            logger.info("_choose_engine: Choosing 'numbagg'")
             return "numbagg"
 
     if not_arg_reduce and (not is_duck_dask_array(by) and _issorted(by)):
+        logger.info("_choose_engine: Choosing 'flox'")
         return "flox"
     else:
+        logger.info("_choose_engine: Choosing 'numpy'")
         return "numpy"
 
 
@@ -2244,6 +2263,7 @@ def groupby_reduce(
         reindex = _validate_reindex(
             reindex, func, method, expected_groups, any_by_dask, is_duck_dask_array(array)
         )
+
         if TYPE_CHECKING:
             assert method is not None
 

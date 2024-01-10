@@ -39,6 +39,9 @@ from . import (
     requires_scipy,
 )
 
+logger = logging.getLogger("flox")
+logger.setLevel(logging.DEBUG)
+
 labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
 nan_labels = labels.astype(float)  # copy
 nan_labels[:5] = np.nan
