@@ -857,6 +857,16 @@ def test_find_group_cohorts(expected, labels, chunks: tuple[int]) -> None:
     assert actual == expected, (actual, expected)
 
 
+@requires_dask
+def test_find_cohorts_missing_groups():
+    by = np.array([np.nan, np.nan, np.nan, 2.0, 2.0, 1.0, 1.0, 2.0, 2.0, 1.0, np.nan, np.nan])
+    kwargs = {"func": "sum", "expected_groups": [0, 1, 2], "fill_value": 123}
+    array = dask.array.ones_like(by, chunks=(3,))
+    actual, _ = groupby_reduce(array, by, method="cohorts", **kwargs)
+    expected, _ = groupby_reduce(array.compute(), by, **kwargs)
+    assert_equal(expected, actual)
+
+
 @pytest.mark.parametrize("chunksize", [12, 13, 14, 24, 36, 48, 72, 71])
 def test_verify_complex_cohorts(chunksize: int) -> None:
     time = pd.Series(pd.date_range("2016-01-01", "2018-12-31 23:59", freq="H"))

@@ -340,9 +340,10 @@ def find_group_cohorts(labels, chunks, expected_groups: None | pd.RangeIndex = N
     # TODO: we can optimize this to loop over chunk_cohorts instead
     #       by zeroing out rows that are already in a cohort
     for rowidx in order:
-        cohort_ = containment.indices[
+        cohidx = containment.indices[
             slice(containment.indptr[rowidx], containment.indptr[rowidx + 1])
         ]
+        cohort_ = present_labels[cohidx]
         cohort = [elem for elem in cohort_ if elem not in merged_keys]
         if not cohort:
             continue
