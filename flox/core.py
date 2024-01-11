@@ -2243,7 +2243,11 @@ def groupby_reduce(
                 f"Received method={method!r}"
             )
 
-        if _is_arg_reduction(agg) and method == "blockwise":
+        if (
+            _is_arg_reduction(agg)
+            and method == "blockwise"
+            and not all(nchunks == 1 for nchunks in array.numblocks[-nax:])
+        ):
             raise NotImplementedError(
                 "arg-reductions are not supported with method='blockwise', use 'cohorts' instead."
             )
