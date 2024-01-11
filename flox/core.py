@@ -1914,6 +1914,9 @@ def _choose_method(
             logger.info("_choose_method: choosing 'map-reduce'")
             return "map-reduce"
 
+        if _is_arg_reduction(agg) and preferred_method == "blockwise":
+            return "cohorts"
+
         logger.info("_choose_method: choosing preferred_method={}".format(preferred_method))  # noqa
         return preferred_method
     else:
@@ -2238,6 +2241,11 @@ def groupby_reduce(
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"Received method={method!r}"
+            )
+
+        if _is_arg_reduction(agg) and method == "blockwise":
+            raise NotImplementedError(
+                "arg-reductions are not supported with method='blockwise', use 'cohorts' instead."
             )
 
         if nax != by_.ndim and method in ["blockwise", "cohorts"]:
