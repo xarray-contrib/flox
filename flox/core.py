@@ -1600,7 +1600,6 @@ def dask_groupby_agg(
 
     elif method == "blockwise":
         reduced = intermediate
-        # TODO: use chunks_cohorts here
         if reindex:
             if TYPE_CHECKING:
                 assert expected_groups is not None
@@ -1610,6 +1609,8 @@ def dask_groupby_agg(
             groups = (expected_groups,)
             group_chunks = ((len(expected_groups),),)
         else:
+            # TODO: use chunks_cohorts here; hard because chunks_cohorts does not include all-NaN blocks
+            #       but the array after applying the blockwise op; does. We'd have to insert a subsetting op.
             # Here one input chunk → one output chunks
             # find number of groups in each chunk, this is needed for output chunks
             # along the reduced axis
@@ -2263,7 +2264,7 @@ def groupby_reduce(
                 by_,
                 [array.chunks[ax] for ax in axis_],
                 expected_groups=expected_groups,
-                # when provided with cohorts, we 'merge'
+                # when provided with cohorts, we *always* 'merge'
                 merge=(method == "cohorts"),
             )
         else:

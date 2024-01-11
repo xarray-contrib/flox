@@ -299,7 +299,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
-        assert_equal(actual, expected, tolerance)
+        assert_equal(expected, actual, tolerance)
 
         if not has_dask or chunks is None or func in BLOCKWISE_FUNCS:
             continue
