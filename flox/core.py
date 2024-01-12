@@ -15,6 +15,7 @@ from typing import (
     Any,
     Callable,
     Literal,
+    TypedDict,
     Union,
     overload,
 )
@@ -85,6 +86,17 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 # and then reduced over during the combine stage by
 # _simple_combine.
 DUMMY_AXIS = -2
+
+
+class FactorizeKwargs(TypedDict, total=False):
+    """Used in _factorize_multiple"""
+
+    by: T_Bys
+    axes: T_Axes
+    fastpath: bool
+    expected_groups: T_ExpectIndexOptTuple | None
+    reindex: bool
+    sort: bool
 
 
 def _postprocess_numbagg(result, *, func, fill_value, size, seen_groups):
@@ -1652,7 +1664,7 @@ def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
 def _validate_reindex(
     reindex: bool | None,
     func,
-    method: T_MethodOpt,
+    method: T_Method,
     expected_groups,
     any_by_dask: bool,
     is_dask_array: bool,
@@ -1749,8 +1761,8 @@ def _convert_expected_groups_to_index(
     return tuple(out)
 
 
-def _lazy_factorize_wrapper(*by: T_By, **kwargs) -> np.ndarray:
-    group_idx, *rest = factorize_(by, **kwargs)
+def _lazy_factorize_wrapper(by: T_Bys, **kwargs) -> np.ndarray:
+    group_idx, *_ = factorize_(by, **kwargs)
     return group_idx
 
 
@@ -1760,7 +1772,7 @@ def _factorize_multiple(
     any_by_dask: bool,
     sort: bool = True,
 ) -> tuple[tuple[np.ndarray], tuple[np.ndarray, ...], tuple[int, ...]]:
-    kwargs = dict(
+    kwargs: FactorizeKwargs = dict(
         axes=(),  # always (), we offset later if necessary.
         expected_groups=expected_groups,
         fastpath=True,
@@ -1780,7 +1792,7 @@ def _factorize_multiple(
 
         group_idx = dask.array.map_blocks(
             _lazy_factorize_wrapper,
-            *by_,
+            by_,
             chunks=tuple(chunks.values()),
             meta=np.array((), dtype=np.int64),
             **kwargs,
@@ -1804,7 +1816,8 @@ def _factorize_multiple(
         found_groups = tuple(fg)
         grp_shape = tuple(gs)
     else:
-        group_idx, found_groups, grp_shape, ngroups, size, props = factorize_(by, **kwargs)
+        kwargs["by"] = by
+        group_idx, found_groups, grp_shape, _, _, _ = factorize_(**kwargs)
 
     return (group_idx,), found_groups, grp_shape
 
