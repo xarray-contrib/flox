@@ -879,7 +879,7 @@ def test_verify_complex_cohorts(chunksize: int) -> None:
     chunks_ = np.sort(np.concatenate(tuple(chunk_cohorts.keys())))
     groups = np.sort(np.concatenate(tuple(chunk_cohorts.values())))
     assert_equal(np.unique(chunks_), np.arange(len(chunks), dtype=int))
-    assert_equal(groups, np.arange(366, dtype=int))
+    assert_equal(groups.astype(np.int64), np.arange(366, dtype=np.int64))
 
 
 @requires_dask
