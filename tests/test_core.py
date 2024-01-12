@@ -169,8 +169,6 @@ def test_groupby_reduce(
 ) -> None:
     array = array.astype(dtype)
     if chunk:
-        if expected_groups is None:
-            pytest.skip()
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
         by = da.from_array(by, chunks=(3,) if by.ndim == 1 else (1, 3))
 
@@ -878,8 +876,8 @@ def test_verify_complex_cohorts(chunksize: int) -> None:
     chunk_cohorts = find_group_cohorts(by - 1, (chunks,))
     chunks_ = np.sort(np.concatenate(tuple(chunk_cohorts.keys())))
     groups = np.sort(np.concatenate(tuple(chunk_cohorts.values())))
-    assert_equal(np.unique(chunks_), np.arange(len(chunks), dtype=int))
-    assert_equal(groups, np.arange(366, dtype=int))
+    assert_equal(np.unique(chunks_).astype(np.int64), np.arange(len(chunks), dtype=np.int64))
+    assert_equal(groups.astype(np.int64), np.arange(366, dtype=np.int64))
 
 
 @requires_dask
