@@ -23,7 +23,7 @@ import numpy as np
 import numpy_groupies as npg
 import pandas as pd
 import toolz as tlz
-from scipy.sparse import csc_array
+from scipy.sparse import csc_array, csr_array
 
 from . import xrdtypes
 from .aggregate_flox import _prepare_for_flox
@@ -328,7 +328,7 @@ def find_group_cohorts(labels, chunks, expected_groups: None | pd.RangeIndex = N
     #  - S is the existing set
     MIN_CONTAINMENT = 0.75  # arbitrary
     asfloat = bitmask.astype(float)
-    containment = ((asfloat.T @ asfloat) / chunks_per_label).tocsr()
+    containment = csr_array((asfloat.T @ asfloat) / chunks_per_label)
     mask = containment.data < MIN_CONTAINMENT
     containment.data[mask] = 0
     containment.eliminate_zeros()
