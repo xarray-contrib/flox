@@ -1378,9 +1378,7 @@ def _extract_unknown_groups(reduced, dtype) -> tuple[DaskArray]:
 
     groups_token = f"group-{reduced.name}"
     first_block = reduced.ndim * (0,)
-    layer: Graph = {
-        (groups_token, *first_block): (operator.getitem, (reduced.name, *first_block), "groups")
-    }
+    layer: Graph = {(groups_token, 0): (operator.getitem, (reduced.name, *first_block), "groups")}
     groups: tuple[DaskArray] = (
         dask.array.Array(
             HighLevelGraph.from_collections(groups_token, layer, dependencies=[reduced]),
