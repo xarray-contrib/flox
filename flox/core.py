@@ -1759,7 +1759,7 @@ def _convert_expected_groups_to_index(
     return tuple(out)
 
 
-def _lazy_factorize_wrapper(by: T_Bys, **kwargs) -> np.ndarray:
+def _lazy_factorize_wrapper(*by: T_By, **kwargs) -> np.ndarray:
     group_idx, *_ = factorize_(by, **kwargs)
     return group_idx
 
@@ -1790,7 +1790,7 @@ def _factorize_multiple(
 
         group_idx = dask.array.map_blocks(
             _lazy_factorize_wrapper,
-            by_,
+            *by_,
             chunks=tuple(chunks.values()),
             meta=np.array((), dtype=np.int64),
             **kwargs,
