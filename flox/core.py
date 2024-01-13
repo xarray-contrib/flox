@@ -16,6 +16,7 @@ from typing import (
     Any,
     Callable,
     Literal,
+    TypedDict,
     Union,
     overload,
 )
@@ -89,6 +90,17 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 DUMMY_AXIS = -2
 
 logger = logging.getLogger("flox")
+
+
+class FactorizeKwargs(TypedDict, total=False):
+    """Used in _factorize_multiple"""
+
+    by: T_Bys
+    axes: T_Axes
+    fastpath: bool
+    expected_groups: T_ExpectIndexOptTuple | None
+    reindex: bool
+    sort: bool
 
 
 def _postprocess_numbagg(result, *, func, fill_value, size, seen_groups):
@@ -1466,7 +1478,7 @@ def dask_groupby_agg(
     _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
 
     # tokenize here since by has already been hashed if its numpy
-    token = dask.base.tokenize(array, by, agg, expected_groups, axis)
+    token = dask.base.tokenize(array, by, agg, expected_groups, axis, method)
 
     # preprocess the array:
     #   - for argreductions, this zips the index together with the array block
@@ -1486,7 +1498,8 @@ def dask_groupby_agg(
     #    b. "_grouped_combine": A more general solution where we tree-reduce the groupby reduction.
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
-    do_simple_combine = not _is_arg_reduction(agg)
+    labels_are_unknown = is_duck_dask_array(by_input) and expected_groups is None
+    do_simple_combine = not _is_arg_reduction(agg) and not labels_are_unknown
 
     if method == "blockwise":
         #  use the "non dask" code path, but applied blockwise
@@ -1542,7 +1555,7 @@ def dask_groupby_agg(
 
         tree_reduce = partial(
             dask.array.reductions._tree_reduce,
-            name=f"{name}-reduce-{method}",
+            name=f"{name}-reduce",
             dtype=array.dtype,
             axis=axis,
             keepdims=True,
@@ -1561,7 +1574,7 @@ def dask_groupby_agg(
                 combine=partial(combine, agg=agg),
                 aggregate=partial(aggregate, expected_groups=expected_groups, reindex=reindex),
             )
-            if is_duck_dask_array(by_input) and expected_groups is None:
+            if labels_are_unknown:
                 groups = _extract_unknown_groups(reduced, dtype=by.dtype)
                 group_chunks = ((np.nan,),)
             else:
@@ -1786,7 +1799,7 @@ def _convert_expected_groups_to_index(
 
 
 def _lazy_factorize_wrapper(*by: T_By, **kwargs) -> np.ndarray:
-    group_idx, *rest = factorize_(by, **kwargs)
+    group_idx, *_ = factorize_(by, **kwargs)
     return group_idx
 
 
@@ -1794,9 +1807,18 @@ def _factorize_multiple(
     by: T_Bys,
     expected_groups: T_ExpectIndexOptTuple,
     any_by_dask: bool,
-    reindex: bool,
     sort: bool = True,
 ) -> tuple[tuple[np.ndarray], tuple[np.ndarray, ...], tuple[int, ...]]:
+    kwargs: FactorizeKwargs = dict(
+        axes=(),  # always (), we offset later if necessary.
+        expected_groups=expected_groups,
+        fastpath=True,
+        # This is the only way it makes sense I think.
+        # reindex controls what's actually allocated in chunk_reduce
+        # At this point, we care about an accurate conversion to codes.
+        reindex=True,
+        sort=sort,
+    )
     if any_by_dask:
         import dask.array
 
@@ -1810,11 +1832,7 @@ def _factorize_multiple(
             *by_,
             chunks=tuple(chunks.values()),
             meta=np.array((), dtype=np.int64),
-            axes=(),  # always (), we offset later if necessary.
-            expected_groups=expected_groups,
-            fastpath=True,
-            reindex=reindex,
-            sort=sort,
+            **kwargs,
         )
 
         fg, gs = [], []
@@ -1835,14 +1853,8 @@ def _factorize_multiple(
         found_groups = tuple(fg)
         grp_shape = tuple(gs)
     else:
-        group_idx, found_groups, grp_shape, ngroups, size, props = factorize_(
-            by,
-            axes=(),  # always (), we offset later if necessary.
-            expected_groups=expected_groups,
-            fastpath=True,
-            reindex=reindex,
-            sort=sort,
-        )
+        kwargs["by"] = by
+        group_idx, found_groups, grp_shape, *_ = factorize_(**kwargs)
 
     return (group_idx,), found_groups, grp_shape
 
@@ -2127,7 +2139,7 @@ def groupby_reduce(
     # (pd.IntervalIndex or not)
     expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, sort)
 
-    # Don't factorize "early only when
+    # Don't factorize early only when
     # grouping by dask arrays, and not having expected_groups
     factorize_early = not (
         # can't do it if we are grouping by dask array but don't have expected_groups
@@ -2138,10 +2150,6 @@ def groupby_reduce(
             bys,
             expected_groups,
             any_by_dask=any_by_dask,
-            # This is the only way it makes sense I think.
-            # reindex controls what's actually allocated in chunk_reduce
-            # At this point, we care about an accurate conversion to codes.
-            reindex=True,
             sort=sort,
         )
         expected_groups = (pd.RangeIndex(math.prod(grp_shape)),)
@@ -2172,21 +2180,17 @@ def groupby_reduce(
                 "along a single axis or when reducing across all dimensions of `by`."
             )
 
-    # TODO: make sure expected_groups is unique
     if nax == 1 and by_.ndim > 1 and expected_groups is None:
-        if not any_by_dask:
-            expected_groups = _get_expected_groups(by_, sort)
-        else:
-            # When we reduce along all axes, we are guaranteed to see all
-            # groups in the final combine stage, so everything works.
-            # This is not necessarily true when reducing along a subset of axes
-            # (of by)
-            # TODO: Does this depend on chunking of by?
-            # For e.g., we could relax this if there is only one chunk along all
-            # by dim != axis?
-            raise NotImplementedError(
-                "Please provide ``expected_groups`` when not reducing along all axes."
-            )
+        # When we reduce along all axes, we are guaranteed to see all
+        # groups in the final combine stage, so everything works.
+        # This is not necessarily true when reducing along a subset of axes
+        # (of by)
+        # TODO: Does this depend on chunking of by?
+        # For e.g., we could relax this if there is only one chunk along all
+        # by dim != axis?
+        raise NotImplementedError(
+            "Please provide ``expected_groups`` when not reducing along all axes."
+        )
 
     assert nax <= by_.ndim
     if nax < by_.ndim:
