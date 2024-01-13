@@ -366,6 +366,7 @@ def find_group_cohorts(
     # 3. Time grouping cohorts (e.g. dayofyear) appear as lines in this matrix.
     # 4. When there are no overlaps at all between labels, containment is an identity matrix.
     sparsity = containment.nnz / math.prod(containment.shape)
+    preferred_method: Literal["map-reduce"] | Literal["cohorts"]
     if sparsity > 0.8:
         logger.info("sparsity is {}".format(sparsity))  # noqa
         preferred_method = "map-reduce"
@@ -1694,7 +1695,7 @@ def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
 def _validate_reindex(
     reindex: bool | None,
     func,
-    method: T_Method,
+    method: T_MethodOpt,
     expected_groups,
     any_by_dask: bool,
     is_dask_array: bool,
@@ -2145,6 +2146,7 @@ def groupby_reduce(
         # can't do it if we are grouping by dask array but don't have expected_groups
         any(is_dask and ex_ is None for is_dask, ex_ in zip(by_is_dask, expected_groups))
     )
+    expected_: pd.RangeIndex | None
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
             bys,
@@ -2152,11 +2154,13 @@ def groupby_reduce(
             any_by_dask=any_by_dask,
             sort=sort,
         )
-        expected_groups = (pd.RangeIndex(math.prod(grp_shape)),)
+        expected_ = pd.RangeIndex(math.prod(grp_shape))
+    else:
+        assert expected_groups == (None,)
+        expected_ = None
 
     assert len(bys) == 1
     (by_,) = bys
-    (expected_groups,) = expected_groups
 
     if axis is None:
         axis_ = tuple(array.ndim + np.arange(-by_.ndim, 0))
@@ -2180,7 +2184,7 @@ def groupby_reduce(
                 "along a single axis or when reducing across all dimensions of `by`."
             )
 
-    if nax == 1 and by_.ndim > 1 and expected_groups is None:
+    if nax == 1 and by_.ndim > 1 and expected_ is None:
         # When we reduce along all axes, we are guaranteed to see all
         # groups in the final combine stage, so everything works.
         # This is not necessarily true when reducing along a subset of axes
@@ -2230,7 +2234,7 @@ def groupby_reduce(
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
         results = _reduce_blockwise(
-            array, by_, agg, expected_groups=expected_groups, reindex=reindex, sort=sort, **kwargs
+            array, by_, agg, expected_groups=expected_, reindex=reindex, sort=sort, **kwargs
         )
         groups = (results["groups"],)
         result = results[agg.name]
@@ -2265,7 +2269,7 @@ def groupby_reduce(
             preferred_method, chunks_cohorts = find_group_cohorts(
                 by_,
                 [array.chunks[ax] for ax in axis_],
-                expected_groups=expected_groups,
+                expected_groups=expected_,
                 # when provided with cohorts, we *always* 'merge'
                 merge=(method == "cohorts"),
             )
@@ -2276,7 +2280,7 @@ def groupby_reduce(
         method = _choose_method(method, preferred_method, agg, by_, nax)
         # TODO: clean this up
         reindex = _validate_reindex(
-            reindex, func, method, expected_groups, any_by_dask, is_duck_dask_array(array)
+            reindex, func, method, expected_, any_by_dask, is_duck_dask_array(array)
         )
 
         if TYPE_CHECKING:
@@ -2295,7 +2299,7 @@ def groupby_reduce(
         result, groups = partial_agg(
             array,
             by_,
-            expected_groups=expected_groups,
+            expected_groups=expected_,
             agg=agg,
             reindex=reindex,
             method=method,
@@ -2315,9 +2319,9 @@ def groupby_reduce(
         # nan group labels are factorized to -1, and preserved
         # now we get rid of them by reindexing
         # This also handles bins with no data
-        result = reindex_(
-            result, from_=groups[0], to=expected_groups, fill_value=fill_value
-        ).reshape(result.shape[:-1] + grp_shape)
+        result = reindex_(result, from_=groups[0], to=expected_, fill_value=fill_value).reshape(
+            result.shape[:-1] + grp_shape
+        )
         groups = final_groups
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
