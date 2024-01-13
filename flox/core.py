@@ -1815,7 +1815,7 @@ def _factorize_multiple(
         grp_shape = tuple(gs)
     else:
         kwargs["by"] = by
-        group_idx, found_groups, grp_shape, _, _, _ = factorize_(**kwargs)
+        group_idx, found_groups, grp_shape, *_ = factorize_(**kwargs)
 
     return (group_idx,), found_groups, grp_shape
 
