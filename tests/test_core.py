@@ -855,7 +855,8 @@ def test_rechunk_for_blockwise(inchunks, expected):
     ],
 )
 def test_find_group_cohorts(expected, labels, chunks: tuple[int]) -> None:
-    _, chunks_cohorts = find_group_cohorts(labels, (chunks,))
+    # force merging of cohorts for the test
+    _, chunks_cohorts = find_group_cohorts(labels, (chunks,), merge=True)
     actual = list(chunks_cohorts.values())
     assert actual == expected, (actual, expected)
 
@@ -1646,7 +1647,10 @@ def test_method_guessing(chunksize):
     preferred_method, chunks_cohorts = find_group_cohorts(labels, by.chunks[slice(-1, None)])
     if chunksize == -1:
         assert preferred_method == "blockwise"
+        assert chunks_cohorts == {(0,): list(range(1, 13))}
     elif chunksize in (1, 2, 3, 4, 6):
         assert preferred_method == "cohorts"
+        assert len(chunks_cohorts) == 12 // chunksize
     else:
         assert preferred_method == "map-reduce"
+        assert chunks_cohorts == {}

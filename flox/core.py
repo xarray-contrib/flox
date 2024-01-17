@@ -265,7 +265,7 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
 
 # @memoize
 def find_group_cohorts(
-    labels, chunks, expected_groups: None | pd.RangeIndex = None, merge: bool = True
+    labels, chunks, expected_groups: None | pd.RangeIndex = None, merge: bool = False
 ) -> tuple[T_Method, dict]:
     """
     Finds groups labels that occur together aka "cohorts"
@@ -283,6 +283,9 @@ def find_group_cohorts(
         chunks of the array being reduced
     expected_groups: pd.RangeIndex (optional)
         Used to extract the largest label expected
+    merge: bool (optional)
+        Whether to merge cohorts or not. Set to True if a user
+        specifies "cohorts" but other methods are preferable.
 
     Returns
     -------
