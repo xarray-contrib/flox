@@ -38,6 +38,13 @@ from .aggregations import (
 from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull, module_available
 
+if module_available("numpy", minversion="2.0.0"):
+    from numpy.lib.array_utils import (  # type: ignore[import-not-found]
+        normalize_axis_tuple,
+    )
+else:
+    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
+
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
 
 if TYPE_CHECKING:
@@ -2179,8 +2186,7 @@ def groupby_reduce(
     if axis is None:
         axis_ = tuple(array.ndim + np.arange(-by_.ndim, 0))
     else:
-        # TODO: How come this function doesn't exist according to mypy?
-        axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore[attr-defined]
+        axis_ = normalize_axis_tuple(axis, array.ndim)
     nax = len(axis_)
 
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
