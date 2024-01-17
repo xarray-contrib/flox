@@ -368,10 +368,12 @@ def find_group_cohorts(
     # 2. When labels are uniformly distributed amongst all chunks
     #    (and number of labels < chunk size), sparsity is 1.
     # 3. Time grouping cohorts (e.g. dayofyear) appear as lines in this matrix.
-    # 4. When there are no overlaps at all between labels, containment is an identity matrix.
+    # 4. When there are no overlaps at all between labels, containment is a block diagonal matrix
+    #    (approximately).
+    MAX_SPARSITY_FOR_COHORTS = 0.6  # arbitrary
     sparsity = containment.nnz / math.prod(containment.shape)
     preferred_method: Literal["map-reduce"] | Literal["cohorts"]
-    if sparsity > 0.6:  # arbitrary
+    if sparsity > MAX_SPARSITY_FOR_COHORTS:
         logger.info("sparsity is {}".format(sparsity))  # noqa
         preferred_method = "map-reduce"
         if not merge:
@@ -380,7 +382,9 @@ def find_group_cohorts(
     else:
         preferred_method = "cohorts"
 
-    # Use a threshold to force some merging.
+    # Use a threshold to force some merging. We do not use the filtered
+    # containment matrix for estimating "sparsity" because it is a bit
+    # hard to reason about.
     MIN_CONTAINMENT = 0.75  # arbitrary
     mask = containment.data < MIN_CONTAINMENT
     containment.data[mask] = 0
