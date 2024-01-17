@@ -39,8 +39,8 @@ from .cache import memoize
 from .xrutils import is_duck_array, is_duck_dask_array, isnull, module_available
 
 if module_available("numpy", minversion="2.0.0"):
-    from numpy.lib.array_utils import (
-        normalize_axis_tuple,  # type: ignore[import-not-found]
+    from numpy.lib.array_utils import (  # type: ignore[import-not-found]
+        normalize_axis_tuple,
     )
 else:
     from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
