@@ -124,7 +124,9 @@ class ERA5MonthHour(ERA5Dataset, Cohorts):
         super().__init__()
         by = (self.time.dt.month.values, self.time.dt.hour.values)
         ret = flox.core._factorize_multiple(
-            by, (pd.Index(np.arange(1, 13)), pd.Index(np.arange(1, 25))), False
+            by,
+            (pd.Index(np.arange(1, 13)), pd.Index(np.arange(1, 25))),
+            any_by_dask=False,
         )
         # Add one so the rechunk code is simpler and makes sense
         self.by = ret[0][0]
