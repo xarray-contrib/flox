@@ -133,9 +133,10 @@ def _get_fill_value(dtype, fill_value):
     return fill_value
 
 
-def _atleast_1d(inp):
+def _atleast_1d(inp, min_length: int = 1):
     if xrutils.is_scalar(inp):
-        inp = (inp,)
+        inp = (inp,) * min_length
+    assert len(inp) >= min_length
     return inp
 
 

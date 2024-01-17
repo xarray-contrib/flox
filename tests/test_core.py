@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import logging
 import warnings
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Callable
@@ -37,6 +38,9 @@ from . import (
     requires_dask,
     requires_scipy,
 )
+
+logger = logging.getLogger("flox")
+logger.setLevel(logging.DEBUG)
 
 labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
 nan_labels = labels.astype(float)  # copy
@@ -169,8 +173,6 @@ def test_groupby_reduce(
 ) -> None:
     array = array.astype(dtype)
     if chunk:
-        if expected_groups is None:
-            pytest.skip()
         array = da.from_array(array, chunks=(3,) if array.ndim == 1 else (1, 3))
         by = da.from_array(by, chunks=(3,) if by.ndim == 1 else (1, 3))
 
@@ -295,7 +297,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
-        assert_equal(actual, expected, tolerance)
+        assert_equal(expected, actual, tolerance)
 
         if not has_dask or chunks is None or func in BLOCKWISE_FUNCS:
             continue
@@ -844,22 +846,29 @@ def test_rechunk_for_blockwise(inchunks, expected):
 
 @requires_dask
 @pytest.mark.parametrize(
-    "expected, labels, chunks, merge",
+    "expected, labels, chunks",
     [
-        [[[0, 1, 2, 3]], [0, 1, 2, 0, 1, 2, 3], (3, 4), True],
-        [[[0], [1], [2], [3]], [0, 1, 2, 0, 1, 2, 3], (2, 2, 2, 1), True],
-        [[[0, 1, 2], [3]], [0, 1, 2, 0, 1, 2, 3], (3, 3, 1), True],
-        [
-            [[0], [1, 2, 3, 4], [5]],
-            np.repeat(np.arange(6), [4, 4, 12, 2, 3, 4]),
-            (4, 8, 4, 9, 4),
-            True,
-        ],
+        [[[0, 1, 2, 3]], [0, 1, 2, 0, 1, 2, 3], (3, 4)],
+        [[[0], [1], [2], [3]], [0, 1, 2, 0, 1, 2, 3], (2, 2, 2, 1)],
+        [[[0, 1, 2], [3]], [0, 1, 2, 0, 1, 2, 3], (3, 3, 1)],
+        [[[0], [1, 2, 3, 4], [5]], np.repeat(np.arange(6), [4, 4, 12, 2, 3, 4]), (4, 8, 4, 9, 4)],
     ],
 )
-def test_find_group_cohorts(expected, labels, chunks: tuple[int], merge: bool) -> None:
-    actual = list(find_group_cohorts(labels, (chunks,), merge).values())
+def test_find_group_cohorts(expected, labels, chunks: tuple[int]) -> None:
+    # force merging of cohorts for the test
+    _, chunks_cohorts = find_group_cohorts(labels, (chunks,), merge=True)
+    actual = list(chunks_cohorts.values())
     assert actual == expected, (actual, expected)
+
+
+@requires_dask
+def test_find_cohorts_missing_groups():
+    by = np.array([np.nan, np.nan, np.nan, 2.0, 2.0, 1.0, 1.0, 2.0, 2.0, 1.0, np.nan, np.nan])
+    kwargs = {"func": "sum", "expected_groups": [0, 1, 2], "fill_value": 123}
+    array = dask.array.ones_like(by, chunks=(3,))
+    actual, _ = groupby_reduce(array, by, method="cohorts", **kwargs)
+    expected, _ = groupby_reduce(array.compute(), by, **kwargs)
+    assert_equal(expected, actual)
 
 
 @pytest.mark.parametrize("chunksize", [12, 13, 14, 24, 36, 48, 72, 71])
@@ -870,11 +879,29 @@ def test_verify_complex_cohorts(chunksize: int) -> None:
 
     if len(by) != sum(chunks):
         chunks += (len(by) - sum(chunks),)
-    chunk_cohorts = find_group_cohorts(by - 1, (chunks,))
+    _, chunk_cohorts = find_group_cohorts(by - 1, (chunks,))
     chunks_ = np.sort(np.concatenate(tuple(chunk_cohorts.keys())))
     groups = np.sort(np.concatenate(tuple(chunk_cohorts.values())))
-    assert_equal(np.unique(chunks_), np.arange(len(chunks), dtype=int))
-    assert_equal(groups, np.arange(366, dtype=int))
+    assert_equal(np.unique(chunks_).astype(np.int64), np.arange(len(chunks), dtype=np.int64))
+    assert_equal(groups.astype(np.int64), np.arange(366, dtype=np.int64))
+
+
+@requires_dask
+@pytest.mark.parametrize("chunksize", (12,) + tuple(range(1, 13)) + (-1,))
+def test_method_guessing(chunksize):
+    # just a regression test
+    labels = np.tile(np.arange(1, 13), 30)
+    by = dask.array.from_array(labels, chunks=chunksize) - 1
+    preferred_method, chunks_cohorts = find_group_cohorts(labels, by.chunks[slice(-1, None)])
+    if chunksize == -1:
+        assert preferred_method == "blockwise"
+        assert chunks_cohorts == {(0,): list(range(1, 13))}
+    elif chunksize in (1, 2, 3, 4, 6):
+        assert preferred_method == "cohorts"
+        assert len(chunks_cohorts) == 12 // chunksize
+    else:
+        assert preferred_method == "map-reduce"
+        assert chunks_cohorts == {}
 
 
 @requires_dask
