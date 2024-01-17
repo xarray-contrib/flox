@@ -11,12 +11,19 @@ class Cohorts:
     def setup(self, *args, **kwargs):
         raise NotImplementedError
 
+    def containment(self):
+        asfloat = self.bitmask().astype(float)
+        chunks_per_label = asfloat.sum(axis=0)
+        containment = (asfloat.T @ asfloat) / chunks_per_label
+        print(containment.nnz / np.prod(containment.shape))
+        return containment.todense()
+
     def chunks_cohorts(self):
         return flox.core.find_group_cohorts(
             self.by,
             [self.array.chunks[ax] for ax in self.axis],
             expected_groups=self.expected,
-        )
+        )[1]
 
     def bitmask(self):
         chunks = [self.array.chunks[ax] for ax in self.axis]
@@ -183,4 +190,14 @@ class PerfectBlockwiseResampling(Cohorts):
         self.axis = (2,)
         self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 10))
         self.by = codes_for_resampling(index, freq="5D")
+        self.expected = pd.RangeIndex(self.by.max() + 1)
+
+
+class OISST(Cohorts):
+    def setup(self, *args, **kwargs):
+        self.array = dask.array.ones((1, 14532), chunks=(1, 10))
+        self.axis = (1,)
+        index = pd.date_range("1981-09-01 12:00", "2021-06-14 12:00", freq="D")
+        self.time = pd.Series(index)
+        self.by = self.time.dt.dayofyear.values - 1
         self.expected = pd.RangeIndex(self.by.max() + 1)
