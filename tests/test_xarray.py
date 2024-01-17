@@ -367,26 +367,26 @@ def test_func_is_aggregation():
         xarray_reduce(ds.Tair, ds.time.dt.month, func=mean, skipna=False)
 
 
-@requires_dask
-def test_cache():
-    pytest.importorskip("cachey")
+# @requires_dask
+# def test_cache():
+#     pytest.importorskip("cachey")
 
-    from flox.cache import cache
+#     from flox.cache import cache
 
-    ds = xr.Dataset(
-        {
-            "foo": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
-            "bar": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
-        },
-        coords={"labels": ("y", np.repeat([1, 2], 10))},
-    )
+#     ds = xr.Dataset(
+#         {
+#             "foo": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
+#             "bar": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
+#         },
+#         coords={"labels": ("y", np.repeat([1, 2], 10))},
+#     )
 
-    cache.clear()
-    xarray_reduce(ds, "labels", func="mean", method="cohorts")
-    assert len(cache.data) == 1
+#     cache.clear()
+#     xarray_reduce(ds, "labels", func="mean", method="cohorts")
+#     assert len(cache.data) == 1
 
-    xarray_reduce(ds, "labels", func="mean", method="blockwise")
-    assert len(cache.data) == 2
+#     xarray_reduce(ds, "labels", func="mean", method="blockwise")
+#     assert len(cache.data) == 2
 
 
 @requires_dask
@@ -628,4 +628,31 @@ def test_groupby_2d_dataset():
     assert (
         expected.counts.dims == actual.counts.dims
     )  # https://github.com/pydata/xarray/issues/8292
+    xr.testing.assert_identical(expected, actual)
+
+
+@pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
+def test_resampling_missing_groups(chunk):
+    # Regression test for https://github.com/pydata/xarray/issues/8592
+    time_coords = pd.to_datetime(
+        ["2018-06-13T03:40:36", "2018-06-13T05:50:37", "2018-06-15T03:02:34"]
+    )
+
+    latitude_coords = [0.0]
+    longitude_coords = [0.0]
+
+    data = [[[1.0]], [[2.0]], [[3.0]]]
+
+    da = xr.DataArray(
+        data,
+        coords={"time": time_coords, "latitude": latitude_coords, "longitude": longitude_coords},
+        dims=["time", "latitude", "longitude"],
+    )
+    if chunk:
+        da = da.chunk(time=1)
+    # Without chunking the dataarray, it works:
+    with xr.set_options(use_flox=False):
+        expected = da.resample(time="1D").mean()
+    with xr.set_options(use_flox=True):
+        actual = da.resample(time="1D").mean()
     xr.testing.assert_identical(expected, actual)

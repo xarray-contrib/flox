@@ -8,6 +8,7 @@ dependencies:
   - pooch
   - toolz
   - numba
+  - scipy
   - pytest
   - pytest-cov
   - pytest-pretty
