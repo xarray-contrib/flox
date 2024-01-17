@@ -339,7 +339,7 @@ def find_group_cohorts(
     # 2. Perfectly chunked so there is only a single cohort
     if len(chunks_cohorts) == 1:
         logger.info("Only found a single cohort. 'map-reduce' is preferred.")
-        return "map-reduce", {}
+        return "map-reduce", chunks_cohorts if merge else {}
 
     # 3. Our dataset has chunksize one along the axis,
     single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
@@ -375,10 +375,10 @@ def find_group_cohorts(
     preferred_method: Literal["map-reduce"] | Literal["cohorts"]
     if sparsity > MAX_SPARSITY_FOR_COHORTS:
         logger.info("sparsity is {}".format(sparsity))  # noqa
-        preferred_method = "map-reduce"
         if not merge:
             logger.info("find_group_cohorts: merge=False, choosing 'map-reduce'")
             return "map-reduce", {}
+        preferred_method = "map-reduce"
     else:
         preferred_method = "cohorts"
 
