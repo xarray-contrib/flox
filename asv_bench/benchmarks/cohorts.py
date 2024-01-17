@@ -195,8 +195,8 @@ class PerfectBlockwiseResampling(Cohorts):
 
 class OISST(Cohorts):
     def setup(self, *args, **kwargs):
-        self.array = dask.array.ones((14532, 1), chunks=(10, 1))
-        self.axis = (0,)
+        self.array = dask.array.ones((1, 14532), chunks=(1, 10))
+        self.axis = (1,)
         index = pd.date_range("1981-09-01 12:00", "2021-06-14 12:00", freq="D")
         self.time = pd.Series(index)
         self.by = self.time.dt.dayofyear.values - 1
