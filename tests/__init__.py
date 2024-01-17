@@ -45,6 +45,7 @@ def LooseVersion(vstring):
     return packaging.version.Version(vstring)
 
 
+has_cftime, requires_cftime = _importorskip("cftime")
 has_dask, requires_dask = _importorskip("dask")
 has_numba, requires_numba = _importorskip("numba")
 has_numbagg, requires_numbagg = _importorskip("numbagg")
