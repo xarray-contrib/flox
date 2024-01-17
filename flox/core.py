@@ -333,11 +333,16 @@ def find_group_cohorts(
         logger.info("find_group_cohorts: blockwise is preferred.")
         return "blockwise", chunks_cohorts
 
-    # 2. Our dataset has chunksize one along the axis,
+    # 2. Perfectly chunked so there is only a single cohort
+    if len(chunks_cohorts) == 1:
+        logger.info("Only found a single cohort. 'map-reduce' is preferred.")
+        return "map-reduce", {}
+
+    # 3. Our dataset has chunksize one along the axis,
     single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
-    # 3. Every chunk only has a single group, but that group might extend across multiple chunks
+    # 4. Every chunk only has a single group, but that group might extend across multiple chunks
     one_group_per_chunk = (bitmask.sum(axis=LABEL_AXIS) == 1).all()
-    # 4. Existing cohorts don't overlap, great for time grouping with perfect chunking
+    # 5. Existing cohorts don't overlap, great for time grouping with perfect chunking
     no_overlapping_cohorts = (np.bincount(np.concatenate(tuple(chunks_cohorts.keys()))) == 1).all()
     if one_group_per_chunk or single_chunks or no_overlapping_cohorts:
         logger.info("find_group_cohorts: cohorts is preferred, chunking is perfect.")
@@ -349,16 +354,12 @@ def find_group_cohorts(
     #  - S is the existing set
     # We'll use containment to measure degree of overlap between labels. The bitmask
     # matrix allows us to calculate this pretty efficiently.
-    MIN_CONTAINMENT = 0.75  # arbitrary
     asfloat = bitmask.astype(float)
     # Note: While A.T @ A is a symmetric matrix, the division by chunks_per_label
     # makes it non-symmetric.
     containment = csr_array((asfloat.T @ asfloat) / chunks_per_label)
-    mask = containment.data < MIN_CONTAINMENT
-    containment.data[mask] = 0
-    containment.eliminate_zeros()
 
-    # This "filtered" containment matrix is a measure of how much the labels overlap
+    # The containment matrix is a measure of how much the labels overlap
     # with each other. We treat the sparsity = (nnz/size) as a summary measure of the net overlap.
     # 1. For high enough sparsity, there is a lot of overlap and we should use "map-reduce".
     # 2. When labels are uniformly distributed amongst all chunks
@@ -367,7 +368,7 @@ def find_group_cohorts(
     # 4. When there are no overlaps at all between labels, containment is an identity matrix.
     sparsity = containment.nnz / math.prod(containment.shape)
     preferred_method: Literal["map-reduce"] | Literal["cohorts"]
-    if sparsity > 0.8:
+    if sparsity > 0.6:  # arbitrary
         logger.info("sparsity is {}".format(sparsity))  # noqa
         preferred_method = "map-reduce"
         if not merge:
@@ -375,6 +376,12 @@ def find_group_cohorts(
             return "map-reduce", {}
     else:
         preferred_method = "cohorts"
+
+    # Use a threshold to force some merging.
+    MIN_CONTAINMENT = 0.75  # arbitrary
+    mask = containment.data < MIN_CONTAINMENT
+    containment.data[mask] = 0
+    containment.eliminate_zeros()
 
     # Iterate over labels, beginning with those with most chunks
     logger.info("find_group_cohorts: merging cohorts")
