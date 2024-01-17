@@ -59,3 +59,22 @@ repos:
     rev: v0.15
     hooks:
       - id: validate-pyproject
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.6.26
+    hooks:
+      - id: actionlint
+        files: ".github/workflows/"
+        args:
+          [
+            "-ignore",
+            "SC1090",
+            "-ignore",
+            "SC2046",
+            "-ignore",
+            "SC2086",
+            "-ignore",
+            "SC2129",
+            "-ignore",
+            "SC2155",
+          ]
