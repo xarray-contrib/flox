@@ -887,6 +887,24 @@ def test_verify_complex_cohorts(chunksize: int) -> None:
 
 
 @requires_dask
+@pytest.mark.parametrize("chunksize", (12,) + tuple(range(1, 13)) + (-1,))
+def test_method_guessing(chunksize):
+    # just a regression test
+    labels = np.tile(np.arange(1, 13), 30)
+    by = dask.array.from_array(labels, chunks=chunksize) - 1
+    preferred_method, chunks_cohorts = find_group_cohorts(labels, by.chunks[slice(-1, None)])
+    if chunksize == -1:
+        assert preferred_method == "blockwise"
+        assert chunks_cohorts == {(0,): list(range(1, 13))}
+    elif chunksize in (1, 2, 3, 4, 6):
+        assert preferred_method == "cohorts"
+        assert len(chunks_cohorts) == 12 // chunksize
+    else:
+        assert preferred_method == "map-reduce"
+        assert chunks_cohorts == {}
+
+
+@requires_dask
 @pytest.mark.parametrize(
     "chunk_at,expected",
     [
@@ -1637,20 +1655,3 @@ def test_xarray_fill_value_behaviour():
     )
     # fmt: on
     assert_equal(expected, actual)
-
-
-@pytest.mark.parametrize("chunksize", (12,) + tuple(range(1, 13)) + (-1,))
-def test_method_guessing(chunksize):
-    # just a regression test
-    labels = np.tile(np.arange(1, 13), 30)
-    by = dask.array.from_array(labels, chunks=chunksize) - 1
-    preferred_method, chunks_cohorts = find_group_cohorts(labels, by.chunks[slice(-1, None)])
-    if chunksize == -1:
-        assert preferred_method == "blockwise"
-        assert chunks_cohorts == {(0,): list(range(1, 13))}
-    elif chunksize in (1, 2, 3, 4, 6):
-        assert preferred_method == "cohorts"
-        assert len(chunks_cohorts) == 12 // chunksize
-    else:
-        assert preferred_method == "map-reduce"
-        assert chunks_cohorts == {}
