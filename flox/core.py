@@ -244,12 +244,11 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
 
-    rows = []
     cols = []
     # Add one to handle the -1 sentinel value
     label_is_present = np.zeros((nlabels + 1,), dtype=bool)
     ilabels = np.arange(nlabels)
-    for idx, region in enumerate(slices_from_chunks(chunks)):
+    for region in slices_from_chunks(chunks):
         # This is a quite fast way to find unique integers, when we know how many there are
         # inspired by a similar idea in numpy_groupies for first, last
         # instead of explicitly finding uniques, repeatedly write True to the same location
@@ -259,10 +258,9 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
         # skip the -1 sentinel by slicing
         # Faster than np.argwhere by a lot
         uniques = ilabels[label_is_present[:-1]]
-        rows.append(np.full_like(uniques, idx))
         cols.append(uniques)
         label_is_present[:] = False
-    rows_array = np.concatenate(rows)
+    rows_array = np.repeat(np.arange(nchunks), tuple(len(col) for col in cols))
     cols_array = np.concatenate(cols)
     data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
     bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
