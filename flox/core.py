@@ -260,7 +260,8 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
         uniques = ilabels[label_is_present[:-1]]
         return uniques
 
-    if nlabels < 5 * approx_chunk_size:
+    # TODO: needs a better heuristic
+    if nlabels < 2 * approx_chunk_size:
         logger.debug("Using threadpool since %s < 5 * %s", nlabels, approx_chunk_size)
         with ThreadPoolExecutor() as executor:
             futures = [
