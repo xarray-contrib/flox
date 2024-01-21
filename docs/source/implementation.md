@@ -38,11 +38,12 @@ as appropriate (e.g. Ramba, cubed, arkouda). Please open an issue to discuss if 
 
 (xarray-split)=
 
-## Background: Xarray's current GroupBy strategy
+## Background
 
-Xarray's current strategy is to find all unique group labels, index out each group,
-and then apply the reduction operation. Note that this only works if we know the group
-labels (i.e. you cannot use this strategy to group by a dask array).
+Without `flox` installed, Xarray's GroupBy strategy is to find all unique group labels,
+index out each group, and then apply the reduction operation. Note that this only works
+if we know the group labels (i.e. you cannot use this strategy to group by a dask array),
+and is basically an unvectorized slow for-loop over groups.
 
 Schematically, this looks like (colors indicate group labels; separated groups of colors
 indicate different blocks of an array):
@@ -264,3 +265,46 @@ where the grid lines mark chunk boundaries.
 
 This seems like a good fit for `'cohorts'`: to get the answer for a county in the Northwest US, we needn't look at values
 for the southwest US.
+
+(method-heuristics)=
+
+## Heuristics
+
+`flox >=0.9` will automatically choose `method` for you. To do so, we need to detect how each group
+label is distributed across the chunks of the array; and the degree to which the chunk distribution for a particular
+label overlaps with all other labels. The algorithm is as follows.
+
+1. First determine which labels are present in each chunk. The distribution of labels across chunks
+   is represented internally as a 2D boolean sparse array `S[chunks, labels]`. `S[i, j] = 1` when
+   label `j` is present in chunk `i`.
+
+1. Then we look for patterns in `S` to decide if we can use `"blockwise"`. The dark color cells are `1` at that
+   cell in `S`.
+   ![bitmask-patterns](/../diagrams/bitmask-patterns-perfect.png)
+
+   - On the left, is a monthly grouping for a monthly time series with chunk size 4. There are 3 non-overlapping cohorts so
+     `method="cohorts"` is perfect.
+   - On the right, is a resampling problem of a daily time series with chunk size 10 to 5-daily frequency. Two 5-day periods
+     are exactly contained in one chunk, so `method="blockwise"` is perfect.
+
+1. The metric used for determining the degree of overlap between the chunks occupied by different labels is
+   [containment](http://ekzhu.com/datasketch/lshensemble.html). For each label `i` we can quickly compute containment against
+   all other labels `j` as `C = S.T @ S / number_chunks_per_label`. Here is `C` for a range of chunk sizes from 1 to 12, for computing
+   the monthly mean of a monthly time series problem, \[the title on each image is `(chunk size, sparsity)`\].
+
+   ```python
+   chunks = np.arange(1, 13)
+   labels = np.tile(np.arange(1, 13), 30)
+   ```
+
+   ![cohorts-schematic](/../diagrams/containment.png)
+
+1. To choose between `"map-reduce"` and `"cohorts"`, we need a summary measure of the degree to which the labels overlap with
+   each other. We use _sparsity_ --- the number of non-zero elements in `C` divided by the number of elements in `C`, `C.nnz/C.size`.
+   When sparsity > 0.6, we choose `"map-reduce"` since there is decent overlap between (any) cohorts. Otherwise we use `"cohorts"`.
+
+Cool, isn't it?!
+
+For reference here is `S` and `C` for the US county groupby problem:
+![county-bitmask](/../diagrams/counties-bitmask-containment.png)
+The sparsity of `C` is 0.006, so `"cohorts"` seems a good strategy here.
