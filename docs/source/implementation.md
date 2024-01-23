@@ -257,14 +257,14 @@ preferred_method
 ### Example : spatial grouping
 
 Spatial groupings are particularly interesting for the `"cohorts"` strategy. Consider the problem of computing county-level
-aggregated statistics ([example blog post](https://xarray.dev/blog/flox)). There are ~3100 groups (counties),
-and there are ~2300 chunks of size (350, 350) in (lat, lon). Many groups are contained to a small number of chunks: see left panel
-where the grid lines mark chunk boundaries.
+aggregated statistics ([example blog post](https://xarray.dev/blog/flox)). There are ~3100 groups (counties), each marked by
+a different color. There are ~2300 chunks of size (350, 350) in (lat, lon). Many groups are contained to a small number of chunks:
+see left panel where the grid lines mark chunk boundaries.
 
 ![cohorts-schematic](/../diagrams/nwm-cohorts.png)
 
 This seems like a good fit for `'cohorts'`: to get the answer for a county in the Northwest US, we needn't look at values
-for the southwest US.
+for the southwest US. How do we decide that automatically for the user?
 
 (method-heuristics)=
 
