@@ -2,7 +2,7 @@ from functools import partial
 
 import numpy as np
 
-from .xrutils import isnull
+from .xrutils import is_scalar, isnull
 
 
 def _prepare_for_flox(group_idx, array, lexsort):
@@ -64,19 +64,27 @@ def quantile_(array, inv_idx, *, q, axis, skipna, dtype=None, out=None):
         full_size = np.reshape(np.diff(inv_idx), (1,) * (sizes.ndim - 1) + (inv_idx.size - 1,))
         nanmask = (full_size - sizes) > 0
 
-    q = np.atleast_1d(q)
+    qin = q
+    q = np.atleast_1d(qin)
     q = np.reshape(q, (len(q),) + (1,) * array.ndim)
 
     # This is numpy's method="linear"
     # TODO: could support all the interpolations here
     virtual_index = q * (sizes - 1) + inv_idx[:-1]
 
-    lo = np.floor(virtual_index).astype(int)
-    hi = np.ceil(virtual_index).astype(int)
+    is_scalar_q = is_scalar(qin)
+    if is_scalar_q:
+        virtual_index = virtual_index.squeeze(axis=0)
+        idxshape = array.shape[:-1] + (sizes.shape[-1],)
+        a_ = array
+    else:
+        idxshape = (q.shape[0],) + array.shape[:-1] + (sizes.shape[-1],)
+        a_ = np.broadcast_to(array, (q.shape[0],) + array.shape)
 
     # Broadcast to (num quantiles, ..., num labels)
-    idxshape = (q.shape[0],) + array.shape[:-1] + (sizes.shape[-1],)
-    a_ = np.broadcast_to(array[np.newaxis, ...], (q.shape[0], *array.shape))
+    lo = np.floor(virtual_index, casting="unsafe", out=np.empty_like(virtual_index, dtype=np.int64))
+    hi = np.ceil(virtual_index, casting="unsafe", out=np.empty_like(virtual_index, dtype=np.int64))
+
     lo_ = np.broadcast_to(lo, idxshape)
     hi_ = np.broadcast_to(hi, idxshape)
 
@@ -152,8 +160,10 @@ max = partial(_np_grouped_op, op=np.maximum.reduceat)
 nanmax = partial(_nan_grouped_op, func=max, fillna=-np.inf)
 min = partial(_np_grouped_op, op=np.minimum.reduceat)
 nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
-nanquantile = partial(_np_grouped_op, op=partial(quantile_, skipna=True))
 quantile = partial(_np_grouped_op, op=partial(quantile_, skipna=False))
+nanquantile = partial(_np_grouped_op, op=partial(quantile_, skipna=True))
+median = partial(_np_grouped_op, op=partial(quantile_, q=0.5, skipna=False))
+nanmedian = partial(_np_grouped_op, op=partial(quantile_, q=0.5, skipna=True))
 # TODO: all, any
 
 
