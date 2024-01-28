@@ -54,11 +54,15 @@ def _lerp(a, b, *, t, dtype, out=None):
     return out
 
 
-def nanquantile_(array, inv_idx, *, q, axis, dtype=None, out=None):
+def quantile_(array, inv_idx, *, q, axis, skipna, dtype=None, out=None):
     inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
 
     # This is the only difference between quantile and nanquantile
     sizes = np.add.reduceat(~np.isnan(array), inv_idx[:-1], axis=axis)
+    if not skipna:
+        # includes not NaNs
+        full_size = np.reshape(np.diff(inv_idx), (1,) * (sizes.ndim - 1) + (inv_idx.size - 1,))
+        nanmask = (full_size - sizes) > 0
 
     q = np.atleast_1d(q)
     q = np.reshape(q, (len(q),) + (1,) * array.ndim)
@@ -82,7 +86,10 @@ def nanquantile_(array, inv_idx, *, q, axis, dtype=None, out=None):
 
     # TODO: could support all the interpolations here
     gamma = np.broadcast_to(virtual_index - lo, idxshape)
-    return _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
+    result = _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
+    if not skipna and np.any(nanmask):
+        result[..., nanmask] = np.nan
+    return result
 
 
 def _np_grouped_op(
@@ -145,7 +152,8 @@ max = partial(_np_grouped_op, op=np.maximum.reduceat)
 nanmax = partial(_nan_grouped_op, func=max, fillna=-np.inf)
 min = partial(_np_grouped_op, op=np.minimum.reduceat)
 nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
-nanquantile = partial(_np_grouped_op, op=nanquantile_)
+nanquantile = partial(_np_grouped_op, op=partial(quantile_, skipna=True))
+quantile = partial(_np_grouped_op, op=partial(quantile_, skipna=False))
 # TODO: all, any
 
 
