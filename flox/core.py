@@ -46,6 +46,7 @@ else:
     from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
 
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
+_LEXSORT_FOR_FLOX = ["quantile", "nanquantile", "median", "nanmedian"]
 
 if TYPE_CHECKING:
     try:
@@ -950,7 +951,6 @@ def chunk_reduce(
     # npg's argmax ensures that index of first "max" is returned assuming there
     # are many elements equal to the "max". Sorting messes this up totally.
     # so we skip this for argreductions
-    _LEXSORT_FOR_FLOX = ["quantile", "nanquantile"]
     if engine == "flox":
         # is_arg_reduction = any("arg" in f for f in func if isinstance(f, str))
         # if not is_arg_reduction:
@@ -1961,6 +1961,10 @@ def _choose_engine(by, agg: Aggregation):
     dtype = agg.dtype["user"]
 
     not_arg_reduce = not _is_arg_reduction(agg)
+
+    if agg.name in _LEXSORT_FOR_FLOX:
+        logger.info(f"_choose_engine: Choosing 'flox' since {agg.name}")
+        return "flox"
 
     # numbagg only supports nan-skipping reductions
     # without dtype specified
