@@ -2,7 +2,7 @@ from functools import partial
 
 import numpy as np
 
-from .xrutils import is_scalar, isnull
+from .xrutils import is_scalar, isnull, notnull
 
 
 def _prepare_for_flox(group_idx, array, lexsort):
@@ -58,7 +58,7 @@ def quantile_(array, inv_idx, *, q, axis, skipna, dtype=None, out=None):
     inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
 
     # This is the only difference between quantile and nanquantile
-    sizes = np.add.reduceat(~np.isnan(array), inv_idx[:-1], axis=axis)
+    sizes = np.add.reduceat(notnull(array), inv_idx[:-1], axis=axis)
     if not skipna:
         # includes not NaNs
         full_size = np.reshape(np.diff(inv_idx), (1,) * (sizes.ndim - 1) + (inv_idx.size - 1,))
@@ -187,7 +187,7 @@ def nansum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, 
 
 
 def nanlen(group_idx, array, *args, **kwargs):
-    return sum(group_idx, (~isnull(array)).astype(int), *args, **kwargs)
+    return sum(group_idx, (notnull(array)).astype(int), *args, **kwargs)
 
 
 def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):

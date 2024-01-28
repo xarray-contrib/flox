@@ -36,7 +36,13 @@ from .aggregations import (
     generic_aggregate,
 )
 from .cache import memoize
-from .xrutils import is_duck_array, is_duck_dask_array, isnull, module_available
+from .xrutils import (
+    is_duck_array,
+    is_duck_dask_array,
+    isnull,
+    module_available,
+    notnull,
+)
 
 if module_available("numpy", minversion="2.0.0"):
     from numpy.lib.array_utils import (  # type: ignore[import-not-found]
@@ -157,7 +163,7 @@ def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
     if is_duck_dask_array(by):
         raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
     flatby = by.reshape(-1)
-    expected = pd.unique(flatby[~isnull(flatby)])
+    expected = pd.unique(flatby[notnull(flatby)])
     return _convert_expected_groups_to_index((expected,), isbin=(False,), sort=sort)[0]
 
 
@@ -1098,7 +1104,7 @@ def _find_unique_groups(x_chunk) -> np.ndarray:
     from dask.utils import deepmap
 
     unique_groups = _unique(np.asarray(tuple(flatten(deepmap(listify_groups, x_chunk)))))
-    unique_groups = unique_groups[~isnull(unique_groups)]
+    unique_groups = unique_groups[notnull(unique_groups)]
 
     if len(unique_groups) == 0:
         unique_groups = np.array([np.nan])
