@@ -955,7 +955,7 @@ def chunk_reduce(
         # is_arg_reduction = any("arg" in f for f in func if isinstance(f, str))
         # if not is_arg_reduction:
         group_idx, array = _prepare_for_flox(
-            group_idx, array, lexsort=any(f in _LEXSORT_FOR_FLOX for f in func)
+            group_idx, array, lexsort=any(f in _LEXSORT_FOR_FLOX for f in funcs)
         )
 
     final_array_shape += results["groups"].shape
