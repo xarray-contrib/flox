@@ -5,22 +5,89 @@ import numpy as np
 from .xrutils import isnull
 
 
-def _prepare_for_flox(group_idx, array):
+def _prepare_for_flox(group_idx, array, lexsort):
     """
     Sort the input array once to save time.
     """
     assert array.shape[-1] == group_idx.shape[0]
-    issorted = (group_idx[:-1] <= group_idx[1:]).all()
-    if issorted:
-        ordered_array = array
+
+    if lexsort:
+        # lexsort allows us to sort by label AND array value
+        # numpy's quantile uses partition, which could be a big win
+        # IF we can figure out how to do that.
+        # This trick was snagged from scipy.ndimage.median() :)
+        labels_broadcast = np.broadcast_to(group_idx, array.shape)
+        idxs = np.lexsort((array, labels_broadcast), axis=-1)
+        ordered_array = np.take_along_axis(array, idxs, axis=-1)
+        group_idx = np.take_along_axis(group_idx, idxs[(0,) * (idxs.ndim - 1) + (...,)], axis=-1)
     else:
-        perm = group_idx.argsort(kind="stable")
-        group_idx = group_idx[..., perm]
-        ordered_array = array[..., perm]
+        issorted = (group_idx[:-1] <= group_idx[1:]).all()
+        if issorted:
+            ordered_array = array
+        else:
+            perm = group_idx.argsort(kind="stable")
+            group_idx = group_idx[..., perm]
+            ordered_array = array[..., perm]
     return group_idx, ordered_array
 
 
-def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None):
+def _lerp(a, b, *, t, dtype, out=None):
+    """
+    COPIED from numpy.
+
+    Compute the linear interpolation weighted by gamma on each point of
+    two same shape array.
+
+    a : array_like
+        Left bound.
+    b : array_like
+        Right bound.
+    t : array_like
+        The interpolation weight.
+    """
+    if out is None:
+        out = np.empty_like(a, dtype=dtype)
+    diff_b_a = np.subtract(b, a)
+    # asanyarray is a stop-gap until gh-13105
+    np.add(a, diff_b_a * t, out=out)
+    np.subtract(b, diff_b_a * (1 - t), out=out, where=t >= 0.5)
+    return out
+
+
+def nanquantile_(array, inv_idx, *, q, axis, dtype=None, out=None):
+    inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
+
+    # This is the only difference between quantile and nanquantile
+    sizes = np.add.reduceat(~np.isnan(array), inv_idx[:-1], axis=axis)
+
+    q = np.atleast_1d(q)
+    q = np.reshape(q, (len(q),) + (1,) * array.ndim)
+
+    # This is numpy's method="linear"
+    # TODO: could support all the interpolations here
+    virtual_index = q * (sizes - 1) + inv_idx[:-1]
+
+    lo = np.floor(virtual_index).astype(int)
+    hi = np.ceil(virtual_index).astype(int)
+
+    # Broadcast to (num quantiles, ..., num labels)
+    idxshape = (q.shape[0],) + array.shape[:-1] + (sizes.shape[-1],)
+    a_ = np.broadcast_to(array[np.newaxis, ...], (q.shape[0], *array.shape))
+    lo_ = np.broadcast_to(lo, idxshape)
+    hi_ = np.broadcast_to(hi, idxshape)
+
+    # get bounds
+    loval = np.take_along_axis(a_, lo_, axis=axis)
+    hival = np.take_along_axis(a_, hi_, axis=axis)
+
+    # TODO: could support all the interpolations here
+    gamma = np.broadcast_to(virtual_index - lo, idxshape)
+    return _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
+
+
+def _np_grouped_op(
+    group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None, **kwargs
+):
     """
     most of this code is from shoyer's gist
     https://gist.github.com/shoyer/f538ac78ae904c936844
@@ -38,16 +105,21 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
         dtype = array.dtype
 
     if out is None:
-        out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
+        q = kwargs.get("q", None)
+        if q is None:
+            out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
+        else:
+            nq = len(np.atleast_1d(q))
+            out = np.full((nq,) + array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
 
     if (len(uniques) == size) and (uniques == np.arange(size, like=array)).all():
         # The previous version of this if condition
         #     ((uniques[1:] - uniques[:-1]) == 1).all():
         # does not work when group_idx is [1, 2] for e.g.
         # This happens during binning
-        op.reduceat(array, inv_idx, axis=axis, dtype=dtype, out=out)
+        op(array, inv_idx, axis=axis, dtype=dtype, out=out, **kwargs)
     else:
-        out[..., uniques] = op.reduceat(array, inv_idx, axis=axis, dtype=dtype)
+        out[..., uniques] = op(array, inv_idx, axis=axis, dtype=dtype, **kwargs)
 
     return out
 
@@ -65,14 +137,15 @@ def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
     return result
 
 
-sum = partial(_np_grouped_op, op=np.add)
+sum = partial(_np_grouped_op, op=np.add.reduceat)
 nansum = partial(_nan_grouped_op, func=sum, fillna=0)
-prod = partial(_np_grouped_op, op=np.multiply)
+prod = partial(_np_grouped_op, op=np.multiply.reduceat)
 nanprod = partial(_nan_grouped_op, func=prod, fillna=1)
-max = partial(_np_grouped_op, op=np.maximum)
+max = partial(_np_grouped_op, op=np.maximum.reduceat)
 nanmax = partial(_nan_grouped_op, func=max, fillna=-np.inf)
-min = partial(_np_grouped_op, op=np.minimum)
+min = partial(_np_grouped_op, op=np.minimum.reduceat)
 nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
+nanquantile = partial(_np_grouped_op, op=nanquantile_)
 # TODO: all, any
 
 
