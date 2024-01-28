@@ -58,8 +58,7 @@ def quantile_(array, inv_idx, *, q, axis, skipna, dtype=None, out=None):
     inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
 
     if skipna:
-        mask = notnull(array)
-        sizes = np.add.reduceat(mask, inv_idx[:-1], axis=axis)
+        sizes = np.add.reduceat(notnull(array), inv_idx[:-1], axis=axis)
     else:
         sizes = np.reshape(np.diff(inv_idx), (1,) * (array.ndim - 1) + (inv_idx.size - 1,))
         nanmask = isnull(np.take_along_axis(array, sizes - 1, axis=axis))
