@@ -82,18 +82,15 @@ def quantile_(array, inv_idx, *, q, axis, skipna, dtype=None, out=None):
         a_ = np.broadcast_to(array, (q.shape[0],) + array.shape)
 
     # Broadcast to (num quantiles, ..., num labels)
-    lo = np.floor(virtual_index, casting="unsafe", out=np.empty_like(virtual_index, dtype=np.int64))
-    hi = np.ceil(virtual_index, casting="unsafe", out=np.empty_like(virtual_index, dtype=np.int64))
-
-    lo_ = np.broadcast_to(lo, idxshape)
-    hi_ = np.broadcast_to(hi, idxshape)
+    lo_ = np.floor(virtual_index, casting="unsafe", out=np.empty(idxshape, dtype=np.int64))
+    hi_ = np.ceil(virtual_index, casting="unsafe", out=np.empty(idxshape, dtype=np.int64))
 
     # get bounds
     loval = np.take_along_axis(a_, lo_, axis=axis)
     hival = np.take_along_axis(a_, hi_, axis=axis)
 
     # TODO: could support all the interpolations here
-    gamma = np.broadcast_to(virtual_index - lo, idxshape)
+    gamma = np.broadcast_to(virtual_index, idxshape) - lo_
     result = _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
     if not skipna and np.any(nanmask):
         result[..., nanmask] = np.nan
