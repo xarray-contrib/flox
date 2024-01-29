@@ -8,6 +8,11 @@ def _get_aggregate(engine):
     return npg.aggregate_numpy if engine == "numpy" else npg.aggregate_numba
 
 
+def _casting_wrapper(func, grp, dtype):
+    """Used for generic aggregates. The group is dtype=object, need to cast back to fix weird bugs"""
+    return func(grp.astype(dtype))
+
+
 def sum_of_squares(
     group_idx,
     array,
@@ -106,7 +111,7 @@ def median(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dty
     return npg.aggregate_numpy.aggregate(
         group_idx,
         array,
-        func=np.median,
+        func=partial(_casting_wrapper, np.median, dtype=array.dtype),
         axis=axis,
         size=size,
         fill_value=fill_value,
@@ -118,7 +123,7 @@ def nanmedian(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, 
     return npg.aggregate_numpy.aggregate(
         group_idx,
         array,
-        func=np.nanmedian,
+        func=partial(_casting_wrapper, np.nanmedian, dtype=array.dtype),
         axis=axis,
         size=size,
         fill_value=fill_value,
@@ -130,7 +135,7 @@ def quantile(group_idx, array, engine, *, q, axis=-1, size=None, fill_value=None
     return npg.aggregate_numpy.aggregate(
         group_idx,
         array,
-        func=partial(np.quantile, q=q),
+        func=partial(_casting_wrapper, partial(np.quantile, q=q), dtype=array.dtype),
         axis=axis,
         size=size,
         fill_value=fill_value,
@@ -142,7 +147,7 @@ def nanquantile(group_idx, array, engine, *, q, axis=-1, size=None, fill_value=N
     return npg.aggregate_numpy.aggregate(
         group_idx,
         array,
-        func=partial(np.nanquantile, q=q),
+        func=partial(_casting_wrapper, partial(np.nanquantile, q=q), dtype=array.dtype),
         axis=axis,
         size=size,
         fill_value=fill_value,
