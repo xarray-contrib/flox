@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 import warnings
 from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
@@ -14,6 +15,9 @@ from . import xrdtypes as dtypes
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
     OptionalFuncTuple = tuple[Callable | str | None, ...]
+
+
+logger = logging.getLogger("flox")
 
 
 def _is_arg_reduction(func: str | Aggregation) -> bool:
@@ -62,6 +66,7 @@ def generic_aggregate(
         try:
             method = getattr(aggregate_flox, func)
         except AttributeError:
+            logger.debug(f"Couldn't find {func} for engine='flox'. Falling back to numpy")
             method = get_npg_aggregation(func, engine="numpy")
 
     elif engine == "numbagg":
@@ -78,6 +83,7 @@ def generic_aggregate(
             else:
                 method = getattr(aggregate_numbagg, func)
         except AttributeError:
+            logger.debug(f"Couldn't find {func} for engine='numbagg'. Falling back to numpy")
             method = get_npg_aggregation(func, engine="numpy")
 
     elif engine in ["numpy", "numba"]:

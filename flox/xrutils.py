@@ -100,6 +100,20 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
     )
 
 
+def notnull(data):
+    if not is_duck_array(data):
+        data = np.asarray(data)
+
+    scalar_type = data.dtype.type
+    if issubclass(scalar_type, (np.bool_, np.integer, np.character, np.void)):
+        # these types cannot represent missing values
+        return np.ones_like(data, dtype=bool)
+    else:
+        out = isnull(data)
+        np.logical_not(out, out=out)
+        return out
+
+
 def isnull(data):
     if not is_duck_array(data):
         data = np.asarray(data)

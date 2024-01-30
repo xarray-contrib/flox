@@ -261,6 +261,9 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         fill_value = None
         tolerance = None
 
+    # for constructing expected
+    array_func = _get_array_func(func)
+
     for kwargs in finalize_kwargs:
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -280,7 +283,6 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                     array_[..., nanmask] = np.nan
                     expected = getattr(np, func_)(array_, axis=-1, **kwargs)
                 else:
-                    array_func = _get_array_func(func)
                     expected = array_func(array_[..., ~nanmask], axis=-1, **kwargs)
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
@@ -290,14 +292,27 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             flox_kwargs["method"] = "blockwise"
 
         actual, *groups = groupby_reduce(array, *by, **flox_kwargs)
-        assert actual.ndim == (array.ndim + nby - 1)
-        assert expected.ndim == (array.ndim + nby - 1)
+        assert actual.ndim == expected.ndim == (array.ndim + nby - 1)
         expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
         for actual_group, expect in zip(groups, expected_groups):
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
         assert_equal(expected, actual, tolerance)
+
+        if "nan" not in func and "arg" not in func:
+            # test non-NaN skipping behaviour when NaNs are present
+            nanned = array_.copy()
+            # remove nans in by to reduce complexity
+            # We are checking for consistent behaviour with NaNs in array
+            by_ = tuple(np.nan_to_num(b, nan=np.nanmin(b)) for b in by)
+            nanned[[1, 4, 5], ...] = np.nan
+            nanned.reshape(-1)[0] = np.nan
+            actual, *_ = groupby_reduce(nanned, *by_, **flox_kwargs)
+            expected_0 = array_func(nanned, axis=-1, **kwargs)
+            for _ in range(nby):
+                expected_0 = np.expand_dims(expected_0, -1)
+            assert_equal(expected_0, actual, tolerance)
 
         if not has_dask or chunks is None or func in BLOCKWISE_FUNCS:
             continue
