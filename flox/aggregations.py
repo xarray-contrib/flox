@@ -146,6 +146,10 @@ def _atleast_1d(inp, min_length: int = 1):
     return inp
 
 
+def returns_empty_tuple(*args, **kwargs):
+    return ()
+
+
 class Aggregation:
     def __init__(
         self,
@@ -242,7 +246,7 @@ class Aggregation:
         self.finalize_kwargs: dict[Any, Any] = {}
         self.min_count: int = 0
         self.new_axes_func: Callable = (
-            (lambda **kwargs: tuple()) if new_axes_func is None else new_axes_func
+            returns_empty_tuple if new_axes_func is None else new_axes_func
         )
 
     def get_new_axes(self):
