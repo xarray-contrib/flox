@@ -73,7 +73,7 @@ def nanvar(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None,
     kwargs = {}
     if NUMBAGG_SUPPORTS_DDOF:
         kwargs["ddof"] = ddof
-    elif ddof != 0:
+    elif ddof != 1:
         raise ValueError("Need numbagg >= v0.7.0 to support ddof != 1")
     return _numbagg_wrapper(
         group_idx,

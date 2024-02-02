@@ -74,9 +74,11 @@ def generic_aggregate(
 
         try:
             if "var" in func or "std" in func:
-                if aggregate_numbagg.NUMBAGG_SUPPORTS_DDOF or (kwargs.get("ddof", 0) != 0):
+                ddof = kwargs.get("ddof", 0)
+                if aggregate_numbagg.NUMBAGG_SUPPORTS_DDOF or (ddof != 0):
                     method = getattr(aggregate_numbagg, func)
                 else:
+                    logger.debug(f"numbagg too old for ddof={ddof}. Falling back to numpy")
                     method = get_npg_aggregation(func, engine="numpy")
             else:
                 method = getattr(aggregate_numbagg, func)
