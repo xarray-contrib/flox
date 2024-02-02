@@ -2321,7 +2321,7 @@ def groupby_reduce(
         if (not any_by_dask and method is None) or method == "cohorts":
             preferred_method, chunks_cohorts = find_group_cohorts(
                 by_,
-                [array.chunks[ax] for ax in axis_],
+                [array.chunks[ax] for ax in range(-by_.ndim, 0)],
                 expected_groups=expected_,
                 # when provided with cohorts, we *always* 'merge'
                 merge=(method == "cohorts"),
