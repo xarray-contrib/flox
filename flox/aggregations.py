@@ -146,6 +146,10 @@ def _atleast_1d(inp, min_length: int = 1):
     return inp
 
 
+def returns_empty_tuple(*args, **kwargs):
+    return ()
+
+
 class Aggregation:
     def __init__(
         self,
@@ -161,6 +165,7 @@ class Aggregation:
         dtypes=None,
         final_dtype: DTypeLike | None = None,
         reduction_type: Literal["reduce", "argreduce"] = "reduce",
+        new_axes_func: Callable | None = None,
     ):
         """
         Blueprint for computing grouped aggregations.
@@ -203,6 +208,10 @@ class Aggregation:
             per reduction in ``chunk`` as a tuple.
         final_dtype : DType, optional
             DType for output. By default, uses dtype of array being reduced.
+        new_axes_func: Callable
+            Function that receives finalize_kwargs and returns a tupleof sizes of any new dimensions
+            added by the reduction. For e.g. quantile for q=(0.5, 0.85) adds a new dimension of size 2,
+            so returns (2,)
         """
         self.name = name
         # preprocess before blockwise
@@ -236,6 +245,12 @@ class Aggregation:
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
         self.min_count: int = 0
+        self.new_axes_func: Callable = (
+            returns_empty_tuple if new_axes_func is None else new_axes_func
+        )
+
+    def get_new_axes(self):
+        return self.new_axes_func(**self.finalize_kwargs)
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
@@ -493,11 +508,27 @@ median = Aggregation(
 nanmedian = Aggregation(
     name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
 )
+
+
+def quantile_new_axes_func(q):
+    return tuple() if xrutils.is_scalar(q) else (len(q),)
+
+
 quantile = Aggregation(
-    name="quantile", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+    name="quantile",
+    fill_value=dtypes.NA,
+    chunk=None,
+    combine=None,
+    final_dtype=np.float64,
+    new_axes_func=quantile_new_axes_func,
 )
 nanquantile = Aggregation(
-    name="nanquantile", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+    name="nanquantile",
+    fill_value=dtypes.NA,
+    chunk=None,
+    combine=None,
+    final_dtype=np.float64,
+    new_axes_func=quantile_new_axes_func,
 )
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)

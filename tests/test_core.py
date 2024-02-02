@@ -600,8 +600,14 @@ def test_nanfirst_nanlast_disallowed_dask(axis, func):
 @requires_dask
 @pytest.mark.parametrize("func", ["first", "last"])
 def test_first_last_disallowed_dask(func):
-    with pytest.raises(NotImplementedError):
-        groupby_reduce(dask.array.empty((2, 3, 2)), np.ones((2, 3, 2)), func=func, axis=-1)
+    # blockwise is fine
+    groupby_reduce(dask.array.empty((2, 3, 2)), np.ones((2, 3, 2)), func=func, axis=-1)
+
+    # anything else is not.
+    with pytest.raises(ValueError):
+        groupby_reduce(
+            dask.array.empty((2, 3, 2), chunks=(-1, -1, 1)), np.ones((2,)), func=func, axis=-1
+        )
 
 
 @requires_dask
@@ -1669,4 +1675,22 @@ def test_xarray_fill_value_behaviour():
          nan,  0., nan,  4., nan,  5., nan,  0., nan,  0.]
     )
     # fmt: on
+    assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize("q", (0.5, (0.5,), (0.5, 0.85)))
+@pytest.mark.parametrize("func", ["nanquantile", "quantile"])
+@pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
+def test_multiple_quantiles(q, chunk, func):
+    array = np.array([[1, -1, np.nan, 3, 4, 10, 5], [1, np.nan, np.nan, 3, 4, np.nan, np.nan]])
+    labels = np.array([0, 0, 0, 1, 0, 1, 1])
+    axis = -1
+
+    if chunk:
+        array = dask.array.from_array(array, chunks=(1, -1))
+
+    actual, _ = groupby_reduce(array, labels, func=func, finalize_kwargs=dict(q=q), axis=axis)
+    sorted_array = array[..., [0, 1, 2, 4, 3, 5, 6]]
+    f = partial(getattr(np, func), q=q, axis=axis, keepdims=True)
+    expected = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=axis)
     assert_equal(expected, actual)
