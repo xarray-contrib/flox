@@ -1007,11 +1007,9 @@ def chunk_reduce(
             # TODO: Figure out how to generalize this
             if reduction in ("quantile", "nanquantile"):
                 new_dims_shape = quantile_new_axes_func(**kw)
-                result = result.reshape(
-                    new_dims_shape + final_array_shape[:-1] + found_groups_shape
-                )
             else:
-                result = result.reshape(final_array_shape[:-1] + found_groups_shape)
+                new_dims_shape = tuple()
+            result = result.reshape(new_dims_shape + final_array_shape[:-1] + found_groups_shape)
         results["intermediates"].append(result)
         previous_reduction = reduction
 
