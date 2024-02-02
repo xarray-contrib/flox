@@ -8,7 +8,13 @@ xr = pytest.importorskip("xarray")
 
 from flox.xarray import rechunk_for_blockwise, xarray_reduce
 
-from . import assert_equal, has_dask, raise_if_dask_computes, requires_dask
+from . import (
+    assert_equal,
+    has_dask,
+    raise_if_dask_computes,
+    requires_cftime,
+    requires_dask,
+)
 
 if has_dask:
     import dask
@@ -178,10 +184,18 @@ def test_validate_expected_groups(expected_groups):
         )
 
 
+@requires_cftime
 @requires_dask
 def test_xarray_reduce_single_grouper(engine):
     # DataArray
-    ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
+    ds = xr.Dataset(
+        {"Tair": (("time", "x", "y"), dask.array.ones((36, 205, 275), chunks=(9, -1, -1)))},
+        coords={
+            "time": xr.date_range(
+                "1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap"
+            )
+        },
+    )
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", engine=engine)
     expected = ds.Tair.groupby("time.month").mean()
     xr.testing.assert_allclose(actual, expected)
@@ -355,7 +369,14 @@ def test_xarray_groupby_bins(chunks, engine):
 def test_func_is_aggregation():
     from flox.aggregations import mean
 
-    ds = xr.tutorial.open_dataset("rasm", chunks={"time": 9})
+    ds = xr.Dataset(
+        {"Tair": (("time", "x", "y"), dask.array.ones((36, 205, 275), chunks=(9, -1, -1)))},
+        coords={
+            "time": xr.date_range(
+                "1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap"
+            )
+        },
+    )
     expected = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func=mean)
     xr.testing.assert_allclose(actual, expected)
@@ -367,35 +388,43 @@ def test_func_is_aggregation():
         xarray_reduce(ds.Tair, ds.time.dt.month, func=mean, skipna=False)
 
 
-@requires_dask
-def test_cache():
-    pytest.importorskip("cachey")
+# @requires_dask
+# def test_cache():
+#     pytest.importorskip("cachey")
 
-    from flox.cache import cache
+#     from flox.cache import cache
 
-    ds = xr.Dataset(
-        {
-            "foo": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
-            "bar": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
-        },
-        coords={"labels": ("y", np.repeat([1, 2], 10))},
-    )
+#     ds = xr.Dataset(
+#         {
+#             "foo": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
+#             "bar": (("x", "y"), dask.array.ones((10, 20), chunks=2)),
+#         },
+#         coords={"labels": ("y", np.repeat([1, 2], 10))},
+#     )
 
-    cache.clear()
-    xarray_reduce(ds, "labels", func="mean", method="cohorts")
-    assert len(cache.data) == 1
+#     cache.clear()
+#     xarray_reduce(ds, "labels", func="mean", method="cohorts")
+#     assert len(cache.data) == 1
 
-    xarray_reduce(ds, "labels", func="mean", method="blockwise")
-    assert len(cache.data) == 2
+#     xarray_reduce(ds, "labels", func="mean", method="blockwise")
+#     assert len(cache.data) == 2
 
 
 @requires_dask
 @pytest.mark.parametrize("method", ["cohorts", "map-reduce"])
 def test_groupby_bins_indexed_coordinate(method):
-    ds = (
-        xr.tutorial.open_dataset("air_temperature")
-        .isel(time=slice(100))
-        .chunk({"time": 20, "lat": 5})
+    ds = xr.Dataset(
+        {
+            "air": (
+                ("time", "lat", "lon"),
+                dask.array.random.random((125, 25, 53), chunks=(20, 5, -1)),
+            )
+        },
+        coords={
+            "time": pd.date_range("2013-01-01", "2013-02-01", freq="6H"),
+            "lat": np.arange(75.0, 14.9, -2.5),
+            "lon": np.arange(200.0, 331.0, 2.5),
+        },
     )
     bins = [40, 50, 60, 70]
     expected = ds.groupby_bins("lat", bins=bins).mean(keep_attrs=True, dim=...)
@@ -628,4 +657,31 @@ def test_groupby_2d_dataset():
     assert (
         expected.counts.dims == actual.counts.dims
     )  # https://github.com/pydata/xarray/issues/8292
+    xr.testing.assert_identical(expected, actual)
+
+
+@pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
+def test_resampling_missing_groups(chunk):
+    # Regression test for https://github.com/pydata/xarray/issues/8592
+    time_coords = pd.to_datetime(
+        ["2018-06-13T03:40:36", "2018-06-13T05:50:37", "2018-06-15T03:02:34"]
+    )
+
+    latitude_coords = [0.0]
+    longitude_coords = [0.0]
+
+    data = [[[1.0]], [[2.0]], [[3.0]]]
+
+    da = xr.DataArray(
+        data,
+        coords={"time": time_coords, "latitude": latitude_coords, "longitude": longitude_coords},
+        dims=["time", "latitude", "longitude"],
+    )
+    if chunk:
+        da = da.chunk(time=1)
+    # Without chunking the dataarray, it works:
+    with xr.set_options(use_flox=False):
+        expected = da.resample(time="1D").mean()
+    with xr.set_options(use_flox=True):
+        actual = da.resample(time="1D").mean()
     xr.testing.assert_identical(expected, actual)

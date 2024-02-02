@@ -4,9 +4,9 @@ channels:
 dependencies:
   - asv
   - cachey
+  - cftime
   - codecov
   - dask-core
-  - netcdf4
   - pandas
   - numpy>=1.22
   - scipy

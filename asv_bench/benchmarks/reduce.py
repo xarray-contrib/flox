@@ -7,7 +7,7 @@ import flox.aggregations
 
 N = 3000
 funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "count"]
-engines = [None, "flox", "numpy", "numbagg"]
+engines = [None, "flox", "numpy"]  # numbagg is disabled for now since it takes ages in CI
 expected_groups = {
     "None": None,
     "bins": pd.IntervalIndex.from_breaks([1, 2, 4]),
@@ -59,17 +59,17 @@ class ChunkReduce:
             expected_groups=expected_groups[expected_name],
         )
 
-    @skip_for_params(numbagg_skip)
-    @parameterize({"func": funcs, "expected_name": expected_names, "engine": engines})
-    def peakmem_reduce(self, func, expected_name, engine):
-        flox.groupby_reduce(
-            self.array,
-            self.labels,
-            func=func,
-            engine=engine,
-            axis=self.axis,
-            expected_groups=expected_groups[expected_name],
-        )
+    # @skip_for_params(numbagg_skip)
+    # @parameterize({"func": funcs, "expected_name": expected_names, "engine": engines})
+    # def peakmem_reduce(self, func, expected_name, engine):
+    #     flox.groupby_reduce(
+    #         self.array,
+    #         self.labels,
+    #         func=func,
+    #         engine=engine,
+    #         axis=self.axis,
+    #         expected_groups=expected_groups[expected_name],
+    #     )
 
 
 class ChunkReduce1D(ChunkReduce):

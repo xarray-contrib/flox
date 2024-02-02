@@ -84,7 +84,7 @@ class ReprObject:
 def is_scalar(value: Any, include_0d: bool = True) -> bool:
     """Whether to treat a value as a scalar.
 
-    Any non-iterable, string, or 0-D array
+    Any non-iterable, string, dict, or 0-D array
     """
     NON_NUMPY_SUPPORTED_ARRAY_TYPES = (dask_array_type, pd.Index)
 
@@ -92,12 +92,26 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
         include_0d = getattr(value, "ndim", None) == 0
     return (
         include_0d
-        or isinstance(value, (str, bytes))
+        or isinstance(value, (str, bytes, dict))
         or not (
             isinstance(value, (Iterable,) + NON_NUMPY_SUPPORTED_ARRAY_TYPES)
             or hasattr(value, "__array_function__")
         )
     )
+
+
+def notnull(data):
+    if not is_duck_array(data):
+        data = np.asarray(data)
+
+    scalar_type = data.dtype.type
+    if issubclass(scalar_type, (np.bool_, np.integer, np.character, np.void)):
+        # these types cannot represent missing values
+        return np.ones_like(data, dtype=bool)
+    else:
+        out = isnull(data)
+        np.logical_not(out, out=out)
+        return out
 
 
 def isnull(data):

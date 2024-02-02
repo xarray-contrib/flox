@@ -49,7 +49,7 @@ jobs:
         run: |
           pytest -n auto --cov=./ --cov-report=xml
       - name: Upload code coverage to Codecov
-        uses: codecov/codecov-action@v3.1.4
+        uses: codecov/codecov-action@v4.0.0
         with:
           file: ./coverage.xml
           flags: unittests
@@ -93,7 +93,7 @@ jobs:
         run: |
           python -m pytest -n auto --cov=./ --cov-report=xml
       - name: Upload code coverage to Codecov
-        uses: codecov/codecov-action@v3.1.4
+        uses: codecov/codecov-action@v4.0.0
         with:
           file: ./coverage.xml
           flags: unittests
@@ -148,4 +148,8 @@ jobs:
           python -m pytest -n auto \
               xarray/tests/test_groupby.py \
               xarray/tests/test_units.py::TestDataArray::test_computation_objects \
-              xarray/tests/test_units.py::TestDataset::test_computation_objects
+              xarray/tests/test_units.py::TestDataArray::test_grouped_operations \
+              xarray/tests/test_units.py::TestDataArray::test_resample \
+              xarray/tests/test_units.py::TestDataset::test_computation_objects \
+              xarray/tests/test_units.py::TestDataset::test_grouped_operations \
+              xarray/tests/test_units.py::TestDataset::test_resample

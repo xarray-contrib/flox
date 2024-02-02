@@ -17,11 +17,12 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "pandas",
+    "pandas>=1.5",
     "packaging>=21.3",
     "numpy>=1.22",
     "numpy_groupies>=0.9.19",
     "toolz",
+    "scipy>=1.9",
 ]
 dynamic=["version"]
 
@@ -38,10 +39,10 @@ test = ["netCDF4"]
 
 [build-system]
 requires = [
-    "pandas",
+    "pandas>=1.5",
     "numpy>=1.22",
     "numpy_groupies>=0.9.19",
-    "scipy",
+    "scipy>=1.9",
     "toolz",
     "setuptools>=61.0.0",
     "setuptools_scm[toml]>=7.0",
