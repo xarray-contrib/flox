@@ -1670,3 +1670,21 @@ def test_xarray_fill_value_behaviour():
     )
     # fmt: on
     assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize("q", (0.5, (0.5,), (0.5, 0.85)))
+@pytest.mark.parametrize("func", ["nanquantile", "quantile"])
+@pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
+def test_multiple_quantiles(q, chunk, func):
+    array = np.array([[1, -1, np.nan, 3, 4, 10, 5], [1, np.nan, np.nan, 3, 4, np.nan, np.nan]])
+    labels = np.array([0, 0, 0, 1, 0, 1, 1])
+    axis = -1
+
+    if chunk:
+        array = dask.array.from_array(array, chunks=(1, -1))
+
+    actual, _ = groupby_reduce(array, labels, func=func, finalize_kwargs=dict(q=q), axis=axis)
+    sorted_array = array[..., [0, 1, 2, 4, 3, 5, 6]]
+    f = partial(getattr(np, func), q=q, axis=axis, keepdims=True)
+    expected = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=axis)
+    assert_equal(expected, actual)

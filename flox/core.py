@@ -34,6 +34,7 @@ from .aggregations import (
     _atleast_1d,
     _initialize_aggregation,
     generic_aggregate,
+    quantile_new_axes_func,
 )
 from .cache import memoize
 from .xrutils import (
@@ -943,6 +944,7 @@ def chunk_reduce(
     assert group_idx.ndim == 1
 
     empty = np.all(props.nanmask)
+    hasnan = np.any(props.nanmask)
 
     results: IntermediateDict = {"groups": [], "intermediates": []}
     if reindex and expected_groups is not None:
@@ -999,10 +1001,17 @@ def chunk_reduce(
                     # been "offset" and is really expected_groups in nearly all cases
                     seen_groups=seen_groups,
                 )
-            if np.any(props.nanmask):
+            if hasnan:
                 # remove NaN group label which should be last
                 result = result[..., :-1]
-            result = result.reshape(final_array_shape[:-1] + found_groups_shape)
+            # TODO: Figure out how to generalize this
+            if reduction in ("quantile", "nanquantile"):
+                new_dims_shape = quantile_new_axes_func(**kw)
+                result = result.reshape(
+                    new_dims_shape + final_array_shape[:-1] + found_groups_shape
+                )
+            else:
+                result = result.reshape(final_array_shape[:-1] + found_groups_shape)
         results["intermediates"].append(result)
         previous_reduction = reduction
 
@@ -1663,8 +1672,13 @@ def dask_groupby_agg(
     else:
         raise ValueError(f"Unknown method={method}.")
 
-    out_inds = inds[: -len(axis)] + (inds[-1],)
-    output_chunks = reduced.chunks[: -len(axis)] + group_chunks
+    # Adjust output for any new dimensions added, example for multiple quantiles
+    new_dims_shape = agg.get_new_axes()
+    new_inds = tuple(range(-len(new_dims_shape), 0))
+    out_inds = new_inds + inds[: -len(axis)] + (inds[-1],)
+    output_chunks = new_dims_shape + reduced.chunks[: -len(axis)] + group_chunks
+    new_axes = dict(zip(new_inds, new_dims_shape))
+
     if method == "blockwise" and len(axis) > 1:
         # The final results are available but the blocks along axes
         # need to be reshaped to axis=-1
@@ -1683,6 +1697,7 @@ def dask_groupby_agg(
         key=agg.name,
         name=f"{name}-{token}",
         concatenate=False,
+        new_axes=new_axes,
     )
 
     return (result, groups)
@@ -2119,8 +2134,17 @@ def groupby_reduce(
             "See https://github.com/numbagg/numbagg/issues/121."
         )
 
-    if func == "quantile" and (finalize_kwargs is None or "q" not in finalize_kwargs):
-        raise ValueError("Please pass `q` for quantile calculations.")
+    if func in ["quantile", "nanquantile"]:
+        if finalize_kwargs is None or "q" not in finalize_kwargs:
+            raise ValueError("Please pass `q` for quantile calculations.")
+        else:
+            nq = len(_atleast_1d(finalize_kwargs["q"]))
+            if nq > 1 and engine == "numpy":
+                raise ValueError(
+                    "Multiple quantiles not supported with engine='numpy'."
+                    "Use engine='flox' instead (it is also much faster), "
+                    "or set engine=None to use the default."
+                )
 
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
@@ -2275,7 +2299,7 @@ def groupby_reduce(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
-        if agg.chunk[0] is None and method != "blockwise":
+        if agg.chunk[0] is None and method not in [None, "blockwise"]:
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"Received method={method!r}"
