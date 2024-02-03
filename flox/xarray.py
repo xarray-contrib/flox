@@ -387,7 +387,10 @@ def xarray_reduce(
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
 
-        if result.ndim > array.ndim:
+        # Transpose the new quantile dimension to the end. This is ugly.
+        # but new core dimensions are expected at the end :/
+        # but groupby_reduce inserts them at the beginning
+        if result.ndim > array.ndim and func in ["quantile", "nanquantile"]:
             assert result.ndim - array.ndim == 1
             result = np.moveaxis(result, 0, -1)
 
