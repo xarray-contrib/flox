@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -7,6 +9,7 @@ xr = pytest.importorskip("xarray")
 # isort: on
 
 from flox.xarray import rechunk_for_blockwise, xarray_reduce
+from flox.xrutils import is_scalar
 
 from . import (
     assert_equal,
@@ -685,3 +688,30 @@ def test_resampling_missing_groups(chunk):
     with xr.set_options(use_flox=True):
         actual = da.resample(time="1D").mean()
     xr.testing.assert_identical(expected, actual)
+
+
+@pytest.mark.parametrize("q", (0.5, (0.5,), (0.5, 0.85)))
+@pytest.mark.parametrize("skipna", [False, True])
+@pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
+def test_multiple_quantiles(q, chunk, skipna):
+    array = np.array([[1, -1, np.nan, 3, 4, 10, 5], [1, np.nan, np.nan, 3, 4, np.nan, np.nan]])
+    labels = np.array([0, 0, 0, 1, 0, 1, 1])
+    axis = -1
+
+    if chunk:
+        array = dask.array.from_array(array, chunks=(1, -1))
+
+    da = xr.DataArray(array, dims=("x", "y"))
+    by = xr.DataArray(labels, dims="y", name="by")
+
+    actual = xarray_reduce(da, by, func="quantile", skipna=skipna, q=q)
+    sorted_array = array[..., [0, 1, 2, 4, 3, 5, 6]]
+    f = partial(getattr(np, "nanquantile" if skipna else "quantile"), q=q, axis=axis, keepdims=True)
+    dims = ("x", "by") if is_scalar(q) else ("x", "by", "quantile")
+    q_ = q if is_scalar(q) else np.array(q)
+
+    result = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=axis)
+    if not is_scalar(q):
+        result = np.moveaxis(result, 0, -1)
+    expected = xr.DataArray(result, dims=dims, coords={"quantile": q_, "by": [0, 1]})
+    xr.testing.assert_allclose(expected, actual)

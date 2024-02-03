@@ -9,7 +9,7 @@ import xarray as xr
 from packaging.version import Version
 from xarray.core.duck_array_ops import _datetime_nanmin
 
-from .aggregations import Aggregation, _atleast_1d
+from .aggregations import Aggregation, Dim, _atleast_1d, quantile_new_dims_func
 from .core import (
     _convert_expected_groups_to_index,
     _get_expected_groups,
@@ -74,7 +74,7 @@ def xarray_reduce(
     dim: Dims | ellipsis = None,
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
-    method: str = "map-reduce",
+    method: str | None = None,
     engine: str | None = None,
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
@@ -387,6 +387,10 @@ def xarray_reduce(
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
 
+        if result.ndim > array.ndim:
+            assert result.ndim - array.ndim == 1
+            result = np.moveaxis(result, 0, -1)
+
         # Output of count has an int dtype.
         if requires_numeric and func != "count":
             if is_npdatetime:
@@ -412,8 +416,17 @@ def xarray_reduce(
     input_core_dims = [[d for d in grouper_dims if d not in dim_tuple] + list(dim_tuple)]
     input_core_dims += [list(b.dims) for b in by_da]
 
+    newdims: tuple[Dim, ...] = (
+        quantile_new_dims_func(**finalize_kwargs) if func in ["quantile", "nanquantile"] else ()
+    )
+
     output_core_dims = [d for d in input_core_dims[0] if d not in dim_tuple]
     output_core_dims.extend(group_names)
+    output_sizes = group_sizes
+
+    output_core_dims = output_core_dims + [dim.name for dim in newdims if not dim.is_scalar]
+    output_sizes.update({dim.name: dim.size for dim in newdims if dim.size != 0})
+
     actual = xr.apply_ufunc(
         wrapper,
         ds_broad.drop_vars(tuple(missing_dim)).transpose(..., *grouper_dims),
@@ -424,7 +437,7 @@ def xarray_reduce(
         output_core_dims=[output_core_dims],
         dask="allowed",
         dask_gufunc_kwargs=dict(
-            output_sizes=group_sizes, output_dtypes=[dtype] if dtype is not None else None
+            output_sizes=output_sizes, output_dtypes=[dtype] if dtype is not None else None
         ),
         keep_attrs=keep_attrs,
         kwargs={
@@ -450,6 +463,9 @@ def xarray_reduce(
     for var in set(ds_broad._coord_names) - set(ds_broad._indexes) - set(ds_broad.dims):
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
+
+    for newdim in newdims:
+        actual.coords[newdim.name] = newdim.values if newdim.is_scalar else np.array(newdim.values)
 
     expect3: T_ExpectIndex | np.ndarray
     for name, expect2, by_ in zip(group_names, expected_groups_valid_list, by_da):

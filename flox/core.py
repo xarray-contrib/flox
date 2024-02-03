@@ -34,7 +34,7 @@ from .aggregations import (
     _atleast_1d,
     _initialize_aggregation,
     generic_aggregate,
-    quantile_new_axes_func,
+    quantile_new_dims_func,
 )
 from .cache import memoize
 from .xrutils import (
@@ -1006,7 +1006,9 @@ def chunk_reduce(
                 result = result[..., :-1]
             # TODO: Figure out how to generalize this
             if reduction in ("quantile", "nanquantile"):
-                new_dims_shape = quantile_new_axes_func(**kw)
+                new_dims_shape = tuple(
+                    dim.size for dim in quantile_new_dims_func(**kw) if not dim.is_scalar
+                )
             else:
                 new_dims_shape = tuple()
             result = result.reshape(new_dims_shape + final_array_shape[:-1] + found_groups_shape)
@@ -1671,7 +1673,7 @@ def dask_groupby_agg(
         raise ValueError(f"Unknown method={method}.")
 
     # Adjust output for any new dimensions added, example for multiple quantiles
-    new_dims_shape = agg.get_new_axes()
+    new_dims_shape = tuple(dim.size for dim in agg.get_new_dims() if not dim.is_scalar)
     new_inds = tuple(range(-len(new_dims_shape), 0))
     out_inds = new_inds + inds[: -len(axis)] + (inds[-1],)
     output_chunks = new_dims_shape + reduced.chunks[: -len(axis)] + group_chunks
