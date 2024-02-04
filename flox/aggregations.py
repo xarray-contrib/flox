@@ -163,7 +163,7 @@ class Dim:
 
     @cached_property
     def size(self) -> int:
-        return 0 if self.is_scalar else len(self.values)  # type: ignore
+        return 0 if self.is_scalar else len(self.values)  # type: ignore[arg-type]
 
 
 class Aggregation:
