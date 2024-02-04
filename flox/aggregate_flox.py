@@ -60,8 +60,12 @@ def quantile_(array, inv_idx, *, q, axis, skipna, dtype=None, out=None):
     if skipna:
         sizes = np.add.reduceat(notnull(array), inv_idx[:-1], axis=axis)
     else:
-        sizes = np.reshape(np.diff(inv_idx), (1,) * (array.ndim - 1) + (inv_idx.size - 1,))
-        nanmask = isnull(np.take_along_axis(array, sizes - 1, axis=axis))
+        newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
+        sizes = np.reshape(np.diff(inv_idx), newshape)
+        # NaNs get sorted to the end, so look at the last element in the group to decide
+        # if there are NaNs
+        last_group_elem = np.broadcast_to(inv_idx[1:] - 1, newshape)
+        nanmask = isnull(np.take_along_axis(array, last_group_elem, axis=axis))
 
     qin = q
     q = np.atleast_1d(qin)

@@ -1678,7 +1678,7 @@ def test_xarray_fill_value_behaviour():
     assert_equal(expected, actual)
 
 
-@pytest.mark.parametrize("q", (0.5, (0.5,), (0.5, 0.85)))
+@pytest.mark.parametrize("q", (0.5, (0.5,), (0.5, 0.67, 0.85)))
 @pytest.mark.parametrize("func", ["nanquantile", "quantile"])
 @pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
 def test_multiple_quantiles(q, chunk, func):
