@@ -1694,3 +1694,8 @@ def test_multiple_quantiles(q, chunk, func):
     f = partial(getattr(np, func), q=q, axis=axis, keepdims=True)
     expected = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=axis)
     assert_equal(expected, actual)
+
+
+# TODO: More quantile tests:
+# 1. grouping by multiple vars
+# 2. grouping by single nD var
