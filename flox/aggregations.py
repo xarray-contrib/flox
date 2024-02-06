@@ -265,8 +265,13 @@ class Aggregation:
             returns_empty_tuple if new_dims_func is None else new_dims_func
         )
 
-    def get_new_dims(self) -> tuple[Dim]:
+    @cached_property
+    def new_dims(self) -> tuple[Dim]:
         return self.new_dims_func(**self.finalize_kwargs)
+
+    @cached_property
+    def num_new_vector_dims(self) -> tuple[Dim]:
+        return len(tuple(dim for dim in self.new_dims if not dim.is_scalar))
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)

@@ -1046,8 +1046,7 @@ def _finalize_results(
     3. Mask using counts and fill with user-provided fill_value.
     4. reindex to expected_groups
     """
-    n_new_axes = len(agg.new_dims_func(**agg.finalize_kwargs))
-    squeezed = _squeeze_results(results, tuple(n_new_axes + ax for ax in axis))
+    squeezed = _squeeze_results(results, tuple(agg.num_new_vector_dims + ax for ax in axis))
 
     min_count = agg.min_count
     if min_count > 0:
@@ -1674,7 +1673,7 @@ def dask_groupby_agg(
         raise ValueError(f"Unknown method={method}.")
 
     # Adjust output for any new dimensions added, example for multiple quantiles
-    new_dims_shape = tuple(dim.size for dim in agg.get_new_dims() if not dim.is_scalar)
+    new_dims_shape = tuple(dim.size for dim in agg.new_dims if not dim.is_scalar)
     new_inds = tuple(range(-len(new_dims_shape), 0))
     out_inds = new_inds + inds[: -len(axis)] + (inds[-1],)
     output_chunks = new_dims_shape + reduced.chunks[: -len(axis)] + group_chunks
