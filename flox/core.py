@@ -1047,7 +1047,7 @@ def _finalize_results(
     4. reindex to expected_groups
     """
     n_new_axes = len(agg.new_dims_func(**agg.finalize_kwargs))
-    squeezed = _squeeze_results(results, [n_new_axes + ax for ax in axis])
+    squeezed = _squeeze_results(results, tuple(n_new_axes + ax for ax in axis))
 
     min_count = agg.min_count
     if min_count > 0:
