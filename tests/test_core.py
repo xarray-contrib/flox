@@ -1705,7 +1705,3 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
     if by_ndim == 2:
         expected = expected.squeeze(axis=-2)
     assert_equal(expected, actual, tolerance=1e-14)
-
-
-# TODO: More quantile tests:
-# 1. grouping by multiple vars

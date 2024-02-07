@@ -393,9 +393,8 @@ def xarray_reduce(
         if func in ["quantile", "nanquantile"]:
             (newdim,) = quantile_new_dims_func(**finalize_kwargs)
             if not newdim.is_scalar:
-                nby = len(by)
                 # output dim order: (*broadcast_dims, quantile_dim, *group_dims)
-                result = np.moveaxis(result, 0, -nby - 1)
+                result = np.moveaxis(result, 0, -1)
 
         # Output of count has an int dtype.
         if requires_numeric and func != "count":
@@ -427,8 +426,9 @@ def xarray_reduce(
     )
 
     output_core_dims = [d for d in input_core_dims[0] if d not in dim_tuple]
-    output_core_dims.extend([dim.name for dim in newdims if not dim.is_scalar])
     output_core_dims.extend(group_names)
+    vector_dims = [dim.name for dim in newdims if not dim.is_scalar]
+    output_core_dims.extend(vector_dims)
 
     output_sizes = group_sizes
     output_sizes.update({dim.name: dim.size for dim in newdims if dim.size != 0})
@@ -514,7 +514,7 @@ def xarray_reduce(
             else:
                 template = obj
 
-            if actual[var].ndim > 1:
+            if actual[var].ndim > 1 + len(vector_dims):
                 no_groupby_reorder = isinstance(
                     obj, xr.Dataset
                 )  # do not re-order dataarrays inside datasets
