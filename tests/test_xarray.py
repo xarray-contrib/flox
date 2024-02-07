@@ -685,3 +685,28 @@ def test_resampling_missing_groups(chunk):
     with xr.set_options(use_flox=True):
         actual = da.resample(time="1D").mean()
     xr.testing.assert_identical(expected, actual)
+
+
+@pytest.mark.parametrize("q", (0.5, (0.5,), (0.5, 0.67, 0.85)))
+@pytest.mark.parametrize("skipna", [False, True])
+@pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
+@pytest.mark.parametrize("by_ndim", [1, 2])
+def test_multiple_quantiles(q, chunk, by_ndim, skipna):
+    array = np.array([[1, -1, np.nan, 3, 4, 10, 5], [1, np.nan, np.nan, 3, 4, np.nan, np.nan]])
+    labels = np.array([0, 0, 0, 1, 0, 1, 1])
+    dims = ("y",)
+    if by_ndim == 2:
+        labels = np.broadcast_to(labels, (5, *labels.shape))
+        array = np.broadcast_to(np.expand_dims(array, -2), (2, 5, array.shape[-1]))
+        dims += ("y0",)
+
+    if chunk:
+        array = dask.array.from_array(array, chunks=(1,) + (-1,) * by_ndim)
+
+    da = xr.DataArray(array, dims=("x", *dims))
+    by = xr.DataArray(labels, dims=dims, name="by")
+
+    actual = xarray_reduce(da, by, func="quantile", skipna=skipna, q=q)
+    with xr.set_options(use_flox=False):
+        expected = da.groupby(by).quantile(q, skipna=skipna)
+    xr.testing.assert_allclose(expected, actual)

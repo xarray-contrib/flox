@@ -34,7 +34,7 @@ from .aggregations import (
     _atleast_1d,
     _initialize_aggregation,
     generic_aggregate,
-    quantile_new_axes_func,
+    quantile_new_dims_func,
 )
 from .cache import memoize
 from .xrutils import (
@@ -1006,7 +1006,9 @@ def chunk_reduce(
                 result = result[..., :-1]
             # TODO: Figure out how to generalize this
             if reduction in ("quantile", "nanquantile"):
-                new_dims_shape = quantile_new_axes_func(**kw)
+                new_dims_shape = tuple(
+                    dim.size for dim in quantile_new_dims_func(**kw) if not dim.is_scalar
+                )
             else:
                 new_dims_shape = tuple()
             result = result.reshape(new_dims_shape + final_array_shape[:-1] + found_groups_shape)
@@ -1044,7 +1046,7 @@ def _finalize_results(
     3. Mask using counts and fill with user-provided fill_value.
     4. reindex to expected_groups
     """
-    squeezed = _squeeze_results(results, axis)
+    squeezed = _squeeze_results(results, tuple(agg.num_new_vector_dims + ax for ax in axis))
 
     min_count = agg.min_count
     if min_count > 0:
@@ -1671,7 +1673,7 @@ def dask_groupby_agg(
         raise ValueError(f"Unknown method={method}.")
 
     # Adjust output for any new dimensions added, example for multiple quantiles
-    new_dims_shape = agg.get_new_axes()
+    new_dims_shape = tuple(dim.size for dim in agg.new_dims if not dim.is_scalar)
     new_inds = tuple(range(-len(new_dims_shape), 0))
     out_inds = new_inds + inds[: -len(axis)] + (inds[-1],)
     output_chunks = new_dims_shape + reduced.chunks[: -len(axis)] + group_chunks
@@ -2297,7 +2299,21 @@ def groupby_reduce(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
-        if agg.chunk[0] is None and method not in [None, "blockwise"]:
+        if (not any_by_dask and method is None) or method == "cohorts":
+            preferred_method, chunks_cohorts = find_group_cohorts(
+                by_,
+                [array.chunks[ax] for ax in range(-by_.ndim, 0)],
+                expected_groups=expected_,
+                # when provided with cohorts, we *always* 'merge'
+                merge=(method == "cohorts"),
+            )
+        else:
+            preferred_method = "map-reduce"
+            chunks_cohorts = {}
+
+        method = _choose_method(method, preferred_method, agg, by_, nax)
+
+        if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"Received method={method!r}"
@@ -2318,19 +2334,6 @@ def groupby_reduce(
                 f"Received method={method!r}"
             )
 
-        if (not any_by_dask and method is None) or method == "cohorts":
-            preferred_method, chunks_cohorts = find_group_cohorts(
-                by_,
-                [array.chunks[ax] for ax in range(-by_.ndim, 0)],
-                expected_groups=expected_,
-                # when provided with cohorts, we *always* 'merge'
-                merge=(method == "cohorts"),
-            )
-        else:
-            preferred_method = "map-reduce"
-            chunks_cohorts = {}
-
-        method = _choose_method(method, preferred_method, agg, by_, nax)
         # TODO: clean this up
         reindex = _validate_reindex(
             reindex, func, method, expected_, any_by_dask, is_duck_dask_array(array)

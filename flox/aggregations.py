@@ -3,11 +3,12 @@ from __future__ import annotations
 import copy
 import logging
 import warnings
-from functools import partial
+from dataclasses import dataclass
+from functools import cached_property, partial
 from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
 
 import numpy as np
-from numpy.typing import DTypeLike
+from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
@@ -151,6 +152,20 @@ def returns_empty_tuple(*args, **kwargs):
     return ()
 
 
+@dataclass
+class Dim:
+    values: ArrayLike
+    name: str | None
+
+    @cached_property
+    def is_scalar(self) -> bool:
+        return xrutils.is_scalar(self.values)
+
+    @cached_property
+    def size(self) -> int:
+        return 0 if self.is_scalar else len(self.values)  # type: ignore[arg-type]
+
+
 class Aggregation:
     def __init__(
         self,
@@ -166,7 +181,7 @@ class Aggregation:
         dtypes=None,
         final_dtype: DTypeLike | None = None,
         reduction_type: Literal["reduce", "argreduce"] = "reduce",
-        new_axes_func: Callable | None = None,
+        new_dims_func: Callable | None = None,
     ):
         """
         Blueprint for computing grouped aggregations.
@@ -209,7 +224,7 @@ class Aggregation:
             per reduction in ``chunk`` as a tuple.
         final_dtype : DType, optional
             DType for output. By default, uses dtype of array being reduced.
-        new_axes_func: Callable
+        new_dims_func: Callable
             Function that receives finalize_kwargs and returns a tupleof sizes of any new dimensions
             added by the reduction. For e.g. quantile for q=(0.5, 0.85) adds a new dimension of size 2,
             so returns (2,)
@@ -246,12 +261,17 @@ class Aggregation:
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
         self.min_count: int = 0
-        self.new_axes_func: Callable = (
-            returns_empty_tuple if new_axes_func is None else new_axes_func
+        self.new_dims_func: Callable = (
+            returns_empty_tuple if new_dims_func is None else new_dims_func
         )
 
-    def get_new_axes(self):
-        return self.new_axes_func(**self.finalize_kwargs)
+    @cached_property
+    def new_dims(self) -> tuple[Dim]:
+        return self.new_dims_func(**self.finalize_kwargs)
+
+    @cached_property
+    def num_new_vector_dims(self) -> int:
+        return len(tuple(dim for dim in self.new_dims if not dim.is_scalar))
 
     def _normalize_dtype_fill_value(self, value, name):
         value = _atleast_1d(value)
@@ -511,8 +531,8 @@ nanmedian = Aggregation(
 )
 
 
-def quantile_new_axes_func(q):
-    return tuple() if xrutils.is_scalar(q) else (len(q),)
+def quantile_new_dims_func(q) -> tuple[Dim]:
+    return (Dim(name="quantile", values=q),)
 
 
 quantile = Aggregation(
@@ -521,7 +541,7 @@ quantile = Aggregation(
     chunk=None,
     combine=None,
     final_dtype=np.float64,
-    new_axes_func=quantile_new_axes_func,
+    new_dims_func=quantile_new_dims_func,
 )
 nanquantile = Aggregation(
     name="nanquantile",
@@ -529,7 +549,7 @@ nanquantile = Aggregation(
     chunk=None,
     combine=None,
     final_dtype=np.float64,
-    new_axes_func=quantile_new_axes_func,
+    new_dims_func=quantile_new_dims_func,
 )
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
@@ -638,9 +658,10 @@ def _initialize_aggregation(
     # where the identity element is 0, 1
     if min_count > 0:
         agg.min_count = min_count
-        agg.chunk += ("nanlen",)
         agg.numpy += ("nanlen",)
-        agg.combine += ("sum",)
+        if agg.chunk != (None,):
+            agg.chunk += ("nanlen",)
+            agg.combine += ("sum",)
         agg.fill_value["intermediate"] += (0,)
         agg.fill_value["numpy"] += (0,)
         agg.dtype["intermediate"] += (np.intp,)
