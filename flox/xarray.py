@@ -393,7 +393,9 @@ def xarray_reduce(
         if func in ["quantile", "nanquantile"]:
             (newdim,) = quantile_new_dims_func(**finalize_kwargs)
             if not newdim.is_scalar:
-                # output dim order: (*broadcast_dims, quantile_dim, *group_dims)
+                # NOTE: _restore_dim_order will move any new dims to the end anyway.
+                # This transpose is simply makes it easy to specify output_core_dims
+                # output dim order: (*broadcast_dims, *group_dims, quantile_dim)
                 result = np.moveaxis(result, 0, -1)
 
         # Output of count has an int dtype.
