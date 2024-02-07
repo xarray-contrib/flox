@@ -603,6 +603,15 @@ def test_nanfirst_nanlast_disallowed_dask(axis, func):
 
 
 @requires_dask
+@pytest.mark.xfail
+@pytest.mark.parametrize("func", ["first", "last"])
+def test_first_last_allowed_dask(func):
+    # blockwise should be fine... but doesn't work now.
+    groupby_reduce(dask.array.empty((2, 3, 2)), np.ones((2, 3, 2)), func=func, axis=-1)
+
+
+@requires_dask
+@pytest.mark.xfail
 @pytest.mark.parametrize("func", ["first", "last"])
 def test_first_last_disallowed_dask(func):
     # blockwise is fine
