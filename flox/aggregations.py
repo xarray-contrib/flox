@@ -270,7 +270,7 @@ class Aggregation:
         return self.new_dims_func(**self.finalize_kwargs)
 
     @cached_property
-    def num_new_vector_dims(self) -> tuple[Dim]:
+    def num_new_vector_dims(self) -> int:
         return len(tuple(dim for dim in self.new_dims if not dim.is_scalar))
 
     def _normalize_dtype_fill_value(self, value, name):
