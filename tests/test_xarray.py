@@ -421,7 +421,7 @@ def test_groupby_bins_indexed_coordinate(method):
             )
         },
         coords={
-            "time": pd.date_range("2013-01-01", "2013-02-01", freq="6H"),
+            "time": pd.date_range("2013-01-01", "2013-02-01", freq="6h"),
             "lat": np.arange(75.0, 14.9, -2.5),
             "lon": np.arange(200.0, 331.0, 2.5),
         },
@@ -533,7 +533,7 @@ def test_dtype(add_nan, chunk, dtype, dtype_out, engine):
 @pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
 @pytest.mark.parametrize("use_flox", [True, False])
 def test_dtype_accumulation(use_flox, chunk):
-    datetimes = pd.date_range("2010-01", "2015-01", freq="6H", inclusive="left")
+    datetimes = pd.date_range("2010-01", "2015-01", freq="6h", inclusive="left")
     samples = 10 + np.cos(2 * np.pi * 0.001 * np.arange(len(datetimes))) * 1
     samples += np.random.randn(len(datetimes))
     samples = samples.astype("float32")
@@ -593,7 +593,7 @@ def test_preserve_multiindex():
 
 
 def test_fill_value_xarray_behaviour():
-    times = pd.date_range("2000-01-01", freq="6H", periods=10)
+    times = pd.date_range("2000-01-01", freq="6h", periods=10)
     ds = xr.Dataset(
         {
             "bar": (
@@ -605,11 +605,11 @@ def test_fill_value_xarray_behaviour():
         }
     )
 
-    pd.date_range("2000-01-01", freq="3H", periods=19)
+    pd.date_range("2000-01-01", freq="3h", periods=19)
     with xr.set_options(use_flox=False):
-        expected = ds.resample(time="3H").sum()
+        expected = ds.resample(time="3h").sum()
     with xr.set_options(use_flox=True):
-        actual = ds.resample(time="3H").sum()
+        actual = ds.resample(time="3h").sum()
     xr.testing.assert_identical(expected, actual)
 
 
