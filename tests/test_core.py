@@ -254,7 +254,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         fill_value = np.nan
         tolerance = {"rtol": 1e-14, "atol": 1e-16}
     elif "quantile" in func:
-        finalize_kwargs = [{"q": DEFAULT_QUANTILE}]
+        finalize_kwargs = [{"q": DEFAULT_QUANTILE}, {"q": [DEFAULT_QUANTILE / 2, DEFAULT_QUANTILE]}]
         fill_value = None
         tolerance = None
     else:
@@ -265,6 +265,8 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     array_func = _get_array_func(func)
 
     for kwargs in finalize_kwargs:
+        if "quantile" in func and isinstance(kwargs["q"], list) and engine != "flox":
+            continue
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
         with np.errstate(invalid="ignore", divide="ignore"):
             with warnings.catch_warnings():
@@ -289,10 +291,13 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
 
         if func in BLOCKWISE_FUNCS:
             assert chunks == -1
-            flox_kwargs["method"] = "blockwise"
 
         actual, *groups = groupby_reduce(array, *by, **flox_kwargs)
-        assert actual.ndim == expected.ndim == (array.ndim + nby - 1)
+        if "quantile" in func and isinstance(kwargs["q"], list):
+            assert actual.ndim == expected.ndim == (array.ndim + nby)
+        else:
+            assert actual.ndim == expected.ndim == (array.ndim + nby - 1)
+
         expected_groups = tuple(np.array([idx + 1.0]) for idx in range(nby))
         for actual_group, expect in zip(groups, expected_groups):
             assert_equal(actual_group, expect)
@@ -1681,21 +1686,26 @@ def test_xarray_fill_value_behaviour():
 @pytest.mark.parametrize("q", (0.5, (0.5,), (0.5, 0.67, 0.85)))
 @pytest.mark.parametrize("func", ["nanquantile", "quantile"])
 @pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
-def test_multiple_quantiles(q, chunk, func):
+@pytest.mark.parametrize("by_ndim", [1, 2])
+def test_multiple_quantiles(q, chunk, func, by_ndim):
     array = np.array([[1, -1, np.nan, 3, 4, 10, 5], [1, np.nan, np.nan, 3, 4, np.nan, np.nan]])
     labels = np.array([0, 0, 0, 1, 0, 1, 1])
-    axis = -1
+    if by_ndim == 2:
+        labels = np.broadcast_to(labels, (5, *labels.shape))
+        array = np.broadcast_to(np.expand_dims(array, -2), (2, 5, array.shape[-1]))
+    axis = tuple(range(-by_ndim, 0))
 
     if chunk:
-        array = dask.array.from_array(array, chunks=(1, -1))
+        array = dask.array.from_array(array, chunks=(1,) + (-1,) * by_ndim)
 
     actual, _ = groupby_reduce(array, labels, func=func, finalize_kwargs=dict(q=q), axis=axis)
     sorted_array = array[..., [0, 1, 2, 4, 3, 5, 6]]
     f = partial(getattr(np, func), q=q, axis=axis, keepdims=True)
-    expected = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=axis)
-    assert_equal(expected, actual)
+    expected = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=-1)
+    if by_ndim == 2:
+        expected = expected.squeeze(axis=-2)
+    assert_equal(expected, actual, tolerance=1e-14)
 
 
 # TODO: More quantile tests:
 # 1. grouping by multiple vars
-# 2. grouping by single nD var

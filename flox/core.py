@@ -2299,7 +2299,21 @@ def groupby_reduce(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
-        if agg.chunk[0] is None and method not in [None, "blockwise"]:
+        if (not any_by_dask and method is None) or method == "cohorts":
+            preferred_method, chunks_cohorts = find_group_cohorts(
+                by_,
+                [array.chunks[ax] for ax in range(-by_.ndim, 0)],
+                expected_groups=expected_,
+                # when provided with cohorts, we *always* 'merge'
+                merge=(method == "cohorts"),
+            )
+        else:
+            preferred_method = "map-reduce"
+            chunks_cohorts = {}
+
+        method = _choose_method(method, preferred_method, agg, by_, nax)
+
+        if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"Received method={method!r}"
@@ -2320,19 +2334,6 @@ def groupby_reduce(
                 f"Received method={method!r}"
             )
 
-        if (not any_by_dask and method is None) or method == "cohorts":
-            preferred_method, chunks_cohorts = find_group_cohorts(
-                by_,
-                [array.chunks[ax] for ax in range(-by_.ndim, 0)],
-                expected_groups=expected_,
-                # when provided with cohorts, we *always* 'merge'
-                merge=(method == "cohorts"),
-            )
-        else:
-            preferred_method = "map-reduce"
-            chunks_cohorts = {}
-
-        method = _choose_method(method, preferred_method, agg, by_, nax)
         # TODO: clean this up
         reindex = _validate_reindex(
             reindex, func, method, expected_, any_by_dask, is_duck_dask_array(array)

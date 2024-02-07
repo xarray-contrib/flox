@@ -658,9 +658,10 @@ def _initialize_aggregation(
     # where the identity element is 0, 1
     if min_count > 0:
         agg.min_count = min_count
-        agg.chunk += ("nanlen",)
         agg.numpy += ("nanlen",)
-        agg.combine += ("sum",)
+        if agg.chunk != (None,):
+            agg.chunk += ("nanlen",)
+            agg.combine += ("sum",)
         agg.fill_value["intermediate"] += (0,)
         agg.fill_value["numpy"] += (0,)
         agg.dtype["intermediate"] += (np.intp,)
