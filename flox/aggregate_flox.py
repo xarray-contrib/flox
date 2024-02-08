@@ -64,7 +64,8 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
     # so we must replace all NaNs with the maximum array value in the group so these NaNs
     # get sorted to the end.
     # Partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
-    array[array_nanmask] = -np.inf
+    # TODO: Don't know if this array has been copied in _prepare_for_flox. This is potentially wasteful
+    array = np.where(array_nanmask, -np.inf, array)
     maxes = np.maximum.reduceat(array, inv_idx[:-1], axis=axis)
     replacement = np.repeat(maxes, np.diff(inv_idx), axis=axis)
     array[array_nanmask] = replacement[array_nanmask]
@@ -176,8 +177,8 @@ min = partial(_np_grouped_op, op=np.minimum.reduceat)
 nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
 quantile = partial(_np_grouped_op, op=partial(quantile_, skipna=False))
 nanquantile = partial(_np_grouped_op, op=partial(quantile_, skipna=True))
-median = partial(_np_grouped_op, op=partial(quantile_, q=0.5, skipna=False))
-nanmedian = partial(_np_grouped_op, op=partial(quantile_, q=0.5, skipna=True))
+median = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=False))
+nanmedian = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=True))
 # TODO: all, any
 
 
