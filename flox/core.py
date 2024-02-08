@@ -53,7 +53,6 @@ else:
     from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
 
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
-_LEXSORT_FOR_FLOX = ["quantile", "nanquantile", "median", "nanmedian"]
 
 if TYPE_CHECKING:
     try:
@@ -962,9 +961,7 @@ def chunk_reduce(
     if engine == "flox":
         # is_arg_reduction = any("arg" in f for f in func if isinstance(f, str))
         # if not is_arg_reduction:
-        group_idx, array = _prepare_for_flox(
-            group_idx, array, lexsort=any(f in _LEXSORT_FOR_FLOX for f in funcs)
-        )
+        group_idx, array = _prepare_for_flox(group_idx, array)
 
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
@@ -1983,7 +1980,7 @@ def _choose_engine(by, agg: Aggregation):
 
     not_arg_reduce = not _is_arg_reduction(agg)
 
-    if agg.name in _LEXSORT_FOR_FLOX:
+    if agg.name in ["quantile", "nanquantile", "median", "nanmedian"]:
         logger.info(f"_choose_engine: Choosing 'flox' since {agg.name}")
         return "flox"
 

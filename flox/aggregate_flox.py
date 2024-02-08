@@ -5,29 +5,19 @@ import numpy as np
 from .xrutils import is_scalar, isnull, notnull
 
 
-def _prepare_for_flox(group_idx, array, lexsort):
+def _prepare_for_flox(group_idx, array):
     """
     Sort the input array once to save time.
     """
     assert array.shape[-1] == group_idx.shape[0]
 
-    if lexsort:
-        # lexsort allows us to sort by label AND array value
-        # numpy's quantile uses partition, which could be a big win
-        # IF we can figure out how to do that.
-        # This trick was snagged from scipy.ndimage.median() :)
-        labels_broadcast = np.broadcast_to(group_idx, array.shape)
-        idxs = np.lexsort((array, labels_broadcast), axis=-1)
-        ordered_array = np.take_along_axis(array, idxs, axis=-1)
-        group_idx = np.take_along_axis(group_idx, idxs[(0,) * (idxs.ndim - 1) + (...,)], axis=-1)
+    issorted = (group_idx[:-1] <= group_idx[1:]).all()
+    if issorted:
+        ordered_array = array
     else:
-        issorted = (group_idx[:-1] <= group_idx[1:]).all()
-        if issorted:
-            ordered_array = array
-        else:
-            perm = group_idx.argsort(kind="stable")
-            group_idx = group_idx[..., perm]
-            ordered_array = array[..., perm]
+        perm = group_idx.argsort(kind="stable")
+        group_idx = group_idx[..., perm]
+        ordered_array = array[..., perm]
     return group_idx, ordered_array
 
 
@@ -54,18 +44,30 @@ def _lerp(a, b, *, t, dtype, out=None):
     return out
 
 
-def quantile_(array, inv_idx, *, q, axis, skipna, dtype=None, out=None):
+def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=None):
     inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
 
-    if skipna:
-        sizes = np.add.reduceat(notnull(array), inv_idx[:-1], axis=axis)
-    else:
-        newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
-        sizes = np.reshape(np.diff(inv_idx), newshape)
-        # NaNs get sorted to the end, so look at the last element in the group to decide
-        # if there are NaNs
-        last_group_elem = np.broadcast_to(inv_idx[1:] - 1, newshape)
-        nanmask = isnull(np.take_along_axis(array, last_group_elem, axis=axis))
+    array_nanmask = isnull(array)
+    actual_sizes = np.add.reduceat(~array_nanmask, inv_idx[:-1], axis=axis)
+    newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
+    full_sizes = np.reshape(np.diff(inv_idx), newshape)
+    nanmask = full_sizes != actual_sizes
+
+    # The approach here is to use (complex_array.partition) because
+    # 1. The full np.lexsort((array, labels), axis=-1) is slow and unnecessary
+    # 2. Using record_array.partition(..., order=["labels", "array"]) is incredibly slow.
+    # partition will first sort by real part, then by imaginary part, so it is a two element lex-partition.
+    # So we set
+    #     complex_array = group_idx + 1j * array
+    # group_idx is an integer (guaranteed), but array can have NaNs. Now,
+    #     1 + 1j*NaN = NaN + 1j * NaN
+    # so we must replace all NaNs with the maximum array value in the group so these NaNs
+    # get sorted to the end.
+    # Partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
+    array[array_nanmask] = -np.inf
+    maxes = np.maximum.reduceat(array, inv_idx[:-1], axis=axis)
+    replacement = np.repeat(maxes, np.diff(inv_idx), axis=axis)
+    array[array_nanmask] = replacement[array_nanmask]
 
     qin = q
     q = np.atleast_1d(qin)
@@ -73,24 +75,35 @@ def quantile_(array, inv_idx, *, q, axis, skipna, dtype=None, out=None):
 
     # This is numpy's method="linear"
     # TODO: could support all the interpolations here
-    virtual_index = q * (sizes - 1) + inv_idx[:-1]
+    virtual_index = q * (actual_sizes - 1) + inv_idx[:-1]
 
     is_scalar_q = is_scalar(qin)
     if is_scalar_q:
         virtual_index = virtual_index.squeeze(axis=0)
-        idxshape = array.shape[:-1] + (sizes.shape[-1],)
-        a_ = array
+        idxshape = array.shape[:-1] + (actual_sizes.shape[-1],)
     else:
-        idxshape = (q.shape[0],) + array.shape[:-1] + (sizes.shape[-1],)
-        a_ = np.broadcast_to(array, (q.shape[0],) + array.shape)
+        idxshape = (q.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
 
-    # Broadcast to (num quantiles, ..., num labels)
-    lo_ = np.floor(virtual_index, casting="unsafe", out=np.empty(idxshape, dtype=np.int64))
-    hi_ = np.ceil(virtual_index, casting="unsafe", out=np.empty(idxshape, dtype=np.int64))
+    lo_ = np.floor(
+        virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
+    )
+    hi_ = np.ceil(
+        virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
+    )
+    kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
 
-    # get bounds
-    loval = np.take_along_axis(a_, lo_, axis=axis)
-    hival = np.take_along_axis(a_, hi_, axis=axis)
+    # partition the complex array in-place
+    labels_broadcast = np.broadcast_to(group_idx, array.shape)
+    cmplx = labels_broadcast + 1j * array
+    cmplx.partition(kth=kth, axis=-1)
+    if is_scalar_q:
+        a_ = cmplx.imag
+    else:
+        a_ = np.broadcast_to(cmplx.imag, (q.shape[0],) + array.shape)
+
+    # get bounds, Broadcast to (num quantiles, ..., num labels)
+    loval = np.take_along_axis(a_, np.broadcast_to(lo_, idxshape), axis=axis)
+    hival = np.take_along_axis(a_, np.broadcast_to(hi_, idxshape), axis=axis)
 
     # TODO: could support all the interpolations here
     gamma = np.broadcast_to(virtual_index, idxshape) - lo_
@@ -126,6 +139,7 @@ def _np_grouped_op(
         else:
             nq = len(np.atleast_1d(q))
             out = np.full((nq,) + array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
+            kwargs["group_idx"] = group_idx
 
     if (len(uniques) == size) and (uniques == np.arange(size, like=array)).all():
         # The previous version of this if condition
