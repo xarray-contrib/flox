@@ -201,10 +201,10 @@ def xarray_reduce(
     >>> da = da = xr.ones_like(labels)
     >>> # Sum all values in da that matches the elements in the group index:
     >>> xarray_reduce(da, labels, func="sum")
-    <xarray.DataArray 'label' (label: 4)>
+    <xarray.DataArray 'label' (label: 4)> Size: 32B
     array([3, 2, 2, 2])
     Coordinates:
-      * label    (label) int64 0 1 2 3
+      * label    (label) int64 32B 0 1 2 3
     """
 
     if skipna is not None and isinstance(func, Aggregation):
