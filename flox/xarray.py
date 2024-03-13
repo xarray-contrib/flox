@@ -303,14 +303,16 @@ def xarray_reduce(
         # reducing along a dimension along which groups do not vary
         # This is really just a normal reduction.
         # This is not right when binning so we exclude.
-        if isinstance(func, str):
-            dsfunc = func[3:] if skipna else func
-        else:
+        if isinstance(func, str) and func.startswith("nan"):
+            raise ValueError(f"Specify func={func[3:]}, skipna=True instead of func={func}")
+        elif isinstance(func, Aggregation):
             raise NotImplementedError(
                 "func must be a string when reducing along a dimension not present in `by`"
             )
-        # TODO: skipna needs test
-        result = getattr(ds_broad, dsfunc)(dim=dim_tuple, skipna=skipna)
+        # skipna is not supported for all reductions
+        # https://github.com/pydata/xarray/issues/8819
+        kwargs = {"skipna": skipna} if skipna is not None else {}
+        result = getattr(ds_broad, func)(dim=dim_tuple, **kwargs)
         if isinstance(obj, xr.DataArray):
             return obj._from_temp_dataset(result)
         else:
