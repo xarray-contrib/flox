@@ -31,12 +31,14 @@ from flox.core import (
 )
 
 from . import (
+    ALL_FUNCS,
+    BLOCKWISE_FUNCS,
+    SCIPY_STATS_FUNCS,
     assert_equal,
     assert_equal_tuple,
     has_dask,
     raise_if_dask_computes,
     requires_dask,
-    requires_scipy,
 )
 
 logger = logging.getLogger("flox")
@@ -60,36 +62,6 @@ else:
 
 
 DEFAULT_QUANTILE = 0.9
-SCIPY_STATS_FUNCS = ("mode", "nanmode")
-BLOCKWISE_FUNCS = ("median", "nanmedian", "quantile", "nanquantile") + SCIPY_STATS_FUNCS
-ALL_FUNCS = (
-    "sum",
-    "nansum",
-    "argmax",
-    "nanfirst",
-    "nanargmax",
-    "prod",
-    "nanprod",
-    "mean",
-    "nanmean",
-    "var",
-    "nanvar",
-    "std",
-    "nanstd",
-    "max",
-    "nanmax",
-    "min",
-    "nanmin",
-    "argmin",
-    "nanargmin",
-    "any",
-    "all",
-    "nanlast",
-    "median",
-    "nanmedian",
-    "quantile",
-    "nanquantile",
-) + tuple(pytest.param(func, marks=requires_scipy) for func in SCIPY_STATS_FUNCS)
 
 if TYPE_CHECKING:
     from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt, T_Method

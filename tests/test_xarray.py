@@ -9,6 +9,7 @@ xr = pytest.importorskip("xarray")
 from flox.xarray import rechunk_for_blockwise, xarray_reduce
 
 from . import (
+    ALL_FUNCS,
     assert_equal,
     has_dask,
     raise_if_dask_computes,
@@ -710,3 +711,32 @@ def test_multiple_quantiles(q, chunk, by_ndim, skipna):
     with xr.set_options(use_flox=False):
         expected = da.groupby(by).quantile(q, skipna=skipna)
     xr.testing.assert_allclose(expected, actual)
+
+
+@pytest.mark.parametrize("func", ALL_FUNCS)
+def test_direct_reduction(func):
+    if "arg" in func or "mode" in func:
+        pytest.skip()
+    # regression test for https://github.com/pydata/xarray/issues/8819
+    rand = np.random.choice([True, False], size=(2, 3))
+    if func not in ["any", "all"]:
+        rand = rand.astype(float)
+
+    if "nan" in func:
+        func = func[3:]
+        kwargs = {"skipna": True}
+    else:
+        kwargs = {}
+
+    if "first" not in func and "last" not in func:
+        kwargs["dim"] = "y"
+
+    if "quantile" in func:
+        kwargs["q"] = 0.9
+
+    data = xr.DataArray(rand, dims=("x", "y"), coords={"x": [10, 20], "y": [0, 1, 2]})
+    with xr.set_options(use_flox=True):
+        actual = getattr(data.groupby("x", squeeze=False), func)(**kwargs)
+    with xr.set_options(use_flox=False):
+        expected = getattr(data.groupby("x", squeeze=False), func)(**kwargs)
+    xr.testing.assert_identical(expected, actual)

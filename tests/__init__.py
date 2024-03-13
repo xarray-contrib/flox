@@ -124,3 +124,35 @@ def assert_equal_tuple(a, b):
             np.testing.assert_array_equal(a_, b_)
         else:
             assert a_ == b_
+
+
+SCIPY_STATS_FUNCS = ("mode", "nanmode")
+BLOCKWISE_FUNCS = ("median", "nanmedian", "quantile", "nanquantile") + SCIPY_STATS_FUNCS
+ALL_FUNCS = (
+    "sum",
+    "nansum",
+    "argmax",
+    "nanfirst",
+    "nanargmax",
+    "prod",
+    "nanprod",
+    "mean",
+    "nanmean",
+    "var",
+    "nanvar",
+    "std",
+    "nanstd",
+    "max",
+    "nanmax",
+    "min",
+    "nanmin",
+    "argmin",
+    "nanargmin",
+    "any",
+    "all",
+    "nanlast",
+    "median",
+    "nanmedian",
+    "quantile",
+    "nanquantile",
+) + tuple(pytest.param(func, marks=requires_scipy) for func in SCIPY_STATS_FUNCS)
