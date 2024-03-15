@@ -259,7 +259,7 @@ def xarray_reduce(
     for var in maybe_drop:
         maybe_midx = ds._indexes.get(var, None)
         if isinstance(maybe_midx, PandasMultiIndex):
-            idx_coord_names = set(maybe_midx.index.names + (maybe_midx.dim,))
+            idx_coord_names = set(tuple(maybe_midx.index.names) + (maybe_midx.dim,))
             idx_other_names = idx_coord_names - set(maybe_drop)
             more_drop.update(idx_other_names)
     maybe_drop.update(more_drop)
