@@ -10,6 +10,7 @@ on:
     paths:
       - ".github/workflows/upstream-dev-ci.yaml"
       - "ci/upstream-dev-env.yml"
+      - "flox/*"
   schedule:
     - cron: "0 0 * * *" # Daily “At 00:00” UTC
   workflow_dispatch: # allows you to trigger the workflow run manually
