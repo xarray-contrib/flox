@@ -736,7 +736,7 @@ def test_direct_reduction(func):
 
     data = xr.DataArray(rand, dims=("x", "y"), coords={"x": [10, 20], "y": [0, 1, 2]})
     with xr.set_options(use_flox=True):
-        actual = getattr(data.groupby("x", squeeze=False), func)(**kwargs)
+        actual = xarray_reduce(data, "x", func=func, **kwargs)
     with xr.set_options(use_flox=False):
         expected = getattr(data.groupby("x", squeeze=False), func)(**kwargs)
     xr.testing.assert_identical(expected, actual)
