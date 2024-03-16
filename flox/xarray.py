@@ -312,6 +312,7 @@ def xarray_reduce(
         # skipna is not supported for all reductions
         # https://github.com/pydata/xarray/issues/8819
         kwargs = {"skipna": skipna} if skipna is not None else {}
+        kwargs.update(finalize_kwargs)
         result = getattr(ds_broad, func)(dim=dim_tuple, **kwargs)
         if isinstance(obj, xr.DataArray):
             return obj._from_temp_dataset(result)
