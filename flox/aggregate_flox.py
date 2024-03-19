@@ -37,7 +37,8 @@ def _lerp(a, b, *, t, dtype, out=None):
     """
     if out is None:
         out = np.empty_like(a, dtype=dtype)
-    diff_b_a = np.subtract(b, a)
+    with np.errstate(invalid="ignore"):
+        diff_b_a = np.subtract(b, a)
     # asanyarray is a stop-gap until gh-13105
     np.add(a, diff_b_a * t, out=out)
     np.subtract(b, diff_b_a * (1 - t), out=out, where=t >= 0.5)
@@ -95,7 +96,8 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
 
     # partition the complex array in-place
     labels_broadcast = np.broadcast_to(group_idx, array.shape)
-    cmplx = labels_broadcast + 1j * array
+    with np.errstate(invalid="ignore"):
+        cmplx = labels_broadcast + 1j * array
     cmplx.partition(kth=kth, axis=-1)
     if is_scalar_q:
         a_ = cmplx.imag

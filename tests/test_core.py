@@ -1127,7 +1127,7 @@ def test_group_by_datetime(engine, method):
 
     edges = pd.date_range("1999-12-31", "2000-12-31", freq="ME").to_series().to_numpy()
     actual, _ = groupby_reduce(daskarray, t.to_numpy(), isbin=True, expected_groups=edges, **kwargs)
-    expected = data.resample("M").mean().to_numpy()
+    expected = data.resample("ME").mean().to_numpy()
     assert_equal(expected, actual)
 
     actual, _ = groupby_reduce(
@@ -1688,3 +1688,12 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
     if by_ndim == 2:
         expected = expected.squeeze(axis=-2)
     assert_equal(expected, actual, tolerance=1e-14)
+
+
+@pytest.mark.parametrize("dtype", ["U3", "S3"])
+def test_nanlen_string(dtype, engine):
+    array = np.array(["ABC", "DEF", "GHI", "JKL", "MNO", "PQR"], dtype=dtype)
+    by = np.array([0, 0, 1, 2, 1, 0])
+    expected = np.array([3, 2, 1], dtype=np.intp)
+    actual, *_ = groupby_reduce(array, by, func="count", engine=engine)
+    assert_equal(expected, actual)

@@ -105,11 +105,24 @@ def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None,
     )
 
 
+def nanlen(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+    if array.dtype.kind in "US":
+        array = np.broadcast_to(np.array([1]), array.shape)
+    return _numbagg_wrapper(
+        group_idx,
+        array,
+        axis=axis,
+        size=size,
+        func="nancount",
+        # fill_value=fill_value,
+        # dtype=dtype,
+    )
+
+
 nansum = partial(_numbagg_wrapper, func="nansum")
 nanmean = partial(_numbagg_wrapper, func="nanmean")
 nanprod = partial(_numbagg_wrapper, func="nanprod")
 nansum_of_squares = partial(_numbagg_wrapper, func="nansum_of_squares")
-nanlen = partial(_numbagg_wrapper, func="nancount")
 nanprod = partial(_numbagg_wrapper, func="nanprod")
 nanfirst = partial(_numbagg_wrapper, func="nanfirst")
 nanlast = partial(_numbagg_wrapper, func="nanlast")
