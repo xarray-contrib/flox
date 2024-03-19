@@ -1694,6 +1694,6 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
 def test_nanlen_string(dtype, engine):
     array = np.array(["ABC", "DEF", "GHI", "JKL", "MNO", "PQR"], dtype=dtype)
     by = np.array([0, 0, 1, 2, 1, 0])
-    expected = np.array([3, 2, 1])
+    expected = np.array([3, 2, 1], dtype=np.intp)
     actual, *_ = groupby_reduce(array, by, func="count", engine=engine)
     assert_equal(expected, actual)
