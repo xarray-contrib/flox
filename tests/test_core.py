@@ -1688,3 +1688,12 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
     if by_ndim == 2:
         expected = expected.squeeze(axis=-2)
     assert_equal(expected, actual, tolerance=1e-14)
+
+
+@pytest.mark.parametrize("dtype", ["U3", "S3"])
+def test_nanlen_string(dtype, engine):
+    array = np.array(["ABC", "DEF", "GHI", "JKL", "MNO", "PQR"], dtype=dtype)
+    by = np.array([0, 0, 1, 2, 1, 0])
+    expected = np.array([3, 2, 1])
+    actual, *_ = groupby_reduce(array, by, func="count", engine=engine)
+    assert_equal(expected, actual)

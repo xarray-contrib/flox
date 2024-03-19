@@ -88,6 +88,8 @@ def nanprod(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dt
 
 
 def _len(group_idx, array, engine, *, func, axis=-1, size=None, fill_value=None, dtype=None):
+    if array.dtype.kind in "US":
+        array = np.broadcast_to(np.array([1]), array.shape)
     result = _get_aggregate(engine).aggregate(
         group_idx,
         array,
