@@ -95,7 +95,7 @@ class ERA5Dataset:
     """ERA5"""
 
     def __init__(self, *args, **kwargs):
-        self.time = pd.Series(pd.date_range("2016-01-01", "2018-12-31 23:59", freq="H"))
+        self.time = pd.Series(pd.date_range("2016-01-01", "2018-12-31 23:59", freq="h"))
         self.axis = (-1,)
         self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 48))
 
@@ -164,7 +164,7 @@ class PerfectMonthly(Cohorts):
 class ERA5Google(Cohorts):
     def setup(self, *args, **kwargs):
         TIME = 900  # 92044 in Google ARCO ERA5
-        self.time = pd.Series(pd.date_range("1959-01-01", freq="6H", periods=TIME))
+        self.time = pd.Series(pd.date_range("1959-01-01", freq="6h", periods=TIME))
         self.axis = (2,)
         self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 1))
         self.by = self.time.dt.day.values - 1
