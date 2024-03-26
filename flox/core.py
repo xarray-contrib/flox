@@ -397,7 +397,7 @@ def find_group_cohorts(
         preferred_method = "cohorts"
 
     # Now normalize the dotproduct to get containment
-    containment = dotproduct / chunks_per_label
+    containment = csr_array(dotproduct / chunks_per_label)
 
     # Use a threshold to force some merging. We do not use the filtered
     # containment matrix for estimating "sparsity" because it is a bit
@@ -406,8 +406,6 @@ def find_group_cohorts(
     mask = containment.data < MIN_CONTAINMENT
     containment.data[mask] = 0
     containment.eliminate_zeros()
-
-    containment = csr_array(containment)
 
     # Iterate over labels, beginning with those with most chunks
     logger.info("find_group_cohorts: merging cohorts")
