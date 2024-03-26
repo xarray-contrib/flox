@@ -201,3 +201,12 @@ class OISST(Cohorts):
         self.time = pd.Series(index)
         self.by = self.time.dt.dayofyear.values - 1
         self.expected = pd.RangeIndex(self.by.max() + 1)
+
+
+class RandomBigArray(Cohorts):
+    def setup(self, *args, **kwargs):
+        M, N = 100_000, 20_000
+        self.array = dask.array.random.normal(size=(M, N), chunks=(10_000, N // 5)).T
+        self.by = np.random.choice(5_000, size=M)
+        self.expected = pd.RangeIndex(5000)
+        self.axis = (1,)

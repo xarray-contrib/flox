@@ -371,8 +371,10 @@ def find_group_cohorts(
     # matrix allows us to calculate this pretty efficiently.
     asfloat = bitmask.astype(float)
     # Note: While A.T @ A is a symmetric matrix, the division by chunks_per_label
-    # makes it non-symmetric.
-    containment = csr_array((asfloat.T @ asfloat) / chunks_per_label)
+    #       makes it non-symmetric.
+    # Note: We haven't normalized this yet, since we will first check sparsity.
+    #       We don't need the actual containment value for this check.
+    dotproduct = asfloat.T @ asfloat
 
     # The containment matrix is a measure of how much the labels overlap
     # with each other. We treat the sparsity = (nnz/size) as a summary measure of the net overlap.
@@ -383,7 +385,7 @@ def find_group_cohorts(
     # 4. When there are no overlaps at all between labels, containment is a block diagonal matrix
     #    (approximately).
     MAX_SPARSITY_FOR_COHORTS = 0.6  # arbitrary
-    sparsity = containment.nnz / math.prod(containment.shape)
+    sparsity = dotproduct.nnz / math.prod(dotproduct.shape)
     preferred_method: Literal["map-reduce"] | Literal["cohorts"]
     if sparsity > MAX_SPARSITY_FOR_COHORTS:
         logger.info("sparsity is {}".format(sparsity))  # noqa
@@ -394,6 +396,9 @@ def find_group_cohorts(
     else:
         preferred_method = "cohorts"
 
+    # Now normalize the dotproduct to get containment
+    containment = dotproduct / chunks_per_label
+
     # Use a threshold to force some merging. We do not use the filtered
     # containment matrix for estimating "sparsity" because it is a bit
     # hard to reason about.
@@ -401,6 +406,8 @@ def find_group_cohorts(
     mask = containment.data < MIN_CONTAINMENT
     containment.data[mask] = 0
     containment.eliminate_zeros()
+
+    containment = csr_array(containment)
 
     # Iterate over labels, beginning with those with most chunks
     logger.info("find_group_cohorts: merging cohorts")
