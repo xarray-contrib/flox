@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - asv
+  - build
   - cachey
   - dask-core
   - numpy>=1.22
