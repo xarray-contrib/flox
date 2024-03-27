@@ -143,7 +143,7 @@ class PerfectMonthly(Cohorts):
     """Perfectly chunked for a "cohorts" monthly mean climatology"""
 
     def setup(self, *args, **kwargs):
-        self.time = pd.Series(pd.date_range("1961-01-01", "2018-12-31 23:59", freq="M"))
+        self.time = pd.Series(pd.date_range("1961-01-01", "2018-12-31 23:59", freq="ME"))
         self.axis = (-1,)
         self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 4))
         self.by = self.time.dt.month.values - 1
