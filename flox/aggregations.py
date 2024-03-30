@@ -123,6 +123,17 @@ def _normalize_dtype(dtype: DTypeLike, array_dtype: np.dtype, fill_value=None) -
     return dtype
 
 
+def _maybe_promote_int(dtype: np.dtype):
+    # https://numpy.org/doc/stable/reference/generated/numpy.prod.html
+    # The dtype of a is used by default unless a has an integer dtype of less precision
+    # than the default platform integer.
+    if dtype.kind == "i":
+        dtype = np.result_type(dtype, np.intp)
+    elif dtype.kind == "u":
+        dtype = np.result_type(dtype, np.uintp)
+    return dtype
+
+
 def _get_fill_value(dtype, fill_value):
     """Returns dtype appropriate infinity. Returns +Inf equivalent for None."""
     if fill_value == dtypes.INF or fill_value is None:
@@ -524,10 +535,10 @@ any_ = Aggregation(
 # Support statistical quantities only blockwise
 # The parallel versions will be approximate and are hard to implement!
 median = Aggregation(
-    name="median", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+    name="median", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.floating
 )
 nanmedian = Aggregation(
-    name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+    name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.floating
 )
 
 
@@ -618,6 +629,8 @@ def _initialize_aggregation(
     )
 
     final_dtype = _normalize_dtype(dtype_ or agg.dtype_init["final"], array_dtype, fill_value)
+    if agg.name not in ["min", "max", "nanmin", "nanmax"]:
+        final_dtype = _maybe_promote_int(final_dtype)
     agg.dtype = {
         "user": dtype,  # Save to automatically choose an engine
         "final": final_dtype,

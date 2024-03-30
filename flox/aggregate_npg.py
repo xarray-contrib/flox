@@ -113,7 +113,7 @@ def median(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dty
     return npg.aggregate_numpy.aggregate(
         group_idx,
         array,
-        func=partial(_casting_wrapper, np.median, dtype=array.dtype),
+        func=partial(_casting_wrapper, np.median, dtype=np.result_type(array.dtype)),
         axis=axis,
         size=size,
         fill_value=fill_value,
@@ -125,7 +125,7 @@ def nanmedian(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, 
     return npg.aggregate_numpy.aggregate(
         group_idx,
         array,
-        func=partial(_casting_wrapper, np.nanmedian, dtype=array.dtype),
+        func=partial(_casting_wrapper, np.nanmedian, dtype=np.result_type(array.dtype)),
         axis=axis,
         size=size,
         fill_value=fill_value,
@@ -137,7 +137,11 @@ def quantile(group_idx, array, engine, *, q, axis=-1, size=None, fill_value=None
     return npg.aggregate_numpy.aggregate(
         group_idx,
         array,
-        func=partial(_casting_wrapper, partial(np.quantile, q=q), dtype=array.dtype),
+        func=partial(
+            _casting_wrapper,
+            partial(np.quantile, q=q),
+            dtype=np.result_type(np.float64, array.dtype),
+        ),
         axis=axis,
         size=size,
         fill_value=fill_value,
@@ -149,7 +153,11 @@ def nanquantile(group_idx, array, engine, *, q, axis=-1, size=None, fill_value=N
     return npg.aggregate_numpy.aggregate(
         group_idx,
         array,
-        func=partial(_casting_wrapper, partial(np.nanquantile, q=q), dtype=array.dtype),
+        func=partial(
+            _casting_wrapper,
+            partial(np.nanquantile, q=q),
+            dtype=np.result_type(np.float64, array.dtype),
+        ),
         axis=axis,
         size=size,
         fill_value=fill_value,

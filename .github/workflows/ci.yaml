@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build (${{ matrix.python-version }}, ${{ matrix.os }})
+  test:
+    name: Test (${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -45,6 +45,15 @@ jobs:
       - name: Install flox
         run: |
           python -m pip install --no-deps -e .
+
+      - name: Restore cached hypothesis directory
+        uses: actions/cache@v4
+        with:
+          path: .hypothesis/
+          key: cache-hypothesis
+          enableCrossOsArchive: true
+          save-always: true
+
       - name: Run Tests
         run: |
           pytest -n auto --cov=./ --cov-report=xml
