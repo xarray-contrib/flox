@@ -1,3 +1,7 @@
+import pytest
+
+pytest.importorskip("hypothesis")
+
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
