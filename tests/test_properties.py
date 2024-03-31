@@ -50,9 +50,9 @@ func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS])
 
 def not_overflowing_array(array) -> bool:
     if array.dtype.kind == "f":
-        info = np.finfo(array.dtype)  # type: ignore
+        info = np.finfo(array.dtype)  # type: ignore[assignment]
     elif array.dtype.kind in ["i", "u"]:
-        info = np.iinfo(array.dtype)  # type: ignore
+        info = np.iinfo(array.dtype)  # type: ignore[assignment]
     else:
         return True
 
