@@ -957,10 +957,12 @@ def test_dtype_preservation(dtype, func, engine):
     if engine == "numbagg":
         # https://github.com/numbagg/numbagg/issues/121
         pytest.skip()
-    if func == "sum" or (func == "mean" and "float" in dtype):
-        expected = np.dtype(dtype)
+    if func == "sum" and "int" in dtype:
+        expected = np.result_type(np.intp, np.dtype(dtype))
     elif func == "mean" and "int" in dtype:
         expected = np.float64
+    else:
+        expected = np.dtype(dtype)
     array = np.ones((20,), dtype=dtype)
     by = np.ones(array.shape, dtype=int)
     actual, _ = groupby_reduce(array, by, func=func, engine=engine)
