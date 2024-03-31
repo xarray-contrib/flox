@@ -36,7 +36,7 @@ func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS])
 
 def not_overflowing_array(array) -> bool:
     if array.dtype.kind == "f":
-        info = np.finfo(array.dtype)  # type: ignore[assignment]
+        info = np.finfo(array.dtype)
     elif array.dtype.kind in ["i", "u"]:
         info = np.iinfo(array.dtype)  # type: ignore[assignment]
     else:
@@ -45,7 +45,7 @@ def not_overflowing_array(array) -> bool:
     return bool(np.all((array < info.max / array.size) & (array > info.min / array.size)))
 
 
-@settings(deadline=None, suppress_health_check=[HealthCheck.filter_too_much])
+@settings(suppress_health_check=[HealthCheck.filter_too_much])
 @given(
     array=npst.arrays(
         elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
