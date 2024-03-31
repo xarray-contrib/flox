@@ -379,7 +379,8 @@ def test_groupby_reduce_preserves_dtype(dtype, func):
     array = np.ones((2, 12), dtype=dtype)
     by = np.array([labels] * 2)
     result, _ = groupby_reduce(from_array(array, chunks=(-1, 4)), by, func=func)
-    assert result.dtype == array.dtype
+    expect_dtype = np.result_type(np.intp, array.dtype) if array.dtype.kind == "i" else array.dtype
+    assert result.dtype == expect_dtype
 
 
 def test_numpy_reduce_nd_md():
@@ -988,7 +989,9 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
 
     actual, actual_groups = groupby_reduce(array, labels, func="sum", method=method)
     assert_equal(actual_groups, np.arange(6, dtype=labels.dtype))
-    assert_equal(actual, np.array([0, 4, 24, 6, 12, 20], dtype))
+
+    expect_dtype = np.result_type(np.intp, dtype) if np.dtype(dtype).kind == "i" else dtype
+    assert_equal(actual, np.array([0, 4, 24, 6, 12, 20], dtype=expect_dtype))
 
 
 @requires_dask
