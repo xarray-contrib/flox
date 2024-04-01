@@ -67,6 +67,12 @@ if TYPE_CHECKING:
     from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt, T_Method
 
 
+def _maybe_promote_int(dtype):
+    if not isinstance(dtype, np.dtype):
+        dtype = np.dtype(dtype)
+    return np.result_type(np.intp, dtype) if dtype.kind == "i" else dtype
+
+
 def _get_array_func(func: str) -> Callable:
     if func == "count":
 
@@ -151,7 +157,7 @@ def test_groupby_reduce(
     if func == "mean" or func == "nanmean":
         expected_result = np.array(expected, dtype=np.float64)
     elif func == "sum":
-        expected_result = np.array(expected, dtype=dtype)
+        expected_result = np.array(expected, dtype=_maybe_promote_int(array.dtype))
     elif func == "count":
         expected_result = np.array(expected, dtype=np.intp)
 
@@ -379,7 +385,7 @@ def test_groupby_reduce_preserves_dtype(dtype, func):
     array = np.ones((2, 12), dtype=dtype)
     by = np.array([labels] * 2)
     result, _ = groupby_reduce(from_array(array, chunks=(-1, 4)), by, func=func)
-    expect_dtype = np.result_type(np.intp, array.dtype) if array.dtype.kind == "i" else array.dtype
+    expect_dtype = _maybe_promote_int(array.dtype)
     assert result.dtype == expect_dtype
 
 
@@ -958,8 +964,8 @@ def test_dtype_preservation(dtype, func, engine):
     if engine == "numbagg":
         # https://github.com/numbagg/numbagg/issues/121
         pytest.skip()
-    if func == "sum" and "int" in dtype:
-        expected = np.result_type(np.intp, np.dtype(dtype))
+    if func == "sum":
+        expected = _maybe_promote_int(dtype)
     elif func == "mean" and "int" in dtype:
         expected = np.float64
     else:
@@ -990,7 +996,7 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
     actual, actual_groups = groupby_reduce(array, labels, func="sum", method=method)
     assert_equal(actual_groups, np.arange(6, dtype=labels.dtype))
 
-    expect_dtype = np.result_type(np.intp, dtype) if np.dtype(dtype).kind == "i" else dtype
+    expect_dtype = _maybe_promote_int(dtype)
     assert_equal(actual, np.array([0, 4, 24, 6, 12, 20], dtype=expect_dtype))
 
 
