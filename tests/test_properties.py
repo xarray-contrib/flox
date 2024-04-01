@@ -9,9 +9,11 @@ from hypothesis import HealthCheck, assume, given, note, settings
 
 from flox.core import groupby_reduce
 
-from . import ALL_FUNCS, assert_equal
+from . import ALL_FUNCS, SCIPY_STATS_FUNCS, assert_equal
 
-NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all", "mode", "nanmode"]
+NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"] + list(
+    SCIPY_STATS_FUNCS
+)
 
 
 def supported_dtypes() -> st.SearchStrategy[np.dtype]:
@@ -30,7 +32,6 @@ dtype_st = supported_dtypes().filter(lambda x: x.byteorder == "=" and x.kind not
 
 array_dtype_st = dtype_st.filter(lambda x: x.kind != "U")
 by_dtype_st = dtype_st
-
 func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS])
 
 

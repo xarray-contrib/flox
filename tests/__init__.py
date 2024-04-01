@@ -155,4 +155,4 @@ ALL_FUNCS = (
     "nanmedian",
     "quantile",
     "nanquantile",
-)  # + tuple(pytest.param(func, marks=requires_scipy) for func in SCIPY_STATS_FUNCS)
+) + tuple(SCIPY_STATS_FUNCS)
