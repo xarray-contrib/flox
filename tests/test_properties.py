@@ -65,17 +65,21 @@ def test_groupby_reduce(array, dtype, func):
     axis = -1
     by = np.ones((array.shape[-1],), dtype=dtype)
     kwargs = {"q": 0.8} if "quantile" in func else {}
+    flox_kwargs = {}
     # numpy-groupies always does the calculation in float64
-    if ("var" in func or "std" in func or "sum" in func) and array.dtype.kind == "f":
+    if (
+        "var" in func or "std" in func or "sum" in func or "mean" in func
+    ) and array.dtype.kind == "f":
         # bincount accumulates in float64
-        kwargs.setdefault("dtype", np.float64)
+        flox_kwargs.setdefault("dtype", np.float64)
         cast_to = array.dtype
     else:
         cast_to = None
+    note((kwargs, cast_to))
 
     with np.errstate(invalid="ignore", divide="ignore"):
         actual, _ = groupby_reduce(
-            array, by, func=func, axis=axis, engine="numpy", finalize_kwargs=kwargs
+            array, by, func=func, axis=axis, engine="numpy", **flox_kwargs, finalize_kwargs=kwargs
         )
         expected = getattr(np, func)(array, axis=axis, keepdims=True, **kwargs)
     note(("expected: ", expected, "actual: ", actual))
