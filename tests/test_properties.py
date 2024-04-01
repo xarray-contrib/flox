@@ -28,7 +28,7 @@ def supported_dtypes() -> st.SearchStrategy[np.dtype]:
     ).filter(lambda x: x.byteorder == "=")
 
 
-array_dtype_st = supported_dtypes().filter(lambda x: x.kind != "mcMU")
+array_dtype_st = supported_dtypes().filter(lambda x: x.kind not in "U")
 by_dtype_st = supported_dtypes()
 func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS])
 
