@@ -141,7 +141,7 @@ def _get_fill_value(dtype, fill_value):
     if fill_value == dtypes.NINF:
         return dtypes.get_neg_infinity(dtype, min_for_int=True)
     if fill_value == dtypes.NA:
-        if np.issubdtype(dtype, np.floating):
+        if np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.complexfloating):
             return np.nan
         # This is madness, but npg checks that fill_value is compatible
         # with array dtype even if the fill_value is never used.

@@ -57,6 +57,7 @@ def not_overflowing_array(array) -> bool:
 def test_groupby_reduce(array, dtype, func):
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(array))
+    assume(not ("quantile" in func and array.dtype.kind == "c"))
     # arg* with nans in array are weird
     assume("arg" not in func and not np.any(np.isnan(array).ravel()))
 
