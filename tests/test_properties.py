@@ -21,17 +21,15 @@ def supported_dtypes() -> st.SearchStrategy[np.dtype]:
         npst.integer_dtypes()
         | npst.unsigned_integer_dtypes()
         | npst.floating_dtypes()
-        # | npst.complex_number_dtypes()
-        # | npst.datetime64_dtypes()
-        # | npst.timedelta64_dtypes()
+        | npst.complex_number_dtypes()
+        | npst.datetime64_dtypes()
+        | npst.timedelta64_dtypes()
         | npst.unicode_string_dtypes()
-    )
+    ).filter(lambda x: x.byteorder == "=")
 
 
-dtype_st = supported_dtypes().filter(lambda x: x.byteorder == "=" and x.kind not in ["mcM"])
-
-array_dtype_st = dtype_st.filter(lambda x: x.kind != "U")
-by_dtype_st = dtype_st
+array_dtype_st = supported_dtypes().filter(lambda x: x.kind != "mcMU")
+by_dtype_st = supported_dtypes()
 func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS])
 
 
@@ -66,7 +64,7 @@ def test_groupby_reduce(array, dtype, func):
     by = np.ones((array.shape[-1],), dtype=dtype)
     kwargs = {"q": 0.8} if "quantile" in func else {}
     # numpy-groupies always does the calculation in float64
-    if ("var" in func or "std" in func or "sum" in func) and array.dtype.kinde == "f":
+    if ("var" in func or "std" in func or "sum" in func) and array.dtype.kind == "f":
         # bincount accumulates in float64
         kwargs.setdefault("dtype", np.float64)
         cast_to = array.dtype
