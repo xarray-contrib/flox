@@ -1740,7 +1740,7 @@ def _validate_reindex(
     any_by_dask: bool,
     is_dask_array: bool,
 ) -> bool | None:
-    logger.info("Entering _validate_reindex: reindex is {}".format(reindex))  # noqa
+    logger.debug("Entering _validate_reindex: reindex is {}".format(reindex))  # noqa
 
     all_numpy = not is_dask_array and not any_by_dask
     if reindex is True and not all_numpy:
@@ -1755,7 +1755,7 @@ def _validate_reindex(
 
     if reindex is None:
         if method is None:
-            logger.info("Leaving _validate_reindex: method = None, returning None")
+            logger.debug("Leaving _validate_reindex: method = None, returning None")
             return None
 
         if all_numpy:
