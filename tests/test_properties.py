@@ -18,14 +18,14 @@ NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"
 
 def supported_dtypes() -> st.SearchStrategy[np.dtype]:
     return (
-        npst.integer_dtypes()
-        | npst.unsigned_integer_dtypes()
-        | npst.floating_dtypes()
-        | npst.complex_number_dtypes()
-        | npst.datetime64_dtypes()
-        | npst.timedelta64_dtypes()
-        | npst.unicode_string_dtypes()
-    ).filter(lambda x: x.byteorder == "=")
+        npst.integer_dtypes(endianness="=")
+        | npst.unsigned_integer_dtypes(endianness="=")
+        | npst.floating_dtypes(endianness="=")
+        | npst.complex_number_dtypes(endianness="=")
+        | npst.datetime64_dtypes(endianness="=")
+        | npst.timedelta64_dtypes(endianness="=")
+        | npst.unicode_string_dtypes(endianness="=")
+    )
 
 
 # TODO: stop excluding datetime64, timedelta64
@@ -47,7 +47,7 @@ def not_overflowing_array(array) -> bool:
     return result
 
 
-@settings(suppress_health_check=[HealthCheck.filter_too_much])
+@settings(max_examples=300, suppress_health_check=[HealthCheck.filter_too_much])
 @given(
     array=npst.arrays(
         elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
