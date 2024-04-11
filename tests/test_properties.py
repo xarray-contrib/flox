@@ -28,8 +28,8 @@ def supported_dtypes() -> st.SearchStrategy[np.dtype]:
     )
 
 
-# TODO: stop excluding datetime64, timedelta64
-array_dtype_st = supported_dtypes().filter(lambda x: x.kind not in "mMU")
+# TODO: stop excluding everything but U
+array_dtype_st = supported_dtypes().filter(lambda x: x.kind not in "cmMU")
 by_dtype_st = supported_dtypes()
 func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS])
 
@@ -69,24 +69,26 @@ def test_groupby_reduce(array, dtype, func):
     by = np.ones((array.shape[-1],), dtype=dtype)
     kwargs = {"q": 0.8} if "quantile" in func else {}
     flox_kwargs = {}
-    # numpy-groupies always does the calculation in float64
-    if (
-        "var" in func or "std" in func or "sum" in func or "mean" in func
-    ) and array.dtype.kind == "f":
-        # bincount accumulates in float64
-        kwargs.setdefault("dtype", np.float64)
-        cast_to = array.dtype
-    else:
-        cast_to = None
-    note(("kwargs:", kwargs, "cast_to:", cast_to))
-
     with np.errstate(invalid="ignore", divide="ignore"):
         actual, _ = groupby_reduce(
             array, by, func=func, axis=axis, engine="numpy", **flox_kwargs, finalize_kwargs=kwargs
         )
+
+        # numpy-groupies always does the calculation in float64
+        if (
+            "var" in func or "std" in func or "sum" in func or "mean" in func
+        ) and array.dtype.kind == "f":
+            # bincount always accumulates in float64
+            kwargs.setdefault("dtype", np.float64)
+            cast_to = array.dtype
+        else:
+            cast_to = None
+        note(("kwargs:", kwargs, "cast_to:", cast_to))
         expected = getattr(np, func)(array, axis=axis, keepdims=True, **kwargs)
+        if cast_to is not None:
+            expected = expected.astype(cast_to)
+            # actual = actual.astype(cast_to)
+
     note(("expected: ", expected, "actual: ", actual))
     tolerance = {"rtol": 1e-13, "atol": 1e-16} if "var" in func or "std" in func else {}
-    if cast_to:
-        expected = expected.astype(cast_to)
     assert_equal(expected, actual, tolerance)
