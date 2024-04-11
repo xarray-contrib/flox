@@ -74,11 +74,11 @@ def test_groupby_reduce(array, dtype, func):
         "var" in func or "std" in func or "sum" in func or "mean" in func
     ) and array.dtype.kind == "f":
         # bincount accumulates in float64
-        flox_kwargs.setdefault("dtype", np.float64)
+        kwargs.setdefault("dtype", np.float64)
         cast_to = array.dtype
     else:
         cast_to = None
-    note((kwargs, cast_to))
+    note(("kwargs:", kwargs, "cast_to:", cast_to))
 
     with np.errstate(invalid="ignore", divide="ignore"):
         actual, _ = groupby_reduce(
@@ -88,5 +88,5 @@ def test_groupby_reduce(array, dtype, func):
     note(("expected: ", expected, "actual: ", actual))
     tolerance = {"rtol": 1e-13, "atol": 1e-16} if "var" in func or "std" in func else {}
     if cast_to:
-        actual = actual.astype(cast_to)
+        expected = expected.astype(cast_to)
     assert_equal(expected, actual, tolerance)
