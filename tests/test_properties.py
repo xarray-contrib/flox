@@ -78,14 +78,18 @@ def test_groupby_reduce(array, dtype, func):
         if (
             "var" in func or "std" in func or "sum" in func or "mean" in func
         ) and array.dtype.kind == "f":
-            # bincount always accumulates in float64
-            kwargs.setdefault("dtype", np.float64)
+            # bincount always accumulates in float64,
+            # casting to float64 handles std more like npg does.
+            # Setting dtype=float64 works fine for sum, mean.
             cast_to = array.dtype
+            array = array.astype(np.float64)
+            note(f"casting array to float64, cast_to={cast_to!r}")
         else:
             cast_to = None
         note(("kwargs:", kwargs, "cast_to:", cast_to))
         expected = getattr(np, func)(array, axis=axis, keepdims=True, **kwargs)
         if cast_to is not None:
+            note(("casting to:", cast_to))
             expected = expected.astype(cast_to)
             # actual = actual.astype(cast_to)
 
