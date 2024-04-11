@@ -61,7 +61,8 @@ else:
 
     def dask_array_ones(*args):
         return None
-    
+
+
 if has_cubed:
     import cubed
 
@@ -493,7 +494,9 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
         ((12,), (3,), 3),  # form 1
     ],
 )
-def test_groupby_agg_cubed(func, shape, array_chunks, group_chunks, add_nan, dtype, engine, reindex):
+def test_groupby_agg_cubed(
+    func, shape, array_chunks, group_chunks, add_nan, dtype, engine, reindex
+):
     """Tests groupby_reduce with cubed arrays against groupby_reduce with numpy arrays"""
 
     array = cubed.array_api.ones(shape, chunks=array_chunks)
@@ -504,9 +507,7 @@ def test_groupby_agg_cubed(func, shape, array_chunks, group_chunks, add_nan, dty
         labels[:3] = np.nan  # entire block is NaN when group_chunks=3
         labels[-2:] = np.nan
 
-    kwargs = dict(
-        func=func, expected_groups=[0, 1, 2], reindex=reindex
-    )
+    kwargs = dict(func=func, expected_groups=[0, 1, 2], reindex=reindex)
 
     expected, _ = groupby_reduce(array.compute(), labels, engine="numpy", **kwargs)
     actual, _ = groupby_reduce(array.compute(), labels, engine=engine, **kwargs)
