@@ -47,7 +47,9 @@ def not_overflowing_array(array) -> bool:
     return result
 
 
-@settings(max_examples=300, suppress_health_check=[HealthCheck.filter_too_much])
+@settings(
+    max_examples=300, suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow]
+)
 @given(
     array=npst.arrays(
         elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
