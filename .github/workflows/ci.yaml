@@ -54,7 +54,7 @@ jobs:
           path: .hypothesis/
           key: cache-hypothesis-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
-            cache-hypothesis-
+            cache-hypothesis-${{ runner.os }}-
 
       - name: Run Tests
         id: status
