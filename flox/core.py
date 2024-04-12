@@ -1791,7 +1791,7 @@ def cubed_groupby_agg(
         out = {}
         for idx, combine in enumerate(agg.simple_combine):
             field = f"f{idx}"
-            out[field] = combine(a[field], dtype=dtype[field], axis=dummy_axis, keepdims=keepdims)
+            out[field] = combine(a[field], axis=dummy_axis, keepdims=keepdims)
         return out
 
     def _groupby_aggregate(a):
