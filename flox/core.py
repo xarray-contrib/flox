@@ -1814,7 +1814,7 @@ def cubed_groupby_agg(
         by,
         func=_groupby_func,
         combine_func=_groupby_combine,
-        aggegrate_func=_groupby_aggregate,
+        aggregate_func=_groupby_aggregate,
         axis=axis,
         intermediate_dtype=intermediate_dtype,
         dtype=dtype,
