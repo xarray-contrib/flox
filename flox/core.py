@@ -1763,6 +1763,7 @@ def cubed_groupby_agg(
 
     assert do_simple_combine
     assert method == "map-reduce"
+    assert reindex is True
     assert len(axis) == 1  # one axis/grouping
 
     def _groupby_func(a, by, axis, intermediate_dtype, num_groups):
