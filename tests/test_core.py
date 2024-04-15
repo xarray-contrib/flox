@@ -493,9 +493,7 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
         ((12,), (3,), 3),  # form 1
     ],
 )
-def test_groupby_agg_cubed(
-    func, shape, array_chunks, group_chunks, add_nan, engine, reindex
-):
+def test_groupby_agg_cubed(func, shape, array_chunks, group_chunks, add_nan, engine, reindex):
     """Tests groupby_reduce with cubed arrays against groupby_reduce with numpy arrays"""
 
     if func in ["first", "last"] or func in BLOCKWISE_FUNCS:
