@@ -1795,15 +1795,10 @@ def cubed_groupby_agg(
         return out
 
     def _groupby_aggregate(a):
-        # this is similar to _finalize_results, but not as comprehensive
-        arrs = tuple(v for v in a.values())
-        if agg.finalize is None:
-            assert len(arrs) == 1
-            out = arrs[0]
-        else:
-            out = agg.finalize(*arrs, **agg.finalize_kwargs)
-        out = out.astype(agg.dtype["final"], copy=False)
-        return out
+        # Convert cubed dict to one that _finalize_results works with
+        results = {"groups": expected_groups, "intermediates": a.values()}
+        out = _finalize_results(results, agg, axis, expected_groups, fill_value, reindex)
+        return out[agg.name]
 
     # convert list of dtypes to a structured dtype for cubed
     intermediate_dtype = [(f"f{i}", dtype) for i, dtype in enumerate(agg.dtype["intermediate"])]
