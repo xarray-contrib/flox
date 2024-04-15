@@ -487,7 +487,6 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
 @pytest.mark.parametrize("reindex", [True])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("add_nan", [False, True])
-@pytest.mark.parametrize("dtype", (float,))
 @pytest.mark.parametrize(
     "shape, array_chunks, group_chunks",
     [
@@ -495,7 +494,7 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
     ],
 )
 def test_groupby_agg_cubed(
-    func, shape, array_chunks, group_chunks, add_nan, dtype, engine, reindex
+    func, shape, array_chunks, group_chunks, add_nan, engine, reindex
 ):
     """Tests groupby_reduce with cubed arrays against groupby_reduce with numpy arrays"""
 
