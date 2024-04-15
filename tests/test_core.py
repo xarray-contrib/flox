@@ -486,7 +486,7 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
 @requires_cubed
 @pytest.mark.parametrize("reindex", [True])
 @pytest.mark.parametrize("func", ALL_FUNCS)
-@pytest.mark.parametrize("add_nan", [False])
+@pytest.mark.parametrize("add_nan", [False, True])
 @pytest.mark.parametrize("dtype", (float,))
 @pytest.mark.parametrize(
     "shape, array_chunks, group_chunks",
@@ -513,7 +513,12 @@ def test_groupby_agg_cubed(
         labels[:3] = np.nan  # entire block is NaN when group_chunks=3
         labels[-2:] = np.nan
 
-    kwargs = dict(func=func, expected_groups=[0, 1, 2], reindex=reindex)
+    kwargs = dict(
+        func=func,
+        expected_groups=[0, 1, 2],
+        fill_value=False if func in ["all", "any"] else 123,
+        reindex=reindex,
+    )
 
     expected, _ = groupby_reduce(array.compute(), labels, engine="numpy", **kwargs)
     actual, _ = groupby_reduce(array.compute(), labels, engine=engine, **kwargs)
