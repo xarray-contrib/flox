@@ -6,6 +6,7 @@ dependencies:
   - cachey
   - cftime
   - codecov
+  - cubed>=0.14.2
   - dask-core
   - pandas
   - numpy>=1.22
