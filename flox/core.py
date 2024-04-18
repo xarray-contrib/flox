@@ -68,7 +68,9 @@ if TYPE_CHECKING:
     import dask.array.Array as DaskArray
     from dask.typing import Graph
 
-    T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
+    import cubed.Array as CubedArray
+
+    T_DuckArray = Union[np.ndarray, DaskArray, CubedArray]  # Any ?
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
     T_ExpectIndex = pd.Index
@@ -97,7 +99,7 @@ if TYPE_CHECKING:
 
 
 IntermediateDict = dict[Union[str, Callable], Any]
-FinalResultsDict = dict[str, Union["DaskArray", np.ndarray]]
+FinalResultsDict = dict[str, Union["DaskArray", "CubedArray", np.ndarray]]
 FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 
 # This dummy axis is inserted using np.expand_dims
@@ -1721,7 +1723,7 @@ def dask_groupby_agg(
 
 
 def cubed_groupby_agg(
-    array: DaskArray,
+    array: CubedArray,
     by: T_By,
     agg: Aggregation,
     expected_groups: pd.Index | None,
@@ -1732,7 +1734,7 @@ def cubed_groupby_agg(
     engine: T_Engine = "numpy",
     sort: bool = True,
     chunks_cohorts=None,
-) -> tuple[DaskArray, tuple[np.ndarray | DaskArray]]:
+) -> tuple[CubedArray, tuple[np.ndarray | CubedArray]]:
     import cubed
     import cubed.core.groupby
 
