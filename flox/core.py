@@ -1764,6 +1764,7 @@ def cubed_groupby_agg(
 
     assert do_simple_combine
     assert method == "map-reduce"
+    assert expected_groups is not None
     assert reindex is True
     assert len(axis) == 1  # one axis/grouping
 
