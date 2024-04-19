@@ -1777,7 +1777,7 @@ def cubed_groupby_agg(
             reindex=reindex,
             user_dtype=agg.dtype["user"],
             axis=axis,
-            expected_groups=expected_groups if reindex else None,
+            expected_groups=expected_groups,
             engine=engine,
             sort=sort,
         )
