@@ -46,6 +46,7 @@ def LooseVersion(vstring):
 
 
 has_cftime, requires_cftime = _importorskip("cftime")
+has_cubed, requires_cubed = _importorskip("cubed")
 has_dask, requires_dask = _importorskip("dask")
 has_numba, requires_numba = _importorskip("numba")
 has_numbagg, requires_numbagg = _importorskip("numbagg")

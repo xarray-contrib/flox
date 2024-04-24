@@ -38,7 +38,9 @@ from .aggregations import (
 )
 from .cache import memoize
 from .xrutils import (
+    is_chunked_array,
     is_duck_array,
+    is_duck_cubed_array,
     is_duck_dask_array,
     isnull,
     module_available,
@@ -63,10 +65,11 @@ if TYPE_CHECKING:
     except (ModuleNotFoundError, ImportError):
         Unpack: Any  # type: ignore[no-redef]
 
+    import cubed.Array as CubedArray
     import dask.array.Array as DaskArray
     from dask.typing import Graph
 
-    T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
+    T_DuckArray = Union[np.ndarray, DaskArray, CubedArray]  # Any ?
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
     T_ExpectIndex = pd.Index
@@ -95,7 +98,7 @@ if TYPE_CHECKING:
 
 
 IntermediateDict = dict[Union[str, Callable], Any]
-FinalResultsDict = dict[str, Union["DaskArray", np.ndarray]]
+FinalResultsDict = dict[str, Union["DaskArray", "CubedArray", np.ndarray]]
 FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 
 # This dummy axis is inserted using np.expand_dims
@@ -363,37 +366,55 @@ def find_group_cohorts(
         logger.info("find_group_cohorts: cohorts is preferred, chunking is perfect.")
         return "cohorts", chunks_cohorts
 
-    # Containment = |Q & S| / |Q|
+    # We'll use containment to measure degree of overlap between labels.
+    # Containment C = |Q & S| / |Q|
     #  - |X| is the cardinality of set X
     #  - Q is the query set being tested
     #  - S is the existing set
-    # We'll use containment to measure degree of overlap between labels. The bitmask
-    # matrix allows us to calculate this pretty efficiently.
-    asfloat = bitmask.astype(float)
-    # Note: While A.T @ A is a symmetric matrix, the division by chunks_per_label
-    # makes it non-symmetric.
-    containment = csr_array((asfloat.T @ asfloat) / chunks_per_label)
-
-    # The containment matrix is a measure of how much the labels overlap
-    # with each other. We treat the sparsity = (nnz/size) as a summary measure of the net overlap.
+    # The bitmask matrix S allows us to calculate this pretty efficiently using a dot product.
+    #       S.T @ S / chunks_per_label
+    #
+    # We treat the sparsity(C) = (nnz/size) as a summary measure of the net overlap.
     # 1. For high enough sparsity, there is a lot of overlap and we should use "map-reduce".
     # 2. When labels are uniformly distributed amongst all chunks
     #    (and number of labels < chunk size), sparsity is 1.
     # 3. Time grouping cohorts (e.g. dayofyear) appear as lines in this matrix.
     # 4. When there are no overlaps at all between labels, containment is a block diagonal matrix
     #    (approximately).
-    MAX_SPARSITY_FOR_COHORTS = 0.6  # arbitrary
-    sparsity = containment.nnz / math.prod(containment.shape)
+    #
+    # However computing S.T @ S can still be the slowest step, especially if S
+    # is not particularly sparse. Empirically the sparsity( S.T @ S ) > min(1, 2 x sparsity(S)).
+    # So we use sparsity(S) as a shortcut.
+    MAX_SPARSITY_FOR_COHORTS = 0.4  # arbitrary
+    sparsity = bitmask.nnz / math.prod(bitmask.shape)
     preferred_method: Literal["map-reduce"] | Literal["cohorts"]
+    logger.debug(
+        "sparsity of bitmask is {}, threshold is {}".format(  # noqa
+            sparsity, MAX_SPARSITY_FOR_COHORTS
+        )
+    )
     if sparsity > MAX_SPARSITY_FOR_COHORTS:
-        logger.info("sparsity is {}".format(sparsity))  # noqa
         if not merge:
-            logger.info("find_group_cohorts: merge=False, choosing 'map-reduce'")
+            logger.info(
+                "find_group_cohorts: bitmask sparsity={}, merge=False, choosing 'map-reduce'".format(  # noqa
+                    sparsity
+                )
+            )
             return "map-reduce", {}
         preferred_method = "map-reduce"
     else:
         preferred_method = "cohorts"
 
+    # Note: While A.T @ A is a symmetric matrix, the division by chunks_per_label
+    #       makes it non-symmetric.
+    asfloat = bitmask.astype(float)
+    containment = csr_array(asfloat.T @ asfloat / chunks_per_label)
+
+    logger.debug(
+        "sparsity of containment matrix is {}".format(  # noqa
+            containment.nnz / math.prod(containment.shape)
+        )
+    )
     # Use a threshold to force some merging. We do not use the filtered
     # containment matrix for estimating "sparsity" because it is a bit
     # hard to reason about.
@@ -636,8 +657,7 @@ def factorize_(
     expected_groups: T_ExpectIndexOptTuple | None = None,
     reindex: bool = False,
     sort: bool = True,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, None]:
-    ...
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, None]: ...
 
 
 @overload
@@ -649,8 +669,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: Literal[False] = False,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps]:
-    ...
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps]: ...
 
 
 @overload
@@ -662,8 +681,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]:
-    ...
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]: ...
 
 
 def factorize_(
@@ -1700,6 +1718,109 @@ def dask_groupby_agg(
     return (result, groups)
 
 
+def cubed_groupby_agg(
+    array: CubedArray,
+    by: T_By,
+    agg: Aggregation,
+    expected_groups: pd.Index | None,
+    axis: T_Axes = (),
+    fill_value: Any = None,
+    method: T_Method = "map-reduce",
+    reindex: bool = False,
+    engine: T_Engine = "numpy",
+    sort: bool = True,
+    chunks_cohorts=None,
+) -> tuple[CubedArray, tuple[np.ndarray | CubedArray]]:
+    import cubed
+    import cubed.core.groupby
+
+    # I think _tree_reduce expects this
+    assert isinstance(axis, Sequence)
+    assert all(ax >= 0 for ax in axis)
+
+    inds = tuple(range(array.ndim))
+
+    by_input = by
+
+    # Unifying chunks is necessary for argreductions.
+    # We need to rechunk before zipping up with the index
+    # let's always do it anyway
+    if not is_chunked_array(by):
+        # chunk numpy arrays like the input array
+        chunks = tuple(array.chunks[ax] if by.shape[ax] != 1 else (1,) for ax in range(-by.ndim, 0))
+
+        by = cubed.from_array(by, chunks=chunks, spec=array.spec)
+    _, (array, by) = cubed.core.unify_chunks(array, inds, by, inds[-by.ndim :])
+
+    # Cubed's groupby_reduction handles the generation of "intermediates", and the
+    # "map-reduce" combination step, so we don't have to do that here.
+    # Only the equivalent of "_simple_combine" is supported, there is no
+    # support for "_grouped_combine".
+    labels_are_unknown = is_chunked_array(by_input) and expected_groups is None
+    do_simple_combine = not _is_arg_reduction(agg) and not labels_are_unknown
+
+    assert do_simple_combine
+    assert method == "map-reduce"
+    assert expected_groups is not None
+    assert reindex is True
+    assert len(axis) == 1  # one axis/grouping
+
+    def _groupby_func(a, by, axis, intermediate_dtype, num_groups):
+        blockwise_method = partial(
+            _get_chunk_reduction(agg.reduction_type),
+            func=agg.chunk,
+            fill_value=agg.fill_value["intermediate"],
+            dtype=agg.dtype["intermediate"],
+            reindex=reindex,
+            user_dtype=agg.dtype["user"],
+            axis=axis,
+            expected_groups=expected_groups,
+            engine=engine,
+            sort=sort,
+        )
+        out = blockwise_method(a, by)
+        # Convert dict to one that cubed understands, dropping groups since they are
+        # known, and the same for every block.
+        return {f"f{idx}": intermediate for idx, intermediate in enumerate(out["intermediates"])}
+
+    def _groupby_combine(a, axis, dummy_axis, dtype, keepdims):
+        # this is similar to _simple_combine, except the dummy axis and concatenation is handled by cubed
+        # only combine over the dummy axis, to preserve grouping along 'axis'
+        dtype = dict(dtype)
+        out = {}
+        for idx, combine in enumerate(agg.simple_combine):
+            field = f"f{idx}"
+            out[field] = combine(a[field], axis=dummy_axis, keepdims=keepdims)
+        return out
+
+    def _groupby_aggregate(a):
+        # Convert cubed dict to one that _finalize_results works with
+        results = {"groups": expected_groups, "intermediates": a.values()}
+        out = _finalize_results(results, agg, axis, expected_groups, fill_value, reindex)
+        return out[agg.name]
+
+    # convert list of dtypes to a structured dtype for cubed
+    intermediate_dtype = [(f"f{i}", dtype) for i, dtype in enumerate(agg.dtype["intermediate"])]
+    dtype = agg.dtype["final"]
+    num_groups = len(expected_groups)
+
+    result = cubed.core.groupby.groupby_reduction(
+        array,
+        by,
+        func=_groupby_func,
+        combine_func=_groupby_combine,
+        aggregate_func=_groupby_aggregate,
+        axis=axis,
+        intermediate_dtype=intermediate_dtype,
+        dtype=dtype,
+        num_groups=num_groups,
+    )
+
+    groups = (expected_groups.to_numpy(),)
+
+    return (result, groups)
+
+
 def _collapse_blocks_along_axes(reduced: DaskArray, axis: T_Axes, group_chunks) -> DaskArray:
     import dask.array
     from dask.highlevelgraph import HighLevelGraph
@@ -1805,15 +1926,13 @@ def _assert_by_is_aligned(shape: tuple[int, ...], by: T_Bys) -> None:
 @overload
 def _convert_expected_groups_to_index(
     expected_groups: tuple[None, ...], isbin: Sequence[bool], sort: bool
-) -> tuple[None, ...]:
-    ...
+) -> tuple[None, ...]: ...
 
 
 @overload
 def _convert_expected_groups_to_index(
     expected_groups: T_ExpectTuple, isbin: Sequence[bool], sort: bool
-) -> T_ExpectIndexTuple:
-    ...
+) -> T_ExpectIndexTuple: ...
 
 
 def _convert_expected_groups_to_index(
@@ -1901,13 +2020,11 @@ def _factorize_multiple(
 
 
 @overload
-def _validate_expected_groups(nby: int, expected_groups: None) -> tuple[None, ...]:
-    ...
+def _validate_expected_groups(nby: int, expected_groups: None) -> tuple[None, ...]: ...
 
 
 @overload
-def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroups) -> T_ExpectTuple:
-    ...
+def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroups) -> T_ExpectTuple: ...
 
 
 def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectOptTuple:
@@ -2222,6 +2339,7 @@ def groupby_reduce(
     nax = len(axis_)
 
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
+    has_cubed = is_duck_cubed_array(array) or is_duck_cubed_array(by_)
 
     if _is_first_last_reduction(func):
         if has_dask and nax != 1:
@@ -2284,7 +2402,30 @@ def groupby_reduce(
     kwargs["engine"] = _choose_engine(by_, agg) if engine is None else engine
 
     groups: tuple[np.ndarray | DaskArray, ...]
-    if not has_dask:
+    if has_cubed:
+        if method is None:
+            method = "map-reduce"
+
+        if method != "map-reduce":
+            raise NotImplementedError(
+                "Reduction for Cubed arrays is only implemented for method 'map-reduce'."
+            )
+
+        partial_agg = partial(cubed_groupby_agg, **kwargs)
+
+        result, groups = partial_agg(
+            array,
+            by_,
+            expected_groups=expected_,
+            agg=agg,
+            reindex=reindex,
+            method=method,
+            sort=sort,
+        )
+
+        return (result, groups)
+
+    elif not has_dask:
         results = _reduce_blockwise(
             array, by_, agg, expected_groups=expected_, reindex=reindex, sort=sort, **kwargs
         )

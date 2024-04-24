@@ -636,9 +636,11 @@ def _initialize_aggregation(
         "final": final_dtype,
         "numpy": (final_dtype,),
         "intermediate": tuple(
-            _normalize_dtype(int_dtype, np.result_type(array_dtype, final_dtype), int_fv)
-            if int_dtype is None
-            else np.dtype(int_dtype)
+            (
+                _normalize_dtype(int_dtype, np.result_type(array_dtype, final_dtype), int_fv)
+                if int_dtype is None
+                else np.dtype(int_dtype)
+            )
             for int_dtype, int_fv in zip(
                 agg.dtype_init["intermediate"], agg.fill_value["intermediate"]
             )
