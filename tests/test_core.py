@@ -14,7 +14,7 @@ from numpy_groupies.aggregate_numpy import aggregate
 
 import flox
 from flox import xrutils
-from flox.aggregations import Aggregation, _initialize_aggregation, _maybe_promote_int
+from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.core import (
     HAS_NUMBAGG,
     _choose_engine,
@@ -71,6 +71,12 @@ DEFAULT_QUANTILE = 0.9
 
 if TYPE_CHECKING:
     from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt, T_Method
+
+
+def _maybe_promote_int(dtype):
+    if not isinstance(dtype, np.dtype):
+        dtype = np.dtype(dtype)
+    return np.result_type(np.intp, dtype) if dtype.kind == "i" else dtype
 
 
 def _get_array_func(func: str) -> Callable:
