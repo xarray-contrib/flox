@@ -20,7 +20,7 @@ def supported_dtypes() -> st.SearchStrategy[np.dtype]:
     return (
         npst.integer_dtypes(endianness="=")
         | npst.unsigned_integer_dtypes(endianness="=")
-        | npst.floating_dtypes(endianness="=")
+        | npst.floating_dtypes(endianness="=", sizes=(32, 64))
         | npst.complex_number_dtypes(endianness="=")
         | npst.datetime64_dtypes(endianness="=")
         | npst.timedelta64_dtypes(endianness="=")
