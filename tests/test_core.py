@@ -1747,7 +1747,7 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
     expected = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=-1)
     if by_ndim == 2:
         expected = expected.squeeze(axis=-2)
-    assert_equal(expected, actual, tolerance=1e-14)
+    assert_equal(expected, actual, tolerance={"atol": 1e-14})
 
 
 @pytest.mark.parametrize("dtype", ["U3", "S3"])

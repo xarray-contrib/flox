@@ -188,7 +188,7 @@ def mode_(array, nan_policy, dtype):
     # npg splits `array` into object arrays for each group
     # scipy.stats.mode does not like that
     # here we cast back
-    return mode(array.astype(dtype, copy=False), nan_policy=nan_policy, axis=-1).mode
+    return mode(array.astype(dtype, copy=False), nan_policy=nan_policy, axis=-1, keepdims=True).mode
 
 
 def mode(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
