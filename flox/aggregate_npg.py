@@ -109,6 +109,22 @@ len = partial(_len, func="len")
 nanlen = partial(_len, func="nanlen")
 
 
+def _var_std_wrapper(group_idx, array, engine, **kwargs):
+    # Attempt to increase numerical stability by subtracting the first element.
+    # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+    # Cast any unsigned types first
+    dtype = np.result_type(array, -1 * array[0])
+    array = array.astype(dtype)
+    array = array - array[..., [0]]
+    return _get_aggregate(engine).aggregate(group_idx, array, **kwargs)
+
+
+var = partial(_var_std_wrapper, func="var")
+nanvar = partial(_var_std_wrapper, func="nanvar")
+std = partial(_var_std_wrapper, func="std")
+nanstd = partial(_var_std_wrapper, func="nanstd")
+
+
 def median(group_idx, array, engine, *, axis=-1, size=None, fill_value=None, dtype=None):
     return npg.aggregate_numpy.aggregate(
         group_idx,

@@ -76,8 +76,10 @@ def test_groupby_reduce(array, dtype, func):
 
         # numpy-groupies always does the calculation in float64
         if (
-            "var" in func or "std" in func or "sum" in func or "mean" in func
-        ) and array.dtype.kind == "f":
+            ("var" in func or "std" in func or "sum" in func or "mean" in func)
+            and array.dtype.kind == "f"
+            and array.dtype.itemsize != 8
+        ):
             # bincount always accumulates in float64,
             # casting to float64 handles std more like npg does.
             # Setting dtype=float64 works fine for sum, mean.
