@@ -127,10 +127,12 @@ def _maybe_promote_int(dtype: np.dtype):
     # https://numpy.org/doc/stable/reference/generated/numpy.prod.html
     # The dtype of a is used by default unless a has an integer dtype of less precision
     # than the default platform integer.
+    print(f"_maybe_promote_int: input is {dtype}")
     if dtype.kind == "i":
         dtype = np.result_type(dtype, np.intp)
     elif dtype.kind == "u":
         dtype = np.result_type(dtype, np.uintp)
+    print(f"_maybe_promote_int: output is {dtype}")
     return dtype
 
 
