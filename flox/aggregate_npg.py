@@ -109,14 +109,15 @@ len = partial(_len, func="len")
 nanlen = partial(_len, func="nanlen")
 
 
-def _var_std_wrapper(group_idx, array, engine, **kwargs):
+def _var_std_wrapper(group_idx, array, engine, *, axis=-1, **kwargs):
     # Attempt to increase numerical stability by subtracting the first element.
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
     # Cast any unsigned types first
     dtype = np.result_type(array, -1 * array[0])
     array = array.astype(dtype)
-    array = array - array[..., [0]]
-    return _get_aggregate(engine).aggregate(group_idx, array, **kwargs)
+    first = _get_aggregate(engine).aggregate(group_idx, array, func="nanfirst", axis=axis)
+    array = array - first[..., group_idx]
+    return _get_aggregate(engine).aggregate(group_idx, array, axis=axis, **kwargs)
 
 
 var = partial(_var_std_wrapper, func="var")

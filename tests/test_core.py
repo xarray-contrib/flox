@@ -236,7 +236,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if "var" in func or "std" in func:
         finalize_kwargs = finalize_kwargs + [{"ddof": 1}, {"ddof": 0}]
         fill_value = np.nan
-        tolerance = {"rtol": 1e-14, "atol": 1e-16}
+        tolerance = {"rtol": 1e-13, "atol": 1e-15}
     elif "quantile" in func:
         finalize_kwargs = [{"q": DEFAULT_QUANTILE}, {"q": [DEFAULT_QUANTILE / 2, DEFAULT_QUANTILE]}]
         fill_value = None

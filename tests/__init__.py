@@ -95,12 +95,11 @@ def assert_equal(a, b, tolerance=None):
         xr.testing.assert_identical(a, b)
         return
 
-    if tolerance is None and (
-        np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64)
-    ):
-        tolerance = {"atol": 1e-18, "rtol": 1e-15}
-    else:
-        tolerance = {}
+    if tolerance is None:
+        if np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64):
+            tolerance = {"atol": 1e-18, "rtol": 1e-15}
+        else:
+            tolerance = {}
 
     if has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
         # sometimes it's nice to see values and shapes

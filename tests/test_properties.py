@@ -97,6 +97,6 @@ def test_groupby_reduce(array, dtype, func):
 
     note(("expected: ", expected, "actual: ", actual))
     tolerance = (
-        {"rtol": 1e-13, "atol": 1e-16} if "var" in func or "std" in func else {"atol": 1e-16}
+        {"rtol": 1e-13, "atol": 1e-15} if "var" in func or "std" in func else {"atol": 1e-15}
     )
     assert_equal(expected, actual, tolerance)
