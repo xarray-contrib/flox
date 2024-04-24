@@ -24,8 +24,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest", "windows-latest"]
+        os: ["ubuntu-latest"]
         python-version: ["3.9", "3.12"]
+        include:
+          - os: "windows-latest"
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,7 +91,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.12"]
-        env: ["no-dask"] # "no-numba", "no-xarray"
+        env: ["no-dask"] # "no-xarray", "no-numba"
         include:
           - env: "minimal-requirements"
             python-version: "3.9"
