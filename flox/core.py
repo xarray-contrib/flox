@@ -2292,7 +2292,7 @@ def groupby_reduce(
     if not is_duck_array(array):
         array = np.asarray(array)
     is_bool_array = np.issubdtype(array.dtype, bool)
-    array = array.astype(np.intp) if is_bool_array else array
+    array = array.astype(np.int64) if is_bool_array else array
 
     isbins = _atleast_1d(isbin, nby)
 
