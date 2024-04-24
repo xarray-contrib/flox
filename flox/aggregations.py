@@ -123,10 +123,12 @@ def _normalize_dtype(dtype: DTypeLike, array_dtype: np.dtype, fill_value=None) -
     return dtype
 
 
-def _maybe_promote_int(dtype: np.dtype):
+def _maybe_promote_int(dtype) -> np.dtype:
     # https://numpy.org/doc/stable/reference/generated/numpy.prod.html
     # The dtype of a is used by default unless a has an integer dtype of less precision
     # than the default platform integer.
+    if not isinstance(dtype, np.dtype):
+        dtype = np.dtype(dtype)
     print(f"_maybe_promote_int: input is {dtype}")
     if dtype.kind == "i":
         dtype = np.result_type(dtype, np.intp)
