@@ -2,7 +2,7 @@ from functools import partial
 
 import numpy as np
 
-from .xrutils import isnull
+from .xrutils import is_scalar, isnull, notnull
 
 
 def _prepare_for_flox(group_idx, array):
@@ -10,6 +10,7 @@ def _prepare_for_flox(group_idx, array):
     Sort the input array once to save time.
     """
     assert array.shape[-1] == group_idx.shape[0]
+
     issorted = (group_idx[:-1] <= group_idx[1:]).all()
     if issorted:
         ordered_array = array
@@ -20,7 +21,104 @@ def _prepare_for_flox(group_idx, array):
     return group_idx, ordered_array
 
 
-def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None):
+def _lerp(a, b, *, t, dtype, out=None):
+    """
+    COPIED from numpy.
+
+    Compute the linear interpolation weighted by gamma on each point of
+    two same shape array.
+
+    a : array_like
+        Left bound.
+    b : array_like
+        Right bound.
+    t : array_like
+        The interpolation weight.
+    """
+    if out is None:
+        out = np.empty_like(a, dtype=dtype)
+    with np.errstate(invalid="ignore"):
+        diff_b_a = np.subtract(b, a)
+    # asanyarray is a stop-gap until gh-13105
+    np.add(a, diff_b_a * t, out=out)
+    np.subtract(b, diff_b_a * (1 - t), out=out, where=t >= 0.5)
+    return out
+
+
+def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=None):
+    inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
+
+    array_nanmask = isnull(array)
+    actual_sizes = np.add.reduceat(~array_nanmask, inv_idx[:-1], axis=axis)
+    newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
+    full_sizes = np.reshape(np.diff(inv_idx), newshape)
+    nanmask = full_sizes != actual_sizes
+
+    # The approach here is to use (complex_array.partition) because
+    # 1. The full np.lexsort((array, labels), axis=-1) is slow and unnecessary
+    # 2. Using record_array.partition(..., order=["labels", "array"]) is incredibly slow.
+    # partition will first sort by real part, then by imaginary part, so it is a two element lex-partition.
+    # So we set
+    #     complex_array = group_idx + 1j * array
+    # group_idx is an integer (guaranteed), but array can have NaNs. Now,
+    #     1 + 1j*NaN = NaN + 1j * NaN
+    # so we must replace all NaNs with the maximum array value in the group so these NaNs
+    # get sorted to the end.
+    # Partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
+    # TODO: Don't know if this array has been copied in _prepare_for_flox. This is potentially wasteful
+    array = np.where(array_nanmask, -np.inf, array)
+    maxes = np.maximum.reduceat(array, inv_idx[:-1], axis=axis)
+    replacement = np.repeat(maxes, np.diff(inv_idx), axis=axis)
+    array[array_nanmask] = replacement[array_nanmask]
+
+    qin = q
+    q = np.atleast_1d(qin)
+    q = np.reshape(q, (len(q),) + (1,) * array.ndim)
+
+    # This is numpy's method="linear"
+    # TODO: could support all the interpolations here
+    virtual_index = q * (actual_sizes - 1) + inv_idx[:-1]
+
+    is_scalar_q = is_scalar(qin)
+    if is_scalar_q:
+        virtual_index = virtual_index.squeeze(axis=0)
+        idxshape = array.shape[:-1] + (actual_sizes.shape[-1],)
+    else:
+        idxshape = (q.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
+
+    lo_ = np.floor(
+        virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
+    )
+    hi_ = np.ceil(
+        virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
+    )
+    kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
+
+    # partition the complex array in-place
+    labels_broadcast = np.broadcast_to(group_idx, array.shape)
+    with np.errstate(invalid="ignore"):
+        cmplx = labels_broadcast + 1j * array
+    cmplx.partition(kth=kth, axis=-1)
+    if is_scalar_q:
+        a_ = cmplx.imag
+    else:
+        a_ = np.broadcast_to(cmplx.imag, (q.shape[0],) + array.shape)
+
+    # get bounds, Broadcast to (num quantiles, ..., num labels)
+    loval = np.take_along_axis(a_, np.broadcast_to(lo_, idxshape), axis=axis)
+    hival = np.take_along_axis(a_, np.broadcast_to(hi_, idxshape), axis=axis)
+
+    # TODO: could support all the interpolations here
+    gamma = np.broadcast_to(virtual_index, idxshape) - lo_
+    result = _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
+    if not skipna and np.any(nanmask):
+        result[..., nanmask] = np.nan
+    return result
+
+
+def _np_grouped_op(
+    group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None, **kwargs
+):
     """
     most of this code is from shoyer's gist
     https://gist.github.com/shoyer/f538ac78ae904c936844
@@ -38,16 +136,22 @@ def _np_grouped_op(group_idx, array, op, axis=-1, size=None, fill_value=None, dt
         dtype = array.dtype
 
     if out is None:
-        out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
+        q = kwargs.get("q", None)
+        if q is None:
+            out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
+        else:
+            nq = len(np.atleast_1d(q))
+            out = np.full((nq,) + array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
+            kwargs["group_idx"] = group_idx
 
     if (len(uniques) == size) and (uniques == np.arange(size, like=array)).all():
         # The previous version of this if condition
         #     ((uniques[1:] - uniques[:-1]) == 1).all():
         # does not work when group_idx is [1, 2] for e.g.
         # This happens during binning
-        op.reduceat(array, inv_idx, axis=axis, dtype=dtype, out=out)
+        op(array, inv_idx, axis=axis, dtype=dtype, out=out, **kwargs)
     else:
-        out[..., uniques] = op.reduceat(array, inv_idx, axis=axis, dtype=dtype)
+        out[..., uniques] = op(array, inv_idx, axis=axis, dtype=dtype, **kwargs)
 
     return out
 
@@ -65,14 +169,18 @@ def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
     return result
 
 
-sum = partial(_np_grouped_op, op=np.add)
+sum = partial(_np_grouped_op, op=np.add.reduceat)
 nansum = partial(_nan_grouped_op, func=sum, fillna=0)
-prod = partial(_np_grouped_op, op=np.multiply)
+prod = partial(_np_grouped_op, op=np.multiply.reduceat)
 nanprod = partial(_nan_grouped_op, func=prod, fillna=1)
-max = partial(_np_grouped_op, op=np.maximum)
+max = partial(_np_grouped_op, op=np.maximum.reduceat)
 nanmax = partial(_nan_grouped_op, func=max, fillna=-np.inf)
-min = partial(_np_grouped_op, op=np.minimum)
+min = partial(_np_grouped_op, op=np.minimum.reduceat)
 nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
+quantile = partial(_np_grouped_op, op=partial(quantile_, skipna=False))
+nanquantile = partial(_np_grouped_op, op=partial(quantile_, skipna=True))
+median = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=False))
+nanmedian = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=True))
 # TODO: all, any
 
 
@@ -99,7 +207,7 @@ def nansum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, 
 
 
 def nanlen(group_idx, array, *args, **kwargs):
-    return sum(group_idx, (~isnull(array)).astype(int), *args, **kwargs)
+    return sum(group_idx, (notnull(array)).astype(int), *args, **kwargs)
 
 
 def mean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):

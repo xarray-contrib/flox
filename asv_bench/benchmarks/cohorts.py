@@ -95,7 +95,7 @@ class ERA5Dataset:
     """ERA5"""
 
     def __init__(self, *args, **kwargs):
-        self.time = pd.Series(pd.date_range("2016-01-01", "2018-12-31 23:59", freq="H"))
+        self.time = pd.Series(pd.date_range("2016-01-01", "2018-12-31 23:59", freq="h"))
         self.axis = (-1,)
         self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 48))
 
@@ -143,7 +143,7 @@ class PerfectMonthly(Cohorts):
     """Perfectly chunked for a "cohorts" monthly mean climatology"""
 
     def setup(self, *args, **kwargs):
-        self.time = pd.Series(pd.date_range("1961-01-01", "2018-12-31 23:59", freq="M"))
+        self.time = pd.Series(pd.date_range("1961-01-01", "2018-12-31 23:59", freq="ME"))
         self.axis = (-1,)
         self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 4))
         self.by = self.time.dt.month.values - 1
@@ -164,7 +164,7 @@ class PerfectMonthly(Cohorts):
 class ERA5Google(Cohorts):
     def setup(self, *args, **kwargs):
         TIME = 900  # 92044 in Google ARCO ERA5
-        self.time = pd.Series(pd.date_range("1959-01-01", freq="6H", periods=TIME))
+        self.time = pd.Series(pd.date_range("1959-01-01", freq="6h", periods=TIME))
         self.axis = (2,)
         self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 1))
         self.by = self.time.dt.day.values - 1
@@ -201,3 +201,12 @@ class OISST(Cohorts):
         self.time = pd.Series(index)
         self.by = self.time.dt.dayofyear.values - 1
         self.expected = pd.RangeIndex(self.by.max() + 1)
+
+
+class RandomBigArray(Cohorts):
+    def setup(self, *args, **kwargs):
+        M, N = 100_000, 20_000
+        self.array = dask.array.random.normal(size=(M, N), chunks=(10_000, N // 5)).T
+        self.by = np.random.choice(5_000, size=M)
+        self.expected = pd.RangeIndex(5000)
+        self.axis = (1,)

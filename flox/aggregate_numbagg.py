@@ -3,6 +3,9 @@ from functools import partial
 import numbagg
 import numbagg.grouped
 import numpy as np
+from packaging.version import Version
+
+NUMBAGG_SUPPORTS_DDOF = Version(numbagg.__version__) >= Version("0.7.0")
 
 DEFAULT_FILL_VALUE = {
     "nansum": 0,
@@ -42,6 +45,7 @@ def _numbagg_wrapper(
     size=None,
     fill_value=None,
     dtype=None,
+    **kwargs,
 ):
     cast_to = CAST_TO.get(func, None)
     if cast_to:
@@ -56,6 +60,7 @@ def _numbagg_wrapper(
         group_idx,
         axis=axis,
         num_labels=size,
+        **kwargs,
         # The following are unsupported
         # fill_value=fill_value,
         # dtype=dtype,
@@ -65,30 +70,50 @@ def _numbagg_wrapper(
 
 
 def nanvar(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None, ddof=0):
-    assert ddof != 0
-
+    kwargs = {}
+    if NUMBAGG_SUPPORTS_DDOF:
+        kwargs["ddof"] = ddof
+    elif ddof != 1:
+        raise ValueError("Need numbagg >= v0.7.0 to support ddof != 1")
     return _numbagg_wrapper(
         group_idx,
         array,
         axis=axis,
         size=size,
         func="nanvar",
-        # ddof=0,
+        **kwargs,
         # fill_value=fill_value,
         # dtype=dtype,
     )
 
 
 def nanstd(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None, ddof=0):
-    assert ddof != 0
-
+    kwargs = {}
+    if NUMBAGG_SUPPORTS_DDOF:
+        kwargs["ddof"] = ddof
+    elif ddof != 1:
+        raise ValueError("Need numbagg >= v0.7.0 to support ddof != 1")
     return _numbagg_wrapper(
         group_idx,
         array,
         axis=axis,
         size=size,
-        func="nanstd"
-        # ddof=0,
+        func="nanstd",
+        **kwargs,
+        # fill_value=fill_value,
+        # dtype=dtype,
+    )
+
+
+def nanlen(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+    if array.dtype.kind in "US":
+        array = np.broadcast_to(np.array([1]), array.shape)
+    return _numbagg_wrapper(
+        group_idx,
+        array,
+        axis=axis,
+        size=size,
+        func="nancount",
         # fill_value=fill_value,
         # dtype=dtype,
     )
@@ -98,7 +123,6 @@ nansum = partial(_numbagg_wrapper, func="nansum")
 nanmean = partial(_numbagg_wrapper, func="nanmean")
 nanprod = partial(_numbagg_wrapper, func="nanprod")
 nansum_of_squares = partial(_numbagg_wrapper, func="nansum_of_squares")
-nanlen = partial(_numbagg_wrapper, func="nancount")
 nanprod = partial(_numbagg_wrapper, func="nanprod")
 nanfirst = partial(_numbagg_wrapper, func="nanfirst")
 nanlast = partial(_numbagg_wrapper, func="nanlast")
