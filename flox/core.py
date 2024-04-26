@@ -271,8 +271,14 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
         return uniques
 
     # TODO: needs a better heuristic
-    if nlabels < 2 * approx_chunk_size:
-        logger.debug("Using threadpool since %s < 5 * %s", nlabels, approx_chunk_size)
+    THRESHOLD = 2
+    if nlabels < THRESHOLD * approx_chunk_size:
+        logger.debug(
+            "Using threadpool since num_labels %s < %d * chunksize %s",
+            nlabels,
+            THRESHOLD,
+            approx_chunk_size,
+        )
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(chunk_unique, labels, slicer, nlabels)
@@ -281,6 +287,12 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
             cols = tuple(f.result() for f in futures)
 
     else:
+        logger.debug(
+            "Using serial loop since num_labels %s > %d * chunksize %s",
+            nlabels,
+            THRESHOLD,
+            approx_chunk_size,
+        )
         cols = []
         # Add one to handle the -1 sentinel value
         label_is_present = np.zeros((nlabels + 1,), dtype=bool)
