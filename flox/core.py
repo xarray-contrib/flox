@@ -260,7 +260,8 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
     if shape == (nchunks,):
         rows_array = np.arange(nchunks)
         cols_array = labels
-        return make_bitmask(rows_array, cols_array)
+        mask = labels >= 0
+        return make_bitmask(rows_array[mask], cols_array[mask])
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
     cols = []
