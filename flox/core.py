@@ -248,12 +248,21 @@ def slices_from_chunks(chunks):
 
 
 def _compute_label_chunk_bitmask(labels, chunks, nlabels):
+    def make_bitmask(rows, cols):
+        data = np.broadcast_to(np.array(1, dtype=np.uint8), rows.shape)
+        return csc_array((data, (rows, cols)), dtype=bool, shape=(nchunks, nlabels))
+
     assert isinstance(labels, np.ndarray)
     shape = tuple(sum(c) for c in chunks)
     nchunks = math.prod(len(c) for c in chunks)
 
-    labels = np.broadcast_to(labels, shape[-labels.ndim :])
+    # Shortcut for 1D with size-1 chunks
+    if shape == (nchunks,):
+        rows_array = np.arange(nchunks)
+        cols_array = labels
+        return make_bitmask(rows_array, cols_array)
 
+    labels = np.broadcast_to(labels, shape[-labels.ndim :])
     cols = []
     # Add one to handle the -1 sentinel value
     label_is_present = np.zeros((nlabels + 1,), dtype=bool)
@@ -272,10 +281,8 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
         label_is_present[:] = False
     rows_array = np.repeat(np.arange(nchunks), tuple(len(col) for col in cols))
     cols_array = np.concatenate(cols)
-    data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
-    bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
 
-    return bitmask
+    return make_bitmask(rows_array, cols_array)
 
 
 # @memoize
