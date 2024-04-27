@@ -330,7 +330,7 @@ def find_group_cohorts(
 
     # 1. Single chunk, blockwise always
     if nchunks == 1:
-        return "blockwise", {(0,): np.arange(nlabels)}
+        return "blockwise", {(0,): list(range(nlabels))}
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
     bitmask = _compute_label_chunk_bitmask(labels, chunks, nlabels)
