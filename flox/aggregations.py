@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import math
 import warnings
 from dataclasses import dataclass
 from functools import cached_property, partial
@@ -51,6 +52,49 @@ def get_npg_aggregation(func, *, engine):
     return method
 
 
+def grouped_mode(
+    group_idx, array, *, engine: str, func: str, axis=-1, size=None, fill_value=None, dtype=None
+):
+    """A grouped mode implementation.
+
+    The approach is to:
+    1. Factorize `array` and `group_idx` together
+    2. Count all unique values of `array` for all unique values of `group_idx`.
+    3. Then find most common `array` value for each `group_idx` using `argmax`
+
+    This is potentially wasteful, but is vectorized.
+
+    This implementation is kept separate since we can still dispatch the core "count"
+    operation to the appropriate engine.
+    """
+    from flox.core import _factorize_multiple, offset_labels
+
+    # Factorize array, group_idx together
+    (combined_group_idx,), found_groups, grp_shape = _factorize_multiple(
+        (array, group_idx), expected_groups=None, any_by_dask=False
+    )
+    ngroups = math.prod(grp_shape)
+    combined_group_idx, size = offset_labels(combined_group_idx, ngroups)
+    flat_group_idx = combined_group_idx.reshape(-1)
+
+    # bool hits fast path in `notnull`
+    ones = np.broadcast_to(np.array([True]), flat_group_idx.shape)
+    result = generic_aggregate(
+        flat_group_idx,
+        ones,
+        engine="numbagg",
+        func="nanlen",
+        fill_value=0,
+        size=size,
+        dtype=np.intp,
+        axis=-1,
+    ).astype(np.intp)
+
+    result = result.reshape(*group_idx.shape[:-1], *grp_shape)
+    mode = found_groups[0][result.argmax(axis=-2)]
+    return mode
+
+
 def generic_aggregate(
     group_idx,
     array,
@@ -63,7 +107,12 @@ def generic_aggregate(
     dtype=None,
     **kwargs,
 ):
-    if engine == "flox":
+    group_idx = np.asarray(group_idx, like=array)
+
+    if func == "mode":
+        func = grouped_mode
+
+    elif engine == "flox":
         try:
             method = getattr(aggregate_flox, func)
         except AttributeError:
@@ -95,8 +144,6 @@ def generic_aggregate(
         raise ValueError(
             f"Expected engine to be one of ['flox', 'numpy', 'numba', 'numbagg']. Received {engine} instead."
         )
-
-    group_idx = np.asarray(group_idx, like=array)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")

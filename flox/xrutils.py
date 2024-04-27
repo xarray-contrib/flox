@@ -121,7 +121,9 @@ def notnull(data):
         data = np.asarray(data)
 
     scalar_type = data.dtype.type
-    if issubclass(scalar_type, (np.bool_, np.integer, np.character, np.void)):
+    if issubclass(scalar_type, np.bool_):
+        return data
+    elif issubclass(scalar_type, (np.integer, np.character, np.void)):
         # these types cannot represent missing values
         return np.ones_like(data, dtype=bool)
     else:
