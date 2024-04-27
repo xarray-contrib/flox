@@ -320,12 +320,17 @@ def find_group_cohorts(
     labels = np.asarray(labels)
 
     shape = tuple(sum(c) for c in chunks)
+    nchunks = math.prod(len(c) for c in chunks)
 
     # assumes that `labels` are factorized
     if expected_groups is None:
         nlabels = labels.max() + 1
     else:
         nlabels = expected_groups[-1] + 1
+
+    # 1. Single chunk, blockwise always
+    if nchunks == 1:
+        return "blockwise", {(0,): np.arange(nlabels)}
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
     bitmask = _compute_label_chunk_bitmask(labels, chunks, nlabels)
@@ -354,21 +359,21 @@ def find_group_cohorts(
 
     chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
 
-    # 1. Every group is contained to one block, use blockwise here.
+    # 2. Every group is contained to one block, use blockwise here.
     if bitmask.shape[CHUNK_AXIS] == 1 or (chunks_per_label == 1).all():
         logger.info("find_group_cohorts: blockwise is preferred.")
         return "blockwise", chunks_cohorts
 
-    # 2. Perfectly chunked so there is only a single cohort
+    # 3. Perfectly chunked so there is only a single cohort
     if len(chunks_cohorts) == 1:
         logger.info("Only found a single cohort. 'map-reduce' is preferred.")
         return "map-reduce", chunks_cohorts if merge else {}
 
-    # 3. Our dataset has chunksize one along the axis,
+    # 4. Our dataset has chunksize one along the axis,
     single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
-    # 4. Every chunk only has a single group, but that group might extend across multiple chunks
+    # 5. Every chunk only has a single group, but that group might extend across multiple chunks
     one_group_per_chunk = (bitmask.sum(axis=LABEL_AXIS) == 1).all()
-    # 5. Existing cohorts don't overlap, great for time grouping with perfect chunking
+    # 6. Existing cohorts don't overlap, great for time grouping with perfect chunking
     no_overlapping_cohorts = (np.bincount(np.concatenate(tuple(chunks_cohorts.keys()))) == 1).all()
     if one_group_per_chunk or single_chunks or no_overlapping_cohorts:
         logger.info("find_group_cohorts: cohorts is preferred, chunking is perfect.")
@@ -401,6 +406,7 @@ def find_group_cohorts(
             sparsity, MAX_SPARSITY_FOR_COHORTS
         )
     )
+    # 7. Groups seem fairly randomly distributed, use "map-reduce".
     if sparsity > MAX_SPARSITY_FOR_COHORTS:
         if not merge:
             logger.info(
