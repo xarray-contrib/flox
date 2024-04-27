@@ -190,6 +190,19 @@ class PerfectBlockwiseResampling(Cohorts):
         self.expected = pd.RangeIndex(self.by.max() + 1)
 
 
+class SingleChunk(Cohorts):
+    """Single chunk along reduction axis: always blockwise."""
+
+    def setup(self, *args, **kwargs):
+        index = pd.date_range("1959-01-01", freq="D", end="1962-12-31")
+        self.time = pd.Series(index)
+        TIME = len(self.time)
+        self.axis = (2,)
+        self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, -1))
+        self.by = codes_for_resampling(index, freq="5D")
+        self.expected = pd.RangeIndex(self.by.max() + 1)
+
+
 class OISST(Cohorts):
     def setup(self, *args, **kwargs):
         self.array = dask.array.ones((1, 14532), chunks=(1, 10))
