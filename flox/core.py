@@ -1923,7 +1923,6 @@ def _validate_reindex(
 
 
 def _assert_by_is_aligned(shape: tuple[int, ...], by: T_Bys) -> None:
-    assert all(b.ndim == by[0].ndim for b in by[1:])
     for idx, b in enumerate(by):
         if not all(j in [i, 1] for i, j in zip(shape[-b.ndim :], b.shape)):
             raise ValueError(
