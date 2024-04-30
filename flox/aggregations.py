@@ -551,8 +551,24 @@ nanquantile = Aggregation(
     final_dtype=np.float64,
     new_dims_func=quantile_new_dims_func,
 )
+
+
+def _mode_finalize(*args, ngroups):
+    (result,) = args
+    return (result.argmax(axis=-ngroups - 1),)
+
+
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
-nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
+# We implement nanmode differently!
+nanmode = Aggregation(
+    name="nanmode",
+    numpy="nanlen",
+    finalize=_mode_finalize,
+    fill_value=dtypes.NA,
+    chunk=("nanlen",),
+    combine=None,
+)
+
 
 aggregations = {
     "any": any_,

@@ -1367,6 +1367,8 @@ def _reduce_blockwise(
     # for pure numpy grouping, we just use npg directly and avoid "finalizing"
     # (agg.finalize = None). We still need to do the reindexing step in finalize
     # so that everything matches the dask version.
+    if "mode" in agg.name:
+        finalize_ = agg.finalize
     agg.finalize = None
 
     assert agg.finalize_kwargs is not None
@@ -1392,6 +1394,9 @@ def _reduce_blockwise(
 
     if _is_arg_reduction(agg):
         results["intermediates"][0] = np.unravel_index(results["intermediates"][0], array.shape)[-1]
+
+    if "mode" in agg.name:
+        agg.finalize = finalize_
 
     result = _finalize_results(
         results,
@@ -2288,21 +2293,19 @@ def groupby_reduce(
     #   1. set agg.finalize
     #   2. don't set agg.finalize=None for blockwise
     is_nanmode = func == "nanmode"
-    if is_nanmode:
+    if "mode" in func:
         by_ndim = max(_.ndim for _ in bys)
         bys = (array,) + bys
-        if is_duck_dask_array(array):
-            import dask.array
+        # if is_duck_dask_array(array):
+        #     import dask.array
 
-            array = dask.array.ones(array.shape, chunks=array.chunks, dtype=bool)
-        elif isinstance(array, np.ndarray):
-            array = np.broadcast_to(np.array([True]), array.shape)
-        func = "count"
+        #     array = dask.array.ones(array.shape, chunks=array.chunks, dtype=bool)
+        # elif isinstance(array, np.ndarray):
+        #     array = np.broadcast_to(np.array([True]), array.shape)
+        # func = "count"
         if axis is None:
             axis = tuple(array.ndim + np.arange(-by_ndim, 0))
         expected_groups = (None,) + expected_groups
-        fill_value_ = fill_value  # or xrdtypes.NA
-        fill_value = None
 
     nby = len(bys)
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
@@ -2437,6 +2440,8 @@ def groupby_reduce(
     kwargs = dict(axis=axis_, fill_value=fill_value)
     agg = _initialize_aggregation(func, dtype, array.dtype, fill_value, min_count_, finalize_kwargs)
 
+    if "mode" in agg.name:
+        agg.finalize = partial(agg.finalize, ngroups=len(bys) - 1)
     # Need to set this early using `agg`
     # It cannot be done in the core loop of chunk_reduce
     # since we "prepare" the data for flox.
@@ -2562,7 +2567,7 @@ def groupby_reduce(
     if is_nanmode:
         values = groups[0]
         groups = groups[1:]
-        result = values[result.argmax(axis=-len(groups) - 1)]
+        result = values[result]
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
         result = result.astype(bool)
