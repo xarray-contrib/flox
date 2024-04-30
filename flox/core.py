@@ -1394,7 +1394,12 @@ def _reduce_blockwise(
         results["intermediates"][0] = np.unravel_index(results["intermediates"][0], array.shape)[-1]
 
     result = _finalize_results(
-        results, agg, axis, expected_groups, fill_value=fill_value, reindex=reindex
+        results,
+        agg,
+        axis,
+        expected_groups,
+        fill_value=fill_value or agg.fill_value[agg.name],
+        reindex=reindex,
     )
     return result
 
@@ -2273,7 +2278,32 @@ def groupby_reduce(
                     "or set engine=None to use the default."
                 )
 
+    # Processing needed before handling nanmode
+    expected_groups = _validate_expected_groups(len(by), expected_groups)
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
+
+    # Generalized nanmode implementation by treating the array as another `by`
+    # And running `count` on an array of ones.
+    # TODO:
+    #   1. set agg.finalize
+    #   2. don't set agg.finalize=None for blockwise
+    is_nanmode = func == "nanmode"
+    if is_nanmode:
+        by_ndim = max(_.ndim for _ in bys)
+        bys = (array,) + bys
+        if is_duck_dask_array(array):
+            import dask.array
+
+            array = dask.array.ones(array.shape, chunks=array.chunks, dtype=bool)
+        elif isinstance(array, np.ndarray):
+            array = np.broadcast_to(np.array([True]), array.shape)
+        func = "count"
+        if axis is None:
+            axis = tuple(array.ndim + np.arange(-by_ndim, 0))
+        expected_groups = (None,) + expected_groups
+        fill_value_ = fill_value  # or xrdtypes.NA
+        fill_value = None
+
     nby = len(bys)
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
     any_by_dask = any(by_is_dask)
@@ -2310,8 +2340,6 @@ def groupby_reduce(
     isbins = _atleast_1d(isbin, nby)
 
     _assert_by_is_aligned(array.shape, bys)
-
-    expected_groups = _validate_expected_groups(nby, expected_groups)
 
     for idx, (expect, is_dask) in enumerate(zip(expected_groups, by_is_dask)):
         if is_dask and (reindex or nby > 1) and expect is None:
@@ -2530,6 +2558,11 @@ def groupby_reduce(
             result.shape[:-1] + grp_shape
         )
         groups = final_groups
+
+    if is_nanmode:
+        values = groups[0]
+        groups = groups[1:]
+        result = values[result.argmax(axis=-len(groups) - 1)]
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
         result = result.astype(bool)
