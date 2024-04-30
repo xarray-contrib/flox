@@ -1800,6 +1800,7 @@ def cubed_groupby_agg(
 
     if method == "blockwise":
         assert by.ndim == 1
+        assert expected_groups is not None
 
         def _reduction_func(a, by, axis, start_group, num_groups):
             # adjust group labels to start from 0 for each chunk
