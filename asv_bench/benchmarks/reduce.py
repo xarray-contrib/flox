@@ -7,7 +7,7 @@ import flox.aggregations
 
 N = 3000
 funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "count"]
-engines = [None, "flox", "numpy", "numbagg"]
+engines = [None, "flox", "numpy"]  # numbagg is disabled for now since it takes ages in CI
 expected_groups = {
     "None": None,
     "bins": pd.IntervalIndex.from_breaks([1, 2, 4]),
@@ -18,7 +18,7 @@ NUMBAGG_FUNCS = ["nansum", "nanmean", "nanmax", "count", "all"]
 numbagg_skip = []
 for name in expected_names:
     numbagg_skip.extend(
-        list((func, expected_names[0], "numbagg") for func in funcs if func not in NUMBAGG_FUNCS)
+        list((func, name, "numbagg") for func in funcs if func not in NUMBAGG_FUNCS)
     )
 
 
@@ -59,17 +59,17 @@ class ChunkReduce:
             expected_groups=expected_groups[expected_name],
         )
 
-    @skip_for_params(numbagg_skip)
-    @parameterize({"func": funcs, "expected_name": expected_names, "engine": engines})
-    def peakmem_reduce(self, func, expected_name, engine):
-        flox.groupby_reduce(
-            self.array,
-            self.labels,
-            func=func,
-            engine=engine,
-            axis=self.axis,
-            expected_groups=expected_groups[expected_name],
-        )
+    # @skip_for_params(numbagg_skip)
+    # @parameterize({"func": funcs, "expected_name": expected_names, "engine": engines})
+    # def peakmem_reduce(self, func, expected_name, engine):
+    #     flox.groupby_reduce(
+    #         self.array,
+    #         self.labels,
+    #         func=func,
+    #         engine=engine,
+    #         axis=self.axis,
+    #         expected_groups=expected_groups[expected_name],
+    #     )
 
 
 class ChunkReduce1D(ChunkReduce):
@@ -80,7 +80,12 @@ class ChunkReduce1D(ChunkReduce):
         if "numbagg" in args:
             setup_jit()
 
-    @parameterize({"func": ["nansum", "nanmean", "nanmax", "count"], "engine": engines})
+    @parameterize(
+        {
+            "func": ["nansum", "nanmean", "nanmax", "count"],
+            "engine": [e for e in engines if e is not None],
+        }
+    )
     def time_reduce_bare(self, func, engine):
         # TODO: migrate to the other test cases, but we'll have to setup labels
         # appropriately ;(
@@ -105,7 +110,7 @@ class ChunkReduce2D(ChunkReduce):
 class ChunkReduce2DAllAxes(ChunkReduce):
     def setup(self, *args, **kwargs):
         self.array = np.ones((N, N))
-        self.labels = np.repeat(np.arange(N // 5), repeats=5)
+        self.labels = np.repeat(np.arange(N // 5), repeats=5)[np.newaxis, :]
         self.axis = None
         setup_jit()
 

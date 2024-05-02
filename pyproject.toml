@@ -17,10 +17,12 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "pandas",
+    "pandas>=1.5",
+    "packaging>=21.3",
     "numpy>=1.22",
     "numpy_groupies>=0.9.19",
     "toolz",
+    "scipy>=1.9",
 ]
 dynamic=["version"]
 
@@ -37,9 +39,10 @@ test = ["netCDF4"]
 
 [build-system]
 requires = [
-    "pandas",
+    "pandas>=1.5",
     "numpy>=1.22",
     "numpy_groupies>=0.9.19",
+    "scipy>=1.9",
     "toolz",
     "setuptools>=61.0.0",
     "setuptools_scm[toml]>=7.0",
@@ -100,6 +103,7 @@ known-third-party = [
     "pkg_resources",
     "pytest",
     "setuptools",
+    "scipy",
     "xarray"
 ]
 
@@ -110,12 +114,14 @@ show_error_codes = true
 warn_unused_ignores = true
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+exclude=["asv_bench/pkgs"]
 
 [[tool.mypy.overrides]]
 module=[
     "asv_runner.*",
     "cachey",
     "cftime",
+    "cubed.*",
     "dask.*",
     "importlib_metadata",
     "numba",

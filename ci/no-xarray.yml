@@ -3,9 +3,9 @@ channels:
   - conda-forge
 dependencies:
   - codecov
-  - netcdf4
   - pandas
   - numpy>=1.22
+  - scipy
   - pip
   - pytest
   - pytest-cov

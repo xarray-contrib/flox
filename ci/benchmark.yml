@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - asv
+  - build
   - cachey
   - dask-core
   - numpy>=1.22
@@ -13,3 +14,4 @@ dependencies:
   - numpy_groupies>=0.9.19
   - numbagg>=0.3
   - wheel
+  - scipy
