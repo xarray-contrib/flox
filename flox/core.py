@@ -285,7 +285,11 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
         uniques = ilabels[label_is_present[:-1]]
         return uniques
 
-    # TODO: needs a better heuristic
+    # TODO: refine this heuristic.
+    # The general idea is that with the threadpool, we repeatedly allocate memory
+    # for `label_is_present`. We trade that off against the parallelism across number of chunks.
+    # For large enough number of chunks (relative to number of labels), it makes sense to
+    # suffer the extra allocation in exchange for parallelism.
     THRESHOLD = 2
     if nlabels < THRESHOLD * approx_chunk_size:
         logger.debug(
