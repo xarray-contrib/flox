@@ -1448,7 +1448,7 @@ def subset_to_blocks(
     flatblocks: Sequence[int],
     blkshape: tuple[int] | None = None,
     reindexer=identity,
-) -> Graph:
+) -> DaskArray:
     """
     Advanced indexing of .blocks such that we always get a regular array back.
 
