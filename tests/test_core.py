@@ -1465,14 +1465,18 @@ def test_normalize_block_indexing_2d(flatblocks, expected):
 
 @requires_dask
 def test_subset_block_passthrough():
+    from flox.core import identity
+
     # full slice pass through
     array = dask.array.ones((5,), chunks=(1,))
+    expected = dask.array.map_blocks(identity, array)
     subset = subset_to_blocks(array, np.arange(5))
-    assert subset.name == array.name
+    assert subset.name == expected.name
 
     array = dask.array.ones((5, 5), chunks=1)
+    expected = dask.array.map_blocks(identity, array)
     subset = subset_to_blocks(array, np.arange(25))
-    assert subset.name == array.name
+    assert subset.name == expected.name
 
 
 @requires_dask
