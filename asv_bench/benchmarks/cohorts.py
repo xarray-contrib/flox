@@ -14,8 +14,8 @@ class Cohorts:
         raise NotImplementedError
 
     @cached_property
-    def dask(self):
-        return flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis)[0].dask
+    def result(self):
+        return flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis)[0]
 
     def containment(self):
         asfloat = self.bitmask().astype(float)
@@ -52,14 +52,14 @@ class Cohorts:
         flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis)
 
     def track_num_tasks(self):
-        return len(self.dask.to_dict())
+        return len(self.result.dask.to_dict())
 
     def track_num_tasks_optimized(self):
-        (opt,) = dask.optimize(self.dask)
-        return len(opt.to_dict())
+        (opt,) = dask.optimize(self.result)
+        return len(opt.dask.to_dict())
 
     def track_num_layers(self):
-        return len(self.dask.layers)
+        return len(self.result.dask.layers)
 
     track_num_tasks.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_tasks_optimized.unit = "tasks"  # type: ignore[attr-defined] # Lazy
