@@ -267,6 +267,8 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
     cols = []
+    # Add one to handle the -1 sentinel value
+    label_is_present = np.zeros((nlabels + 1,), dtype=bool)
     ilabels = np.arange(nlabels)
 
     def chunk_unique(labels, slicer, nlabels, label_is_present=None):
@@ -296,12 +298,10 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
             THRESHOLD,
             approx_chunk_size,
         )
-        # Add one to handle the -1 sentinel value
-        label_is_present = np.empty((nchunks, nlabels + 1), dtype=bool)
         with ThreadPoolExecutor() as executor:
             futures = [
-                executor.submit(chunk_unique, labels, slicer, nlabels, label_is_present[i, :])
-                for i, slicer in enumerate(slices_from_chunks(chunks))
+                executor.submit(chunk_unique, labels, slicer, nlabels)
+                for slicer in slices_from_chunks(chunks)
             ]
             cols = tuple(f.result() for f in futures)
 
