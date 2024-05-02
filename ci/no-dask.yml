@@ -3,8 +3,8 @@ channels:
   - conda-forge
 dependencies:
   - codecov
-  - netcdf4
   - pandas
+  - cftime
   - numpy>=1.22
   - scipy
   - pip
@@ -19,3 +19,4 @@ dependencies:
   - pooch
   - toolz
   - numba
+  - numbagg>=0.3

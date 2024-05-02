@@ -7,6 +7,10 @@ on:
     types: [opened, reopened, synchronize, labeled]
     branches:
       - main
+    paths:
+      - ".github/workflows/upstream-dev-ci.yaml"
+      - "ci/upstream-dev-env.yml"
+      - "flox/*"
   schedule:
     - cron: "0 0 * * *" # Daily “At 00:00” UTC
   workflow_dispatch: # allows you to trigger the workflow run manually
@@ -30,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11"]
+        python-version: ["3.12"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,16 +45,49 @@ jobs:
       - name: Set up conda environment
         uses: mamba-org/setup-micromamba@v1
         with:
-          environment-file: ci/upstream-dev-env.yml
           environment-name: flox-tests
           init-shell: bash
-          cache-environment: true
+          # cache-environment: true
+          # micromamba list does not list pip dependencies, so install mamba
           create-args: >-
+            mamba
+            pip
             python=${{ matrix.python-version }}
             pytest-reportlog
+
+      - name: Install upstream dev dependencies
+        run: |
+          # install cython for building cftime without build isolation
+          micromamba install -f ci/upstream-dev-env.yml
+          micromamba remove --force numpy scipy pandas cftime
+          python -m pip install \
+            -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
+            --no-deps \
+            --pre \
+            --upgrade \
+            numpy \
+            scipy \
+            pandas \
+            xarray
+          # without build isolation for packages compiling against numpy
+          # TODO: remove once there are `numpy>=2.0` builds for cftime
+          python -m pip install \
+            --no-deps \
+            --upgrade \
+            --no-build-isolation \
+            git+https://github.com/Unidata/cftime
+          python -m pip install \
+            git+https://github.com/dask/dask \
+            git+https://github.com/ml31415/numpy-groupies
+
       - name: Install flox
         run: |
           python -m pip install --no-deps -e .
+
+      - name: List deps
+        run: |
+          # micromamba list does not list pip dependencies
+          mamba list
       - name: Run Tests
         if: success()
         id: status
