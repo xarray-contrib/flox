@@ -273,7 +273,8 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
 
     def chunk_unique(labels, slicer, nlabels, label_is_present=None):
         if label_is_present is None:
-            label_is_present = np.zeros((nlabels + 1,), dtype=bool)
+            label_is_present = np.empty((nlabels + 1,), dtype=bool)
+        label_is_present[:] = False
         subset = labels[slicer]
         # This is a quite fast way to find unique integers, when we know how many there are
         # inspired by a similar idea in numpy_groupies for first, last
@@ -309,11 +310,10 @@ def _compute_label_chunk_bitmask(labels, chunks, nlabels):
         )
         cols = []
         # Add one to handle the -1 sentinel value
-        label_is_present = np.zeros((nlabels + 1,), dtype=bool)
+        label_is_present = np.empty((nlabels + 1,), dtype=bool)
         for region in slices_from_chunks(chunks):
             uniques = chunk_unique(labels, region, nlabels, label_is_present)
             cols.append(uniques)
-            label_is_present[:] = False
     rows_array = np.repeat(np.arange(nchunks), tuple(len(col) for col in cols))
     cols_array = np.concatenate(cols)
 
