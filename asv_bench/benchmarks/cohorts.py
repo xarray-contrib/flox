@@ -21,7 +21,6 @@ class Cohorts:
         asfloat = self.bitmask().astype(float)
         chunks_per_label = asfloat.sum(axis=0)
         containment = (asfloat.T @ asfloat) / chunks_per_label
-        print(containment.nnz / np.prod(containment.shape))
         return containment.todense()
 
     def chunks_cohorts(self):
