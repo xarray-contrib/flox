@@ -1205,6 +1205,40 @@ def test_group_by_datetime(engine, method):
     assert_equal(expected, actual)
 
 
+@requires_cubed
+@pytest.mark.parametrize("method", ["blockwise", "map-reduce"])
+def test_group_by_datetime_cubed(engine, method):
+    kwargs = dict(
+        func="mean",
+        method=method,
+        engine=engine,
+    )
+    t = pd.date_range("2000-01-01", "2000-12-31", freq="D").to_series()
+    data = t.dt.dayofyear
+    cubedarray = cubed.from_array(data.values, chunks=30)
+
+    actual, _ = groupby_reduce(cubedarray, t, **kwargs)
+    expected = data.to_numpy().astype(float)
+    assert_equal(expected, actual)
+
+    edges = pd.date_range("1999-12-31", "2000-12-31", freq="ME").to_series().to_numpy()
+    actual, _ = groupby_reduce(
+        cubedarray, t.to_numpy(), isbin=True, expected_groups=edges, **kwargs
+    )
+    expected = data.resample("ME").mean().to_numpy()
+    assert_equal(expected, actual)
+
+    actual, _ = groupby_reduce(
+        cubed.array_api.broadcast_to(cubedarray, (2, 3, cubedarray.shape[-1])),
+        t.to_numpy(),
+        isbin=True,
+        expected_groups=edges,
+        **kwargs,
+    )
+    expected = np.broadcast_to(expected, (2, 3, expected.shape[-1]))
+    assert_equal(expected, actual)
+
+
 def test_factorize_values_outside_bins():
     # pd.factorize returns intp
     vals = factorize_(
