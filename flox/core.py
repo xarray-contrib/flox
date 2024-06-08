@@ -2917,26 +2917,36 @@ def groupby_cumulate(
         axis_ = tuple(array.ndim + np.arange(-by_.ndim, 0))
     else:
         # TODO: How come this function doesn't exist according to mypy?
-        axis_ = np.core.numeric.normalize_axis_tuple(axis, array.ndim)  # type: ignore
+        axis_ = normalize_axis_tuple(axis, array.ndim)
     nax = len(axis_)
 
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
+    has_cubed = is_duck_cubed_array(array) or is_duck_cubed_array(by_)
 
-    # TODO: make sure expected_groups is unique
-    if nax == 1 and by_.ndim > 1 and expected_ is None:
-        if not any_by_dask:
-            expected_ = _get_expected_groups(by_, _sort)
-        else:
-            # When we reduce along all axes, we are guaranteed to see all
-            # groups in the final combine stage, so everything works.
-            # This is not necessarily true when reducing along a subset of axes
-            # (of by)
-            # TODO: Does this depend on chunking of by?
-            # For e.g., we could relax this if there is only one chunk along all
-            # by dim != axis?
-            raise NotImplementedError(
-                "Please provide ``expected_groups`` when not reducing along all axes."
+    if _is_first_last_reduction(func):
+        if has_dask and nax != 1:
+            raise ValueError(
+                "For dask arrays: first, last, nanfirst, nanlast reductions are "
+                "only supported along a single axis. Please reshape appropriately."
             )
+
+        elif nax not in [1, by_.ndim]:
+            raise ValueError(
+                "first, last, nanfirst, nanlast reductions are only supported "
+                "along a single axis or when reducing across all dimensions of `by`."
+            )
+        
+    if nax == 1 and by_.ndim > 1 and expected_ is None:
+        # When we reduce along all axes, we are guaranteed to see all
+        # groups in the final combine stage, so everything works.
+        # This is not necessarily true when reducing along a subset of axes
+        # (of by)
+        # TODO: Does this depend on chunking of by?
+        # For e.g., we could relax this if there is only one chunk along all
+        # by dim != axis?
+        raise NotImplementedError(
+            "Please provide ``expected_groups`` when not reducing along all axes."
+        )
 
     assert nax <= by_.ndim
     if nax < by_.ndim:
@@ -2945,12 +2955,61 @@ def groupby_cumulate(
         axis_ = tuple(array.ndim + np.arange(-nax, 0))
         nax = len(axis_)
 
+    # When axis is a subset of possible values; then npg will
+    # apply the fill_value to groups that don't exist along a particular axis (for e.g.)
+    # since these count as a group that is absent. thoo!
+    # fill_value applies to all-NaN groups as well as labels in expected_groups that are not found.
+    #     The only way to do this consistently is mask out using min_count
+    #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
+    if min_count is None:
+        if nax < by_.ndim or (fill_value is not None and provided_expected):
+            min_count_: int = 1
+        else:
+            min_count_ = 0
+    else:
+        min_count_ = min_count
+
+    # TODO: set in xarray?
+    if min_count_ > 0 and func in ["nansum", "nanprod"] and fill_value is None:
+        # nansum, nanprod have fill_value=0, 1
+        # overwrite than when min_count is set
+        fill_value = np.nan
+
+    kwargs = dict(axis=axis_, fill_value=fill_value)
     agg = _initialize_aggregation(func, dtype, array.dtype, _fill_value, 0, None)
 
-    groups: tuple[np.ndarray | DaskArray, ...]
-    if not has_dask:
+    # Need to set this early using `agg`
+    # It cannot be done in the core loop of chunk_reduce
+    # since we "prepare" the data for flox.
+    kwargs["engine"] = _choose_engine(by_, agg) if engine is None else engine
+
+     groups: tuple[np.ndarray | DaskArray, ...]
+    if has_cubed:
+        if method is None:
+            method = "map-reduce"
+
+        if method not in ("map-reduce", "blockwise"):
+            raise NotImplementedError(
+                "Reduction for Cubed arrays is only implemented for methods 'map-reduce' and 'blockwise'."
+            )
+
+        partial_agg = partial(cubed_groupby_agg, **kwargs)
+
+        result, groups = partial_agg(
+            array,
+            by_,
+            expected_groups=expected_,
+            agg=agg,
+            reindex=reindex,
+            method=method,
+            sort=_sort,
+        )
+
+        return (result, groups)
+
+    elif not has_dask:
         results = _cumulate_blockwise(
-            array, by_, agg, axis=axis_, expected_groups=expected_, engine=engine
+            array, by_, agg, expected_groups=expected_, reindex=reindex, sort=_sort, **kwargs
         )
         groups = (results["groups"],)
         result = results[agg.name]
@@ -2960,22 +3019,77 @@ def groupby_cumulate(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
+        if (not any_by_dask and method is None) or method == "cohorts":
+            preferred_method, chunks_cohorts = find_group_cohorts(
+                by_,
+                [array.chunks[ax] for ax in range(-by_.ndim, 0)],
+                expected_groups=expected_,
+                # when provided with cohorts, we *always* 'merge'
+                merge=(method == "cohorts"),
+            )
+        else:
+            preferred_method = "map-reduce"
+            chunks_cohorts = {}
+
+        method = _choose_method(method, preferred_method, agg, by_, nax)
+
+        if agg.chunk[0] is None and method != "blockwise":
+            raise NotImplementedError(
+                f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
+                f"Received method={method!r}"
+            )
+
+        if (
+            _is_arg_reduction(agg)
+            and method == "blockwise"
+            and not all(nchunks == 1 for nchunks in array.numblocks[-nax:])
+        ):
+            raise NotImplementedError(
+                "arg-reductions are not supported with method='blockwise', use 'cohorts' instead."
+            )
+
+        if nax != by_.ndim and method in ["blockwise", "cohorts"]:
+            raise NotImplementedError(
+                "Must reduce along all dimensions of `by` when method != 'map-reduce'."
+                f"Received method={method!r}"
+            )
+
+        # TODO: clean this up
+        reindex = _validate_reindex(
+            reindex, func, method, expected_, any_by_dask, is_duck_dask_array(array)
+        )
+
+        if TYPE_CHECKING:
+            assert method is not None
+
         # TODO: just do this in dask_groupby_agg
         # we always need some fill_value (see above) so choose the default if needed
-        if _fill_value is None:
-            _fill_value = agg.fill_value[agg.name]
+        if kwargs["fill_value"] is None:
+            kwargs["fill_value"] = agg.fill_value[agg.name]
 
-        partial_agg = partial(dask_groupby_agg, axis=axis_, fill_value=_fill_value, engine=engine)
+        partial_agg = partial(dask_groupby_agg, **kwargs)
+
+        if method == "blockwise" and by_.ndim == 1:
+            array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
         result, groups = partial_agg(
             array,
             by_,
             expected_groups=expected_,
             agg=agg,
-            reindex=False,
-            method="",  # TODO: ?
+            reindex=reindex,
+            method=method,
+            chunks_cohorts=chunks_cohorts,
             sort=_sort,
         )
+
+        if _sort and method != "map-reduce":
+            assert len(groups) == 1
+            sorted_idx = np.argsort(groups[0])
+            # This optimization helps specifically with resampling
+            if not _issorted(sorted_idx):
+                result = result[..., sorted_idx]
+                groups = (groups[0][sorted_idx],)
 
     if factorize_early:
         # nan group labels are factorized to -1, and preserved
@@ -2984,4 +3098,6 @@ def groupby_cumulate(
         result = reindex_(result, from_=groups[0], to=expected_, fill_value=_fill_value)
         groups = final_groups
 
-    return result
+    if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
+        result = result.astype(bool)
+    return (result, *groups)
