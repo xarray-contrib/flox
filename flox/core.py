@@ -2983,7 +2983,7 @@ def groupby_cumulate(
     # since we "prepare" the data for flox.
     kwargs["engine"] = _choose_engine(by_, agg) if engine is None else engine
 
-     groups: tuple[np.ndarray | DaskArray, ...]
+    groups: tuple[np.ndarray | DaskArray, ...]
     if has_cubed:
         if method is None:
             method = "map-reduce"
