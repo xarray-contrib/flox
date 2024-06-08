@@ -2935,7 +2935,7 @@ def groupby_cumulate(
                 "first, last, nanfirst, nanlast reductions are only supported "
                 "along a single axis or when reducing across all dimensions of `by`."
             )
-        
+
     if nax == 1 and by_.ndim > 1 and expected_ is None:
         # When we reduce along all axes, we are guaranteed to see all
         # groups in the final combine stage, so everything works.
