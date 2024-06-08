@@ -1866,7 +1866,7 @@ def cubed_groupby_agg(
 
         def _groupby_func(a, by, axis, intermediate_dtype, num_groups):
             blockwise_method = partial(
-                _get_chunk_reduction(agg.reduction_type),
+                _get_chunk_aggregation(agg.reduction_type),
                 func=agg.chunk,
                 fill_value=agg.fill_value["intermediate"],
                 dtype=agg.dtype["intermediate"],
