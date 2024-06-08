@@ -31,8 +31,8 @@ See a presentation ([video](https://discourse.pangeo.io/t/november-17-2021-flox-
 1. {py:func}`flox.xarray.xarray_reduce` [extends](xarray.md) Xarray's GroupBy operations allowing lazy grouping by dask arrays, grouping by multiple arrays,
    as well as combining categorical grouping and histogram-style binning operations using multiple variables.
 1. `flox` also provides utility functions for rechunking both dask arrays and Xarray objects along a single dimension using the group labels as a guide:
-   1. To rechunk for blockwise operations: {py:func}`flox.rechunk_for_blockwise`,  {py:func}`flox.xarray.rechunk_for_blockwise`.
-   1. To rechunk so that "cohorts", or groups of labels, tend to occur in the same chunks: {py:func}`flox.rechunk_for_cohorts`,  {py:func}`flox.xarray.rechunk_for_cohorts`.
+   1. To rechunk for blockwise operations: {py:func}`flox.rechunk_for_blockwise`, {py:func}`flox.xarray.rechunk_for_blockwise`.
+   1. To rechunk so that "cohorts", or groups of labels, tend to occur in the same chunks: {py:func}`flox.rechunk_for_cohorts`, {py:func}`flox.xarray.rechunk_for_cohorts`.
 
 ## Installing
 

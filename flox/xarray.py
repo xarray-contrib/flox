@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Hashable, Iterable, Sequence, Union
+from collections.abc import Hashable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 import pandas as pd
@@ -8,7 +9,7 @@ import xarray as xr
 from packaging.version import Version
 from xarray.core.duck_array_ops import _datetime_nanmin
 
-from .aggregations import Aggregation, _atleast_1d
+from .aggregations import Aggregation, Dim, _atleast_1d, quantile_new_dims_func
 from .core import (
     _convert_expected_groups_to_index,
     _get_expected_groups,
@@ -27,10 +28,12 @@ if TYPE_CHECKING:
     Dims = Union[str, Iterable[Hashable], None]
 
 
-def _restore_dim_order(result, obj, by):
+def _restore_dim_order(result, obj, by, no_groupby_reorder=False):
     def lookup_order(dimension):
         if dimension == by.name and by.ndim == 1:
             (dimension,) = by.dims
+            if no_groupby_reorder:
+                return -1e6  # some arbitrarily low value
         if dimension in obj.dims:
             axis = obj.get_axis_num(dimension)
         else:
@@ -71,8 +74,8 @@ def xarray_reduce(
     dim: Dims | ellipsis = None,
     fill_value=None,
     dtype: np.typing.DTypeLike = None,
-    method: str = "map-reduce",
-    engine: str = "numpy",
+    method: str | None = None,
+    engine: str | None = None,
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
@@ -87,8 +90,11 @@ def xarray_reduce(
         Xarray object to reduce
     *by : DataArray or iterable of str or iterable of DataArray
         Variables with which to group by ``obj``
-    func : str or Aggregation
-        Reduction method
+    func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
+            "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
+            "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
+            "first", "nanfirst", "last", "nanlast"} or Aggregation
+        Single function name or an Aggregation instance
     expected_groups : str or sequence
         expected group labels corresponding to each `by` variable
     isbin : iterable of bool
@@ -106,7 +112,7 @@ def xarray_reduce(
         in ``expected_groups`` is not actually present in ``by``.
     dtype : data-type, optional
         DType for the output. Can be anything accepted by ``np.dtype``.
-    method : {"map-reduce", "blockwise", "cohorts", "split-reduce"}, optional
+    method : {"map-reduce", "blockwise", "cohorts"}, optional
         Strategy for reduction of dask arrays only:
           * ``"map-reduce"``:
             First apply the reduction blockwise on ``array``, then
@@ -130,8 +136,6 @@ def xarray_reduce(
             'month', dayofyear' etc. Optimize chunking ``array`` for this
             method by first rechunking using ``rechunk_for_cohorts``
             (for 1D ``by`` only).
-          * ``"split-reduce"``:
-            Same as "cohorts" and will be removed soon.
     engine : {"flox", "numpy", "numba"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
@@ -144,6 +148,9 @@ def xarray_reduce(
             for a reduction that is not yet implemented.
           * ``"numba"``:
             Use the implementations in ``numpy_groupies.aggregate_numba``.
+          * ``"numbagg"``:
+            Use the reductions supported by ``numbagg.grouped``. This will fall back to ``numpy_groupies.aggregate_numpy``
+            for a reduction that is not yet implemented.
     keep_attrs : bool, optional
         Preserve attrs?
     skipna : bool, optional
@@ -163,7 +170,7 @@ def xarray_reduce(
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
     **finalize_kwargs
-        kwargs passed to the finalize function, like ``ddof`` for var, std.
+        kwargs passed to the finalize function, like ``ddof`` for var, std or ``q`` for quantile.
 
     Returns
     -------
@@ -194,10 +201,10 @@ def xarray_reduce(
     >>> da = da = xr.ones_like(labels)
     >>> # Sum all values in da that matches the elements in the group index:
     >>> xarray_reduce(da, labels, func="sum")
-    <xarray.DataArray 'label' (label: 4)>
+    <xarray.DataArray 'label' (label: 4)> Size: 32B
     array([3, 2, 2, 2])
     Coordinates:
-      * label    (label) int64 0 1 2 3
+      * label    (label) int64 32B 0 1 2 3
     """
 
     if skipna is not None and isinstance(func, Aggregation):
@@ -246,13 +253,13 @@ def xarray_reduce(
     try:
         from xarray.indexes import PandasMultiIndex
     except ImportError:
-        PandasMultiIndex = tuple()  # type: ignore
+        PandasMultiIndex = tuple()  # type: ignore[assignment, misc]
 
     more_drop = set()
     for var in maybe_drop:
         maybe_midx = ds._indexes.get(var, None)
         if isinstance(maybe_midx, PandasMultiIndex):
-            idx_coord_names = set(maybe_midx.index.names + [maybe_midx.dim])
+            idx_coord_names = set(tuple(maybe_midx.index.names) + (maybe_midx.dim,))
             idx_other_names = idx_coord_names - set(maybe_drop)
             more_drop.update(idx_other_names)
     maybe_drop.update(more_drop)
@@ -296,14 +303,17 @@ def xarray_reduce(
         # reducing along a dimension along which groups do not vary
         # This is really just a normal reduction.
         # This is not right when binning so we exclude.
-        if isinstance(func, str):
-            dsfunc = func[3:] if skipna else func
-        else:
+        if isinstance(func, str) and func.startswith("nan"):
+            raise ValueError(f"Specify func={func[3:]}, skipna=True instead of func={func}")
+        elif isinstance(func, Aggregation):
             raise NotImplementedError(
                 "func must be a string when reducing along a dimension not present in `by`"
             )
-        # TODO: skipna needs test
-        result = getattr(ds_broad, dsfunc)(dim=dim_tuple, skipna=skipna)
+        # skipna is not supported for all reductions
+        # https://github.com/pydata/xarray/issues/8819
+        kwargs = {"skipna": skipna} if skipna is not None else {}
+        kwargs.update(finalize_kwargs)
+        result = getattr(ds_broad, func)(dim=dim_tuple, **kwargs)
         if isinstance(obj, xr.DataArray):
             return obj._from_temp_dataset(result)
         else:
@@ -364,7 +374,7 @@ def xarray_reduce(
 
         # Flox's count works with non-numeric and its faster than converting.
         requires_numeric = func not in ["count", "any", "all"] or (
-            func == "count" and engine != "flox"
+            func == "count" and kwargs["engine"] != "flox"
         )
         if requires_numeric:
             is_npdatetime = array.dtype.kind in "Mm"
@@ -374,11 +384,22 @@ def xarray_reduce(
                 # xarray always uses np.datetime64[ns] for np.datetime64 data
                 dtype = "timedelta64[ns]"
                 array = datetime_to_numeric(array, offset)
-            elif _contains_cftime_datetimes(array):
-                offset = min(array)
+            elif is_cftime:
+                offset = array.min()
                 array = datetime_to_numeric(array, offset, datetime_unit="us")
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
+
+        # Transpose the new quantile dimension to the end. This is ugly.
+        # but new core dimensions are expected at the end :/
+        # but groupby_reduce inserts them at the beginning
+        if func in ["quantile", "nanquantile"]:
+            (newdim,) = quantile_new_dims_func(**finalize_kwargs)
+            if not newdim.is_scalar:
+                # NOTE: _restore_dim_order will move any new dims to the end anyway.
+                # This transpose is simply makes it easy to specify output_core_dims
+                # output dim order: (*broadcast_dims, *group_dims, quantile_dim)
+                result = np.moveaxis(result, 0, -1)
 
         # Output of count has an int dtype.
         if requires_numeric and func != "count":
@@ -405,8 +426,18 @@ def xarray_reduce(
     input_core_dims = [[d for d in grouper_dims if d not in dim_tuple] + list(dim_tuple)]
     input_core_dims += [list(b.dims) for b in by_da]
 
+    newdims: tuple[Dim, ...] = (
+        quantile_new_dims_func(**finalize_kwargs) if func in ["quantile", "nanquantile"] else ()
+    )
+
     output_core_dims = [d for d in input_core_dims[0] if d not in dim_tuple]
     output_core_dims.extend(group_names)
+    vector_dims = [dim.name for dim in newdims if not dim.is_scalar]
+    output_core_dims.extend(vector_dims)
+
+    output_sizes = group_sizes
+    output_sizes.update({dim.name: dim.size for dim in newdims if dim.size != 0})
+
     actual = xr.apply_ufunc(
         wrapper,
         ds_broad.drop_vars(tuple(missing_dim)).transpose(..., *grouper_dims),
@@ -417,7 +448,7 @@ def xarray_reduce(
         output_core_dims=[output_core_dims],
         dask="allowed",
         dask_gufunc_kwargs=dict(
-            output_sizes=group_sizes, output_dtypes=[dtype] if dtype is not None else None
+            output_sizes=output_sizes, output_dtypes=[dtype] if dtype is not None else None
         ),
         keep_attrs=keep_attrs,
         kwargs={
@@ -443,6 +474,9 @@ def xarray_reduce(
     for var in set(ds_broad._coord_names) - set(ds_broad._indexes) - set(ds_broad.dims):
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
+
+    for newdim in newdims:
+        actual.coords[newdim.name] = newdim.values if newdim.is_scalar else np.array(newdim.values)
 
     expect3: T_ExpectIndex | np.ndarray
     for name, expect2, by_ in zip(group_names, expected_groups_valid_list, by_da):
@@ -485,8 +519,13 @@ def xarray_reduce(
             else:
                 template = obj
 
-            if actual[var].ndim > 1:
-                actual[var] = _restore_dim_order(actual[var], template, by_da[0])
+            if actual[var].ndim > 1 + len(vector_dims):
+                no_groupby_reorder = isinstance(
+                    obj, xr.Dataset
+                )  # do not re-order dataarrays inside datasets
+                actual[var] = _restore_dim_order(
+                    actual[var], template, by_da[0], no_groupby_reorder=no_groupby_reorder
+                )
 
     if missing_dim:
         for k, v in missing_dim.items():

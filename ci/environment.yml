@@ -4,12 +4,14 @@ channels:
 dependencies:
   - asv
   - cachey
+  - cftime
   - codecov
+  - cubed>=0.14.3
   - dask-core
-  - netcdf4
   - pandas
-  - numpy>=1.20
-  - lxml  # for mypy coverage report
+  - numpy>=1.22
+  - scipy
+  - lxml # for mypy coverage report
   - matplotlib
   - pip
   - pytest
@@ -22,3 +24,4 @@ dependencies:
   - pooch
   - toolz
   - numba
+  - numbagg>=0.3

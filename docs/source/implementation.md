@@ -1,3 +1,12 @@
+---
+jupytext:
+  text_representation:
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  name: python3
+---
+
 (algorithms)=
 
 # Parallel Algorithms
@@ -7,10 +16,14 @@
 can be hard. Performance strongly depends on how the groups are distributed amongst the blocks of an array.
 
 `flox` implements 4 strategies for grouped reductions, each is appropriate for a particular distribution of groups
-among the blocks of a dask array. Switch between the various strategies by passing `method`
-and/or `reindex` to either {py:func}`flox.groupby_reduce` or {py:func}`flox.xarray.xarray_reduce`.
+among the blocks of a dask array.
 
-Your options are:
+```{tip}
+By default, `flox >= 0.9.0` will use [heuristics](method-heuristics) to choose a `method`.
+```
+
+Switch between the various strategies by passing `method` and/or `reindex` to either {py:func}`flox.groupby_reduce`
+or {py:func}`flox.xarray.xarray_reduce`. Your options are:
 
 1. [`method="map-reduce"` with `reindex=False`](map-reindex-false)
 1. [`method="map-reduce"` with `reindex=True`](map-reindex-True)
@@ -20,18 +33,17 @@ Your options are:
 The most appropriate strategy for your problem will depend on the chunking of your dataset,
 and the distribution of group labels across those chunks.
 
-```{tip}
 Currently these strategies are implemented for dask. We would like to generalize to other parallel array types
 as appropriate (e.g. Ramba, cubed, arkouda). Please open an issue to discuss if you are interested.
-```
 
 (xarray-split)=
 
-## Background: Xarray's current GroupBy strategy
+## Background
 
-Xarray's current strategy is to find all unique group labels, index out each group,
-and then apply the reduction operation. Note that this only works if we know the group
-labels (i.e. you cannot use this strategy to group by a dask array).
+Without `flox` installed, Xarray's GroupBy strategy is to find all unique group labels,
+index out each group, and then apply the reduction operation. Note that this only works
+if we know the group labels (i.e. you cannot use this strategy to group by a dask array),
+and is basically an unvectorized slow for-loop over groups.
 
 Schematically, this looks like (colors indicate group labels; separated groups of colors
 indicate different blocks of an array):
@@ -43,7 +55,7 @@ width: 100%
 ---
 ```
 
-The first step is to extract all members of a group, which involves a *lot* of
+The first step is to extract all members of a group, which involves a _lot_ of
 communication and is quite expensive (in dataframe terminology, this is a "shuffle").
 This is fundamentally why many groupby reductions don't work well right now with
 big datasets.
@@ -129,7 +141,7 @@ width: 100%
 ---
 ```
 
-*Tradeoffs*
+_Tradeoffs_
 
 1. Only works for certain groupings.
 1. Group labels must be known at graph construction time, so this only works for numpy arrays
@@ -146,14 +158,14 @@ width: 100%
 The `map-reduce` strategy is quite effective but can involve some unnecessary communication. It can be possible to exploit
 patterns in how group labels are distributed across chunks (similar to `method="blockwise"` above). Two cases are illustrative:
 
-1. Groups labels can be *approximately-periodic*: e.g. `time.dayofyear` (period 365 or 366) or `time.month` (period 12).
+1. Groups labels can be _approximately-periodic_: e.g. `time.dayofyear` (period 365 or 366) or `time.month` (period 12).
    Consider our earlier example, `groupby("time.month")` with monthly frequency data and chunksize of 4 along `time`.
    ![cohorts-schematic](/../diagrams/cohorts-month-chunk4.png)
    Because a chunksize of 4 evenly divides the number of groups (12) all we need to do is index out blocks
    0, 3, 7 and then apply the `"map-reduce"` strategy to form the final result for months Jan-Apr. Repeat for the
    remaining groups of months (May-Aug; Sep-Dec) and then concatenate.
 
-1. Groups can be *spatially localized* like the blockwise case above, for example grouping by country administrative boundaries like
+1. Groups can be _spatially localized_ like the blockwise case above, for example grouping by country administrative boundaries like
    counties or districts. In this case, concatenating the result for the northwesternmost county or district and the southeasternmost
    district can involve a lot of wasteful communication (again depending on chunking).
 
@@ -172,7 +184,7 @@ Consider our earlier example, `groupby("time.month")` with monthly frequency dat
 ![cohorts-schematic](/../diagrams/cohorts-month-chunk4.png)
 
 With `method="map-reduce", reindex=True`, each block will become 3x its original size at the blockwise step: input blocks have 4 timesteps while output block
-has a value for all 12 months. Note that the blockwise groupby-reduction *does not reduce* the data since there is only one element in each
+has a value for all 12 months. Note that the blockwise groupby-reduction _does not reduce_ the data since there is only one element in each
 group. In addition, since `map-reduce` will make the final result have only one chunk of size 12 along the new `month`
 dimension, the final result has chunk sizes 3x that of the input, which may not be ideal.
 
@@ -184,7 +196,7 @@ remaining groups of months (May-Aug; Sep-Dec) and then concatenate. This is the 
 
 We can generalize this idea for more complicated problems (inspired by the `split_out`kwarg in `dask.dataframe.groupby`)
 We first apply the groupby-reduction blockwise, then split and reindex blocks to create a new array with which we complete the reduction
-using `map-reduce`. Because the split or shuffle step occurs after the blockwise reduction, we *sometimes* communicate a significantly smaller
+using `map-reduce`. Because the split or shuffle step occurs after the blockwise reduction, we _sometimes_ communicate a significantly smaller
 amount of data than if we split or shuffled the input array.
 
 ```{image} /../diagrams/new-cohorts-annotated.svg
@@ -199,7 +211,7 @@ width: 100%
 1. Group labels must be known at graph construction time, so this only works for numpy arrays.
 1. This does require more tasks and a more complicated graph, but the communication overhead can be significantly lower.
 1. The detection of "cohorts" is currently slow but could be improved.
-1. The extra effort of detecting cohorts and mul;tiple copying of intermediate blocks may be worthwhile only if the chunk sizes are small
+1. The extra effort of detecting cohorts and multiple copying of intermediate blocks may be worthwhile only if the chunk sizes are small
    relative to the approximate period of group labels, or small relative to the size of spatially localized groups.
 
 ### Example : sensitivity to chunking
@@ -208,23 +220,93 @@ One annoyance is that if the chunksize doesn't evenly divide the number of group
 Consider our earlier example, `groupby("time.month")` with monthly frequency data and chunksize of 4 along `time`.
 ![cohorts-schematic](/../diagrams/cohorts-month-chunk4.png)
 
+```{code-cell}
+import flox
+import numpy as np
+
+labels = np.tile(np.arange(12), 12)
+chunks = (tuple(np.repeat(4, labels.size // 4)),)
+```
+
 `flox` can find these cohorts, below it identifies the cohorts with labels `1,2,3,4`; `5,6,7,8`, and `9,10,11,12`.
 
-```python
->>> flox.find_group_cohorts(labels, array.chunks[-1]).values()
-[[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]  # 3 cohorts
+```{code-cell}
+preferred_method, chunks_cohorts = flox.core.find_group_cohorts(labels, chunks)
+chunks_cohorts.values()
 ```
 
 Now consider `chunksize=5`.
 ![cohorts-schematic](/../diagrams/cohorts-month-chunk5.png)
 
-```python
->>> flox.core.find_group_cohorts(labels, array.chunks[-1]).values()
-[[1], [2, 3], [4, 5], [6], [7, 8], [9, 10], [11], [12]]  # 8 cohorts
+```{code-cell}
+labels = np.tile(np.arange(12), 12)
+chunks = (tuple(np.repeat(5, labels.size // 5)) + (4,),)
+preferred_method, chunks_cohorts = flox.core.find_group_cohorts(labels, chunks, merge=True)
+chunks_cohorts.values()
 ```
 
-We find 8 cohorts (note the original xarray strategy is equivalent to constructing 12 cohorts).
-In this case, it seems to better to rechunk to a size of `4` along `time`.
-If you have ideas for improving this case, please open an issue.
+We find 7 cohorts (note the original xarray strategy is equivalent to constructing 12 cohorts).
+In this case, it seems to better to rechunk to a size of `4` (or `6`) along `time`.
+
+Indeed flox's heuristics think `"map-reduce"` is better for this case:
+
+```{code-cell}
+preferred_method
+```
 
 ### Example : spatial grouping
+
+Spatial groupings are particularly interesting for the `"cohorts"` strategy. Consider the problem of computing county-level
+aggregated statistics ([example blog post](https://xarray.dev/blog/flox)). There are ~3100 groups (counties), each marked by
+a different color. There are ~2300 chunks of size (350, 350) in (lat, lon). Many groups are contained to a small number of chunks:
+see left panel where the grid lines mark chunk boundaries.
+
+![cohorts-schematic](/../diagrams/nwm-cohorts.png)
+
+This seems like a good fit for `'cohorts'`: to get the answer for a county in the Northwest US, we needn't look at values
+for the southwest US. How do we decide that automatically for the user?
+
+(method-heuristics)=
+
+## Heuristics
+
+`flox >=0.9` will automatically choose `method` for you. To do so, we need to detect how each group
+label is distributed across the chunks of the array; and the degree to which the chunk distribution for a particular
+label overlaps with all other labels. The algorithm is as follows.
+
+1. First determine which labels are present in each chunk. The distribution of labels across chunks
+   is represented internally as a 2D boolean sparse array `S[chunks, labels]`. `S[i, j] = 1` when
+   label `j` is present in chunk `i`.
+
+1. Then we look for patterns in `S` to decide if we can use `"blockwise"`. The dark color cells are `1` at that
+   cell in `S`.
+   ![bitmask-patterns](/../diagrams/bitmask-patterns-perfect.png)
+
+   - On the left, is a monthly grouping for a monthly time series with chunk size 4. There are 3 non-overlapping cohorts so
+     `method="cohorts"` is perfect.
+   - On the right, is a resampling problem of a daily time series with chunk size 10 to 5-daily frequency. Two 5-day periods
+     are exactly contained in one chunk, so `method="blockwise"` is perfect.
+
+1. The metric used for determining the degree of overlap between the chunks occupied by different labels is
+   [containment](http://ekzhu.com/datasketch/lshensemble.html). For each label `i` we can quickly compute containment against
+   all other labels `j` as `C = S.T @ S / number_chunks_per_label`. Here is `C` for a range of chunk sizes from 1 to 12, for computing
+   the monthly mean of a monthly time series problem, \[the title on each image is `(chunk size, sparsity)`\].
+
+   ```python
+   chunks = np.arange(1, 13)
+   labels = np.tile(np.arange(1, 13), 30)
+   ```
+
+   ![cohorts-schematic](/../diagrams/containment.png)
+
+1. To choose between `"map-reduce"` and `"cohorts"`, we need a summary measure of the degree to which the labels overlap with
+   each other. We can use _sparsity_ --- the number of non-zero elements in `C` divided by the number of elements in `C`, `C.nnz/C.size`.
+   We use sparsity(`S`) as an approximation for the sparsity(`C`) to avoid a potentially expensive sparse matrix dot product when `S`
+   isn't particularly sparse. When sparsity(`S`) > 0.4 (arbitrary), we choose `"map-reduce"` since there is decent overlap between
+   (any) cohorts. Otherwise we use `"cohorts"`.
+
+Cool, isn't it?!
+
+For reference here is `S` and `C` for the US county groupby problem:
+![county-bitmask](/../diagrams/counties-bitmask-containment.png)
+The sparsity of `C` is 0.006, so `"cohorts"` seems a good strategy here.

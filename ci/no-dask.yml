@@ -3,9 +3,10 @@ channels:
   - conda-forge
 dependencies:
   - codecov
-  - netcdf4
   - pandas
-  - numpy>=1.20
+  - cftime
+  - numpy>=1.22
+  - scipy
   - pip
   - pytest
   - pytest-cov
@@ -18,3 +19,4 @@ dependencies:
   - pooch
   - toolz
   - numba
+  - numbagg>=0.3

@@ -1,5 +1,5 @@
 import importlib
-from contextlib import contextmanager
+from contextlib import nullcontext
 
 import numpy as np
 import packaging.version
@@ -14,7 +14,7 @@ try:
 
     dask_array_type = da.Array
 except ImportError:
-    dask_array_type = ()  # type: ignore
+    dask_array_type = ()  # type: ignore[assignment, misc]
 
 
 try:
@@ -22,7 +22,7 @@ try:
 
     xr_types = (xr.DataArray, xr.Dataset)
 except ImportError:
-    xr_types = ()  # type: ignore
+    xr_types = ()  # type: ignore[assignment]
 
 
 def _importorskip(modname, minversion=None):
@@ -45,7 +45,12 @@ def LooseVersion(vstring):
     return packaging.version.Version(vstring)
 
 
+has_cftime, requires_cftime = _importorskip("cftime")
+has_cubed, requires_cubed = _importorskip("cubed")
 has_dask, requires_dask = _importorskip("dask")
+has_numba, requires_numba = _importorskip("numba")
+has_numbagg, requires_numbagg = _importorskip("numbagg")
+has_scipy, requires_scipy = _importorskip("scipy")
 has_xarray, requires_xarray = _importorskip("xarray")
 
 
@@ -67,15 +72,10 @@ class CountingScheduler:
         return dask.get(dsk, keys, **kwargs)
 
 
-@contextmanager
-def dummy_context():
-    yield None
-
-
 def raise_if_dask_computes(max_computes=0):
     # return a dummy context manager so that this can be used for non-dask objects
     if not has_dask:
-        return dummy_context()
+        return nullcontext()
     scheduler = CountingScheduler(max_computes)
     return dask.config.set(scheduler=scheduler)
 
@@ -125,3 +125,35 @@ def assert_equal_tuple(a, b):
             np.testing.assert_array_equal(a_, b_)
         else:
             assert a_ == b_
+
+
+SCIPY_STATS_FUNCS = ("mode", "nanmode")
+BLOCKWISE_FUNCS = ("median", "nanmedian", "quantile", "nanquantile") + SCIPY_STATS_FUNCS
+ALL_FUNCS = (
+    "sum",
+    "nansum",
+    "argmax",
+    "nanfirst",
+    "nanargmax",
+    "prod",
+    "nanprod",
+    "mean",
+    "nanmean",
+    "var",
+    "nanvar",
+    "std",
+    "nanstd",
+    "max",
+    "nanmax",
+    "min",
+    "nanmin",
+    "argmin",
+    "nanargmin",
+    "any",
+    "all",
+    "nanlast",
+    "median",
+    "nanmedian",
+    "quantile",
+    "nanquantile",
+) + tuple(pytest.param(func, marks=requires_scipy) for func in SCIPY_STATS_FUNCS)

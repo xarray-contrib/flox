@@ -2,11 +2,13 @@
 # defined in xarray
 
 import datetime
-from typing import Any, Iterable
+import importlib
+from collections.abc import Iterable
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
-from numpy.core.multiarray import normalize_axis_index  # type: ignore[attr-defined]
+from packaging.version import Version
 
 try:
     import cftime
@@ -19,7 +21,38 @@ try:
 
     dask_array_type = dask.array.Array
 except ImportError:
-    dask_array_type = ()  # type: ignore
+    dask_array_type = ()  # type: ignore[assignment, misc]
+
+
+def module_available(module: str, minversion: Optional[str] = None) -> bool:
+    """Checks whether a module is installed without importing it.
+
+    Use this for a lightweight check and lazy imports.
+
+    Parameters
+    ----------
+    module : str
+        Name of the module.
+
+    Returns
+    -------
+    available : bool
+        Whether the module is installed.
+    """
+    has = importlib.util.find_spec(module) is not None
+    if has:
+        mod = importlib.import_module(module)
+        return Version(mod.__version__) >= Version(minversion) if minversion is not None else True
+    else:
+        return False
+
+
+if module_available("numpy", minversion="2.0.0"):
+    from numpy.lib.array_utils import (  # type: ignore[import-not-found]
+        normalize_axis_index,
+    )
+else:
+    from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
 
 
 def asarray(data, xp=np):
@@ -34,9 +67,16 @@ def is_duck_array(value: Any) -> bool:
         hasattr(value, "ndim")
         and hasattr(value, "shape")
         and hasattr(value, "dtype")
-        and hasattr(value, "__array_function__")
-        and hasattr(value, "__array_ufunc__")
+        and (
+            (hasattr(value, "__array_function__") and hasattr(value, "__array_ufunc__"))
+            or hasattr(value, "__array_namespace__")
+        )
     )
+
+
+def is_chunked_array(x) -> bool:
+    """True if dask or cubed"""
+    return is_duck_dask_array(x) or (is_duck_array(x) and hasattr(x, "chunks"))
 
 
 def is_dask_collection(x):
@@ -51,6 +91,15 @@ def is_dask_collection(x):
 
 def is_duck_dask_array(x):
     return is_duck_array(x) and is_dask_collection(x)
+
+
+def is_duck_cubed_array(x):
+    try:
+        import cubed
+
+        return is_duck_array(x) and isinstance(x, cubed.Array)
+    except ImportError:
+        return False
 
 
 class ReprObject:
@@ -81,7 +130,7 @@ class ReprObject:
 def is_scalar(value: Any, include_0d: bool = True) -> bool:
     """Whether to treat a value as a scalar.
 
-    Any non-iterable, string, or 0-D array
+    Any non-iterable, string, dict, or 0-D array
     """
     NON_NUMPY_SUPPORTED_ARRAY_TYPES = (dask_array_type, pd.Index)
 
@@ -89,12 +138,26 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
         include_0d = getattr(value, "ndim", None) == 0
     return (
         include_0d
-        or isinstance(value, (str, bytes))
+        or isinstance(value, (str, bytes, dict))
         or not (
             isinstance(value, (Iterable,) + NON_NUMPY_SUPPORTED_ARRAY_TYPES)
             or hasattr(value, "__array_function__")
         )
     )
+
+
+def notnull(data):
+    if not is_duck_array(data):
+        data = np.asarray(data)
+
+    scalar_type = data.dtype.type
+    if issubclass(scalar_type, (np.bool_, np.integer, np.character, np.void)):
+        # these types cannot represent missing values
+        return np.ones_like(data, dtype=bool)
+    else:
+        out = isnull(data)
+        np.logical_not(out, out=out)
+        return out
 
 
 def isnull(data):
@@ -157,7 +220,7 @@ def datetime_to_numeric(array, offset=None, datetime_unit=None, dtype=float):
         if array.dtype.kind in "Mm":
             offset = _datetime_nanmin(array)
         else:
-            offset = min(array)
+            offset = array.min()
 
     # Compute timedelta object.
     # For np.datetime64, this can silently yield garbage due to overflow.
