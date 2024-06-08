@@ -2891,28 +2891,27 @@ def groupby_cumulate(
     # (pd.IntervalIndex or not)
     expected_groups = _convert_expected_groups_to_index(expected_groups, isbins, _sort)
 
-    # Don't factorize "early only when
+    # Don't factorize early only when
     # grouping by dask arrays, and not having expected_groups
     factorize_early = not (
         # can't do it if we are grouping by dask array but don't have expected_groups
         any(is_dask and ex_ is None for is_dask, ex_ in zip(by_is_dask, expected_groups))
     )
+    expected_: pd.RangeIndex | None
     if factorize_early:
         bys, final_groups, grp_shape = _factorize_multiple(
             bys,
             expected_groups,
             any_by_dask=any_by_dask,
-            # This is the only way it makes sense I think.
-            # reindex controls what's actually allocated in chunk_reduce
-            # At this point, we care about an accurate conversion to codes.
-            reindex=True,
             sort=_sort,
         )
-        expected_groups = (pd.RangeIndex(math.prod(grp_shape)),)
+        expected_ = pd.RangeIndex(math.prod(grp_shape))
+    else:
+        assert expected_groups == (None,)
+        expected_ = None
 
     assert len(bys) == 1
     (by_,) = bys
-    (expected_groups,) = expected_groups
 
     if axis is None:
         axis_ = tuple(array.ndim + np.arange(-by_.ndim, 0))
@@ -2924,9 +2923,9 @@ def groupby_cumulate(
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
 
     # TODO: make sure expected_groups is unique
-    if nax == 1 and by_.ndim > 1 and expected_groups is None:
+    if nax == 1 and by_.ndim > 1 and expected_ is None:
         if not any_by_dask:
-            expected_groups = _get_expected_groups(by_, _sort)
+            expected_ = _get_expected_groups(by_, _sort)
         else:
             # When we reduce along all axes, we are guaranteed to see all
             # groups in the final combine stage, so everything works.
@@ -2951,7 +2950,7 @@ def groupby_cumulate(
     groups: tuple[np.ndarray | DaskArray, ...]
     if not has_dask:
         results = _cumulate_blockwise(
-            array, by_, agg, axis=axis_, expected_groups=expected_groups, engine=engine
+            array, by_, agg, axis=axis_, expected_groups=expected_, engine=engine
         )
         groups = (results["groups"],)
         result = results[agg.name]
@@ -2971,7 +2970,7 @@ def groupby_cumulate(
         result, groups = partial_agg(
             array,
             by_,
-            expected_groups=expected_groups,
+            expected_groups=expected_,
             agg=agg,
             reindex=False,
             method="",  # TODO: ?
@@ -2982,7 +2981,7 @@ def groupby_cumulate(
         # nan group labels are factorized to -1, and preserved
         # now we get rid of them by reindexing
         # This also handles bins with no data
-        result = reindex_(result, from_=groups[0], to=expected_groups, fill_value=_fill_value)
+        result = reindex_(result, from_=groups[0], to=expected_, fill_value=_fill_value)
         groups = final_groups
 
     return result
