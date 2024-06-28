@@ -9,6 +9,7 @@ import warnings
 from collections import namedtuple
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from functools import partial, reduce
 from itertools import product
 from numbers import Integral
@@ -33,6 +34,7 @@ from . import xrdtypes
 from .aggregate_flox import _prepare_for_flox
 from .aggregations import (
     Aggregation,
+    Scan,
     _atleast_1d,
     _initialize_aggregation,
     generic_aggregate,
@@ -1548,6 +1550,27 @@ def _extract_unknown_groups(reduced, dtype) -> tuple[DaskArray]:
     return groups
 
 
+def _unify_chunks(array, by):
+
+    from dask.array import from_array, unify_chunks
+
+    inds = tuple(range(array.ndim))
+
+    # Unifying chunks is necessary for argreductions.
+    # We need to rechunk before zipping up with the index
+    # let's always do it anyway
+    if not is_duck_dask_array(by):
+        # chunk numpy arrays like the input array
+        # This removes an extra rechunk-merge layer that would be
+        # added otherwise
+        chunks = tuple(array.chunks[ax] if by.shape[ax] != 1 else (1,) for ax in range(-by.ndim, 0))
+
+        by = from_array(by, chunks=chunks)
+    _, (array, by) = unify_chunks(array, inds, by, inds[-by.ndim :])
+
+    return array, by
+
+
 def dask_groupby_agg(
     array: DaskArray,
     by: T_By,
@@ -1578,17 +1601,7 @@ def dask_groupby_agg(
 
     by_input = by
 
-    # Unifying chunks is necessary for argreductions.
-    # We need to rechunk before zipping up with the index
-    # let's always do it anyway
-    if not is_duck_dask_array(by):
-        # chunk numpy arrays like the input array
-        # This removes an extra rechunk-merge layer that would be
-        # added otherwise
-        chunks = tuple(array.chunks[ax] if by.shape[ax] != 1 else (1,) for ax in range(-by.ndim, 0))
-
-        by = dask.array.from_array(by, chunks=chunks)
-    _, (array, by) = dask.array.unify_chunks(array, inds, by, inds[-by.ndim :])
+    array, by = _unify_chunks(array, by)
 
     # tokenize here since by has already been hashed if its numpy
     token = dask.base.tokenize(array, by, agg, expected_groups, axis, method)
@@ -2618,3 +2631,95 @@ def groupby_reduce(
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
         result = result.astype(bool)
     return (result, *groups)
+
+
+@dataclass
+class AlignedArrays:
+    """Simple Xarray DataArray type data class with two aligned arrays."""
+
+    array: np.array
+    group_idx: np.array
+
+    def __post_init__(self):
+        assert self.array.shape[-1] == self.group_idx.size
+
+
+def grouped_scan(inp: AlignedArrays, *, func, axis, dtype=None, keepdims=None) -> AlignedArrays:
+    assert axis == inp.array.ndim - 1
+    accumulated = generic_aggregate(
+        inp.group_idx, inp.array, axis=axis, engine="numpy", func=func, dtype=dtype
+    )
+    return AlignedArrays(array=accumulated, group_idx=inp.group_idx)
+
+
+def grouped_reduce(inp: AlignedArrays, *, func, axis, dtype=None, keepdims=None) -> AlignedArrays:
+    assert axis == inp.array.ndim - 1
+    reduced = generic_aggregate(
+        inp.group_idx, inp.array, axis=axis, engine="numpy", func=func, dtype=dtype
+    )
+    return AlignedArrays(array=reduced, group_idx=np.arange(reduced.shape[-1]))
+
+
+def grouped_binop(left: AlignedArrays, right: AlignedArrays, op: np.ufunc) -> AlignedArrays:
+    reindexed = reindex_(
+        left.array,
+        from_=pd.Index(left.group_idx),
+        to=pd.RangeIndex(right.group_idx.max() + 1),
+        fill_value=op.identity,
+        axis=-1,
+    )
+    return AlignedArrays(
+        array=op(reindexed[..., right.group_idx], right.array), group_idx=right.group_idx
+    )
+
+
+def _zip(group_idx, array):
+    return AlignedArrays(group_idx=group_idx, array=array)
+
+
+def extract_array(block: AlignedArrays):
+    return block.array
+
+
+def _scan_blockwise(array, by, axes: T_Axes, agg: Scan):
+    pass
+
+
+def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan):
+    from dask.array.reductions import cumreduction as scan
+    from dask.array.reductions import map_blocks
+
+    if len(axes) > 1:
+        raise NotImplementedError("Scans are only supported along a single axis.")
+    (axis,) = axes
+
+    array, by = _unify_chunks(array, by)
+
+    # 1. zip together group indices & array
+    zipped = map_blocks(
+        _zip, by, array, dtype=array.dtype, meta=array._meta, name="groupby-scan-preprocess"
+    )
+
+    # dask tokenizing error workaround
+    scan_ = partial(grouped_scan, func=agg.scan)
+    scan_.__name__ = scan_.func.__name__
+
+    # 2. Run the scan
+    accumulated = scan(
+        func=scan_,
+        binop=partial(grouped_binop, op=agg.ufunc),
+        ident=agg.ufunc.identity,
+        x=zipped,
+        axis=axis,
+        method="blelloch",
+        preop=partial(grouped_reduce, func=agg.preop),
+        dtype=array.dtype,
+    )
+
+    # 3. Unzip and extract the final result array, discard groups
+    result = map_blocks(extract_array, accumulated, dtype=array.dtype)
+
+    assert result.dtype == array.dtype
+    assert result.chunks == array.chunks
+
+    return result

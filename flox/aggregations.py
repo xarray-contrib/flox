@@ -567,6 +567,25 @@ nanquantile = Aggregation(
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
 
+
+@dataclass
+class Scan:
+    # This dataclass is separate from aggregations since there's not much in common
+    # between reductions and scans
+    name: str
+    # binary ufunc name (e.g. add)
+    ufunc: np.ufunc
+    # in-memory scan function (e.g. cumsum)
+    scan: str
+    # reduction that yields the last result of the scan (e.g. sum)
+    reduction: str
+
+
+cumsum = Scan("cumsum", ufunc=np.add, reduction="sum", scan="cumsum")
+nancumsum = Scan("nancumsum", ufunc=np.add, reduction="nansum", scan="nancumsum")
+# cumprod = Scan("cumprod", ufunc=np.multiply, preop="prod", scan="cumprod")
+
+
 aggregations = {
     "any": any_,
     "all": all_,
@@ -599,6 +618,8 @@ aggregations = {
     "nanquantile": nanquantile,
     "mode": mode,
     "nanmode": nanmode,
+    "cumsum": cumsum,
+    "nancumsum": nancumsum,
 }
 
 
