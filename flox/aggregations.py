@@ -129,12 +129,10 @@ def _maybe_promote_int(dtype) -> np.dtype:
     # than the default platform integer.
     if not isinstance(dtype, np.dtype):
         dtype = np.dtype(dtype)
-    print(f"_maybe_promote_int: input is {dtype}")
     if dtype.kind == "i":
         dtype = np.result_type(dtype, np.intp)
     elif dtype.kind == "u":
         dtype = np.result_type(dtype, np.uintp)
-    print(f"_maybe_promote_int: output is {dtype}")
     return dtype
 
 
