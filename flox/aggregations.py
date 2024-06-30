@@ -553,7 +553,7 @@ quantile = Aggregation(
     fill_value=dtypes.NA,
     chunk=None,
     combine=None,
-    final_dtype=np.float64,
+    final_dtype=np.floating,
     new_dims_func=quantile_new_dims_func,
 )
 nanquantile = Aggregation(
@@ -561,7 +561,7 @@ nanquantile = Aggregation(
     fill_value=dtypes.NA,
     chunk=None,
     combine=None,
-    final_dtype=np.float64,
+    final_dtype=np.floating,
     new_dims_func=quantile_new_dims_func,
 )
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)

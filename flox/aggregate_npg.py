@@ -157,7 +157,7 @@ def quantile(group_idx, array, engine, *, q, axis=-1, size=None, fill_value=None
         func=partial(
             _casting_wrapper,
             partial(np.quantile, q=q),
-            dtype=np.result_type(np.float64, array.dtype),
+            dtype=np.result_type(dtype, array.dtype),
         ),
         axis=axis,
         size=size,
@@ -173,7 +173,7 @@ def nanquantile(group_idx, array, engine, *, q, axis=-1, size=None, fill_value=N
         func=partial(
             _casting_wrapper,
             partial(np.nanquantile, q=q),
-            dtype=np.result_type(np.float64, array.dtype),
+            dtype=np.result_type(dtype, array.dtype),
         ),
         axis=axis,
         size=size,
