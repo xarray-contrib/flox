@@ -114,7 +114,7 @@ def _var_std_wrapper(group_idx, array, engine, *, axis=-1, **kwargs):
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
     # Cast any unsigned types first
     dtype = np.result_type(array, np.int8(-1) * array[0])
-    array = array.astype(dtype)
+    array = array.astype(dtype, copy=False)
     first = _get_aggregate(engine).aggregate(group_idx, array, func="nanfirst", axis=axis)
     array = array - first[..., group_idx]
     return _get_aggregate(engine).aggregate(group_idx, array, axis=axis, **kwargs)
