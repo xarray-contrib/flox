@@ -1,3 +1,5 @@
+from functools import cached_property
+
 import dask
 import numpy as np
 import pandas as pd
@@ -11,11 +13,14 @@ class Cohorts:
     def setup(self, *args, **kwargs):
         raise NotImplementedError
 
+    @cached_property
+    def result(self):
+        return flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis)[0]
+
     def containment(self):
         asfloat = self.bitmask().astype(float)
         chunks_per_label = asfloat.sum(axis=0)
         containment = (asfloat.T @ asfloat) / chunks_per_label
-        print(containment.nnz / np.prod(containment.shape))
         return containment.todense()
 
     def chunks_cohorts(self):
@@ -43,26 +48,17 @@ class Cohorts:
             pass
 
     def time_graph_construct(self):
-        flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis, method="cohorts")
+        flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis)
 
     def track_num_tasks(self):
-        result = flox.groupby_reduce(
-            self.array, self.by, func="sum", axis=self.axis, method="cohorts"
-        )[0]
-        return len(result.dask.to_dict())
+        return len(self.result.dask.to_dict())
 
     def track_num_tasks_optimized(self):
-        result = flox.groupby_reduce(
-            self.array, self.by, func="sum", axis=self.axis, method="cohorts"
-        )[0]
-        (opt,) = dask.optimize(result)
+        (opt,) = dask.optimize(self.result)
         return len(opt.dask.to_dict())
 
     def track_num_layers(self):
-        result = flox.groupby_reduce(
-            self.array, self.by, func="sum", axis=self.axis, method="cohorts"
-        )[0]
-        return len(result.dask.layers)
+        return len(self.result.dask.layers)
 
     track_num_tasks.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_tasks_optimized.unit = "tasks"  # type: ignore[attr-defined] # Lazy
@@ -189,6 +185,19 @@ class PerfectBlockwiseResampling(Cohorts):
         TIME = len(self.time)
         self.axis = (2,)
         self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 10))
+        self.by = codes_for_resampling(index, freq="5D")
+        self.expected = pd.RangeIndex(self.by.max() + 1)
+
+
+class SingleChunk(Cohorts):
+    """Single chunk along reduction axis: always blockwise."""
+
+    def setup(self, *args, **kwargs):
+        index = pd.date_range("1959-01-01", freq="D", end="1962-12-31")
+        self.time = pd.Series(index)
+        TIME = len(self.time)
+        self.axis = (2,)
+        self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, -1))
         self.by = codes_for_resampling(index, freq="5D")
         self.expected = pd.RangeIndex(self.by.max() + 1)
 
