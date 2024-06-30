@@ -403,12 +403,12 @@ def find_group_cohorts(
 
     # 2. Every group is contained to one block, use blockwise here.
     if bitmask.shape[CHUNK_AXIS] == 1 or (chunks_per_label == 1).all():
-        logger.info("find_group_cohorts: blockwise is preferred.")
+        logger.debug("find_group_cohorts: blockwise is preferred.")
         return "blockwise", chunks_cohorts
 
     # 3. Perfectly chunked so there is only a single cohort
     if len(chunks_cohorts) == 1:
-        logger.info("Only found a single cohort. 'map-reduce' is preferred.")
+        logger.debug("Only found a single cohort. 'map-reduce' is preferred.")
         return "map-reduce", chunks_cohorts if merge else {}
 
     # 4. Our dataset has chunksize one along the axis,
@@ -418,7 +418,7 @@ def find_group_cohorts(
     # 6. Existing cohorts don't overlap, great for time grouping with perfect chunking
     no_overlapping_cohorts = (np.bincount(np.concatenate(tuple(chunks_cohorts.keys()))) == 1).all()
     if one_group_per_chunk or single_chunks or no_overlapping_cohorts:
-        logger.info("find_group_cohorts: cohorts is preferred, chunking is perfect.")
+        logger.debug("find_group_cohorts: cohorts is preferred, chunking is perfect.")
         return "cohorts", chunks_cohorts
 
     # We'll use containment to measure degree of overlap between labels.
@@ -451,7 +451,7 @@ def find_group_cohorts(
     # 7. Groups seem fairly randomly distributed, use "map-reduce".
     if sparsity > MAX_SPARSITY_FOR_COHORTS:
         if not merge:
-            logger.info(
+            logger.debug(
                 "find_group_cohorts: bitmask sparsity={}, merge=False, choosing 'map-reduce'".format(  # noqa
                     sparsity
                 )
@@ -480,7 +480,7 @@ def find_group_cohorts(
     containment.eliminate_zeros()
 
     # Iterate over labels, beginning with those with most chunks
-    logger.info("find_group_cohorts: merging cohorts")
+    logger.debug("find_group_cohorts: merging cohorts")
     order = np.argsort(containment.sum(axis=LABEL_AXIS))[::-1]
     merged_cohorts = {}
     merged_keys = set()
@@ -1957,7 +1957,7 @@ def _validate_reindex(
     any_by_dask: bool,
     is_dask_array: bool,
 ) -> bool | None:
-    logger.info("Entering _validate_reindex: reindex is {}".format(reindex))  # noqa
+    # logger.debug("Entering _validate_reindex: reindex is {}".format(reindex))  # noqa
 
     all_numpy = not is_dask_array and not any_by_dask
     if reindex is True and not all_numpy:
@@ -1972,7 +1972,7 @@ def _validate_reindex(
 
     if reindex is None:
         if method is None:
-            logger.info("Leaving _validate_reindex: method = None, returning None")
+            # logger.debug("Leaving _validate_reindex: method = None, returning None")
             return None
 
         if all_numpy:
@@ -1999,7 +1999,7 @@ def _validate_reindex(
                 reindex = True
 
     assert isinstance(reindex, bool)
-    logger.info("Leaving _validate_reindex: reindex is {}".format(reindex))  # noqa
+    logger.debug("Leaving _validate_reindex: reindex is {}".format(reindex))  # noqa
 
     return reindex
 
@@ -2165,24 +2165,24 @@ def _choose_method(
     method: T_MethodOpt, preferred_method: T_Method, agg: Aggregation, by, nax: int
 ) -> T_Method:
     if method is None:
-        logger.info("_choose_method: method is None")
+        logger.debug("_choose_method: method is None")
         if agg.chunk == (None,):
             if preferred_method != "blockwise":
                 raise ValueError(
                     f"Aggregation {agg.name} is only supported for `method='blockwise'`, "
                     "but the chunking is not right."
                 )
-            logger.info("_choose_method: choosing 'blockwise'")
+            logger.debug("_choose_method: choosing 'blockwise'")
             return "blockwise"
 
         if nax != by.ndim:
-            logger.info("_choose_method: choosing 'map-reduce'")
+            logger.debug("_choose_method: choosing 'map-reduce'")
             return "map-reduce"
 
         if _is_arg_reduction(agg) and preferred_method == "blockwise":
             return "cohorts"
 
-        logger.info("_choose_method: choosing preferred_method={}".format(preferred_method))  # noqa
+        logger.debug(f"_choose_method: choosing preferred_method={preferred_method}")  # noqa
         return preferred_method
     else:
         return method
@@ -2194,7 +2194,7 @@ def _choose_engine(by, agg: Aggregation):
     not_arg_reduce = not _is_arg_reduction(agg)
 
     if agg.name in ["quantile", "nanquantile", "median", "nanmedian"]:
-        logger.info(f"_choose_engine: Choosing 'flox' since {agg.name}")
+        logger.debug(f"_choose_engine: Choosing 'flox' since {agg.name}")
         return "flox"
 
     # numbagg only supports nan-skipping reductions
@@ -2206,14 +2206,14 @@ def _choose_engine(by, agg: Aggregation):
         if agg.name in ["all", "any"] or (
             not_arg_reduce and has_blockwise_nan_skipping and dtype is None
         ):
-            logger.info("_choose_engine: Choosing 'numbagg'")
+            logger.debug("_choose_engine: Choosing 'numbagg'")
             return "numbagg"
 
     if not_arg_reduce and (not is_duck_dask_array(by) and _issorted(by)):
-        logger.info("_choose_engine: Choosing 'flox'")
+        logger.debug("_choose_engine: Choosing 'flox'")
         return "flox"
     else:
-        logger.info("_choose_engine: Choosing 'numpy'")
+        logger.debug("_choose_engine: Choosing 'numpy'")
         return "numpy"
 
 
@@ -2389,7 +2389,7 @@ def groupby_reduce(
     if not is_duck_array(array):
         array = np.asarray(array)
     is_bool_array = np.issubdtype(array.dtype, bool)
-    array = array.astype(int) if is_bool_array else array
+    array = array.astype(np.intp) if is_bool_array else array
 
     isbins = _atleast_1d(isbin, nby)
 

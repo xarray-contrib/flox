@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build (${{ matrix.python-version }}, ${{ matrix.os }})
+  test:
+    name: Test (${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -48,7 +48,19 @@ jobs:
       - name: Install flox
         run: |
           python -m pip install --no-deps -e .
+
+      # https://github.com/actions/cache/blob/main/tips-and-workarounds.md#update-a-cache
+      - name: Restore cached hypothesis directory
+        id: restore-hypothesis-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .hypothesis/
+          key: cache-hypothesis-${{ runner.os }}-${{ matrix.python-version }}-${{ github.run_id }}
+          restore-keys: |
+            cache-hypothesis-${{ runner.os }}-${{ matrix.python-version }}-
+
       - name: Run Tests
+        id: status
         run: |
           pytest -n auto --cov=./ --cov-report=xml
       - name: Upload code coverage to Codecov
@@ -59,6 +71,15 @@ jobs:
           env_vars: RUNNER_OS,PYTHON_VERSION
           name: codecov-umbrella
           fail_ci_if_error: false
+
+      # explicitly save the cache so it gets updated, also do this even if it fails.
+      - name: Save cached hypothesis directory
+        id: save-hypothesis-cache
+        if: always() && steps.status.outcome != 'skipped'
+        uses: actions/cache/save@v4
+        with:
+          path: .hypothesis/
+          key: cache-hypothesis-${{ runner.os }}-${{ matrix.python-version }}-${{ github.run_id }}
 
   optional-deps:
     name: ${{ matrix.env }}

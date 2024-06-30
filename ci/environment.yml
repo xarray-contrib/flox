@@ -25,3 +25,4 @@ dependencies:
   - toolz
   - numba
   - numbagg>=0.3
+  - hypothesis

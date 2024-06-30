@@ -14,7 +14,7 @@ from numpy_groupies.aggregate_numpy import aggregate
 
 import flox
 from flox import xrutils
-from flox.aggregations import Aggregation, _initialize_aggregation
+from flox.aggregations import Aggregation, _initialize_aggregation, _maybe_promote_int
 from flox.core import (
     HAS_NUMBAGG,
     _choose_engine,
@@ -157,7 +157,7 @@ def test_groupby_reduce(
     if func == "mean" or func == "nanmean":
         expected_result = np.array(expected, dtype=np.float64)
     elif func == "sum":
-        expected_result = np.array(expected, dtype=dtype)
+        expected_result = np.array(expected, dtype=_maybe_promote_int(array.dtype))
     elif func == "count":
         expected_result = np.array(expected, dtype=np.intp)
 
@@ -230,7 +230,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if "var" in func or "std" in func:
         finalize_kwargs = finalize_kwargs + [{"ddof": 1}, {"ddof": 0}]
         fill_value = np.nan
-        tolerance = {"rtol": 1e-14, "atol": 1e-16}
+        tolerance = {"rtol": 1e-13, "atol": 1e-15}
     elif "quantile" in func:
         finalize_kwargs = [{"q": DEFAULT_QUANTILE}, {"q": [DEFAULT_QUANTILE / 2, DEFAULT_QUANTILE]}]
         fill_value = None
@@ -385,7 +385,8 @@ def test_groupby_reduce_preserves_dtype(dtype, func):
     array = np.ones((2, 12), dtype=dtype)
     by = np.array([labels] * 2)
     result, _ = groupby_reduce(from_array(array, chunks=(-1, 4)), by, func=func)
-    assert result.dtype == array.dtype
+    expect_dtype = _maybe_promote_int(array.dtype)
+    assert result.dtype == expect_dtype
 
 
 def test_numpy_reduce_nd_md():
@@ -1021,10 +1022,12 @@ def test_dtype_preservation(dtype, func, engine):
     if engine == "numbagg":
         # https://github.com/numbagg/numbagg/issues/121
         pytest.skip()
-    if func == "sum" or (func == "mean" and "float" in dtype):
-        expected = np.dtype(dtype)
+    if func == "sum":
+        expected = _maybe_promote_int(dtype)
     elif func == "mean" and "int" in dtype:
         expected = np.float64
+    else:
+        expected = np.dtype(dtype)
     array = np.ones((20,), dtype=dtype)
     by = np.ones(array.shape, dtype=int)
     actual, _ = groupby_reduce(array, by, func=func, engine=engine)
@@ -1050,7 +1053,9 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
 
     actual, actual_groups = groupby_reduce(array, labels, func="sum", method=method)
     assert_equal(actual_groups, np.arange(6, dtype=labels.dtype))
-    assert_equal(actual, np.array([0, 4, 24, 6, 12, 20], dtype))
+
+    expect_dtype = _maybe_promote_int(dtype)
+    assert_equal(actual, np.array([0, 4, 24, 6, 12, 20], dtype=expect_dtype))
 
 
 @requires_dask
@@ -1789,7 +1794,7 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
     expected = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=-1)
     if by_ndim == 2:
         expected = expected.squeeze(axis=-2)
-    assert_equal(expected, actual, tolerance=1e-14)
+    assert_equal(expected, actual, tolerance={"atol": 1e-14})
 
 
 @pytest.mark.parametrize("dtype", ["U3", "S3"])

@@ -10,19 +10,6 @@ import numpy as np
 import pandas as pd
 from packaging.version import Version
 
-try:
-    import cftime
-except ImportError:
-    cftime = None
-
-
-try:
-    import dask.array
-
-    dask_array_type = dask.array.Array
-except ImportError:
-    dask_array_type = ()  # type: ignore[assignment, misc]
-
 
 def module_available(module: str, minversion: Optional[str] = None) -> bool:
     """Checks whether a module is installed without importing it.
@@ -53,6 +40,20 @@ if module_available("numpy", minversion="2.0.0"):
     )
 else:
     from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
+
+
+try:
+    import cftime
+except ImportError:
+    cftime = None
+
+
+try:
+    import dask.array
+
+    dask_array_type = dask.array.Array
+except ImportError:
+    dask_array_type = ()  # type: ignore[assignment, misc]
 
 
 def asarray(data, xp=np):
