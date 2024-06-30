@@ -2652,10 +2652,18 @@ def grouped_scan(inp: AlignedArrays, *, func, axis, dtype=None, keepdims=None) -
     return AlignedArrays(array=accumulated, group_idx=inp.group_idx)
 
 
-def grouped_reduce(inp: AlignedArrays, *, func, axis, dtype=None, keepdims=None) -> AlignedArrays:
+def grouped_reduce(
+    inp: AlignedArrays, *, func, axis, fill_value=None, dtype=None, keepdims=None
+) -> AlignedArrays:
     assert axis == inp.array.ndim - 1
     reduced = generic_aggregate(
-        inp.group_idx, inp.array, axis=axis, engine="numpy", func=func, dtype=dtype
+        inp.group_idx,
+        inp.array,
+        axis=axis,
+        engine="numpy",
+        func=func,
+        dtype=dtype,
+        fill_value=fill_value,
     )
     return AlignedArrays(array=reduced, group_idx=np.arange(reduced.shape[-1]))
 
@@ -2686,8 +2694,8 @@ def _scan_blockwise(array, by, axes: T_Axes, agg: Scan):
 
 
 def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan):
+    from dask.array import map_blocks
     from dask.array.reductions import cumreduction as scan
-    from dask.array.reductions import map_blocks
 
     if len(axes) > 1:
         raise NotImplementedError("Scans are only supported along a single axis.")
@@ -2712,7 +2720,7 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan):
         x=zipped,
         axis=axis,
         method="blelloch",
-        preop=partial(grouped_reduce, func=agg.preop),
+        preop=partial(grouped_reduce, func=agg.reduction, fill_value=agg.ufunc.identity),
         dtype=array.dtype,
     )
 

@@ -2,12 +2,13 @@ import pytest
 
 pytest.importorskip("hypothesis")
 
+import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
 from hypothesis import HealthCheck, assume, given, note, settings
 
-from flox.core import groupby_reduce
+from flox.core import dask_groupby_scan, groupby_reduce
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS, assert_equal
 
@@ -103,3 +104,49 @@ def test_groupby_reduce(array, dtype, func):
         {"rtol": 1e-13, "atol": 1e-15} if "var" in func or "std" in func else {"atol": 1e-15}
     )
     assert_equal(expected, actual, tolerance)
+
+
+@st.composite
+def chunked_arrays(
+    draw,
+    *,
+    arrays=npst.arrays(
+        elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
+    ),
+    from_array=dask.array.from_array,
+):
+    array = draw(arrays)
+    size = array.shape[-1]
+    if size > 1:
+        nchunks = draw(st.integers(min_value=1, max_value=size - 1))
+        dividers = sorted(
+            set(draw(st.integers(min_value=1, max_value=size - 1)) for _ in range(nchunks - 1))
+        )
+        chunks = tuple(a - b for a, b in zip(dividers + [size], [0] + dividers))
+    else:
+        chunks = (1,)
+    return from_array(array, chunks=("auto",) * (array.ndim - 1) + (chunks,))
+
+
+from flox.aggregations import cumsum
+
+dask.config.set(scheduler="sync")
+
+
+def test():
+    array = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+    da = dask.array.from_array(array, chunks=2)
+    actual = dask_groupby_scan(
+        da, np.array([0] * array.shape[-1]), agg=cumsum, axes=(array.ndim - 1,)
+    )
+    actual.compute()
+
+
+@given(data=st.data(), array=chunked_arrays())
+def test_scans(data, array):
+    note(np.array(array))
+    actual = dask_groupby_scan(
+        array, np.array([0] * array.shape[-1]), agg=cumsum, axes=(array.ndim - 1,)
+    )
+    expected = np.cumsum(np.asarray(array), axis=-1)
+    np.testing.assert_array_equal(expected, actual)
