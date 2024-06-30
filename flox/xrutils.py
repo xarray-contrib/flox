@@ -39,7 +39,7 @@ if module_available("numpy", minversion="2.0.0"):
         normalize_axis_index,
     )
 else:
-    from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
+    from numpy.core.numeric import normalize_axis_index  # type: ignore[no-redef]
 
 
 try:
