@@ -54,7 +54,7 @@ if module_available("numpy", minversion="2.0.0"):
         normalize_axis_tuple,
     )
 else:
-    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[no-redef]
+    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
 
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
 
