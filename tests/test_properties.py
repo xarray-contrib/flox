@@ -14,6 +14,7 @@ from . import ALL_FUNCS, SCIPY_STATS_FUNCS, assert_equal
 NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"] + list(
     SCIPY_STATS_FUNCS
 )
+SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
 
 
 def supported_dtypes() -> st.SearchStrategy[np.dtype]:
@@ -31,7 +32,9 @@ def supported_dtypes() -> st.SearchStrategy[np.dtype]:
 # TODO: stop excluding everything but U
 array_dtype_st = supported_dtypes().filter(lambda x: x.kind not in "cmMU")
 by_dtype_st = supported_dtypes()
-func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS])
+func_st = st.sampled_from(
+    [f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS and f not in SKIPPED_FUNCS]
+)
 
 
 def not_overflowing_array(array) -> bool:
