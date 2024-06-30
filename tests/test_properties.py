@@ -88,12 +88,12 @@ def test_groupby_reduce(array, dtype, func):
             note(f"casting array to float64, cast_to={cast_to!r}")
         else:
             cast_to = None
-        # note(("kwargs:", kwargs, "cast_to:", cast_to))
+        note(("kwargs:", kwargs, "cast_to:", cast_to))
         expected = getattr(np, func)(array, axis=axis, keepdims=True, **kwargs)
         if cast_to is not None:
-            # note(("casting to:", cast_to))
+            note(("casting to:", cast_to))
             expected = expected.astype(cast_to)
-            # actual = actual.astype(cast_to)
+            actual = actual.astype(cast_to)
 
     note(("expected: ", expected, "actual: ", actual))
     tolerance = (
