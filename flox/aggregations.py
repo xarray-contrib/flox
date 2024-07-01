@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
 import numpy as np
 from numpy.typing import ArrayLike, DTypeLike
 
-from . import aggregate_flox, aggregate_npg, xrutils
+from . import aggregate_flox, aggregate_npg, sketches, xrutils
 from . import xrdtypes as dtypes
 
 if TYPE_CHECKING:
@@ -119,7 +119,10 @@ def _normalize_dtype(dtype: DTypeLike, array_dtype: np.dtype, fill_value=None) -
     elif not isinstance(dtype, np.dtype):
         dtype = np.dtype(dtype)
     if fill_value not in [None, dtypes.INF, dtypes.NINF, dtypes.NA]:
-        dtype = np.result_type(dtype, fill_value)
+        try:
+            dtype = np.result_type(dtype, fill_value)
+        except TypeError:
+            pass
     return dtype
 
 
@@ -567,6 +570,30 @@ nanquantile = Aggregation(
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
 
+
+from crick import TDigest
+
+quantile_tdigest = Aggregation(
+    "quantile_tdigest",
+    numpy=(sketches.tdigest_aggregate,),
+    chunk=(sketches.tdigest_chunk,),
+    combine=(sketches.tdigest_combine,),
+    finalize=sketches.tdigest_aggregate,
+    fill_value=TDigest(),
+    final_dtype=np.float64,
+)
+
+nanquantile_tdigest = Aggregation(
+    "nanquantile_tdigest",
+    numpy=(sketches.tdigest_aggregate,),
+    chunk=(sketches.tdigest_chunk,),
+    combine=(sketches.tdigest_combine,),
+    finalize=sketches.tdigest_aggregate,
+    fill_value=TDigest(),
+    final_dtype=np.float64,
+)
+
+
 aggregations = {
     "any": any_,
     "all": all_,
@@ -599,6 +626,8 @@ aggregations = {
     "nanquantile": nanquantile,
     "mode": mode,
     "nanmode": nanmode,
+    "quantile_tdigest": quantile_tdigest,
+    "nanquantile_tdigest": nanquantile_tdigest,
 }
 
 
