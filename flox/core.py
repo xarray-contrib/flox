@@ -2644,19 +2644,11 @@ class AlignedArrays:
         assert self.array.shape[-1] == self.group_idx.size
 
 
-def grouped_scan(inp: AlignedArrays, *, func, axis, dtype=None, keepdims=None) -> AlignedArrays:
-    assert axis == inp.array.ndim - 1
-    accumulated = generic_aggregate(
-        inp.group_idx, inp.array, axis=axis, engine="numpy", func=func, dtype=dtype
-    )
-    return AlignedArrays(array=accumulated, group_idx=inp.group_idx)
-
-
-def grouped_reduce(
-    inp: AlignedArrays, *, func, axis, fill_value=None, dtype=None, keepdims=None
+def grouped_scan(
+    inp: AlignedArrays, *, func: str, axis, fill_value=None, dtype=None, keepdims=None
 ) -> AlignedArrays:
     assert axis == inp.array.ndim - 1
-    reduced = generic_aggregate(
+    accumulated = generic_aggregate(
         inp.group_idx,
         inp.array,
         axis=axis,
@@ -2665,10 +2657,24 @@ def grouped_reduce(
         dtype=dtype,
         fill_value=fill_value,
     )
+    return AlignedArrays(array=accumulated, group_idx=inp.group_idx)
+
+
+def grouped_reduce(inp: AlignedArrays, *, agg: Scan, axis: int, keepdims=None) -> AlignedArrays:
+    assert axis == inp.array.ndim - 1
+    reduced = generic_aggregate(
+        inp.group_idx,
+        inp.array,
+        axis=axis,
+        engine="numpy",
+        func=agg.reduction,
+        dtype=inp.array.dtype,
+        fill_value=agg.binary_op.identity,
+    )
     return AlignedArrays(array=reduced, group_idx=np.arange(reduced.shape[-1]))
 
 
-def grouped_binop(left: AlignedArrays, right: AlignedArrays, op: np.ufunc) -> AlignedArrays:
+def grouped_binop(left: AlignedArrays, right: AlignedArrays, op: Callable) -> AlignedArrays:
     reindexed = reindex_(
         left.array,
         from_=pd.Index(left.group_idx),
@@ -2708,26 +2714,39 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan):
         _zip, by, array, dtype=array.dtype, meta=array._meta, name="groupby-scan-preprocess"
     )
 
+    # TODO: move to aggregate_npg.py
+    if agg.name in ["cumsum", "nancumsum"]:
+        # https://numpy.org/doc/stable/reference/generated/numpy.cumsum.html
+        # it defaults to the dtype of a, unless a
+        # has an integer dtype with a precision less than that of the default platform integer.
+        if array.dtype.kind == "i":
+            agg.dtype = np.result_type(array.dtype, np.intp)
+        elif array.dtype.kind == "u":
+            agg.dtype = np.result_type(array.dtype, np.uintp)
+        else:
+            agg.dtype = array.dtype
+    else:
+        agg.dtype = array.dtype
+
+    scan_ = partial(grouped_scan, func=agg.scan, fill_value=agg.identity)
     # dask tokenizing error workaround
-    scan_ = partial(grouped_scan, func=agg.scan)
     scan_.__name__ = scan_.func.__name__
 
     # 2. Run the scan
     accumulated = scan(
         func=scan_,
-        binop=partial(grouped_binop, op=agg.ufunc),
-        ident=agg.ufunc.identity,
+        binop=partial(grouped_binop, op=agg.binary_op),
+        ident=agg.identity,
         x=zipped,
         axis=axis,
         method="blelloch",
-        preop=partial(grouped_reduce, func=agg.reduction, fill_value=agg.ufunc.identity),
-        dtype=array.dtype,
+        preop=partial(grouped_reduce, agg=agg),
+        dtype=agg.dtype,
     )
 
     # 3. Unzip and extract the final result array, discard groups
-    result = map_blocks(extract_array, accumulated, dtype=array.dtype)
+    result = map_blocks(extract_array, accumulated, dtype=agg.dtype)
 
-    assert result.dtype == array.dtype
     assert result.chunks == array.chunks
 
     return result

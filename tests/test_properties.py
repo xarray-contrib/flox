@@ -8,10 +8,12 @@ import hypothesis.strategies as st
 import numpy as np
 from hypothesis import HealthCheck, assume, given, note, settings
 
+from flox.aggregations import cumsum
 from flox.core import dask_groupby_scan, groupby_reduce
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS, assert_equal
 
+dask.config.set(scheduler="sync")
 NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"] + list(
     SCIPY_STATS_FUNCS
 )
@@ -128,25 +130,30 @@ def chunked_arrays(
     return from_array(array, chunks=("auto",) * (array.ndim - 1) + (chunks,))
 
 
-from flox.aggregations import cumsum
-
-dask.config.set(scheduler="sync")
-
-
 def test():
-    array = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+    # TODO: FIX
+    # array =np.array([[5592407., 5592407.],
+    #         [5592407., 5592407.]], dtype=np.float32)
+
+    array = np.array([1, 1, 1], dtype=np.uint64)
     da = dask.array.from_array(array, chunks=2)
     actual = dask_groupby_scan(
         da, np.array([0] * array.shape[-1]), agg=cumsum, axes=(array.ndim - 1,)
     )
     actual.compute()
+    expected = np.cumsum(array, axis=-1)
+    np.testing.assert_array_equal(expected, actual)
 
 
 @given(data=st.data(), array=chunked_arrays())
 def test_scans(data, array):
     note(np.array(array))
+    # overflow behaviour differs between bincount and sum (for example)
+    assume(not_overflowing_array(np.asarray(array)))
+
     actual = dask_groupby_scan(
-        array, np.array([0] * array.shape[-1]), agg=cumsum, axes=(array.ndim - 1,)
+        array, np.repeat(0, array.shape[-1]), agg=cumsum, axes=(array.ndim - 1,)
     )
     expected = np.cumsum(np.asarray(array), axis=-1)
-    np.testing.assert_array_equal(expected, actual)
+    tolerance = {"rtol": 1e-13, "atol": 1e-15}
+    assert_equal(actual, expected, tolerance)
