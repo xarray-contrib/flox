@@ -9,7 +9,6 @@ import warnings
 from collections import namedtuple
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from functools import partial, reduce
 from itertools import product
 from numbers import Integral
@@ -34,6 +33,7 @@ from . import xrdtypes
 from .aggregate_flox import _prepare_for_flox
 from .aggregations import (
     Aggregation,
+    AlignedArrays,
     Scan,
     _atleast_1d,
     _initialize_aggregation,
@@ -2633,17 +2633,6 @@ def groupby_reduce(
     return (result, *groups)
 
 
-@dataclass
-class AlignedArrays:
-    """Simple Xarray DataArray type data class with two aligned arrays."""
-
-    array: np.array
-    group_idx: np.array
-
-    def __post_init__(self):
-        assert self.array.shape[-1] == self.group_idx.size
-
-
 def grouped_scan(
     inp: AlignedArrays, *, func: str, axis, fill_value=None, dtype=None, keepdims=None
 ) -> AlignedArrays:
@@ -2652,7 +2641,7 @@ def grouped_scan(
         inp.group_idx,
         inp.array,
         axis=axis,
-        engine="numpy",
+        engine="flox",
         func=func,
         dtype=dtype,
         fill_value=fill_value,
@@ -2662,29 +2651,17 @@ def grouped_scan(
 
 def grouped_reduce(inp: AlignedArrays, *, agg: Scan, axis: int, keepdims=None) -> AlignedArrays:
     assert axis == inp.array.ndim - 1
-    reduced = generic_aggregate(
-        inp.group_idx,
+    reduced = chunk_reduce(
         inp.array,
+        inp.group_idx,
+        func=(agg.reduction,),
         axis=axis,
-        engine="numpy",
-        func=agg.reduction,
+        engine="flox",
         dtype=inp.array.dtype,
-        fill_value=agg.binary_op.identity,
+        fill_value=agg.identity,
+        expected_groups=None,
     )
-    return AlignedArrays(array=reduced, group_idx=np.arange(reduced.shape[-1]))
-
-
-def grouped_binop(left: AlignedArrays, right: AlignedArrays, op: Callable) -> AlignedArrays:
-    reindexed = reindex_(
-        left.array,
-        from_=pd.Index(left.group_idx),
-        to=pd.RangeIndex(right.group_idx.max() + 1),
-        fill_value=op.identity,
-        axis=-1,
-    )
-    return AlignedArrays(
-        array=op(reindexed[..., right.group_idx], right.array), group_idx=right.group_idx
-    )
+    return AlignedArrays(array=reduced["intermediates"][0], group_idx=reduced["groups"])
 
 
 def _zip(group_idx, array):
@@ -2735,7 +2712,7 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan):
     # 2. Run the scan
     accumulated = scan(
         func=scan_,
-        binop=partial(grouped_binop, op=agg.binary_op),
+        binop=partial(agg.binary_op, fill_value=agg.identity),
         ident=agg.identity,
         x=zipped,
         axis=axis,

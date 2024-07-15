@@ -8,6 +8,7 @@ from functools import cached_property, partial
 from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
 
 import numpy as np
+import pandas as pd
 from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
@@ -585,8 +586,77 @@ class Scan:
     dtype: Any = None
 
 
-cumsum = Scan("cumsum", binary_op=np.add, reduction="sum", scan="cumsum", identity=0)
-nancumsum = Scan("nancumsum", binary_op=np.add, reduction="nansum", scan="nancumsum", identity=0)
+@dataclass
+class AlignedArrays:
+    """Simple Xarray DataArray type data class with two aligned arrays."""
+
+    array: np.array
+    group_idx: np.array
+
+    def __post_init__(self):
+        assert self.array.shape[-1] == self.group_idx.size
+
+
+def scan_binary_op(
+    left: AlignedArrays, right: AlignedArrays, *, op: Callable, fill_value: Any
+) -> AlignedArrays:
+    from .core import reindex_
+
+    reindexed = reindex_(
+        left.array,
+        from_=pd.Index(left.group_idx),
+        # TODO: `right.group_idx` instead?
+        to=pd.RangeIndex(right.group_idx.max() + 1),
+        fill_value=fill_value,
+        axis=-1,
+    )
+    return AlignedArrays(
+        array=op(reindexed[..., right.group_idx], right.array), group_idx=right.group_idx
+    )
+
+
+def _fill_with_last_one(
+    left: AlignedArrays, right: AlignedArrays, *, fill_value: Any
+) -> AlignedArrays:
+    from .aggregate_flox import ffill
+
+    if right.group_idx[0] not in left.group_idx:
+        return right
+
+    # from .core import reindex_
+    # reindexed = reindex_(
+    #     left.array,
+    #     from_=pd.Index(left.group_idx),
+    #     to=pd.Index(right.group_idx),
+    #     fill_value=fill_value,
+    #     axis=-1,
+    # )
+
+    new = ffill(
+        np.concatenate([left.group_idx, right.group_idx], axis=-1),
+        np.concatenate([left.array, right.array], axis=-1),
+        axis=right.array.ndim - 1,
+    )[..., left.group_idx.size :]
+    return AlignedArrays(array=new, group_idx=right.group_idx)
+
+
+cumsum = Scan(
+    "cumsum",
+    binary_op=partial(scan_binary_op, op=np.add),
+    reduction="sum",
+    scan="cumsum",
+    identity=0,
+)
+nancumsum = Scan(
+    "nancumsum",
+    binary_op=partial(scan_binary_op, op=np.add),
+    reduction="nansum",
+    scan="nancumsum",
+    identity=0,
+)
+ffill = Scan(
+    "ffill", binary_op=_fill_with_last_one, reduction="nanlast", scan="ffill", identity=np.nan
+)
 # cumprod = Scan("cumprod", binary_op=np.multiply, preop="prod", scan="cumprod")
 
 

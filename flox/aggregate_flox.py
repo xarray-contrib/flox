@@ -226,3 +226,27 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     with np.errstate(invalid="ignore", divide="ignore"):
         out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
+
+
+def ffill(group_idx, array, *, axis, **kwargs):
+    shape = array.shape
+    ndim = array.ndim
+    assert axis == (ndim - 1)
+
+    flag = np.concatenate((np.array([True], like=array), group_idx[1:] != group_idx[:-1]))
+    (group_starts,) = flag.nonzero()
+
+    # https://stackoverflow.com/questions/41190852/most-efficient-way-to-forward-fill-nan-values-in-numpy-array
+    mask = np.isnan(array)
+    # modified from SO answer, just reset the index at the start of every group!
+    mask[..., np.asarray(group_starts)] = False
+
+    idx = np.where(mask, 0, np.arange(shape[axis]))
+    np.maximum.accumulate(idx, axis=axis, out=idx)
+    slc = [
+        np.arange(k)[tuple([slice(None) if dim == i else np.newaxis for dim in range(ndim)])]
+        for i, k in enumerate(shape)
+    ]
+    slc[axis] = idx
+    # TODO: need inverse perm here
+    return array[tuple(slc)]
