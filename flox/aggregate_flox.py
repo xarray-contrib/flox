@@ -14,11 +14,12 @@ def _prepare_for_flox(group_idx, array):
     issorted = (group_idx[:-1] <= group_idx[1:]).all()
     if issorted:
         ordered_array = array
+        perm = slice(None)
     else:
         perm = group_idx.argsort(kind="stable")
         group_idx = group_idx[..., perm]
         ordered_array = array[..., perm]
-    return group_idx, ordered_array
+    return group_idx, ordered_array, perm
 
 
 def _lerp(a, b, *, t, dtype, out=None):
@@ -229,6 +230,8 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
 
 
 def ffill(group_idx, array, *, axis, **kwargs):
+    group_idx, array, perm = _prepare_for_flox(group_idx, array)
+
     shape = array.shape
     ndim = array.ndim
     assert axis == (ndim - 1)
@@ -248,5 +251,6 @@ def ffill(group_idx, array, *, axis, **kwargs):
         for i, k in enumerate(shape)
     ]
     slc[axis] = idx
-    # TODO: need inverse perm here
-    return array[tuple(slc)]
+
+    invert_perm = slice(None) if isinstance(perm, slice) else np.argsort(perm, kind="stable")
+    return array[tuple(slc)][..., invert_perm]

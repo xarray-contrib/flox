@@ -962,10 +962,7 @@ def chunk_reduce(
         nax = len(axes)
     else:
         nax = by.ndim
-        if axis is None:
-            axes = ()
-        else:
-            axes = (axis,) * nax
+        axes = () if axis is None else (axis,) * nax
 
     assert by.ndim <= array.ndim
 
@@ -1037,7 +1034,7 @@ def chunk_reduce(
     if engine == "flox":
         # is_arg_reduction = any("arg" in f for f in func if isinstance(f, str))
         # if not is_arg_reduction:
-        group_idx, array = _prepare_for_flox(group_idx, array)
+        group_idx, array, _ = _prepare_for_flox(group_idx, array)
 
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
@@ -2633,18 +2630,43 @@ def groupby_reduce(
     return (result, *groups)
 
 
-def grouped_scan(
-    inp: AlignedArrays, *, func: str, axis, fill_value=None, dtype=None, keepdims=None
-) -> AlignedArrays:
-    assert axis == inp.array.ndim - 1
+def chunk_scan(
+    array: np.ndarray,
+    by: np.ndarray,
+    *,
+    func: str,
+    axis: int,
+    engine: T_Engine,
+    fill_value=None,
+    dtype=None,
+) -> np.ndarray:
+    assert axis == array.ndim - 1
+    # TODO: factorize here (maybe?)
+    group_idx = by
     accumulated = generic_aggregate(
-        inp.group_idx,
-        inp.array,
+        group_idx,
+        array,
         axis=axis,
-        engine="flox",
+        engine=engine,
         func=func,
         dtype=dtype,
         fill_value=fill_value,
+    )
+    return accumulated
+
+
+def grouped_scan(
+    inp: AlignedArrays, *, func: str, axis: int, fill_value=None, dtype=None, keepdims=None
+) -> AlignedArrays:
+    assert axis == inp.array.ndim - 1
+    accumulated = chunk_scan(
+        array=inp.array,
+        by=inp.group_idx,
+        func=func,
+        axis=axis,
+        engine="flox",
+        fill_value=fill_value,
+        dtype=dtype,
     )
     return AlignedArrays(array=accumulated, group_idx=inp.group_idx)
 
@@ -2670,10 +2692,6 @@ def _zip(group_idx, array):
 
 def extract_array(block: AlignedArrays):
     return block.array
-
-
-def _scan_blockwise(array, by, axes: T_Axes, agg: Scan):
-    pass
 
 
 def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan):
