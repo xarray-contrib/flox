@@ -2637,14 +2637,79 @@ def groupby_reduce(
 def groupby_scan(
     array: np.ndarray | DaskArray,
     *by: T_By,
-    expected_groups: T_ExpectedGroupsOpt = None,
     func: T_Scan,
+    expected_groups: T_ExpectedGroupsOpt = None,
     axis: int | tuple[int] = -1,
     dtype: np.typing.DTypeLike = None,
-    min_count: int | None = None,
     method: T_MethodOpt = None,
     engine: T_EngineOpt = None,
 ) -> np.ndarray | DaskArray:
+    """
+    GroupBy reductions using parallel scans for dask.array
+
+    Parameters
+    ----------
+    array : ndarray or DaskArray
+        Array to be reduced, possibly nD
+    *by : ndarray or DaskArray
+        Array of labels to group over. Must be aligned with ``array`` so that
+        ``array.shape[-by.ndim :] == by.shape`` or any disagreements in that
+        equality check are for dimensions of size 1 in `by`.
+    func : {"nancumsum", "ffill"} or Scan
+        Single function name or a Scan instance
+    expected_groups : (optional) Sequence
+        Expected unique labels.
+    axis : None or int or Sequence[int], optional
+        If None, reduce across all dimensions of by
+        Else, reduce across corresponding axes of array
+        Negative integers are normalized using array.ndim.
+    fill_value : Any
+        Value to assign when a label in ``expected_groups`` is not present.
+    dtype : data-type , optional
+        DType for the output. Can be anything that is accepted by ``np.dtype``.
+    method : {"blockwise", "cohorts"}, optional
+        Strategy for reduction of dask arrays only:
+          * ``"blockwise"``:
+            Only scan using blockwise and avoid aggregating blocks
+            together. Useful for resampling-style groupby problems where group
+            members are always together. If  `by` is 1D,  `array` is automatically
+            rechunked so that chunk boundaries line up with group boundaries
+            i.e. each block contains all members of any group present
+            in that block. For nD `by`, you must make sure that all members of a group
+            are present in a single block.
+          * ``"cohorts"``:
+            Finds group labels that tend to occur together ("cohorts"),
+            indexes out cohorts and reduces that subset using "map-reduce",
+            repeat for all cohorts. This works well for many time groupings
+            where the group labels repeat at regular intervals like 'hour',
+            'month', dayofyear' etc. Optimize chunking ``array`` for this
+            method by first rechunking using ``rechunk_for_cohorts``
+            (for 1D ``by`` only).
+    engine : {"flox", "numpy", "numba", "numbagg"}, optional
+        Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
+          * ``"numpy"``:
+            Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
+            This is the default choice because it works for most array types.
+          * ``"flox"``:
+            Use an internal implementation where the data is sorted so that
+            all members of a group occur sequentially, and then numpy.ufunc.reduceat
+            is to used for the reduction. This will fall back to ``numpy_groupies.aggregate_numpy``
+            for a reduction that is not yet implemented.
+          * ``"numba"``:
+            Use the implementations in ``numpy_groupies.aggregate_numba``.
+          * ``"numbagg"``:
+            Use the reductions supported by ``numbagg.grouped``. This will fall back to ``numpy_groupies.aggregate_numpy``
+            for a reduction that is not yet implemented.
+
+    Returns
+    -------
+    result
+        Aggregated result
+
+    See Also
+    --------
+    xarray.xarray_reduce
+    """
 
     axis = _atleast_1d(axis)
     if len(axis) > 1:
