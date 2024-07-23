@@ -32,6 +32,7 @@ from scipy.sparse import csc_array, csr_array
 from . import xrdtypes
 from .aggregate_flox import _prepare_for_flox
 from .aggregations import (
+    AGGREGATIONS,
     Aggregation,
     AlignedArrays,
     Scan,
@@ -89,6 +90,7 @@ if TYPE_CHECKING:
     T_Func = Union[str, Callable]
     T_Funcs = Union[T_Func, Sequence[T_Func]]
     T_Agg = Union[str, Aggregation]
+    T_Scan = Union[str, Scan]
     T_Axis = int
     T_Axes = tuple[T_Axis, ...]
     T_AxesOpt = Union[T_Axis, T_Axes, None]
@@ -530,7 +532,7 @@ def rechunk_for_cohorts(
         array to rechunk
     axis : int
         Axis to rechunk
-    labels : np.array
+    labels : np.ndarray
         1D Group labels to align chunks with. This routine works
         well when ``labels`` has repeating patterns: e.g.
         ``1, 2, 3, 1, 2, 3, 4, 1, 2, 3`` though there is no requirement
@@ -2630,43 +2632,106 @@ def groupby_reduce(
     return (result, *groups)
 
 
-def chunk_scan(
-    array: np.ndarray,
-    by: np.ndarray,
-    *,
-    func: str,
-    axis: int,
-    engine: T_Engine,
-    fill_value=None,
-    dtype=None,
-) -> np.ndarray:
-    assert axis == array.ndim - 1
-    # TODO: factorize here (maybe?)
-    group_idx = by
-    accumulated = generic_aggregate(
-        group_idx,
-        array,
-        axis=axis,
-        engine=engine,
-        func=func,
-        dtype=dtype,
-        fill_value=fill_value,
+def groupby_scan(
+    array: np.ndarray | DaskArray,
+    *by: T_By,
+    expected_groups: T_ExpectedGroupsOpt = None,
+    func: T_Scan,
+    axis: int | tuple[int] = -1,
+    dtype: np.typing.DTypeLike = None,
+    min_count: int | None = None,
+    method: T_MethodOpt = None,
+    engine: T_EngineOpt = None,
+) -> np.ndarray | DaskArray:
+
+    axis = _atleast_1d(axis)
+    if len(axis) > 1:
+        raise NotImplementedError("Scans are only supported along a single dimension.")
+
+    bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
+    nby = len(by)
+    by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
+    any_by_dask = any(by_is_dask)
+
+    axis_ = normalize_axis_tuple(axis, array.ndim)
+
+    if engine is None:
+        engine = "flox"
+    assert engine == "flox"
+
+    if not is_duck_array(array):
+        array = np.asarray(array)
+    is_bool_array = np.issubdtype(array.dtype, bool)
+    array = array.astype(np.intp) if is_bool_array else array
+
+    expected_groups = _validate_expected_groups(nby, expected_groups)
+    expected_groups = _convert_expected_groups_to_index(
+        expected_groups, isbin=(False,) * nby, sort=False
     )
-    return accumulated
+
+    # Don't factorize early only when
+    # grouping by dask arrays, and not having expected_groups
+    factorize_early = not (
+        # can't do it if we are grouping by dask array but don't have expected_groups
+        any(is_dask and ex_ is None for is_dask, ex_ in zip(by_is_dask, expected_groups))
+    )
+    if factorize_early:
+        bys, final_groups, grp_shape = _factorize_multiple(
+            bys,
+            expected_groups,
+            any_by_dask=any_by_dask,
+            sort=False,
+        )
+    else:
+        raise NotImplementedError
+
+    assert len(bys) == 1
+    by_: np.ndarray
+    (by_,) = bys
+    has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
+
+    if isinstance(func, str):
+        agg = AGGREGATIONS[func]
+    assert isinstance(agg, Scan)
+
+    # TODO: move to aggregate_npg.py
+    if agg.name in ["cumsum", "nancumsum"]:
+        # https://numpy.org/doc/stable/reference/generated/numpy.cumsum.html
+        # it defaults to the dtype of a, unless a
+        # has an integer dtype with a precision less than that of the default platform integer.
+        if array.dtype.kind == "i":
+            agg.dtype = np.result_type(array.dtype, np.intp)
+        elif array.dtype.kind == "u":
+            agg.dtype = np.result_type(array.dtype, np.uintp)
+        else:
+            agg.dtype = array.dtype
+    else:
+        agg.dtype = array.dtype
+
+    if not has_dask:
+        (single_axis,) = axis_
+        result = grouped_scan(
+            AlignedArrays(array=array, group_idx=by_), axis=single_axis, agg=agg, dtype=agg.dtype
+        )
+        return result.array
+    else:
+        return dask_groupby_scan(array, by_, axes=axis_, agg=agg)
 
 
 def grouped_scan(
-    inp: AlignedArrays, *, func: str, axis: int, fill_value=None, dtype=None, keepdims=None
+    inp: AlignedArrays, *, axis: int, agg: Scan, dtype=None, keepdims=None
 ) -> AlignedArrays:
     assert axis == inp.array.ndim - 1
-    accumulated = chunk_scan(
-        array=inp.array,
-        by=inp.group_idx,
-        func=func,
+
+    # TODO: factorize here (maybe?)
+    accumulated = generic_aggregate(
+        inp.group_idx,
+        inp.array,
         axis=axis,
         engine="flox",
-        fill_value=fill_value,
+        func=agg.scan,
         dtype=dtype,
+        fill_value=agg.identity,
     )
     return AlignedArrays(array=accumulated, group_idx=inp.group_idx)
 
@@ -2694,7 +2759,7 @@ def extract_array(block: AlignedArrays):
     return block.array
 
 
-def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan):
+def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
     from dask.array import map_blocks
     from dask.array.reductions import cumreduction as scan
 
@@ -2709,21 +2774,7 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan):
         _zip, by, array, dtype=array.dtype, meta=array._meta, name="groupby-scan-preprocess"
     )
 
-    # TODO: move to aggregate_npg.py
-    if agg.name in ["cumsum", "nancumsum"]:
-        # https://numpy.org/doc/stable/reference/generated/numpy.cumsum.html
-        # it defaults to the dtype of a, unless a
-        # has an integer dtype with a precision less than that of the default platform integer.
-        if array.dtype.kind == "i":
-            agg.dtype = np.result_type(array.dtype, np.intp)
-        elif array.dtype.kind == "u":
-            agg.dtype = np.result_type(array.dtype, np.uintp)
-        else:
-            agg.dtype = array.dtype
-    else:
-        agg.dtype = array.dtype
-
-    scan_ = partial(grouped_scan, func=agg.scan, fill_value=agg.identity)
+    scan_ = partial(grouped_scan, agg=agg)
     # dask tokenizing error workaround
     scan_.__name__ = scan_.func.__name__
 

@@ -590,8 +590,8 @@ class Scan:
 class AlignedArrays:
     """Simple Xarray DataArray type data class with two aligned arrays."""
 
-    array: np.array
-    group_idx: np.array
+    array: np.ndarray
+    group_idx: np.ndarray
 
     def __post_init__(self):
         assert self.array.shape[-1] == self.group_idx.size
@@ -660,7 +660,7 @@ ffill = Scan(
 # cumprod = Scan("cumprod", binary_op=np.multiply, preop="prod", scan="cumprod")
 
 
-aggregations = {
+AGGREGATIONS = {
     "any": any_,
     "all": all_,
     "count": count,
@@ -709,7 +709,7 @@ def _initialize_aggregation(
         try:
             # TODO: need better interface
             # we set dtype, fillvalue on reduction later. so deepcopy now
-            agg = copy.deepcopy(aggregations[func])
+            agg = copy.deepcopy(AGGREGATIONS[func])
         except KeyError:
             raise NotImplementedError(f"Reduction {func!r} not implemented yet")
     elif isinstance(func, Aggregation):

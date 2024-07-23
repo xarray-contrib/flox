@@ -8,8 +8,7 @@ import hypothesis.strategies as st
 import numpy as np
 from hypothesis import HealthCheck, assume, given, note, settings
 
-from flox.aggregations import cumsum
-from flox.core import dask_groupby_scan, groupby_reduce
+from flox.core import groupby_reduce, groupby_scan
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS, assert_equal
 
@@ -137,11 +136,14 @@ def test():
 
     array = np.array([1, 1, 1], dtype=np.uint64)
     da = dask.array.from_array(array, chunks=2)
-    actual = dask_groupby_scan(
-        da, np.array([0] * array.shape[-1]), agg=cumsum, axes=(array.ndim - 1,)
-    )
-    actual.compute()
+    by = np.array([0] * array.shape[-1])
+    kwargs = {"func": "cumsum", "axis": -1}
+
+    actual = groupby_scan(da, by, **kwargs)
     expected = np.cumsum(array, axis=-1)
+    np.testing.assert_array_equal(expected, actual)
+
+    actual = groupby_scan(da.compute(), by, **kwargs)
     np.testing.assert_array_equal(expected, actual)
 
 
@@ -151,9 +153,14 @@ def test_scans(data, array):
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(np.asarray(array)))
 
-    actual = dask_groupby_scan(
-        array, np.repeat(0, array.shape[-1]), agg=cumsum, axes=(array.ndim - 1,)
-    )
+    kwargs = {"func": "cumsum", "axis": -1}
+
+    by = np.repeat(0, array.shape[-1])
+
+    actual = groupby_scan(array, by, **kwargs)
     expected = np.cumsum(np.asarray(array), axis=-1)
     tolerance = {"rtol": 1e-13, "atol": 1e-15}
+    assert_equal(actual, expected, tolerance)
+
+    actual = groupby_scan(array.compute(), by, **kwargs)
     assert_equal(actual, expected, tolerance)
