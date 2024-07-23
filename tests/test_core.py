@@ -1808,21 +1808,18 @@ def test_nanlen_string(dtype, engine):
 
 
 def test_scans():
-    # TODO: FIX
-    # array =np.array([[5592407., 5592407.],
-    #         [5592407., 5592407.]], dtype=np.float32)
-
     array = np.array([1, 1, 1], dtype=np.uint64)
-    da = dask.array.from_array(array, chunks=2)
     by = np.array([0] * array.shape[-1])
     kwargs = {"func": "nancumsum", "axis": -1}
-
-    actual = groupby_scan(da, by, **kwargs)
     expected = np.nancumsum(array, axis=-1)
-    np.testing.assert_array_equal(expected, actual)
 
-    actual = groupby_scan(da.compute(), by, **kwargs)
-    np.testing.assert_array_equal(expected, actual)
+    actual = groupby_scan(array, by, **kwargs)
+    assert_equal(expected, actual)
+
+    if has_dask:
+        da = dask.array.from_array(array, chunks=2)
+        actual = groupby_scan(da, by, **kwargs)
+        assert_equal(expected, actual)
 
 
 # from numpy import nan
