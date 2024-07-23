@@ -591,6 +591,8 @@ class Scan:
     dtype: Any = None
     # binary op "mode"
     mode: T_ScanBinaryOpMode = "apply_binary_op"
+    preprocess: Callable | None = None
+    finalize: Callable | None = None
 
 
 def concatenate(arrays: Sequence[AlignedArrays], axis=-1, out=None) -> AlignedArrays:
@@ -637,6 +639,12 @@ class ScanState:
 
     def __post_init__(self):
         assert (self.state is not None) or (self.result is not None)
+
+
+def reverse(a: AlignedArrays) -> AlignedArrays:
+    a.group_idx = a.group_idx[::-1]
+    a.array = a.array[::-1]
+    return a
 
 
 def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) -> ScanState:
@@ -712,6 +720,16 @@ ffill = Scan(
     identity=np.nan,
     mode="concat_then_scan",
 )
+bfill = Scan(
+    "bfill",
+    binary_op=None,
+    reduction="nanlast",
+    scan="ffill",
+    identity=np.nan,
+    mode="concat_then_scan",
+    preprocess=reverse,
+    finalize=reverse,
+)
 # cumprod = Scan("cumprod", binary_op=np.multiply, preop="prod", scan="cumprod")
 
 
@@ -750,6 +768,7 @@ AGGREGATIONS: dict[str, Aggregation | Scan] = {
     # "cumsum": cumsum,
     "nancumsum": nancumsum,
     "ffill": ffill,
+    "bfill": bfill,
 }
 
 

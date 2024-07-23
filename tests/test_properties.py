@@ -22,11 +22,21 @@ def ffill(array, axis, dtype=None):
     return flox.aggregate_flox.ffill(np.zeros(array.shape[-1], dtype=int), array, axis=axis)
 
 
+def bfill(array, axis, dtype=None):
+    return flox.aggregate_flox.ffill(np.zeros(array.shape[-1], dtype=int), array[::-1], axis=axis)[
+        ::-1
+    ]
+
+
 NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"] + list(
     SCIPY_STATS_FUNCS
 )
 SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
-NUMPY_SCAN_FUNCS = {"nancumsum": np.nancumsum, "ffill": ffill}  # "cumsum": np.cumsum,
+NUMPY_SCAN_FUNCS = {
+    "nancumsum": np.nancumsum,
+    "ffill": ffill,
+    "bfill": bfill,
+}  # "cumsum": np.cumsum,
 
 
 def supported_dtypes() -> st.SearchStrategy[np.dtype]:
@@ -197,3 +207,22 @@ def test_scans(data, array, func):
 
     actual = groupby_scan(array, by, func=func, axis=-1, dtype=dtype)
     assert_equal(actual, expected, tolerance)
+
+
+@settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
+@given(data=st.data(), array=chunked_arrays())
+def test_ffill_bfill_reverse(data, array):
+    assume(not_overflowing_array(np.asarray(array)))
+    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+
+    def reverse(arr):
+        return arr[..., ::-1]
+
+    for a in (array, array.compute()):
+        forward = groupby_scan(a, by, func="ffill")
+        backward_reversed = reverse(groupby_scan(reverse(a), reverse(by), func="bfill"))
+        assert_equal(forward, backward_reversed)
+
+        backward = groupby_scan(a, by, func="bfill")
+        forward_reversed = reverse(groupby_scan(reverse(a), reverse(by), func="ffill"))
+        assert_equal(forward_reversed, backward)
