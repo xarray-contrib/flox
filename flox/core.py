@@ -2703,7 +2703,7 @@ def groupby_scan(
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
 
     # TODO: move to aggregate_npg.py
-    if agg.name in ["cumsum", "nancumsum"]:
+    if agg.name in ["cumsum", "nancumsum"] and agg.dtype.kind in ["i", "u"]:
         # https://numpy.org/doc/stable/reference/generated/numpy.cumsum.html
         # it defaults to the dtype of a, unless a
         # has an integer dtype with a precision less than that of the default platform integer.
@@ -2711,8 +2711,6 @@ def groupby_scan(
             agg.dtype = np.result_type(array.dtype, np.intp)
         elif array.dtype.kind == "u":
             agg.dtype = np.result_type(array.dtype, np.uintp)
-        else:
-            agg.dtype = array.dtype if dtype is None else dtype
     else:
         agg.dtype = array.dtype if dtype is None else dtype
 
@@ -2733,7 +2731,7 @@ def groupby_scan(
 def chunk_scan(inp: AlignedArrays, *, axis: int, agg: Scan, dtype=None, keepdims=None) -> ScanState:
     assert axis == inp.array.ndim - 1
 
-    # TODO: factorize here (maybe?)
+    # I don't think we need to re-factorize here unless we are grouping by a dask array
     accumulated = generic_aggregate(
         inp.group_idx,
         inp.array,
