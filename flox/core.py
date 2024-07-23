@@ -2712,12 +2712,16 @@ def groupby_scan(
         elif array.dtype.kind == "u":
             agg.dtype = np.result_type(array.dtype, np.uintp)
         else:
-            agg.dtype = array.dtype
+            agg.dtype = array.dtype if dtype is None else dtype
     else:
-        agg.dtype = array.dtype
+        agg.dtype = array.dtype if dtype is None else dtype
+
+    (single_axis,) = axis_  # type: ignore[misc]
+    # avoid some roundoff error when we can.
+    if by_.shape[-1] == 1 or by_.shape == grp_shape:
+        return array.astype(agg.dtype)
 
     if not has_dask:
-        (single_axis,) = axis_  # type: ignore[misc]
         final_state = chunk_scan(
             AlignedArrays(array=array, group_idx=by_), axis=single_axis, agg=agg, dtype=agg.dtype
         )

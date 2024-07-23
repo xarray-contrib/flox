@@ -17,7 +17,7 @@ from . import ALL_FUNCS, SCIPY_STATS_FUNCS, assert_equal
 dask.config.set(scheduler="sync")
 
 
-def ffill(array, axis):
+def ffill(array, axis, dtype=None):
     return flox.aggregate_flox.ffill(np.zeros(array.shape[-1], dtype=int), array, axis=axis)
 
 
@@ -159,25 +159,6 @@ def chunked_arrays(
     return from_array(array, chunks=("auto",) * (array.ndim - 1) + (chunks,))
 
 
-@given(data=st.data(), array=chunked_arrays())
-def test_simple_scans(data, array):
-    note(np.array(array))
-    # overflow behaviour differs between bincount and sum (for example)
-    assume(not_overflowing_array(np.asarray(array)))
-
-    kwargs = {"func": "nancumsum", "axis": -1}
-
-    by = np.repeat(0, array.shape[-1])
-
-    actual = groupby_scan(array, by, **kwargs)
-    expected = NUMPY_SCAN_FUNCS[kwargs["func"]](np.asarray(array), axis=-1)
-    tolerance = {"rtol": 1e-13, "atol": 1e-15}
-    assert_equal(actual, expected, tolerance)
-
-    actual = groupby_scan(array.compute(), by, **kwargs)
-    assert_equal(actual, expected, tolerance)
-
-
 @settings(
     max_examples=300, suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow]
 )
@@ -193,7 +174,14 @@ def test_scans(data, array, func):
     axis = array.ndim - 1
     numpy_array = array.compute()
 
-    dtype = NUMPY_SCAN_FUNCS[func](numpy_array[..., [0]], axis=axis).dtype
+    if (
+        "cumsum" in func
+        and np.issubdtype(numpy_array.dtype, np.float32)
+        and np.sum(numpy_array).item() > 2**24
+    ):
+        dtype = np.float64
+    else:
+        dtype = NUMPY_SCAN_FUNCS[func](numpy_array[..., [0]], axis=axis).dtype
     expected = np.empty_like(numpy_array, dtype=dtype)
     group_idx, uniques = pd.factorize(by)
     for i in range(len(uniques)):
@@ -201,13 +189,13 @@ def test_scans(data, array, func):
         if not mask.any():
             note((by, group_idx, uniques))
             raise ValueError
-        expected[..., mask] = NUMPY_SCAN_FUNCS[func](numpy_array[..., mask], axis=axis)
+        expected[..., mask] = NUMPY_SCAN_FUNCS[func](numpy_array[..., mask], axis=axis, dtype=dtype)
 
     note((numpy_array, group_idx, array.chunks))
 
     tolerance = {"rtol": 1e-13, "atol": 1e-15}
-    actual = groupby_scan(numpy_array, by, func=func, axis=-1)
+    actual = groupby_scan(numpy_array, by, func=func, axis=-1, dtype=dtype)
     assert_equal(actual, expected, tolerance)
 
-    actual = groupby_scan(array, by, func=func, axis=-1)
+    actual = groupby_scan(array, by, func=func, axis=-1, dtype=dtype)
     assert_equal(actual, expected, tolerance)
