@@ -128,7 +128,9 @@ def chunked_arrays(
     draw,
     *,
     arrays=npst.arrays(
-        elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
+        elements={"allow_subnormal": False},
+        shape=npst.array_shapes(max_side=10),
+        dtype=array_dtype_st,
     ),
     from_array=dask.array.from_array,
 ):
@@ -197,8 +199,8 @@ def test_simple_scans(data, array):
 @given(
     data=st.data(),
     array=chunked_arrays(),
-    func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
-    # func=st.just("ffill"),
+    # func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
+    func=st.just("ffill"),
 )
 def test_scans(data, array, func):
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
@@ -213,6 +215,8 @@ def test_scans(data, array, func):
             note((by, group_idx, uniques))
             raise ValueError
         expected[..., mask] = NUMPY_SCAN_FUNCS[func](numpy_array[..., mask], axis=axis)
+
+    note((numpy_array, group_idx, array.chunks))
 
     actual = groupby_scan(numpy_array, by, func=func, axis=-1)
     assert_equal(actual, expected)

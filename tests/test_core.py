@@ -1813,3 +1813,10 @@ def test_nanlen_string(dtype, engine):
 # ffill.dtype = array.dtype
 # dask_groupby_scan(dask.array.from_array(array, chunks=(1, 1, 1, 2)), group_idx, axes=(0,), agg=ffill).compute()
 # dask_groupby_scan(dask.array.from_array(array, chunks=(2, 1, 2)), group_idx, axes=(0,), agg=ffill).compute()
+
+
+# func = "ffill"
+# array = array([[ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.],
+#         [ 0.,  1.,  0.,  0.,  0.,  0.,  0.,  0., nan,  0.]], dtype=float32),
+# group_idx=  array([0, 0, 0, 0, 1, 1, 1, 1, 0, 0])
+# chunks = ((2,), (1, 1, 2, 1, 5))
