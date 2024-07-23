@@ -1804,3 +1804,12 @@ def test_nanlen_string(dtype, engine):
     expected = np.array([3, 2, 1], dtype=np.intp)
     actual, *_ = groupby_reduce(array, by, func="count", engine=engine)
     assert_equal(expected, actual)
+
+
+# from numpy import nan
+
+# array = np.array([nan,  0., nan, nan,  0.], dtype=np.float32)
+# group_idx = np.array([0, 0, 1, 0, 0])
+# ffill.dtype = array.dtype
+# dask_groupby_scan(dask.array.from_array(array, chunks=(1, 1, 1, 2)), group_idx, axes=(0,), agg=ffill).compute()
+# dask_groupby_scan(dask.array.from_array(array, chunks=(2, 1, 2)), group_idx, axes=(0,), agg=ffill).compute()

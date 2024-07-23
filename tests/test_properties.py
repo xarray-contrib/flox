@@ -197,8 +197,8 @@ def test_simple_scans(data, array):
 @given(
     data=st.data(),
     array=chunked_arrays(),
-    # func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS))
-    func=st.just("ffill"),
+    func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
+    # func=st.just("ffill"),
 )
 def test_scans(data, array, func):
     by = data.draw(by_arrays(shape=(array.shape[-1],)))

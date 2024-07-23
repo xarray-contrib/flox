@@ -231,7 +231,6 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
 
 def ffill(group_idx, array, *, axis, **kwargs):
     group_idx, array, perm = _prepare_for_flox(group_idx, array)
-
     shape = array.shape
     ndim = array.ndim
     assert axis == (ndim - 1), (axis, ndim - 1)

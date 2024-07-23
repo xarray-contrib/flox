@@ -37,6 +37,7 @@ from .aggregations import (
     Aggregation,
     AlignedArrays,
     Scan,
+    ScanState,
     _atleast_1d,
     _initialize_aggregation,
     generic_aggregate,
@@ -2717,17 +2718,17 @@ def groupby_scan(
 
     if not has_dask:
         (single_axis,) = axis_
-        result = grouped_scan(
+        final_state = grouped_scan(
             AlignedArrays(array=array, group_idx=by_), axis=single_axis, agg=agg, dtype=agg.dtype
         )
-        return result.array
+        return extract_array(final_state)
     else:
         return dask_groupby_scan(array, by_, axes=axis_, agg=agg)
 
 
 def grouped_scan(
     inp: AlignedArrays, *, axis: int, agg: Scan, dtype=None, keepdims=None
-) -> AlignedArrays:
+) -> ScanState:
     assert axis == inp.array.ndim - 1
 
     # TODO: factorize here (maybe?)
@@ -2740,10 +2741,10 @@ def grouped_scan(
         dtype=dtype,
         fill_value=agg.identity,
     )
-    return AlignedArrays(array=accumulated, group_idx=inp.group_idx)
+    return ScanState(result=AlignedArrays(array=accumulated, group_idx=inp.group_idx), state=None)
 
 
-def grouped_reduce(inp: AlignedArrays, *, agg: Scan, axis: int, keepdims=None) -> AlignedArrays:
+def grouped_reduce(inp: AlignedArrays, *, agg: Scan, axis: int, keepdims=None) -> ScanState:
     assert axis == inp.array.ndim - 1
     reduced = chunk_reduce(
         inp.array,
@@ -2755,15 +2756,45 @@ def grouped_reduce(inp: AlignedArrays, *, agg: Scan, axis: int, keepdims=None) -
         fill_value=agg.identity,
         expected_groups=None,
     )
-    return AlignedArrays(array=reduced["intermediates"][0], group_idx=reduced["groups"])
+    return ScanState(
+        state=AlignedArrays(array=reduced["intermediates"][0], group_idx=reduced["groups"]),
+        result=None,
+    )
 
 
-def _zip(group_idx, array):
+def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) -> ScanState:
+
+    assert left_state.state is not None
+    left = left_state.state
+    right = right_state.result if right_state.result is not None else right_state.state
+
+    new_group_idx = np.concatenate([left.group_idx, right.group_idx], axis=-1)
+    new_array = np.concatenate([left.array, right.array], axis=-1)
+
+    new = generic_aggregate(
+        new_group_idx,
+        new_array,
+        func=agg.scan,
+        axis=right.array.ndim - 1,
+        engine="flox",
+        fill_value=agg.identity,
+    )[..., left.group_idx.size :]
+    # This is quite important. We need to update the state seen so far and propagate that.
+    lasts = grouped_reduce(
+        AlignedArrays(group_idx=new_group_idx, array=new_array), agg=agg, axis=right.array.ndim - 1
+    )
+    return ScanState(
+        state=lasts.state,
+        result=AlignedArrays(array=new, group_idx=right.group_idx),
+    )
+
+
+def _zip(group_idx, array) -> AlignedArrays:
     return AlignedArrays(group_idx=group_idx, array=array)
 
 
-def extract_array(block: AlignedArrays):
-    return block.array
+def extract_array(block: ScanState) -> np.ndarray:
+    return block.result.array
 
 
 def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
@@ -2785,10 +2816,12 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
     # dask tokenizing error workaround
     scan_.__name__ = scan_.func.__name__
 
+    binop = partial(scan_binary_op, agg=agg)
+
     # 2. Run the scan
     accumulated = scan(
         func=scan_,
-        binop=partial(agg.binary_op, fill_value=agg.identity),
+        binop=binop,
         ident=agg.identity,
         x=zipped,
         axis=axis,
