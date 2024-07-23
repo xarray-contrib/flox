@@ -159,36 +159,18 @@ def chunked_arrays(
     return from_array(array, chunks=("auto",) * (array.ndim - 1) + (chunks,))
 
 
-def test():
-    # TODO: FIX
-    # array =np.array([[5592407., 5592407.],
-    #         [5592407., 5592407.]], dtype=np.float32)
-
-    array = np.array([1, 1, 1], dtype=np.uint64)
-    da = dask.array.from_array(array, chunks=2)
-    by = np.array([0] * array.shape[-1])
-    kwargs = {"func": "cumsum", "axis": -1}
-
-    actual = groupby_scan(da, by, **kwargs)
-    expected = np.cumsum(array, axis=-1)
-    np.testing.assert_array_equal(expected, actual)
-
-    actual = groupby_scan(da.compute(), by, **kwargs)
-    np.testing.assert_array_equal(expected, actual)
-
-
 @given(data=st.data(), array=chunked_arrays())
 def test_simple_scans(data, array):
     note(np.array(array))
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(np.asarray(array)))
 
-    kwargs = {"func": "cumsum", "axis": -1}
+    kwargs = {"func": "nancumsum", "axis": -1}
 
     by = np.repeat(0, array.shape[-1])
 
     actual = groupby_scan(array, by, **kwargs)
-    expected = np.cumsum(np.asarray(array), axis=-1)
+    expected = NUMPY_SCAN_FUNCS[kwargs["func"]](np.asarray(array), axis=-1)
     tolerance = {"rtol": 1e-13, "atol": 1e-15}
     assert_equal(actual, expected, tolerance)
 

@@ -25,6 +25,7 @@ from flox.core import (
     factorize_,
     find_group_cohorts,
     groupby_reduce,
+    groupby_scan,
     rechunk_for_cohorts,
     reindex_,
     subset_to_blocks,
@@ -1804,6 +1805,24 @@ def test_nanlen_string(dtype, engine):
     expected = np.array([3, 2, 1], dtype=np.intp)
     actual, *_ = groupby_reduce(array, by, func="count", engine=engine)
     assert_equal(expected, actual)
+
+
+def test_scans():
+    # TODO: FIX
+    # array =np.array([[5592407., 5592407.],
+    #         [5592407., 5592407.]], dtype=np.float32)
+
+    array = np.array([1, 1, 1], dtype=np.uint64)
+    da = dask.array.from_array(array, chunks=2)
+    by = np.array([0] * array.shape[-1])
+    kwargs = {"func": "nancumsum", "axis": -1}
+
+    actual = groupby_scan(da, by, **kwargs)
+    expected = np.nancumsum(array, axis=-1)
+    np.testing.assert_array_equal(expected, actual)
+
+    actual = groupby_scan(da.compute(), by, **kwargs)
+    np.testing.assert_array_equal(expected, actual)
 
 
 # from numpy import nan
