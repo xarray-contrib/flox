@@ -95,7 +95,10 @@ def _get_array_func(func: str) -> Callable:
 
         def npfunc(x, **kwargs):
             spfunc = partial(getattr(scipy.stats, func), nan_policy=nan_policy)
-            return getattr(spfunc(x, **kwargs), func)
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", r"After omitting NaNs, one or more axis-slices")
+                result = getattr(spfunc(x, **kwargs), func)
+            return result
 
     else:
         npfunc = getattr(np, func)
