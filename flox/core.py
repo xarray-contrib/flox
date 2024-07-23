@@ -814,7 +814,7 @@ def factorize_(
                     idx = sorter[(idx,)]
                 idx[mask] = -1
             else:
-                idx, groups = pd.factorize(flat, sort=sort)  # type: ignore[arg-type]
+                idx, groups = pd.factorize(flat, sort=sort)
 
             found_groups.append(np.array(groups))
         factorized.append(idx.reshape(groupvar.shape))
@@ -2717,7 +2717,7 @@ def groupby_scan(
         agg.dtype = array.dtype
 
     if not has_dask:
-        (single_axis,) = axis_
+        (single_axis,) = axis_  # type: ignore[misc]
         final_state = chunk_scan(
             AlignedArrays(array=array, group_idx=by_), axis=single_axis, agg=agg, dtype=agg.dtype
         )
@@ -2765,6 +2765,7 @@ def _zip(group_idx: np.ndarray, array: np.ndarray) -> AlignedArrays:
 
 
 def extract_array(block: ScanState) -> np.ndarray:
+    assert block.result is not None
     return block.result.array
 
 
@@ -2787,7 +2788,7 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
 
     scan_ = partial(chunk_scan, agg=agg)
     # dask tokenizing error workaround
-    scan_.__name__ = scan_.func.__name__
+    scan_.__name__ = scan_.func.__name__  # type: ignore[attr-defined]
 
     # 2. Run the scan
     accumulated = scan(

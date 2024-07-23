@@ -1833,3 +1833,9 @@ def test_nanlen_string(dtype, engine):
 #     func="cumsum",
 #     axis=-1,
 # )
+
+# numpy_array, group_idx = (
+#     array([1.6777218e07, 1.0000000e00, 0.0000000e00], dtype=float32),
+#     array([0, 1, 1]),
+# )
+# groupby_scan(numpy_array, group_idx, axis=-1, func="nancumsum")

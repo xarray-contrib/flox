@@ -593,9 +593,6 @@ class Scan:
     mode: T_ScanBinaryOpMode = "apply_binary_op"
 
 
-HANDLED_FUNCTIONS = {}
-
-
 def concatenate(arrays: Sequence[AlignedArrays], axis=-1, out=None) -> AlignedArrays:
     group_idx = np.concatenate([a.group_idx for a in arrays], axis=axis)
     array = np.concatenate([a.array for a in arrays], axis=axis)
@@ -642,16 +639,16 @@ class ScanState:
         assert (self.state is not None) or (self.result is not None)
 
 
-def scan_binary_op(
-    left_state: AlignedArrays, right_state: AlignedArrays, *, agg: Scan
-) -> AlignedArrays:
+def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) -> ScanState:
     from .core import reindex_
 
     assert left_state.state is not None
     left = left_state.state
     right = right_state.result if right_state.result is not None else right_state.state
+    assert right is not None
 
     if agg.mode == "apply_binary_op":
+        assert agg.binary_op is not None
         # Implements groupby binary operation.
         reindexed = reindex_(
             left.array,
@@ -718,7 +715,7 @@ ffill = Scan(
 # cumprod = Scan("cumprod", binary_op=np.multiply, preop="prod", scan="cumprod")
 
 
-AGGREGATIONS = {
+AGGREGATIONS: dict[str, Aggregation | Scan] = {
     "any": any_,
     "all": all_,
     "count": count,
@@ -769,7 +766,9 @@ def _initialize_aggregation(
         try:
             # TODO: need better interface
             # we set dtype, fillvalue on reduction later. so deepcopy now
-            agg = copy.deepcopy(AGGREGATIONS[func])
+            agg_ = copy.deepcopy(AGGREGATIONS[func])
+            assert isinstance(agg_, Aggregation)
+            agg = agg_
         except KeyError:
             raise NotImplementedError(f"Reduction {func!r} not implemented yet")
     elif isinstance(func, Aggregation):
