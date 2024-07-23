@@ -241,7 +241,7 @@ def ffill(group_idx, array, *, axis, **kwargs):
 
     # https://stackoverflow.com/questions/41190852/most-efficient-way-to-forward-fill-nan-values-in-numpy-array
     mask = np.isnan(array)
-    # modified from SO answer, just reset the index at the start of every group!
+    # modified from the SO answer, just reset the index at the start of every group!
     mask[..., np.asarray(group_starts)] = False
 
     idx = np.where(mask, 0, np.arange(shape[axis]))

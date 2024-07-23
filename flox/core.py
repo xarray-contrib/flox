@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import itertools
 import logging
 import math
@@ -2693,6 +2694,7 @@ def groupby_scan(
     if isinstance(func, str):
         agg = AGGREGATIONS[func]
     assert isinstance(agg, Scan)
+    agg = copy.deepcopy(agg)
 
     # TODO: move to aggregate_npg.py
     if agg.name in ["cumsum", "nancumsum"]:
