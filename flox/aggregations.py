@@ -698,7 +698,8 @@ def scan_binary_op(
     )
 
 
-cumsum = Scan("cumsum", binary_op=np.add, reduction="sum", scan="cumsum", identity=0)
+# numpy_groupies cumsum is a broken when NaNs are present.
+# cumsum = Scan("cumsum", binary_op=np.add, reduction="sum", scan="cumsum", identity=0)
 nancumsum = Scan("nancumsum", binary_op=np.add, reduction="nansum", scan="nancumsum", identity=0)
 # ffill uses the identity for scan, and then at the binary-op state,
 # we concatenate the blockwise-reduced values with the original block,
@@ -747,7 +748,7 @@ AGGREGATIONS = {
     "nanquantile": nanquantile,
     "mode": mode,
     "nanmode": nanmode,
-    "cumsum": cumsum,
+    # "cumsum": cumsum,
     "nancumsum": nancumsum,
     "ffill": ffill,
 }

@@ -25,7 +25,7 @@ NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"
     SCIPY_STATS_FUNCS
 )
 SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
-NUMPY_SCAN_FUNCS = {"cumsum": np.cumsum, "nancumsum": np.nancumsum, "ffill": ffill}
+NUMPY_SCAN_FUNCS = {"nancumsum": np.nancumsum, "ffill": ffill}  # "cumsum": np.cumsum,
 
 
 def supported_dtypes() -> st.SearchStrategy[np.dtype]:
@@ -199,15 +199,15 @@ def test_simple_scans(data, array):
 @given(
     data=st.data(),
     array=chunked_arrays(),
-    # func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
-    func=st.just("ffill"),
+    func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
 )
 def test_scans(data, array, func):
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
     axis = array.ndim - 1
     numpy_array = array.compute()
 
-    expected = np.empty_like(numpy_array)
+    dtype = NUMPY_SCAN_FUNCS[func](numpy_array[..., [0]], axis=axis).dtype
+    expected = np.empty_like(numpy_array, dtype=dtype)
     group_idx, uniques = pd.factorize(by)
     for i in range(len(uniques)):
         mask = group_idx == i
