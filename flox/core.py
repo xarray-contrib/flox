@@ -2768,7 +2768,7 @@ def groupby_scan(
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
 
     # TODO: move to aggregate_npg.py
-    if agg.name in ["cumsum", "nancumsum"] and agg.dtype.kind in ["i", "u"]:
+    if agg.name in ["cumsum", "nancumsum"] and array.dtype.kind in ["i", "u"]:
         # https://numpy.org/doc/stable/reference/generated/numpy.cumsum.html
         # it defaults to the dtype of a, unless a
         # has an integer dtype with a precision less than that of the default platform integer.
