@@ -651,43 +651,43 @@ def scan_binary_op(
     left = left_state.state
     right = right_state.result if right_state.result is not None else right_state.state
 
-    concat = concatenate([left, right], axis=-1)
+    if agg.mode == "apply_binary_op":
+        # Implements groupby binary operation.
+        reindexed = reindex_(
+            left.array,
+            from_=pd.Index(left.group_idx),
+            # can't use right.group_idx since we need to do the indexing later
+            to=pd.RangeIndex(right.group_idx.max() + 1),
+            fill_value=agg.identity,
+            axis=-1,
+        )
+        result = AlignedArrays(
+            array=agg.binary_op(reindexed[..., right.group_idx], right.array),
+            group_idx=right.group_idx,
+        )
 
-    if right_state.result is not None:
-        if agg.mode == "apply_binary_op":
-            # Implements groupby binary operation.
-            reindexed = reindex_(
-                left.array,
-                from_=pd.Index(left.group_idx),
-                # can't use right.group_idx since we need to do the indexing later
-                to=pd.RangeIndex(right.group_idx.max() + 1),
-                fill_value=agg.identity,
-                axis=-1,
-            )
-            result = AlignedArrays(
-                array=agg.binary_op(reindexed[..., right.group_idx], right.array),
-                group_idx=right.group_idx,
-            )
-        elif agg.mode == "concat_then_scan":
-            # Implements the binary op portion of the scan as a concatenate-then-scan.
-            # This is useful for `ffill`, and presumably more generalized scans.
-            assert agg.binary_op is None
-            result = AlignedArrays(
-                array=generic_aggregate(
-                    concat.group_idx,
-                    concat.array,
-                    func=agg.scan,
-                    axis=concat.array.ndim - 1,
-                    engine="flox",
-                    fill_value=agg.identity,
-                )[..., left.group_idx.size :],
-                group_idx=right.group_idx,
-            )
-        else:
-            raise ValueError(f"Unknown binary op application mode: {agg.mode!r}")
+    elif agg.mode == "concat_then_scan":
+        # Implements the binary op portion of the scan as a concatenate-then-scan.
+        # This is useful for `ffill`, and presumably more generalized scans.
+        assert agg.binary_op is None
+        concat = concatenate([left, right], axis=-1)
+        final_value = generic_aggregate(
+            concat.group_idx,
+            concat.array,
+            func=agg.scan,
+            axis=concat.array.ndim - 1,
+            engine="flox",
+            fill_value=agg.identity,
+        )
+        result = AlignedArrays(
+            array=final_value[..., left.group_idx.size :], group_idx=right.group_idx
+        )
+    else:
+        raise ValueError(f"Unknown binary op application mode: {agg.mode!r}")
 
     # This is quite important. We need to update the state seen so far and propagate that.
-    lasts = concat.last()
+    # So we must account for what we know when entering this function: i.e. left
+    lasts = concatenate([left, result]).last()
 
     return ScanState(
         state=lasts,
