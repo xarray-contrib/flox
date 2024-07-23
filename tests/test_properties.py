@@ -172,16 +172,13 @@ def test_scans(data, array, func):
 
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
     axis = array.ndim - 1
+
+    # Too many float32 edge-cases!
+    if "cum" in func and array.dtype.kind == "f" and array.dtype.itemsize == 4:
+        array = array.astype(np.float64)
     numpy_array = array.compute()
 
-    if (
-        "cumsum" in func
-        and np.issubdtype(numpy_array.dtype, np.float32)
-        and np.sum(numpy_array).item() > 2**24
-    ):
-        dtype = np.float64
-    else:
-        dtype = NUMPY_SCAN_FUNCS[func](numpy_array[..., [0]], axis=axis).dtype
+    dtype = NUMPY_SCAN_FUNCS[func](numpy_array[..., [0]], axis=axis).dtype
     expected = np.empty_like(numpy_array, dtype=dtype)
     group_idx, uniques = pd.factorize(by)
     for i in range(len(uniques)):
