@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 pytest.importorskip("hypothesis")
+pytest.importorskip("dask")
 
 import dask
 import hypothesis.extra.numpy as npst
