@@ -2772,6 +2772,8 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
     from dask.array import map_blocks
     from dask.array.reductions import cumreduction as scan
 
+    from flox.aggregations import scan_binary_op
+
     if len(axes) > 1:
         raise NotImplementedError("Scans are only supported along a single axis.")
     (axis,) = axes
@@ -2787,12 +2789,10 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
     # dask tokenizing error workaround
     scan_.__name__ = scan_.func.__name__
 
-    binop = partial(agg.binary_op, agg=agg)
-
     # 2. Run the scan
     accumulated = scan(
         func=scan_,
-        binop=binop,
+        binop=partial(scan_binary_op, agg=agg),
         ident=agg.identity,
         x=zipped,
         axis=axis,
