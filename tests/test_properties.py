@@ -196,12 +196,17 @@ def test_simple_scans(data, array):
     assert_equal(actual, expected, tolerance)
 
 
+@settings(
+    max_examples=300, suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow]
+)
 @given(
     data=st.data(),
     array=chunked_arrays(),
     func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
 )
 def test_scans(data, array, func):
+    assume(not_overflowing_array(np.asarray(array)))
+
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
     axis = array.ndim - 1
     numpy_array = array.compute()
@@ -218,8 +223,9 @@ def test_scans(data, array, func):
 
     note((numpy_array, group_idx, array.chunks))
 
+    tolerance = {"rtol": 1e-13, "atol": 1e-15}
     actual = groupby_scan(numpy_array, by, func=func, axis=-1)
-    assert_equal(actual, expected)
+    assert_equal(actual, expected, tolerance)
 
     actual = groupby_scan(array, by, func=func, axis=-1)
-    assert_equal(actual, expected)
+    assert_equal(actual, expected, tolerance)

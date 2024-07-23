@@ -623,7 +623,7 @@ class AlignedArrays:
             # TODO: automate?
             engine="flox",
             dtype=self.array.dtype,
-            fill_value=np.nan,
+            fill_value=_get_fill_value(self.array.dtype, dtypes.NA),
             expected_groups=None,
         )
         return AlignedArrays(array=reduced["intermediates"][0], group_idx=reduced["groups"])
@@ -686,7 +686,9 @@ def scan_binary_op(
         raise ValueError(f"Unknown binary op application mode: {agg.mode!r}")
 
     # This is quite important. We need to update the state seen so far and propagate that.
-    # So we must account for what we know when entering this function: i.e. left
+    # So we must account for what we know when entering this function: i.e. `left`
+    # TODO: this is a bit wasteful since it will sort again, but for now let's focus on
+    # correctness and DRY
     lasts = concatenate([left, result]).last()
 
     return ScanState(
