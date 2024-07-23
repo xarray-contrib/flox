@@ -8,8 +8,39 @@ from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
-from numpy.core.multiarray import normalize_axis_index  # type: ignore[attr-defined]
 from packaging.version import Version
+
+
+def module_available(module: str, minversion: Optional[str] = None) -> bool:
+    """Checks whether a module is installed without importing it.
+
+    Use this for a lightweight check and lazy imports.
+
+    Parameters
+    ----------
+    module : str
+        Name of the module.
+
+    Returns
+    -------
+    available : bool
+        Whether the module is installed.
+    """
+    has = importlib.util.find_spec(module) is not None
+    if has:
+        mod = importlib.import_module(module)
+        return Version(mod.__version__) >= Version(minversion) if minversion is not None else True
+    else:
+        return False
+
+
+if module_available("numpy", minversion="2.0.0"):
+    from numpy.lib.array_utils import (  # type: ignore[import-not-found]
+        normalize_axis_index,
+    )
+else:
+    from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
+
 
 try:
     import cftime
@@ -37,9 +68,16 @@ def is_duck_array(value: Any) -> bool:
         hasattr(value, "ndim")
         and hasattr(value, "shape")
         and hasattr(value, "dtype")
-        and hasattr(value, "__array_function__")
-        and hasattr(value, "__array_ufunc__")
+        and (
+            (hasattr(value, "__array_function__") and hasattr(value, "__array_ufunc__"))
+            or hasattr(value, "__array_namespace__")
+        )
     )
+
+
+def is_chunked_array(x) -> bool:
+    """True if dask or cubed"""
+    return is_duck_dask_array(x) or (is_duck_array(x) and hasattr(x, "chunks"))
 
 
 def is_dask_collection(x):
@@ -54,6 +92,15 @@ def is_dask_collection(x):
 
 def is_duck_dask_array(x):
     return is_duck_array(x) and is_dask_collection(x)
+
+
+def is_duck_cubed_array(x):
+    try:
+        import cubed
+
+        return is_duck_array(x) and isinstance(x, cubed.Array)
+    except ImportError:
+        return False
 
 
 class ReprObject:
@@ -333,26 +380,3 @@ def nanlast(values, axis, keepdims=False):
         return np.expand_dims(result, axis=axis)
     else:
         return result
-
-
-def module_available(module: str, minversion: Optional[str] = None) -> bool:
-    """Checks whether a module is installed without importing it.
-
-    Use this for a lightweight check and lazy imports.
-
-    Parameters
-    ----------
-    module : str
-        Name of the module.
-
-    Returns
-    -------
-    available : bool
-        Whether the module is installed.
-    """
-    has = importlib.util.find_spec(module) is not None
-    if has:
-        mod = importlib.import_module(module)
-        return Version(mod.__version__) >= Version(minversion) if minversion is not None else True
-    else:
-        return False

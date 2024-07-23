@@ -122,6 +122,7 @@ module=[
     "cachey",
     "crick",
     "cftime",
+    "cubed.*",
     "dask.*",
     "importlib_metadata",
     "numba",

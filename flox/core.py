@@ -8,6 +8,7 @@ import sys
 import warnings
 from collections import namedtuple
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from itertools import product
 from numbers import Integral
@@ -17,6 +18,7 @@ from typing import (
     Callable,
     Literal,
     TypedDict,
+    TypeVar,
     Union,
     overload,
 )
@@ -34,11 +36,13 @@ from .aggregations import (
     _atleast_1d,
     _initialize_aggregation,
     generic_aggregate,
-    quantile_new_axes_func,
+    quantile_new_dims_func,
 )
 from .cache import memoize
 from .xrutils import (
+    is_chunked_array,
     is_duck_array,
+    is_duck_cubed_array,
     is_duck_dask_array,
     isnull,
     module_available,
@@ -53,7 +57,6 @@ else:
     from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
 
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
-_LEXSORT_FOR_FLOX = ["quantile", "nanquantile", "median", "nanmedian"]
 
 if TYPE_CHECKING:
     try:
@@ -64,10 +67,11 @@ if TYPE_CHECKING:
     except (ModuleNotFoundError, ImportError):
         Unpack: Any  # type: ignore[no-redef]
 
+    import cubed.Array as CubedArray
     import dask.array.Array as DaskArray
     from dask.typing import Graph
 
-    T_DuckArray = Union[np.ndarray, DaskArray]  # Any ?
+    T_DuckArray = Union[np.ndarray, DaskArray, CubedArray]  # Any ?
     T_By = T_DuckArray
     T_Bys = tuple[T_By, ...]
     T_ExpectIndex = pd.Index
@@ -94,9 +98,10 @@ if TYPE_CHECKING:
     T_MethodOpt = None | Literal["map-reduce", "blockwise", "cohorts"]
     T_IsBins = Union[bool | Sequence[bool]]
 
+T = TypeVar("T")
 
 IntermediateDict = dict[Union[str, Callable], Any]
-FinalResultsDict = dict[str, Union["DaskArray", np.ndarray]]
+FinalResultsDict = dict[str, Union["DaskArray", "CubedArray", np.ndarray]]
 FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 
 # This dummy axis is inserted using np.expand_dims
@@ -136,6 +141,10 @@ def _postprocess_numbagg(result, *, func, fill_value, size, seen_groups):
         if mask.any():
             result[..., groups[mask]] = fill_value
     return result
+
+
+def identity(x: T) -> T:
+    return x
 
 
 def _issorted(arr: np.ndarray) -> bool:
@@ -246,34 +255,77 @@ def slices_from_chunks(chunks):
 
 
 def _compute_label_chunk_bitmask(labels, chunks, nlabels):
+    def make_bitmask(rows, cols):
+        data = np.broadcast_to(np.array(1, dtype=np.uint8), rows.shape)
+        return csc_array((data, (rows, cols)), dtype=bool, shape=(nchunks, nlabels))
+
     assert isinstance(labels, np.ndarray)
     shape = tuple(sum(c) for c in chunks)
     nchunks = math.prod(len(c) for c in chunks)
+    approx_chunk_size = math.prod(c[0] for c in chunks)
+
+    # Shortcut for 1D with size-1 chunks
+    if shape == (nchunks,):
+        rows_array = np.arange(nchunks)
+        cols_array = labels
+        mask = labels >= 0
+        return make_bitmask(rows_array[mask], cols_array[mask])
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
-
     cols = []
-    # Add one to handle the -1 sentinel value
-    label_is_present = np.zeros((nlabels + 1,), dtype=bool)
     ilabels = np.arange(nlabels)
-    for region in slices_from_chunks(chunks):
+
+    def chunk_unique(labels, slicer, nlabels, label_is_present=None):
+        if label_is_present is None:
+            label_is_present = np.empty((nlabels + 1,), dtype=bool)
+        label_is_present[:] = False
+        subset = labels[slicer]
         # This is a quite fast way to find unique integers, when we know how many there are
         # inspired by a similar idea in numpy_groupies for first, last
         # instead of explicitly finding uniques, repeatedly write True to the same location
-        subset = labels[region]
-        # The reshape is not strictly necessary but is about 100ms faster on a test problem.
         label_is_present[subset.reshape(-1)] = True
         # skip the -1 sentinel by slicing
         # Faster than np.argwhere by a lot
         uniques = ilabels[label_is_present[:-1]]
-        cols.append(uniques)
-        label_is_present[:] = False
+        return uniques
+
+    # TODO: refine this heuristic.
+    # The general idea is that with the threadpool, we repeatedly allocate memory
+    # for `label_is_present`. We trade that off against the parallelism across number of chunks.
+    # For large enough number of chunks (relative to number of labels), it makes sense to
+    # suffer the extra allocation in exchange for parallelism.
+    THRESHOLD = 2
+    if nlabels < THRESHOLD * approx_chunk_size:
+        logger.debug(
+            "Using threadpool since num_labels %s < %d * chunksize %s",
+            nlabels,
+            THRESHOLD,
+            approx_chunk_size,
+        )
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(chunk_unique, labels, slicer, nlabels)
+                for slicer in slices_from_chunks(chunks)
+            ]
+            cols = tuple(f.result() for f in futures)
+
+    else:
+        logger.debug(
+            "Using serial loop since num_labels %s > %d * chunksize %s",
+            nlabels,
+            THRESHOLD,
+            approx_chunk_size,
+        )
+        cols = []
+        # Add one to handle the -1 sentinel value
+        label_is_present = np.empty((nlabels + 1,), dtype=bool)
+        for region in slices_from_chunks(chunks):
+            uniques = chunk_unique(labels, region, nlabels, label_is_present)
+            cols.append(uniques)
     rows_array = np.repeat(np.arange(nchunks), tuple(len(col) for col in cols))
     cols_array = np.concatenate(cols)
-    data = np.broadcast_to(np.array(1, dtype=np.uint8), rows_array.shape)
-    bitmask = csc_array((data, (rows_array, cols_array)), dtype=bool, shape=(nchunks, nlabels))
 
-    return bitmask
+    return make_bitmask(rows_array, cols_array)
 
 
 # @memoize
@@ -310,12 +362,17 @@ def find_group_cohorts(
     labels = np.asarray(labels)
 
     shape = tuple(sum(c) for c in chunks)
+    nchunks = math.prod(len(c) for c in chunks)
 
     # assumes that `labels` are factorized
     if expected_groups is None:
         nlabels = labels.max() + 1
     else:
         nlabels = expected_groups[-1] + 1
+
+    # 1. Single chunk, blockwise always
+    if nchunks == 1:
+        return "blockwise", {(0,): list(range(nlabels))}
 
     labels = np.broadcast_to(labels, shape[-labels.ndim :])
     bitmask = _compute_label_chunk_bitmask(labels, chunks, nlabels)
@@ -344,57 +401,76 @@ def find_group_cohorts(
 
     chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
 
-    # 1. Every group is contained to one block, use blockwise here.
+    # 2. Every group is contained to one block, use blockwise here.
     if bitmask.shape[CHUNK_AXIS] == 1 or (chunks_per_label == 1).all():
-        logger.info("find_group_cohorts: blockwise is preferred.")
+        logger.debug("find_group_cohorts: blockwise is preferred.")
         return "blockwise", chunks_cohorts
 
-    # 2. Perfectly chunked so there is only a single cohort
+    # 3. Perfectly chunked so there is only a single cohort
     if len(chunks_cohorts) == 1:
-        logger.info("Only found a single cohort. 'map-reduce' is preferred.")
+        logger.debug("Only found a single cohort. 'map-reduce' is preferred.")
         return "map-reduce", chunks_cohorts if merge else {}
 
-    # 3. Our dataset has chunksize one along the axis,
+    # 4. Our dataset has chunksize one along the axis,
     single_chunks = all(all(a == 1 for a in ac) for ac in chunks)
-    # 4. Every chunk only has a single group, but that group might extend across multiple chunks
+    # 5. Every chunk only has a single group, but that group might extend across multiple chunks
     one_group_per_chunk = (bitmask.sum(axis=LABEL_AXIS) == 1).all()
-    # 5. Existing cohorts don't overlap, great for time grouping with perfect chunking
+    # 6. Existing cohorts don't overlap, great for time grouping with perfect chunking
     no_overlapping_cohorts = (np.bincount(np.concatenate(tuple(chunks_cohorts.keys()))) == 1).all()
     if one_group_per_chunk or single_chunks or no_overlapping_cohorts:
-        logger.info("find_group_cohorts: cohorts is preferred, chunking is perfect.")
+        logger.debug("find_group_cohorts: cohorts is preferred, chunking is perfect.")
         return "cohorts", chunks_cohorts
 
-    # Containment = |Q & S| / |Q|
+    # We'll use containment to measure degree of overlap between labels.
+    # Containment C = |Q & S| / |Q|
     #  - |X| is the cardinality of set X
     #  - Q is the query set being tested
     #  - S is the existing set
-    # We'll use containment to measure degree of overlap between labels. The bitmask
-    # matrix allows us to calculate this pretty efficiently.
-    asfloat = bitmask.astype(float)
-    # Note: While A.T @ A is a symmetric matrix, the division by chunks_per_label
-    # makes it non-symmetric.
-    containment = csr_array((asfloat.T @ asfloat) / chunks_per_label)
-
-    # The containment matrix is a measure of how much the labels overlap
-    # with each other. We treat the sparsity = (nnz/size) as a summary measure of the net overlap.
+    # The bitmask matrix S allows us to calculate this pretty efficiently using a dot product.
+    #       S.T @ S / chunks_per_label
+    #
+    # We treat the sparsity(C) = (nnz/size) as a summary measure of the net overlap.
     # 1. For high enough sparsity, there is a lot of overlap and we should use "map-reduce".
     # 2. When labels are uniformly distributed amongst all chunks
     #    (and number of labels < chunk size), sparsity is 1.
     # 3. Time grouping cohorts (e.g. dayofyear) appear as lines in this matrix.
     # 4. When there are no overlaps at all between labels, containment is a block diagonal matrix
     #    (approximately).
-    MAX_SPARSITY_FOR_COHORTS = 0.6  # arbitrary
-    sparsity = containment.nnz / math.prod(containment.shape)
+    #
+    # However computing S.T @ S can still be the slowest step, especially if S
+    # is not particularly sparse. Empirically the sparsity( S.T @ S ) > min(1, 2 x sparsity(S)).
+    # So we use sparsity(S) as a shortcut.
+    MAX_SPARSITY_FOR_COHORTS = 0.4  # arbitrary
+    sparsity = bitmask.nnz / math.prod(bitmask.shape)
     preferred_method: Literal["map-reduce"] | Literal["cohorts"]
+    logger.debug(
+        "sparsity of bitmask is {}, threshold is {}".format(  # noqa
+            sparsity, MAX_SPARSITY_FOR_COHORTS
+        )
+    )
+    # 7. Groups seem fairly randomly distributed, use "map-reduce".
     if sparsity > MAX_SPARSITY_FOR_COHORTS:
-        logger.info("sparsity is {}".format(sparsity))  # noqa
         if not merge:
-            logger.info("find_group_cohorts: merge=False, choosing 'map-reduce'")
+            logger.debug(
+                "find_group_cohorts: bitmask sparsity={}, merge=False, choosing 'map-reduce'".format(  # noqa
+                    sparsity
+                )
+            )
             return "map-reduce", {}
         preferred_method = "map-reduce"
     else:
         preferred_method = "cohorts"
 
+    # Note: While A.T @ A is a symmetric matrix, the division by chunks_per_label
+    #       makes it non-symmetric.
+    asfloat = bitmask.astype(float)
+    containment = csr_array(asfloat.T @ asfloat / chunks_per_label)
+
+    logger.debug(
+        "sparsity of containment matrix is {}".format(  # noqa
+            containment.nnz / math.prod(containment.shape)
+        )
+    )
     # Use a threshold to force some merging. We do not use the filtered
     # containment matrix for estimating "sparsity" because it is a bit
     # hard to reason about.
@@ -404,7 +480,7 @@ def find_group_cohorts(
     containment.eliminate_zeros()
 
     # Iterate over labels, beginning with those with most chunks
-    logger.info("find_group_cohorts: merging cohorts")
+    logger.debug("find_group_cohorts: merging cohorts")
     order = np.argsort(containment.sum(axis=LABEL_AXIS))[::-1]
     merged_cohorts = {}
     merged_keys = set()
@@ -637,8 +713,7 @@ def factorize_(
     expected_groups: T_ExpectIndexOptTuple | None = None,
     reindex: bool = False,
     sort: bool = True,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, None]:
-    ...
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, None]: ...
 
 
 @overload
@@ -650,8 +725,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: Literal[False] = False,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps]:
-    ...
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps]: ...
 
 
 @overload
@@ -663,8 +737,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]:
-    ...
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]: ...
 
 
 def factorize_(
@@ -962,9 +1035,7 @@ def chunk_reduce(
     if engine == "flox":
         # is_arg_reduction = any("arg" in f for f in func if isinstance(f, str))
         # if not is_arg_reduction:
-        group_idx, array = _prepare_for_flox(
-            group_idx, array, lexsort=any(f in _LEXSORT_FOR_FLOX for f in funcs)
-        )
+        group_idx, array = _prepare_for_flox(group_idx, array)
 
     final_array_shape += results["groups"].shape
     final_groups_shape += results["groups"].shape
@@ -1006,7 +1077,9 @@ def chunk_reduce(
                 result = result[..., :-1]
             # TODO: Figure out how to generalize this
             if reduction in ("quantile", "nanquantile"):
-                new_dims_shape = quantile_new_axes_func(**kw)
+                new_dims_shape = tuple(
+                    dim.size for dim in quantile_new_dims_func(**kw) if not dim.is_scalar
+                )
             else:
                 new_dims_shape = tuple()
             result = result.reshape(new_dims_shape + final_array_shape[:-1] + found_groups_shape)
@@ -1044,7 +1117,7 @@ def _finalize_results(
     3. Mask using counts and fill with user-provided fill_value.
     4. reindex to expected_groups
     """
-    squeezed = _squeeze_results(results, axis)
+    squeezed = _squeeze_results(results, tuple(agg.num_new_vector_dims + ax for ax in axis))
 
     min_count = agg.min_count
     if min_count > 0:
@@ -1407,7 +1480,10 @@ def _normalize_indexes(array: DaskArray, flatblocks, blkshape) -> tuple:
 
 
 def subset_to_blocks(
-    array: DaskArray, flatblocks: Sequence[int], blkshape: tuple[int] | None = None
+    array: DaskArray,
+    flatblocks: Sequence[int],
+    blkshape: tuple[int] | None = None,
+    reindexer=identity,
 ) -> DaskArray:
     """
     Advanced indexing of .blocks such that we always get a regular array back.
@@ -1433,20 +1509,21 @@ def subset_to_blocks(
     index = _normalize_indexes(array, flatblocks, blkshape)
 
     if all(not isinstance(i, np.ndarray) and i == slice(None) for i in index):
-        return array
+        return dask.array.map_blocks(reindexer, array, meta=array._meta)
 
     # These rest is copied from dask.array.core.py with slight modifications
     index = normalize_index(index, array.numblocks)
     index = tuple(slice(k, k + 1) if isinstance(k, Integral) else k for k in index)
 
-    name = "blocks-" + tokenize(array, index)
+    name = "groupby-cohort-" + tokenize(array, index)
     new_keys = array._key_array[index]
 
     squeezed = tuple(np.squeeze(i) if isinstance(i, np.ndarray) else i for i in index)
     chunks = tuple(tuple(np.array(c)[i].tolist()) for c, i in zip(array.chunks, squeezed))
 
     keys = itertools.product(*(range(len(c)) for c in chunks))
-    layer: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+    layer: Graph = {(name,) + key: (reindexer, tuple(new_keys[key].tolist())) for key in keys}
+
     graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
 
     return dask.array.Array(graph, name, chunks, meta=array)
@@ -1620,26 +1697,26 @@ def dask_groupby_agg(
 
         elif method == "cohorts":
             assert chunks_cohorts
+            block_shape = array.blocks.shape[-len(axis) :]
+
             reduced_ = []
             groups_ = []
             for blks, cohort in chunks_cohorts.items():
-                index = pd.Index(cohort)
-                subset = subset_to_blocks(intermediate, blks, array.blocks.shape[-len(axis) :])
-                reindexed = dask.array.map_blocks(
-                    reindex_intermediates, subset, agg, index, meta=subset._meta
-                )
+                cohort_index = pd.Index(cohort)
+                reindexer = partial(reindex_intermediates, agg=agg, unique_groups=cohort_index)
+                reindexed = subset_to_blocks(intermediate, blks, block_shape, reindexer)
                 # now that we have reindexed, we can set reindex=True explicitlly
                 reduced_.append(
                     tree_reduce(
                         reindexed,
                         combine=partial(combine, agg=agg, reindex=True),
-                        aggregate=partial(aggregate, expected_groups=index, reindex=True),
+                        aggregate=partial(aggregate, expected_groups=cohort_index, reindex=True),
                     )
                 )
                 # This is done because pandas promotes to 64-bit types when an Index is created
                 # So we use the index to generate the return value for consistency with "map-reduce"
                 # This is important on windows
-                groups_.append(index.values)
+                groups_.append(cohort_index.values)
 
             reduced = dask.array.concatenate(reduced_, axis=-1)
             groups = (np.concatenate(groups_),)
@@ -1671,7 +1748,7 @@ def dask_groupby_agg(
         raise ValueError(f"Unknown method={method}.")
 
     # Adjust output for any new dimensions added, example for multiple quantiles
-    new_dims_shape = agg.get_new_axes()
+    new_dims_shape = tuple(dim.size for dim in agg.new_dims if not dim.is_scalar)
     new_inds = tuple(range(-len(new_dims_shape), 0))
     out_inds = new_inds + inds[: -len(axis)] + (inds[-1],)
     output_chunks = new_dims_shape + reduced.chunks[: -len(axis)] + group_chunks
@@ -1699,6 +1776,145 @@ def dask_groupby_agg(
     )
 
     return (result, groups)
+
+
+def cubed_groupby_agg(
+    array: CubedArray,
+    by: T_By,
+    agg: Aggregation,
+    expected_groups: pd.Index | None,
+    axis: T_Axes = (),
+    fill_value: Any = None,
+    method: T_Method = "map-reduce",
+    reindex: bool = False,
+    engine: T_Engine = "numpy",
+    sort: bool = True,
+    chunks_cohorts=None,
+) -> tuple[CubedArray, tuple[np.ndarray | CubedArray]]:
+    import cubed
+    import cubed.core.groupby
+
+    # I think _tree_reduce expects this
+    assert isinstance(axis, Sequence)
+    assert all(ax >= 0 for ax in axis)
+
+    if method == "blockwise":
+        assert by.ndim == 1
+        assert expected_groups is not None
+
+        def _reduction_func(a, by, axis, start_group, num_groups):
+            # adjust group labels to start from 0 for each chunk
+            by_for_chunk = by - start_group
+            expected_groups_for_chunk = pd.RangeIndex(num_groups)
+
+            axis = (axis,)  # convert integral axis to tuple
+
+            blockwise_method = partial(
+                _reduce_blockwise,
+                agg=agg,
+                axis=axis,
+                expected_groups=expected_groups_for_chunk,
+                fill_value=fill_value,
+                engine=engine,
+                sort=sort,
+                reindex=reindex,
+            )
+            out = blockwise_method(a, by_for_chunk)
+            return out[agg.name]
+
+        num_groups = len(expected_groups)
+        result = cubed.core.groupby.groupby_blockwise(
+            array, by, axis=axis, func=_reduction_func, num_groups=num_groups
+        )
+        groups = (expected_groups.to_numpy(),)
+        return (result, groups)
+
+    else:
+        inds = tuple(range(array.ndim))
+
+        by_input = by
+
+        # Unifying chunks is necessary for argreductions.
+        # We need to rechunk before zipping up with the index
+        # let's always do it anyway
+        if not is_chunked_array(by):
+            # chunk numpy arrays like the input array
+            chunks = tuple(
+                array.chunks[ax] if by.shape[ax] != 1 else (1,) for ax in range(-by.ndim, 0)
+            )
+
+            by = cubed.from_array(by, chunks=chunks, spec=array.spec)
+        _, (array, by) = cubed.core.unify_chunks(array, inds, by, inds[-by.ndim :])
+
+        # Cubed's groupby_reduction handles the generation of "intermediates", and the
+        # "map-reduce" combination step, so we don't have to do that here.
+        # Only the equivalent of "_simple_combine" is supported, there is no
+        # support for "_grouped_combine".
+        labels_are_unknown = is_chunked_array(by_input) and expected_groups is None
+        do_simple_combine = not _is_arg_reduction(agg) and not labels_are_unknown
+
+        assert do_simple_combine
+        assert method == "map-reduce"
+        assert expected_groups is not None
+        assert reindex is True
+        assert len(axis) == 1  # one axis/grouping
+
+        def _groupby_func(a, by, axis, intermediate_dtype, num_groups):
+            blockwise_method = partial(
+                _get_chunk_reduction(agg.reduction_type),
+                func=agg.chunk,
+                fill_value=agg.fill_value["intermediate"],
+                dtype=agg.dtype["intermediate"],
+                reindex=reindex,
+                user_dtype=agg.dtype["user"],
+                axis=axis,
+                expected_groups=expected_groups,
+                engine=engine,
+                sort=sort,
+            )
+            out = blockwise_method(a, by)
+            # Convert dict to one that cubed understands, dropping groups since they are
+            # known, and the same for every block.
+            return {
+                f"f{idx}": intermediate for idx, intermediate in enumerate(out["intermediates"])
+            }
+
+        def _groupby_combine(a, axis, dummy_axis, dtype, keepdims):
+            # this is similar to _simple_combine, except the dummy axis and concatenation is handled by cubed
+            # only combine over the dummy axis, to preserve grouping along 'axis'
+            dtype = dict(dtype)
+            out = {}
+            for idx, combine in enumerate(agg.simple_combine):
+                field = f"f{idx}"
+                out[field] = combine(a[field], axis=dummy_axis, keepdims=keepdims)
+            return out
+
+        def _groupby_aggregate(a):
+            # Convert cubed dict to one that _finalize_results works with
+            results = {"groups": expected_groups, "intermediates": a.values()}
+            out = _finalize_results(results, agg, axis, expected_groups, fill_value, reindex)
+            return out[agg.name]
+
+        # convert list of dtypes to a structured dtype for cubed
+        intermediate_dtype = [(f"f{i}", dtype) for i, dtype in enumerate(agg.dtype["intermediate"])]
+        dtype = agg.dtype["final"]
+        num_groups = len(expected_groups)
+
+        result = cubed.core.groupby.groupby_reduction(
+            array,
+            by,
+            func=_groupby_func,
+            combine_func=_groupby_combine,
+            aggregate_func=_groupby_aggregate,
+            axis=axis,
+            intermediate_dtype=intermediate_dtype,
+            dtype=dtype,
+            num_groups=num_groups,
+        )
+
+        groups = (expected_groups.to_numpy(),)
+
+        return (result, groups)
 
 
 def _collapse_blocks_along_axes(reduced: DaskArray, axis: T_Axes, group_chunks) -> DaskArray:
@@ -1741,7 +1957,7 @@ def _validate_reindex(
     any_by_dask: bool,
     is_dask_array: bool,
 ) -> bool | None:
-    logger.info("Entering _validate_reindex: reindex is {}".format(reindex))  # noqa
+    # logger.debug("Entering _validate_reindex: reindex is {}".format(reindex))  # noqa
 
     all_numpy = not is_dask_array and not any_by_dask
     if reindex is True and not all_numpy:
@@ -1756,7 +1972,7 @@ def _validate_reindex(
 
     if reindex is None:
         if method is None:
-            logger.info("Leaving _validate_reindex: method = None, returning None")
+            # logger.debug("Leaving _validate_reindex: method = None, returning None")
             return None
 
         if all_numpy:
@@ -1783,7 +1999,7 @@ def _validate_reindex(
                 reindex = True
 
     assert isinstance(reindex, bool)
-    logger.info("Leaving _validate_reindex: reindex is {}".format(reindex))  # noqa
+    logger.debug("Leaving _validate_reindex: reindex is {}".format(reindex))  # noqa
 
     return reindex
 
@@ -1806,15 +2022,13 @@ def _assert_by_is_aligned(shape: tuple[int, ...], by: T_Bys) -> None:
 @overload
 def _convert_expected_groups_to_index(
     expected_groups: tuple[None, ...], isbin: Sequence[bool], sort: bool
-) -> tuple[None, ...]:
-    ...
+) -> tuple[None, ...]: ...
 
 
 @overload
 def _convert_expected_groups_to_index(
     expected_groups: T_ExpectTuple, isbin: Sequence[bool], sort: bool
-) -> T_ExpectIndexTuple:
-    ...
+) -> T_ExpectIndexTuple: ...
 
 
 def _convert_expected_groups_to_index(
@@ -1902,13 +2116,11 @@ def _factorize_multiple(
 
 
 @overload
-def _validate_expected_groups(nby: int, expected_groups: None) -> tuple[None, ...]:
-    ...
+def _validate_expected_groups(nby: int, expected_groups: None) -> tuple[None, ...]: ...
 
 
 @overload
-def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroups) -> T_ExpectTuple:
-    ...
+def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroups) -> T_ExpectTuple: ...
 
 
 def _validate_expected_groups(nby: int, expected_groups: T_ExpectedGroupsOpt) -> T_ExpectOptTuple:
@@ -1953,24 +2165,24 @@ def _choose_method(
     method: T_MethodOpt, preferred_method: T_Method, agg: Aggregation, by, nax: int
 ) -> T_Method:
     if method is None:
-        logger.info("_choose_method: method is None")
+        logger.debug("_choose_method: method is None")
         if agg.chunk == (None,):
             if preferred_method != "blockwise":
                 raise ValueError(
                     f"Aggregation {agg.name} is only supported for `method='blockwise'`, "
                     "but the chunking is not right."
                 )
-            logger.info("_choose_method: choosing 'blockwise'")
+            logger.debug("_choose_method: choosing 'blockwise'")
             return "blockwise"
 
         if nax != by.ndim:
-            logger.info("_choose_method: choosing 'map-reduce'")
+            logger.debug("_choose_method: choosing 'map-reduce'")
             return "map-reduce"
 
         if _is_arg_reduction(agg) and preferred_method == "blockwise":
             return "cohorts"
 
-        logger.info("_choose_method: choosing preferred_method={}".format(preferred_method))  # noqa
+        logger.debug(f"_choose_method: choosing preferred_method={preferred_method}")  # noqa
         return preferred_method
     else:
         return method
@@ -1981,8 +2193,8 @@ def _choose_engine(by, agg: Aggregation):
 
     not_arg_reduce = not _is_arg_reduction(agg)
 
-    if agg.name in _LEXSORT_FOR_FLOX:
-        logger.info(f"_choose_engine: Choosing 'flox' since {agg.name}")
+    if agg.name in ["quantile", "nanquantile", "median", "nanmedian"]:
+        logger.debug(f"_choose_engine: Choosing 'flox' since {agg.name}")
         return "flox"
 
     # numbagg only supports nan-skipping reductions
@@ -1994,14 +2206,14 @@ def _choose_engine(by, agg: Aggregation):
         if agg.name in ["all", "any"] or (
             not_arg_reduce and has_blockwise_nan_skipping and dtype is None
         ):
-            logger.info("_choose_engine: Choosing 'numbagg'")
+            logger.debug("_choose_engine: Choosing 'numbagg'")
             return "numbagg"
 
     if not_arg_reduce and (not is_duck_dask_array(by) and _issorted(by)):
-        logger.info("_choose_engine: Choosing 'flox'")
+        logger.debug("_choose_engine: Choosing 'flox'")
         return "flox"
     else:
-        logger.info("_choose_engine: Choosing 'numpy'")
+        logger.debug("_choose_engine: Choosing 'numpy'")
         return "numpy"
 
 
@@ -2148,6 +2360,7 @@ def groupby_reduce(
     nby = len(bys)
     by_is_dask = tuple(is_duck_dask_array(b) for b in bys)
     any_by_dask = any(by_is_dask)
+    provided_expected = expected_groups is not None
 
     if (
         engine == "numbagg"
@@ -2176,7 +2389,7 @@ def groupby_reduce(
     if not is_duck_array(array):
         array = np.asarray(array)
     is_bool_array = np.issubdtype(array.dtype, bool)
-    array = array.astype(int) if is_bool_array else array
+    array = array.astype(np.intp) if is_bool_array else array
 
     isbins = _atleast_1d(isbin, nby)
 
@@ -2223,6 +2436,7 @@ def groupby_reduce(
     nax = len(axis_)
 
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
+    has_cubed = is_duck_cubed_array(array) or is_duck_cubed_array(by_)
 
     if _is_first_last_reduction(func):
         if has_dask and nax != 1:
@@ -2263,7 +2477,7 @@ def groupby_reduce(
     #     The only way to do this consistently is mask out using min_count
     #     Consider np.sum([np.nan]) = np.nan, np.nansum([np.nan]) = 0
     if min_count is None:
-        if nax < by_.ndim or fill_value is not None:
+        if nax < by_.ndim or (fill_value is not None and provided_expected):
             min_count_: int = 1
         else:
             min_count_ = 0
@@ -2285,7 +2499,30 @@ def groupby_reduce(
     kwargs["engine"] = _choose_engine(by_, agg) if engine is None else engine
 
     groups: tuple[np.ndarray | DaskArray, ...]
-    if not has_dask:
+    if has_cubed:
+        if method is None:
+            method = "map-reduce"
+
+        if method not in ("map-reduce", "blockwise"):
+            raise NotImplementedError(
+                "Reduction for Cubed arrays is only implemented for methods 'map-reduce' and 'blockwise'."
+            )
+
+        partial_agg = partial(cubed_groupby_agg, **kwargs)
+
+        result, groups = partial_agg(
+            array,
+            by_,
+            expected_groups=expected_,
+            agg=agg,
+            reindex=reindex,
+            method=method,
+            sort=sort,
+        )
+
+        return (result, groups)
+
+    elif not has_dask:
         results = _reduce_blockwise(
             array, by_, agg, expected_groups=expected_, reindex=reindex, sort=sort, **kwargs
         )
@@ -2297,7 +2534,21 @@ def groupby_reduce(
             # TODO: How else to narrow that array.chunks is there?
             assert isinstance(array, DaskArray)
 
-        if agg.chunk[0] is None and method not in [None, "blockwise"]:
+        if (not any_by_dask and method is None) or method == "cohorts":
+            preferred_method, chunks_cohorts = find_group_cohorts(
+                by_,
+                [array.chunks[ax] for ax in range(-by_.ndim, 0)],
+                expected_groups=expected_,
+                # when provided with cohorts, we *always* 'merge'
+                merge=(method == "cohorts"),
+            )
+        else:
+            preferred_method = "map-reduce"
+            chunks_cohorts = {}
+
+        method = _choose_method(method, preferred_method, agg, by_, nax)
+
+        if agg.chunk[0] is None and method != "blockwise":
             raise NotImplementedError(
                 f"Aggregation {agg.name!r} is only implemented for dask arrays when method='blockwise'."
                 f"Received method={method!r}"
@@ -2318,19 +2569,6 @@ def groupby_reduce(
                 f"Received method={method!r}"
             )
 
-        if (not any_by_dask and method is None) or method == "cohorts":
-            preferred_method, chunks_cohorts = find_group_cohorts(
-                by_,
-                [array.chunks[ax] for ax in range(-by_.ndim, 0)],
-                expected_groups=expected_,
-                # when provided with cohorts, we *always* 'merge'
-                merge=(method == "cohorts"),
-            )
-        else:
-            preferred_method = "map-reduce"
-            chunks_cohorts = {}
-
-        method = _choose_method(method, preferred_method, agg, by_, nax)
         # TODO: clean this up
         reindex = _validate_reindex(
             reindex, func, method, expected_, any_by_dask, is_duck_dask_array(array)

@@ -46,6 +46,7 @@ def LooseVersion(vstring):
 
 
 has_cftime, requires_cftime = _importorskip("cftime")
+has_cubed, requires_cubed = _importorskip("cubed")
 has_dask, requires_dask = _importorskip("dask")
 has_numba, requires_numba = _importorskip("numba")
 has_numbagg, requires_numbagg = _importorskip("numbagg")
@@ -94,12 +95,11 @@ def assert_equal(a, b, tolerance=None):
         xr.testing.assert_identical(a, b)
         return
 
-    if tolerance is None and (
-        np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64)
-    ):
-        tolerance = {"atol": 1e-18, "rtol": 1e-15}
-    else:
-        tolerance = {}
+    if tolerance is None:
+        if np.issubdtype(a.dtype, np.float64) | np.issubdtype(b.dtype, np.float64):
+            tolerance = {"atol": 1e-18, "rtol": 1e-15}
+        else:
+            tolerance = {}
 
     if has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
         # sometimes it's nice to see values and shapes
@@ -124,3 +124,35 @@ def assert_equal_tuple(a, b):
             np.testing.assert_array_equal(a_, b_)
         else:
             assert a_ == b_
+
+
+SCIPY_STATS_FUNCS = ("mode", "nanmode")
+BLOCKWISE_FUNCS = ("median", "nanmedian", "quantile", "nanquantile") + SCIPY_STATS_FUNCS
+ALL_FUNCS = (
+    "sum",
+    "nansum",
+    "argmax",
+    "nanfirst",
+    "nanargmax",
+    "prod",
+    "nanprod",
+    "mean",
+    "nanmean",
+    "var",
+    "nanvar",
+    "std",
+    "nanstd",
+    "max",
+    "nanmax",
+    "min",
+    "nanmin",
+    "argmin",
+    "nanargmin",
+    "any",
+    "all",
+    "nanlast",
+    "median",
+    "nanmedian",
+    "quantile",
+    "nanquantile",
+) + tuple(SCIPY_STATS_FUNCS)

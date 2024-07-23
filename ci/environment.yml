@@ -6,6 +6,7 @@ dependencies:
   - cachey
   - cftime
   - codecov
+  - cubed>=0.14.3
   - dask-core
   - pandas
   - numpy>=1.22
@@ -19,9 +20,9 @@ dependencies:
   - pytest-xdist
   - xarray
   - pre-commit
-  - numbagg>=0.3
   - numpy_groupies>=0.9.19
   - pooch
   - toolz
   - numba
   - numbagg>=0.3
+  - hypothesis
