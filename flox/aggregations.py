@@ -694,6 +694,7 @@ AGGREGATIONS = {
     "nanmode": nanmode,
     "cumsum": cumsum,
     "nancumsum": nancumsum,
+    "ffill": ffill,
 }
 
 
@@ -705,6 +706,7 @@ def _initialize_aggregation(
     min_count: int,
     finalize_kwargs: dict[Any, Any] | None,
 ) -> Aggregation:
+    agg: Aggregation
     if not isinstance(func, Aggregation):
         try:
             # TODO: need better interface

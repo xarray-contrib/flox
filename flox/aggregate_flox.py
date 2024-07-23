@@ -234,7 +234,7 @@ def ffill(group_idx, array, *, axis, **kwargs):
 
     shape = array.shape
     ndim = array.ndim
-    assert axis == (ndim - 1)
+    assert axis == (ndim - 1), (axis, ndim - 1)
 
     flag = np.concatenate((np.array([True], like=array), group_idx[1:] != group_idx[:-1]))
     (group_starts,) = flag.nonzero()

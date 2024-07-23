@@ -2662,6 +2662,16 @@ def groupby_scan(
 
     if not is_duck_array(array):
         array = np.asarray(array)
+
+    if isinstance(func, str):
+        agg = AGGREGATIONS[func]
+    assert isinstance(agg, Scan)
+    agg = copy.deepcopy(agg)
+
+    if agg == AGGREGATIONS["ffill"] and array.dtype.kind != "f":
+        # nothing to do, no NaNs!
+        return array
+
     is_bool_array = np.issubdtype(array.dtype, bool)
     array = array.astype(np.intp) if is_bool_array else array
 
@@ -2690,11 +2700,6 @@ def groupby_scan(
     by_: np.ndarray
     (by_,) = bys
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
-
-    if isinstance(func, str):
-        agg = AGGREGATIONS[func]
-    assert isinstance(agg, Scan)
-    agg = copy.deepcopy(agg)
 
     # TODO: move to aggregate_npg.py
     if agg.name in ["cumsum", "nancumsum"]:

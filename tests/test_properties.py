@@ -1,3 +1,4 @@
+import pandas as pd
 import pytest
 
 pytest.importorskip("hypothesis")
@@ -8,15 +9,23 @@ import hypothesis.strategies as st
 import numpy as np
 from hypothesis import HealthCheck, assume, given, note, settings
 
+import flox
 from flox.core import groupby_reduce, groupby_scan
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS, assert_equal
 
 dask.config.set(scheduler="sync")
+
+
+def ffill(array, axis):
+    return flox.aggregate_flox.ffill(np.zeros(array.shape[-1], dtype=int), array, axis=axis)
+
+
 NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"] + list(
     SCIPY_STATS_FUNCS
 )
 SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
+NUMPY_SCAN_FUNCS = {"cumsum": np.cumsum, "nancumsum": np.nancumsum, "ffill": ffill}
 
 
 def supported_dtypes() -> st.SearchStrategy[np.dtype]:
@@ -37,6 +46,13 @@ by_dtype_st = supported_dtypes()
 func_st = st.sampled_from(
     [f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS and f not in SKIPPED_FUNCS]
 )
+
+
+def by_arrays(shape):
+    return npst.arrays(
+        dtype=npst.integer_dtypes(endianness="=") | npst.unicode_string_dtypes(endianness="="),
+        shape=shape,
+    )
 
 
 def not_overflowing_array(array) -> bool:
@@ -126,6 +142,18 @@ def chunked_arrays(
         chunks = tuple(a - b for a, b in zip(dividers + [size], [0] + dividers))
     else:
         chunks = (1,)
+
+    if array.dtype.kind == "f":
+        nan_idx = draw(
+            st.lists(
+                st.integers(min_value=0, max_value=array.shape[-1] - 1),
+                max_size=array.shape[-1] - 1,
+                unique=True,
+            )
+        )
+        if nan_idx:
+            array[..., nan_idx] = np.nan
+
     return from_array(array, chunks=("auto",) * (array.ndim - 1) + (chunks,))
 
 
@@ -148,7 +176,7 @@ def test():
 
 
 @given(data=st.data(), array=chunked_arrays())
-def test_scans(data, array):
+def test_simple_scans(data, array):
     note(np.array(array))
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(np.asarray(array)))
@@ -164,3 +192,30 @@ def test_scans(data, array):
 
     actual = groupby_scan(array.compute(), by, **kwargs)
     assert_equal(actual, expected, tolerance)
+
+
+@given(
+    data=st.data(),
+    array=chunked_arrays(),
+    # func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS))
+    func=st.just("ffill"),
+)
+def test_scans(data, array, func):
+    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+    axis = array.ndim - 1
+    numpy_array = array.compute()
+
+    expected = np.empty_like(numpy_array)
+    group_idx, uniques = pd.factorize(by)
+    for i in range(len(uniques)):
+        mask = group_idx == i
+        if not mask.any():
+            note((by, group_idx, uniques))
+            raise ValueError
+        expected[..., mask] = NUMPY_SCAN_FUNCS[func](numpy_array[..., mask], axis=axis)
+
+    actual = groupby_scan(numpy_array, by, func=func, axis=-1)
+    assert_equal(actual, expected)
+
+    actual = groupby_scan(array, by, func=func, axis=-1)
+    assert_equal(actual, expected)
