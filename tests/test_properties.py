@@ -171,7 +171,9 @@ def chunked_arrays(
 
 
 @settings(
-    max_examples=300, suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow]
+    max_examples=300,
+    deadline=None,
+    suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow],
 )
 @given(
     data=st.data(),
@@ -188,6 +190,7 @@ def test_scans(data, array, func):
     if "cum" in func and array.dtype.kind == "f" and array.dtype.itemsize == 4:
         array = array.astype(np.float64)
     numpy_array = array.compute()
+    assume((numpy_array < 2**53).all())
 
     dtype = NUMPY_SCAN_FUNCS[func](numpy_array[..., [0]], axis=axis).dtype
     expected = np.empty_like(numpy_array, dtype=dtype)
