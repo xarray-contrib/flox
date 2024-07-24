@@ -8,7 +8,7 @@ import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
-from hypothesis import HealthCheck, assume, given, note, settings
+from hypothesis import assume, given, note
 
 import flox
 from flox.core import groupby_reduce, groupby_scan
@@ -79,9 +79,6 @@ def not_overflowing_array(array) -> bool:
     return result
 
 
-@settings(
-    max_examples=300, suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow]
-)
 @given(
     array=npst.arrays(
         elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
@@ -170,11 +167,6 @@ def chunked_arrays(
     return from_array(array, chunks=("auto",) * (array.ndim - 1) + (chunks,))
 
 
-@settings(
-    max_examples=300,
-    deadline=None,
-    suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow],
-)
 @given(
     data=st.data(),
     array=chunked_arrays(),
@@ -212,7 +204,6 @@ def test_scans(data, array, func):
     assert_equal(actual, expected, tolerance)
 
 
-@settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
 @given(data=st.data(), array=chunked_arrays())
 def test_ffill_bfill_reverse(data, array):
     assume(not_overflowing_array(np.asarray(array)))
