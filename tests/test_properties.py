@@ -59,6 +59,12 @@ by_dtype_st = supported_dtypes()
 func_st = st.sampled_from(
     [f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS and f not in SKIPPED_FUNCS]
 )
+numeric_arrays = npst.arrays(
+    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
+)
+all_arrays = npst.arrays(
+    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=supported_dtypes()
+)
 
 
 def by_arrays(shape):
@@ -81,13 +87,7 @@ def not_overflowing_array(array) -> bool:
     return result
 
 
-@given(
-    array=npst.arrays(
-        elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
-    ),
-    dtype=by_dtype_st,
-    func=func_st,
-)
+@given(array=numeric_arrays, dtype=by_dtype_st, func=func_st)
 def test_groupby_reduce(array, dtype, func):
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(array))
@@ -149,17 +149,7 @@ def chunks(draw, *, shape: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
 
 
 @st.composite
-def chunked_arrays(
-    draw,
-    *,
-    chunks=chunks,
-    arrays=npst.arrays(
-        elements={"allow_subnormal": False},
-        shape=npst.array_shapes(max_side=10),
-        dtype=array_dtype_st,
-    ),
-    from_array=dask.array.from_array,
-):
+def chunked_arrays(draw, *, chunks=chunks, arrays=numeric_arrays, from_array=dask.array.from_array):
     array = draw(arrays)
     chunks = draw(chunks(shape=array.shape))
 
@@ -216,6 +206,7 @@ def test_scans(data, array, func):
 
 @given(data=st.data(), array=chunked_arrays())
 def test_ffill_bfill_reverse(data, array):
+    # TODO: test NaT and timedelta, datetime
     assume(not_overflowing_array(np.asarray(array)))
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
 
@@ -230,3 +221,38 @@ def test_ffill_bfill_reverse(data, array):
         backward = groupby_scan(a, by, func="bfill")
         forward_reversed = reverse(groupby_scan(reverse(a), reverse(by), func="ffill"))
         assert_equal(forward_reversed, backward)
+
+
+@given(
+    data=st.data(),
+    array=chunked_arrays(arrays=all_arrays),
+    func=st.sampled_from(["first", "last", "nanfirst", "nanlast"]),
+)
+def test_first_last(data, array, func):
+    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+
+    INVERSES = {"first": "last", "last": "first", "nanfirst": "nanlast", "nanlast": "nanfirst"}
+    MATES = {"first": "nanfirst", "last": "nanlast", "nanfirst": "first", "nanlast": "last"}
+    inverse = INVERSES[func]
+    mate = MATES[func]
+
+    if func in ["first", "last"]:
+        array = array.rechunk((*array.chunks[:-1], -1))
+
+    for arr in [array, array.compute()]:
+        forward, fg = groupby_reduce(arr, by, func=func, engine="flox")
+        reverse, rg = groupby_reduce(arr[..., ::-1], by[..., ::-1], func=inverse, engine="flox")
+
+        assert forward.dtype == reverse.dtype
+        assert forward.dtype == arr.dtype
+
+        assert_equal(fg, rg)
+        assert_equal(forward, reverse)
+
+    if arr.dtype.kind == "f" and not np.isnan(array.compute()).any():
+        if mate in ["first", "last"]:
+            array = array.rechunk((*array.chunks[:-1], -1))
+
+        first, _ = groupby_reduce(array, by, func=func, engine="flox")
+        second, _ = groupby_reduce(array, by, func=mate, engine="flox")
+        assert_equal(first, second)
