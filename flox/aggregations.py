@@ -69,6 +69,9 @@ def generic_aggregate(
     if func == "identity":
         return array
 
+    if func in ["nanfirst", "nanlast"] and array.dtype.kind in "US":
+        func = func[3:]
+
     if engine == "flox":
         try:
             method = getattr(aggregate_flox, func)
@@ -144,6 +147,8 @@ def _maybe_promote_int(dtype) -> np.dtype:
 
 def _get_fill_value(dtype, fill_value):
     """Returns dtype appropriate infinity. Returns +Inf equivalent for None."""
+    if fill_value in [None, dtypes.NA] and dtype.kind in "US":
+        return ""
     if fill_value == dtypes.INF or fill_value is None:
         return dtypes.get_pos_infinity(dtype, max_for_int=True)
     if fill_value == dtypes.NINF:
@@ -516,10 +521,10 @@ nanargmin = Aggregation(
     final_dtype=np.intp,
 )
 
-first = Aggregation("first", chunk=None, combine=None, fill_value=0)
-last = Aggregation("last", chunk=None, combine=None, fill_value=0)
-nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=np.nan)
-nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=np.nan)
+first = Aggregation("first", chunk=None, combine=None, fill_value=None)
+last = Aggregation("last", chunk=None, combine=None, fill_value=None)
+nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=dtypes.NA)
+nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=dtypes.NA)
 
 all_ = Aggregation(
     "all",
@@ -808,7 +813,7 @@ def _initialize_aggregation(
     )
 
     final_dtype = _normalize_dtype(dtype_ or agg.dtype_init["final"], array_dtype, fill_value)
-    if agg.name not in ["min", "max", "nanmin", "nanmax"]:
+    if agg.name not in ["first", "last", "nanfirst", "nanlast", "min", "max", "nanmin", "nanmax"]:
         final_dtype = _maybe_promote_int(final_dtype)
     agg.dtype = {
         "user": dtype,  # Save to automatically choose an engine

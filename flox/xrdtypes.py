@@ -100,6 +100,7 @@ def get_pos_infinity(dtype, max_for_int=False):
 
     if issubclass(dtype.type, np.integer):
         if max_for_int:
+            dtype = np.int64 if dtype.kind in "Mm" else dtype
             return np.iinfo(dtype).max
         else:
             return np.inf
