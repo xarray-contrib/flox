@@ -2722,6 +2722,10 @@ def groupby_scan(
 
     axis_ = normalize_axis_tuple(axis, array.ndim)
 
+    if engine is not None:
+        raise NotImplementedError("Setting `engine` is not supported for scans yet.")
+    if method is not None:
+        raise NotImplementedError("Setting `method` is not supported for scans yet.")
     if engine is None:
         engine = "flox"
     assert engine == "flox"
