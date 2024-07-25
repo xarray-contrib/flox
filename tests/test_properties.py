@@ -23,9 +23,11 @@ def ffill(array, axis, dtype=None):
 
 
 def bfill(array, axis, dtype=None):
-    return flox.aggregate_flox.ffill(np.zeros(array.shape[-1], dtype=int), array[::-1], axis=axis)[
-        ::-1
-    ]
+    return flox.aggregate_flox.ffill(
+        np.zeros(array.shape[-1], dtype=int),
+        array[::-1],
+        axis=axis,
+    )[::-1]
 
 
 NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"] + list(
