@@ -132,9 +132,25 @@ def test_groupby_reduce(array, dtype, func):
 
 
 @st.composite
+def chunks(draw, *, shape: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
+    chunks = []
+    for size in shape:
+        if size > 1:
+            nchunks = draw(st.integers(min_value=1, max_value=size - 1))
+            dividers = sorted(
+                set(draw(st.integers(min_value=1, max_value=size - 1)) for _ in range(nchunks - 1))
+            )
+            chunks.append(tuple(a - b for a, b in zip(dividers + [size], [0] + dividers)))
+        else:
+            chunks.append((1,))
+    return tuple(chunks)
+
+
+@st.composite
 def chunked_arrays(
     draw,
     *,
+    chunks=chunks,
     arrays=npst.arrays(
         elements={"allow_subnormal": False},
         shape=npst.array_shapes(max_side=10),
@@ -143,17 +159,9 @@ def chunked_arrays(
     from_array=dask.array.from_array,
 ):
     array = draw(arrays)
-    size = array.shape[-1]
-    if size > 1:
-        nchunks = draw(st.integers(min_value=1, max_value=size - 1))
-        dividers = sorted(
-            set(draw(st.integers(min_value=1, max_value=size - 1)) for _ in range(nchunks - 1))
-        )
-        chunks = tuple(a - b for a, b in zip(dividers + [size], [0] + dividers))
-    else:
-        chunks = (1,)
+    chunks = draw(chunks(shape=array.shape))
 
-    if array.dtype.kind == "f":
+    if array.dtype.kind in "cf":
         nan_idx = draw(
             st.lists(
                 st.integers(min_value=0, max_value=array.shape[-1] - 1),
@@ -164,7 +172,7 @@ def chunked_arrays(
         if nan_idx:
             array[..., nan_idx] = np.nan
 
-    return from_array(array, chunks=("auto",) * (array.ndim - 1) + (chunks,))
+    return from_array(array, chunks=chunks)
 
 
 @given(
