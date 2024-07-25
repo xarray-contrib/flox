@@ -2745,6 +2745,8 @@ def groupby_scan(
     is_bool_array = np.issubdtype(array.dtype, bool)
     array = array.astype(np.intp) if is_bool_array else array
 
+    if expected_groups is not None:
+        raise NotImplementedError("Setting `expected_groups` and binning is not supported yet.")
     expected_groups = _validate_expected_groups(nby, expected_groups)
     expected_groups = _convert_expected_groups_to_index(
         expected_groups, isbin=(False,) * nby, sort=False
@@ -2875,6 +2877,7 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
         ident=agg.identity,
         x=zipped,
         axis=axis,
+        # TODO: support method="sequential" here.
         method="blelloch",
         preop=partial(grouped_reduce, agg=agg),
         dtype=agg.dtype,
