@@ -192,7 +192,7 @@ def test_scans(data, array, func):
     if "cum" in func and array.dtype.kind == "f" and array.dtype.itemsize == 4:
         array = array.astype(np.float64)
     numpy_array = array.compute()
-    assume((numpy_array < 2**53).all())
+    assume((np.abs(numpy_array) < 2**53).all())
 
     dtype = NUMPY_SCAN_FUNCS[func](numpy_array[..., [0]], axis=axis).dtype
     expected = np.empty_like(numpy_array, dtype=dtype)
