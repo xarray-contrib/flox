@@ -9,7 +9,7 @@ from .core import groupby_reduce, groupby_scan, rechunk_for_blockwise, rechunk_f
 def _get_version():
     __version__ = "999"
     try:
-        from ._version import __version__
+        from ._version import __version__  # type: ignore[import-not-found]
     except ImportError:
         pass
     return __version__

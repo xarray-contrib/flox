@@ -55,11 +55,9 @@ from .xrutils import (
 )
 
 if module_available("numpy", minversion="2.0.0"):
-    from numpy.lib.array_utils import (  # type: ignore[import-not-found]
-        normalize_axis_tuple,
-    )
+    from numpy.lib.array_utils import normalize_axis_tuple
 else:
-    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
+    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[no-redef]
 
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
 
@@ -1400,10 +1398,10 @@ def _reduce_blockwise(
     *,
     axis: T_Axes,
     expected_groups,
-    fill_value,
+    fill_value: Any,
     engine: T_Engine,
-    sort,
-    reindex,
+    sort: bool,
+    reindex: bool,
 ) -> FinalResultsDict:
     """
     Blockwise groupby reduction that produces the final result. This code path is
@@ -2529,7 +2527,7 @@ def groupby_reduce(
             by_,
             expected_groups=expected_,
             agg=agg,
-            reindex=reindex,
+            reindex=bool(reindex),
             method=method,
             sort=sort,
         )
@@ -2538,7 +2536,7 @@ def groupby_reduce(
 
     elif not has_dask:
         results = _reduce_blockwise(
-            array, by_, agg, expected_groups=expected_, reindex=reindex, sort=sort, **kwargs
+            array, by_, agg, expected_groups=expected_, reindex=bool(reindex), sort=sort, **kwargs
         )
         groups = (results["groups"],)
         result = results[agg.name]
@@ -2606,7 +2604,7 @@ def groupby_reduce(
             by_,
             expected_groups=expected_,
             agg=agg,
-            reindex=reindex,
+            reindex=bool(reindex),
             method=method,
             chunks_cohorts=chunks_cohorts,
             sort=sort,
