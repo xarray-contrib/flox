@@ -576,10 +576,11 @@ nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=
 
 @dataclass
 class Scan:
-    # This dataclass is separate from aggregations since there's not much in common
+    # This dataclass is separate from Aggregations since there's not much in common
     # between reductions and scans
     name: str
-    # binary operation (e.g. add)
+    # binary operation (e.g. np.add)
+    # Must be None for mode="concat_then_scan"
     binary_op: Callable | None
     # in-memory grouped scan function (e.g. cumsum)
     scan: str
@@ -589,7 +590,9 @@ class Scan:
     identity: Any
     # dtype of result
     dtype: Any = None
-    # binary op "mode"
+    # "Mode" of applying binary op.
+    # for np.add we apply the op directly to the `state` array and the `current` array.
+    # for ffill, bfill we concat `state` to `current` and then run the scan again.
     mode: T_ScanBinaryOpMode = "apply_binary_op"
     preprocess: Callable | None = None
     finalize: Callable | None = None
@@ -705,13 +708,13 @@ def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) 
     )
 
 
-# numpy_groupies cumsum is a broken when NaNs are present.
+# TODO: numpy_groupies cumsum is a broken when NaNs are present.
 # cumsum = Scan("cumsum", binary_op=np.add, reduction="sum", scan="cumsum", identity=0)
 nancumsum = Scan("nancumsum", binary_op=np.add, reduction="nansum", scan="nancumsum", identity=0)
 # ffill uses the identity for scan, and then at the binary-op state,
 # we concatenate the blockwise-reduced values with the original block,
 # and then execute the scan
-# TODO: consider chunk="identity" here, like with reductions as an optimization
+# TODO: consider adding chunk="identity" here, like with reductions as an optimization
 ffill = Scan(
     "ffill",
     binary_op=None,
@@ -730,6 +733,7 @@ bfill = Scan(
     preprocess=reverse,
     finalize=reverse,
 )
+# TODO: not implemented in numpy_groupies
 # cumprod = Scan("cumprod", binary_op=np.multiply, preop="prod", scan="cumprod")
 
 
