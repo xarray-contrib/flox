@@ -1,20 +1,44 @@
+import pandas as pd
 import pytest
 
 pytest.importorskip("hypothesis")
+pytest.importorskip("dask")
 
+import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
-from hypothesis import HealthCheck, assume, given, note, settings
+from hypothesis import assume, given, note
 
-from flox.core import groupby_reduce
+import flox
+from flox.core import groupby_reduce, groupby_scan
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS, assert_equal
+
+dask.config.set(scheduler="sync")
+
+
+def ffill(array, axis, dtype=None):
+    return flox.aggregate_flox.ffill(np.zeros(array.shape[-1], dtype=int), array, axis=axis)
+
+
+def bfill(array, axis, dtype=None):
+    return flox.aggregate_flox.ffill(
+        np.zeros(array.shape[-1], dtype=int),
+        array[::-1],
+        axis=axis,
+    )[::-1]
+
 
 NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"] + list(
     SCIPY_STATS_FUNCS
 )
 SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
+NUMPY_SCAN_FUNCS = {
+    "nancumsum": np.nancumsum,
+    "ffill": ffill,
+    "bfill": bfill,
+}  # "cumsum": np.cumsum,
 
 
 def supported_dtypes() -> st.SearchStrategy[np.dtype]:
@@ -37,6 +61,13 @@ func_st = st.sampled_from(
 )
 
 
+def by_arrays(shape):
+    return npst.arrays(
+        dtype=npst.integer_dtypes(endianness="=") | npst.unicode_string_dtypes(endianness="="),
+        shape=shape,
+    )
+
+
 def not_overflowing_array(array) -> bool:
     if array.dtype.kind == "f":
         info = np.finfo(array.dtype)
@@ -50,9 +81,6 @@ def not_overflowing_array(array) -> bool:
     return result
 
 
-@settings(
-    max_examples=300, suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow]
-)
 @given(
     array=npst.arrays(
         elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
@@ -103,3 +131,102 @@ def test_groupby_reduce(array, dtype, func):
         {"rtol": 1e-13, "atol": 1e-15} if "var" in func or "std" in func else {"atol": 1e-15}
     )
     assert_equal(expected, actual, tolerance)
+
+
+@st.composite
+def chunks(draw, *, shape: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
+    chunks = []
+    for size in shape:
+        if size > 1:
+            nchunks = draw(st.integers(min_value=1, max_value=size - 1))
+            dividers = sorted(
+                set(draw(st.integers(min_value=1, max_value=size - 1)) for _ in range(nchunks - 1))
+            )
+            chunks.append(tuple(a - b for a, b in zip(dividers + [size], [0] + dividers)))
+        else:
+            chunks.append((1,))
+    return tuple(chunks)
+
+
+@st.composite
+def chunked_arrays(
+    draw,
+    *,
+    chunks=chunks,
+    arrays=npst.arrays(
+        elements={"allow_subnormal": False},
+        shape=npst.array_shapes(max_side=10),
+        dtype=array_dtype_st,
+    ),
+    from_array=dask.array.from_array,
+):
+    array = draw(arrays)
+    chunks = draw(chunks(shape=array.shape))
+
+    if array.dtype.kind in "cf":
+        nan_idx = draw(
+            st.lists(
+                st.integers(min_value=0, max_value=array.shape[-1] - 1),
+                max_size=array.shape[-1] - 1,
+                unique=True,
+            )
+        )
+        if nan_idx:
+            array[..., nan_idx] = np.nan
+
+    return from_array(array, chunks=chunks)
+
+
+@given(
+    data=st.data(),
+    array=chunked_arrays(),
+    func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
+)
+def test_scans(data, array, func):
+    assume(not_overflowing_array(np.asarray(array)))
+
+    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+    axis = array.ndim - 1
+
+    # Too many float32 edge-cases!
+    if "cum" in func and array.dtype.kind == "f" and array.dtype.itemsize == 4:
+        array = array.astype(np.float64)
+    numpy_array = array.compute()
+    assume((np.abs(numpy_array) < 2**53).all())
+
+    dtype = NUMPY_SCAN_FUNCS[func](numpy_array[..., [0]], axis=axis).dtype
+    expected = np.empty_like(numpy_array, dtype=dtype)
+    group_idx, uniques = pd.factorize(by)
+    for i in range(len(uniques)):
+        mask = group_idx == i
+        if not mask.any():
+            note((by, group_idx, uniques))
+            raise ValueError
+        expected[..., mask] = NUMPY_SCAN_FUNCS[func](numpy_array[..., mask], axis=axis, dtype=dtype)
+
+    note((numpy_array, group_idx, array.chunks))
+
+    tolerance = {"rtol": 1e-13, "atol": 1e-15}
+    actual = groupby_scan(numpy_array, by, func=func, axis=-1, dtype=dtype)
+    assert_equal(actual, expected, tolerance)
+
+    actual = groupby_scan(array, by, func=func, axis=-1, dtype=dtype)
+    assert_equal(actual, expected, tolerance)
+
+
+@given(data=st.data(), array=chunked_arrays())
+def test_ffill_bfill_reverse(data, array):
+    assume(not_overflowing_array(np.asarray(array)))
+    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+
+    def reverse(arr):
+        return arr[..., ::-1]
+
+    for a in (array, array.compute()):
+        forward = groupby_scan(a, by, func="ffill")
+        backward_reversed = reverse(groupby_scan(reverse(a), reverse(by), func="bfill"))
+        assert_equal(forward, backward_reversed)
+
+        backward = groupby_scan(a, by, func="bfill")
+        forward_reversed = reverse(groupby_scan(reverse(a), reverse(by), func="ffill"))
+        assert_equal(forward_reversed, backward)

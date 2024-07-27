@@ -3,7 +3,7 @@
 """Top-level module for flox ."""
 from . import cache
 from .aggregations import Aggregation  # noqa
-from .core import groupby_reduce, rechunk_for_blockwise, rechunk_for_cohorts  # noqa
+from .core import groupby_reduce, groupby_scan, rechunk_for_blockwise, rechunk_for_cohorts  # noqa
 
 
 def _get_version():

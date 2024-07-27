@@ -25,6 +25,7 @@ from flox.core import (
     factorize_,
     find_group_cohorts,
     groupby_reduce,
+    groupby_scan,
     rechunk_for_cohorts,
     reindex_,
     subset_to_blocks,
@@ -94,7 +95,10 @@ def _get_array_func(func: str) -> Callable:
 
         def npfunc(x, **kwargs):
             spfunc = partial(getattr(scipy.stats, func), nan_policy=nan_policy)
-            return getattr(spfunc(x, **kwargs), func)
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", r"After omitting NaNs, one or more axis-slices")
+                result = getattr(spfunc(x, **kwargs), func)
+            return result
 
     else:
         npfunc = getattr(np, func)
@@ -1804,3 +1808,18 @@ def test_nanlen_string(dtype, engine):
     expected = np.array([3, 2, 1], dtype=np.intp)
     actual, *_ = groupby_reduce(array, by, func="count", engine=engine)
     assert_equal(expected, actual)
+
+
+def test_scans():
+    array = np.array([1, 1, 1], dtype=np.uint64)
+    by = np.array([0] * array.shape[-1])
+    kwargs = {"func": "nancumsum", "axis": -1}
+    expected = np.nancumsum(array, axis=-1)
+
+    actual = groupby_scan(array, by, **kwargs)
+    assert_equal(expected, actual)
+
+    if has_dask:
+        da = dask.array.from_array(array, chunks=2)
+        actual = groupby_scan(da, by, **kwargs)
+        assert_equal(expected, actual)

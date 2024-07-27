@@ -35,11 +35,9 @@ def module_available(module: str, minversion: Optional[str] = None) -> bool:
 
 
 if module_available("numpy", minversion="2.0.0"):
-    from numpy.lib.array_utils import (  # type: ignore[import-not-found]
-        normalize_axis_index,
-    )
+    from numpy.lib.array_utils import normalize_axis_index
 else:
-    from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
+    from numpy.core.numeric import normalize_axis_index  # type: ignore[no-redef]
 
 
 try:

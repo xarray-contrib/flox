@@ -14,11 +14,12 @@ def _prepare_for_flox(group_idx, array):
     issorted = (group_idx[:-1] <= group_idx[1:]).all()
     if issorted:
         ordered_array = array
+        perm = slice(None)
     else:
         perm = group_idx.argsort(kind="stable")
         group_idx = group_idx[..., perm]
         ordered_array = array[..., perm]
-    return group_idx, ordered_array
+    return group_idx, ordered_array, perm
 
 
 def _lerp(a, b, *, t, dtype, out=None):
@@ -226,3 +227,29 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     with np.errstate(invalid="ignore", divide="ignore"):
         out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
+
+
+def ffill(group_idx, array, *, axis, **kwargs):
+    group_idx, array, perm = _prepare_for_flox(group_idx, array)
+    shape = array.shape
+    ndim = array.ndim
+    assert axis == (ndim - 1), (axis, ndim - 1)
+
+    flag = np.concatenate((np.array([True], like=array), group_idx[1:] != group_idx[:-1]))
+    (group_starts,) = flag.nonzero()
+
+    # https://stackoverflow.com/questions/41190852/most-efficient-way-to-forward-fill-nan-values-in-numpy-array
+    mask = np.isnan(array)
+    # modified from the SO answer, just reset the index at the start of every group!
+    mask[..., np.asarray(group_starts)] = False
+
+    idx = np.where(mask, 0, np.arange(shape[axis]))
+    np.maximum.accumulate(idx, axis=axis, out=idx)
+    slc = [
+        np.arange(k)[tuple([slice(None) if dim == i else np.newaxis for dim in range(ndim)])]
+        for i, k in enumerate(shape)
+    ]
+    slc[axis] = idx
+
+    invert_perm = slice(None) if isinstance(perm, slice) else np.argsort(perm, kind="stable")
+    return array[tuple(slc)][..., invert_perm]
