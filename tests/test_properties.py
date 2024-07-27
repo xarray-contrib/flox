@@ -1,3 +1,5 @@
+from typing import Any, Callable
+
 import pandas as pd
 import pytest
 
@@ -14,7 +16,7 @@ import flox
 from flox.core import groupby_reduce, groupby_scan
 
 from . import assert_equal
-from .strategies import all_arrays, by_arrays, chunked_arrays, func_st, numeric_arrays
+from .strategies import by_arrays, chunked_arrays, func_st, numeric_arrays
 
 dask.config.set(scheduler="sync")
 
@@ -31,14 +33,14 @@ def bfill(array, axis, dtype=None):
     )[::-1]
 
 
-NUMPY_SCAN_FUNCS = {
+NUMPY_SCAN_FUNCS: dict[str, Callable] = {
     "nancumsum": np.nancumsum,
     "ffill": ffill,
     "bfill": bfill,
 }  # "cumsum": np.cumsum,
 
 
-def not_overflowing_array(array) -> bool:
+def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
     if array.dtype.kind == "f":
         info = np.finfo(array.dtype)
     elif array.dtype.kind in ["i", "u"]:
@@ -51,9 +53,8 @@ def not_overflowing_array(array) -> bool:
     return result
 
 
-# TODO: migrate to by_arrays but with constant value
 @given(data=st.data(), array=numeric_arrays, func=func_st)
-def test_groupby_reduce(data, array, func):
+def test_groupby_reduce(data, array, func: str) -> None:
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(array))
     # TODO: fix var for complex numbers upstream
@@ -71,14 +72,14 @@ def test_groupby_reduce(data, array, func):
                 "min_size": 1,
                 "max_size": 1,
             },
-            shape=array.shape[-1],
+            shape=(array.shape[-1],),
         )
     )
     assert len(np.unique(by)) == 1
     kwargs = {"q": 0.8} if "quantile" in func else {}
-    flox_kwargs = {}
+    flox_kwargs: dict[str, Any] = {}
     with np.errstate(invalid="ignore", divide="ignore"):
-        actual, _ = groupby_reduce(
+        actual, *_ = groupby_reduce(
             array, by, func=func, axis=axis, engine="numpy", **flox_kwargs, finalize_kwargs=kwargs
         )
 
@@ -112,10 +113,10 @@ def test_groupby_reduce(data, array, func):
 
 @given(
     data=st.data(),
-    array=chunked_arrays(),
+    array=chunked_arrays(arrays=numeric_arrays),
     func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
 )
-def test_scans(data, array, func):
+def test_scans(data, array: dask.array.Array, func: str) -> None:
     assume(not_overflowing_array(np.asarray(array)))
 
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
@@ -148,7 +149,7 @@ def test_scans(data, array, func):
 
 
 @given(data=st.data(), array=chunked_arrays())
-def test_ffill_bfill_reverse(data, array):
+def test_ffill_bfill_reverse(data, array: dask.array.Array) -> None:
     # TODO: test NaT and timedelta, datetime
     assume(not_overflowing_array(np.asarray(array)))
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
@@ -168,10 +169,10 @@ def test_ffill_bfill_reverse(data, array):
 
 @given(
     data=st.data(),
-    array=chunked_arrays(arrays=all_arrays),
+    array=chunked_arrays(),
     func=st.sampled_from(["first", "last", "nanfirst", "nanlast"]),
 )
-def test_first_last(data, array, func):
+def test_first_last(data, array: dask.array.Array, func: str) -> None:
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
 
     INVERSES = {"first": "last", "last": "first", "nanfirst": "nanlast", "nanlast": "nanfirst"}
@@ -183,8 +184,8 @@ def test_first_last(data, array, func):
         array = array.rechunk((*array.chunks[:-1], -1))
 
     for arr in [array, array.compute()]:
-        forward, fg = groupby_reduce(arr, by, func=func, engine="flox")
-        reverse, rg = groupby_reduce(arr[..., ::-1], by[..., ::-1], func=inverse, engine="flox")
+        forward, *fg = groupby_reduce(arr, by, func=func, engine="flox")
+        reverse, *rg = groupby_reduce(arr[..., ::-1], by[..., ::-1], func=inverse, engine="flox")
 
         assert forward.dtype == reverse.dtype
         assert forward.dtype == arr.dtype
@@ -196,6 +197,6 @@ def test_first_last(data, array, func):
         if mate in ["first", "last"]:
             array = array.rechunk((*array.chunks[:-1], -1))
 
-        first, _ = groupby_reduce(array, by, func=func, engine="flox")
-        second, _ = groupby_reduce(array, by, func=mate, engine="flox")
+        first, *_ = groupby_reduce(array, by, func=func, engine="flox")
+        second, *_ = groupby_reduce(array, by, func=mate, engine="flox")
         assert_equal(first, second)
