@@ -1823,38 +1823,3 @@ def test_scans():
         da = dask.array.from_array(array, chunks=2)
         actual = groupby_scan(da, by, **kwargs)
         assert_equal(expected, actual)
-
-
-# from numpy import nan
-
-# array = np.array([nan,  0., nan, nan,  0.], dtype=np.float32)
-# group_idx = np.array([0, 0, 1, 0, 0])
-# ffill.dtype = array.dtype
-# dask_groupby_scan(dask.array.from_array(array, chunks=(1, 1, 1, 2)), group_idx, axes=(0,), agg=ffill).compute()
-# dask_groupby_scan(dask.array.from_array(array, chunks=(2, 1, 2)), group_idx, axes=(0,), agg=ffill).compute()
-
-
-# DASK/FLOX BUG?
-# func = "ffill"
-# array = array([[ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.],
-#         [ 0.,  1.,  0.,  0.,  0.,  0.,  0.,  0., nan,  0.]], dtype=float32),
-# group_idx=  array([0, 0, 0, 0, 1, 1, 1, 1, 0, 0])
-# chunks = ((2,), (1, 1, 2, 1, 5))
-
-
-# NUMPY_GROUPIES BUG
-# import numpy_groupies as npg
-
-# npg.aggregate_numpy.aggregate(
-#     array([1, 1, 1, 0, 0]),
-#     array([[ 5.,  6.,  7.,  8.,  9.],
-#        [ 0.,  0.,  0., nan,  0.]], dtype=float32),
-#     func="cumsum",
-#     axis=-1,
-# )
-
-# numpy_array, group_idx = (
-#     array([1.6777218e07, 1.0000000e00, 0.0000000e00], dtype=float32),
-#     array([0, 1, 1]),
-# )
-# groupby_scan(numpy_array, group_idx, axis=-1, func="nancumsum")
