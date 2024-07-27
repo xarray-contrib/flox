@@ -2523,8 +2523,8 @@ def groupby_reduce(
         partial_agg = partial(cubed_groupby_agg, **kwargs)
 
         result, groups = partial_agg(
-            array,
-            by_,
+            array=array,
+            by=by_,
             expected_groups=expected_,
             agg=agg,
             reindex=bool(reindex),
@@ -2600,8 +2600,8 @@ def groupby_reduce(
             array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
         result, groups = partial_agg(
-            array,
-            by_,
+            array=array,
+            by=by_,
             expected_groups=expected_,
             agg=agg,
             reindex=bool(reindex),
