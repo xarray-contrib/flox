@@ -113,7 +113,7 @@ def assert_equal(a, b, tolerance=None):
     else:
         a_eager, b_eager = a, b
 
-    if a.dtype.kind in "SUMm":
+    if a.dtype.kind in "SUMmO":
         np.testing.assert_equal(a_eager, b_eager)
     else:
         np.testing.assert_allclose(a_eager, b_eager, equal_nan=True, **tolerance)
