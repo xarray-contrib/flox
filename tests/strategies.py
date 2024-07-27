@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any, Callable
+
 import cftime
 import dask
 import hypothesis.extra.numpy as npst
@@ -5,6 +9,8 @@ import hypothesis.strategies as st
 import numpy as np
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS
+
+Chunks = tuple[tuple[int, ...], ...]
 
 
 def supported_dtypes() -> st.SearchStrategy[np.dtype]:
@@ -38,7 +44,6 @@ all_arrays = npst.arrays(
     elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=supported_dtypes()
 )
 
-
 calendars = st.sampled_from(
     [
         "standard",
@@ -55,7 +60,7 @@ calendars = st.sampled_from(
 
 
 @st.composite
-def units(draw, *, calendar: str):
+def units(draw, *, calendar: str) -> str:
     choices = ["days", "hours", "minutes", "seconds", "milliseconds", "microseconds"]
     if calendar == "360_day":
         choices += ["months"]
@@ -67,20 +72,36 @@ def units(draw, *, calendar: str):
     year, month, day = dt.year, dt.month, dt.day
     if calendar == "360_day":
         day = min(day, 30)
+    if calendar in ["360_day", "365_day", "noleap"] and month == 2 and day == 29:
+        day = 28
+
     return f"{time_units} since {year}-{month}-{day}"
 
 
 @st.composite
-def cftime_arrays(draw, *, shape, calendars=calendars, elements=None):
+def cftime_arrays(
+    draw: st.DrawFn,
+    *,
+    shape: tuple[int, ...],
+    calendars: st.SearchStrategy[str] = calendars,
+    elements: dict[str, Any] | None = None,
+) -> np.ndarray[Any, Any]:
     if elements is None:
-        elements = {"min_value": -10_000, "max_value": 10_000}
+        elements = {}
+    elements.setdefault("min_value", -10_000)
+    elements.setdefault("max_value", 10_000)
     cal = draw(calendars)
     values = draw(npst.arrays(dtype=np.int64, shape=shape, elements=elements))
     unit = draw(units(calendar=cal))
     return cftime.num2date(values, units=unit, calendar=cal)
 
 
-def by_arrays(shape, *, elements=None):
+def by_arrays(
+    shape: tuple[int, ...], *, elements: dict[str, Any] | None = None
+) -> st.SearchStrategy[np.ndarray[Any, Any]]:
+    if elements is None:
+        elements = {}
+    elements.setdefault("alphabet", st.characters(exclude_categories=("C",)))
     return st.one_of(
         npst.arrays(
             dtype=npst.integer_dtypes(endianness="=") | npst.unicode_string_dtypes(endianness="="),
@@ -92,7 +113,7 @@ def by_arrays(shape, *, elements=None):
 
 
 @st.composite
-def chunks(draw, *, shape: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
+def chunks(draw: st.DrawFn, *, shape: tuple[int, ...]) -> Chunks:
     chunks = []
     for size in shape:
         if size > 1:
@@ -107,7 +128,13 @@ def chunks(draw, *, shape: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
 
 
 @st.composite
-def chunked_arrays(draw, *, chunks=chunks, arrays=numeric_arrays, from_array=dask.array.from_array):
+def chunked_arrays(
+    draw: st.DrawFn,
+    *,
+    chunks: Callable[..., st.SearchStrategy[Chunks]] = chunks,
+    arrays=all_arrays,
+    from_array: Callable = dask.array.from_array,
+) -> dask.array.Array:
     array = draw(arrays)
     chunks = draw(chunks(shape=array.shape))
 
