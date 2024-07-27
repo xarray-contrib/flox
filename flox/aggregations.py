@@ -563,6 +563,10 @@ def quantile_new_dims_func(q) -> tuple[Dim]:
     return (Dim(name="quantile", values=q),)
 
 
+def topk_new_dims_func(k) -> tuple[Dim]:
+    return (Dim(name="k", values=np.arange(k)),)
+
+
 quantile = Aggregation(
     name="quantile",
     fill_value=dtypes.NA,
@@ -578,6 +582,14 @@ nanquantile = Aggregation(
     combine=None,
     final_dtype=np.floating,
     new_dims_func=quantile_new_dims_func,
+)
+topk = Aggregation(
+    name="topk",
+    fill_value=dtypes.NINF,
+    chunk=None,
+    combine=None,
+    final_dtype=None,
+    new_dims_func=topk_new_dims_func,
 )
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
@@ -778,6 +790,7 @@ AGGREGATIONS: dict[str, Aggregation | Scan] = {
     "nanquantile": nanquantile,
     "mode": mode,
     "nanmode": nanmode,
+    "topk": topk,
     # "cumsum": cumsum,
     "nancumsum": nancumsum,
     "ffill": ffill,

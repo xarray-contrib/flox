@@ -42,6 +42,7 @@ from .aggregations import (
     _initialize_aggregation,
     generic_aggregate,
     quantile_new_dims_func,
+    topk_new_dims_func,
 )
 from .cache import memoize
 from .xrutils import (
@@ -1080,6 +1081,10 @@ def chunk_reduce(
             if reduction in ("quantile", "nanquantile"):
                 new_dims_shape = tuple(
                     dim.size for dim in quantile_new_dims_func(**kw) if not dim.is_scalar
+                )
+            elif reduction == "topk":
+                new_dims_shape = tuple(
+                    dim.size for dim in topk_new_dims_func(**kw) if not dim.is_scalar
                 )
             else:
                 new_dims_shape = tuple()
@@ -2205,7 +2210,7 @@ def _choose_engine(by, agg: Aggregation):
 
     not_arg_reduce = not _is_arg_reduction(agg)
 
-    if agg.name in ["quantile", "nanquantile", "median", "nanmedian"]:
+    if agg.name in ["quantile", "nanquantile", "median", "nanmedian", "topk"]:
         logger.debug(f"_choose_engine: Choosing 'flox' since {agg.name}")
         return "flox"
 
@@ -2258,7 +2263,7 @@ def groupby_reduce(
         equality check are for dimensions of size 1 in `by`.
     func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
             "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
-            "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
+            "quantile", "nanquantile", "median", "nanmedian", "topk", "mode", "nanmode", \
             "first", "nanfirst", "last", "nanlast"} or Aggregation
         Single function name or an Aggregation instance
     expected_groups : (optional) Sequence
