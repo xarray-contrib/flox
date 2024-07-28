@@ -28,3 +28,15 @@ settings.register_profile(
 )
 def engine(request):
     return request.param
+
+
+@pytest.fixture(
+    scope="module",
+    params=[
+        "flox",
+        "numpy",
+        pytest.param("numbagg", marks=requires_numbagg),
+    ],
+)
+def engine_no_numba(request):
+    return request.param

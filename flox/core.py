@@ -2011,7 +2011,7 @@ def _validate_reindex(
                 reindex = True
 
     assert isinstance(reindex, bool)
-    logger.debug("Leaving _validate_reindex: reindex is {}".format(reindex))  # noqa
+    # logger.debug("Leaving _validate_reindex: reindex is {}".format(reindex))  # noqa
 
     return reindex
 
