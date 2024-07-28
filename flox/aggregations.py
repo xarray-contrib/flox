@@ -564,7 +564,7 @@ def quantile_new_dims_func(q) -> tuple[Dim]:
 
 
 def topk_new_dims_func(k) -> tuple[Dim]:
-    return (Dim(name="k", values=np.arange(k)),)
+    return (Dim(name="k", values=np.arange(abs(k))),)
 
 
 quantile = Aggregation(
@@ -848,6 +848,8 @@ def _initialize_aggregation(
         ),
     }
 
+    if agg.name == "topk" and finalize_kwargs["k"] < 0:
+        agg.fill_value["intermediate"] = (dtypes.INF,)
     # Replace sentinel fill values according to dtype
     agg.fill_value["user"] = fill_value
     agg.fill_value["intermediate"] = tuple(

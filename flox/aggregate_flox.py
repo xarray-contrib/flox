@@ -47,7 +47,17 @@ def _lerp(a, b, *, t, dtype, out=None):
 
 
 def quantile_or_topk(
-    array, inv_idx, *, q=None, k=None, axis, skipna, group_idx, dtype=None, out=None
+    array,
+    inv_idx,
+    *,
+    q=None,
+    k=None,
+    axis,
+    skipna,
+    group_idx,
+    dtype=None,
+    out=None,
+    fill_value=None,
 ):
     assert q or k
 
@@ -81,9 +91,8 @@ def quantile_or_topk(
 
     param = q or k
     if k is not None:
-        assert k > 0
         is_scalar_param = False
-        param = np.arange(k)
+        param = np.arange(abs(k))
     else:
         is_scalar_param = is_scalar(q)
         param = np.atleast_1d(param)
@@ -111,10 +120,10 @@ def quantile_or_topk(
         kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
 
     else:
-        virtual_index = (actual_sizes - k) + inv_idx[:-1]
+        virtual_index = inv_idx[:-1] + ((actual_sizes - k) if k > 0 else abs(k) - 1)
         kth = np.unique(virtual_index)
         kth = kth[kth > 0]
-        k_offset = np.arange(k).reshape((k,) + (1,) * virtual_index.ndim)
+        k_offset = param.reshape((abs(k),) + (1,) * virtual_index.ndim)
         lo_ = k_offset + virtual_index[np.newaxis, ...]
 
     # partition the complex array in-place
@@ -137,15 +146,12 @@ def quantile_or_topk(
         gamma = np.broadcast_to(virtual_index, idxshape) - lo_
         result = _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
     else:
-        import ipdb
-
-        ipdb.set_trace()
         result = loval
-        result[lo_ < 0] = np.nan
+        result[lo_ < 0] = fill_value
     if not skipna and np.any(nanmask):
-        result[..., nanmask] = np.nan
+        result[..., nanmask] = fill_value
     if k is not None:
-        result = result.astype(array.dtype, copy=False)
+        result = result.astype(dtype, copy=False)
         np.copyto(out, result)
     return result
 
@@ -175,9 +181,10 @@ def _np_grouped_op(
         if not q and not k:
             out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
         else:
-            nq = len(np.atleast_1d(q)) if q is not None else k
+            nq = len(np.atleast_1d(q)) if q is not None else abs(k)
             out = np.full((nq,) + array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
             kwargs["group_idx"] = group_idx
+            kwargs["fill_value"] = fill_value
 
     if (len(uniques) == size) and (uniques == np.arange(size, like=array)).all():
         # The previous version of this if condition
