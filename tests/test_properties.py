@@ -159,14 +159,19 @@ def test_ffill_bfill_reverse(data, array: dask.array.Array) -> None:
     def reverse(arr):
         return arr[..., ::-1]
 
-    for a in (array, array.compute()):
-        forward = groupby_scan(a, by, func="ffill")
-        backward_reversed = reverse(groupby_scan(reverse(a), reverse(by), func="bfill"))
-        assert_equal(forward, backward_reversed)
+    forward = groupby_scan(array, by, func="ffill")
+    as_numpy = groupby_scan(array.compute(), by, func="ffill")
+    assert_equal(forward, as_numpy)
 
-        backward = groupby_scan(a, by, func="bfill")
-        forward_reversed = reverse(groupby_scan(reverse(a), reverse(by), func="ffill"))
-        assert_equal(forward_reversed, backward)
+    backward = groupby_scan(array, by, func="bfill")
+    as_numpy = groupby_scan(array.compute(), by, func="bfill")
+    assert_equal(backward, as_numpy)
+
+    backward_reversed = reverse(groupby_scan(reverse(array), reverse(by), func="bfill"))
+    assert_equal(forward, backward_reversed)
+
+    forward_reversed = reverse(groupby_scan(reverse(array), reverse(by), func="ffill"))
+    assert_equal(forward_reversed, backward)
 
 
 @given(

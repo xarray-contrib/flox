@@ -2788,20 +2788,29 @@ def groupby_scan(
     if by_.shape[-1] == 1 or by_.shape == grp_shape:
         return array.astype(agg.dtype)
 
+    # Made a design choice here to have `preprocess` handle both array and group_idx
+    # Example: for reversing, we need to reverse the whole array, not just reverse
+    #          each block independently
+    inp = AlignedArrays(array=array, group_idx=by_)
+    if agg.preprocess:
+        inp = agg.preprocess(inp)
+
     if not has_dask:
-        final_state = chunk_scan(
-            AlignedArrays(array=array, group_idx=by_), axis=single_axis, agg=agg, dtype=agg.dtype
-        )
-        return extract_array(final_state)
+        final_state = chunk_scan(inp, axis=single_axis, agg=agg, dtype=agg.dtype)
+        result = _finalize_scan(final_state)
     else:
-        return dask_groupby_scan(array, by_, axes=axis_, agg=agg)
+        result = dask_groupby_scan(inp.array, inp.group_idx, axes=axis_, agg=agg)
+
+    # Made a design choice here to have `postprocess` handle both array and group_idx
+    out = AlignedArrays(array=result, group_idx=by_)
+    if agg.finalize:
+        out = agg.finalize(out)
+    return out.array
 
 
 def chunk_scan(inp: AlignedArrays, *, axis: int, agg: Scan, dtype=None, keepdims=None) -> ScanState:
     assert axis == inp.array.ndim - 1
 
-    if agg.preprocess:
-        inp = agg.preprocess(inp)
     # I don't think we need to re-factorize here unless we are grouping by a dask array
     accumulated = generic_aggregate(
         inp.group_idx,
@@ -2813,8 +2822,6 @@ def chunk_scan(inp: AlignedArrays, *, axis: int, agg: Scan, dtype=None, keepdims
         fill_value=agg.identity,
     )
     result = AlignedArrays(array=accumulated, group_idx=inp.group_idx)
-    if agg.finalize:
-        result = agg.finalize(result)
     return ScanState(result=result, state=None)
 
 
@@ -2840,10 +2847,9 @@ def _zip(group_idx: np.ndarray, array: np.ndarray) -> AlignedArrays:
     return AlignedArrays(group_idx=group_idx, array=array)
 
 
-def extract_array(block: ScanState, finalize: Callable | None = None) -> np.ndarray:
+def _finalize_scan(block: ScanState) -> np.ndarray:
     assert block.result is not None
-    result = finalize(block.result) if finalize is not None else block.result
-    return result.array
+    return block.result.array
 
 
 def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
@@ -2859,9 +2865,8 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
     array, by = _unify_chunks(array, by)
 
     # 1. zip together group indices & array
-    to_map = _zip if agg.preprocess is None else tlz.compose(agg.preprocess, _zip)
     zipped = map_blocks(
-        to_map, by, array, dtype=array.dtype, meta=array._meta, name="groupby-scan-preprocess"
+        _zip, by, array, dtype=array.dtype, meta=array._meta, name="groupby-scan-preprocess"
     )
 
     scan_ = partial(chunk_scan, agg=agg)
@@ -2882,7 +2887,7 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
     )
 
     # 3. Unzip and extract the final result array, discard groups
-    result = map_blocks(extract_array, accumulated, dtype=agg.dtype, finalize=agg.finalize)
+    result = map_blocks(_finalize_scan, accumulated, dtype=agg.dtype)
 
     assert result.chunks == array.chunks
 
