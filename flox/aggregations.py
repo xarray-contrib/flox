@@ -76,7 +76,7 @@ def generic_aggregate(
         try:
             method = getattr(aggregate_flox, func)
         except AttributeError:
-            logger.debug(f"Couldn't find {func} for engine='flox'. Falling back to numpy")
+            # logger.debug(f"Couldn't find {func} for engine='flox'. Falling back to numpy")
             method = get_npg_aggregation(func, engine="numpy")
 
     elif engine == "numbagg":
@@ -94,7 +94,7 @@ def generic_aggregate(
                 method = getattr(aggregate_numbagg, func)
 
         except AttributeError:
-            logger.debug(f"Couldn't find {func} for engine='numbagg'. Falling back to numpy")
+            # logger.debug(f"Couldn't find {func} for engine='numbagg'. Falling back to numpy")
             method = get_npg_aggregation(func, engine="numpy")
 
     elif engine in ["numpy", "numba"]:

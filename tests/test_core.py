@@ -187,7 +187,7 @@ def test_groupby_reduce(
     assert_equal(expected_result, result)
 
 
-def gen_array_by(size, func: str):
+def gen_array_by(size, func):
     by = np.ones(size[-1])
     rng = np.random.default_rng(12345)
     array = rng.random(tuple(6 if s == 1 else s for s in size))

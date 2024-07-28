@@ -62,7 +62,7 @@ jobs:
       - name: Run Tests
         id: status
         run: |
-          pytest -n auto --cov=./ --cov-report=xml --hypothesis-profile ci
+          pytest --durations=20 --durations-min=0.5 -n auto --cov=./ --cov-report=xml --hypothesis-profile ci
       - name: Upload code coverage to Codecov
         uses: codecov/codecov-action@v4.5.0
         with:

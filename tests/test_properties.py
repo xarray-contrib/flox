@@ -1,3 +1,4 @@
+import warnings
 from typing import Any, Callable
 
 import pandas as pd
@@ -51,7 +52,9 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
 
     array = array.ravel()
     array = array[notnull(array)]
-    result = bool(np.all((array < info.max / array.size) & (array > info.min / array.size)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        result = bool(np.all((array < info.max / array.size) & (array > info.min / array.size)))
     # note(f"returning {result}, {array.min()} vs {info.min}, {array.max()} vs {info.max}")
     return result
 
