@@ -403,7 +403,9 @@ def xarray_reduce(
             (newdim,) = quantile_new_dims_func(**finalize_kwargs)
         elif func == "topk":
             (newdim,) = topk_new_dims_func(**finalize_kwargs)
-        if not newdim.is_scalar:
+        else:
+            newdim = None
+        if newdim is not None and not newdim.is_scalar:
             # NOTE: _restore_dim_order will move any new dims to the end anyway.
             # This transpose is simply makes it easy to specify output_core_dims
             # output dim order: (*broadcast_dims, *group_dims, quantile_dim)
