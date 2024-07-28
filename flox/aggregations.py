@@ -654,8 +654,8 @@ class ScanState:
 
 
 def reverse(a: AlignedArrays) -> AlignedArrays:
-    a.group_idx = a.group_idx[::-1]
-    a.array = a.array[::-1]
+    a.group_idx = a.group_idx[..., ::-1]
+    a.array = a.array[..., ::-1]
     return a
 
 

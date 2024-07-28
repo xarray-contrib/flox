@@ -187,11 +187,11 @@ def test_groupby_reduce(
     assert_equal(expected_result, result)
 
 
-def gen_array_by(size, func):
+def gen_array_by(size, func: str):
     by = np.ones(size[-1])
     rng = np.random.default_rng(12345)
     array = rng.random(tuple(6 if s == 1 else s for s in size))
-    if "nan" in func and "nanarg" not in func:
+    if ("nan" in func or "fill" in func) and "nanarg" not in func:
         array[[1, 4, 5], ...] = np.nan
     elif "nanarg" in func and len(size) > 1:
         array[[1, 4, 5], 1] = np.nan
@@ -1810,7 +1810,7 @@ def test_nanlen_string(dtype, engine):
     assert_equal(expected, actual)
 
 
-def test_scans():
+def test_cumusm():
     array = np.array([1, 1, 1], dtype=np.uint64)
     by = np.array([0] * array.shape[-1])
     kwargs = {"func": "nancumsum", "axis": -1}
@@ -1823,3 +1823,27 @@ def test_scans():
         da = dask.array.from_array(array, chunks=2)
         actual = groupby_scan(da, by, **kwargs)
         assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        pytest.param(-1, marks=requires_dask),
+        pytest.param(3, marks=requires_dask),
+        pytest.param(4, marks=requires_dask),
+    ],
+)
+@pytest.mark.parametrize("size", ((1, 12), (12,), (12, 9)))
+@pytest.mark.parametrize("add_nan_by", [True, False])
+@pytest.mark.parametrize("func", ["ffill", "bfill"])
+def test_ffill_bfill(chunks, size, add_nan_by, func):
+    array, by = gen_array_by(size, func)
+    if chunks:
+        array = dask.array.from_array(array, chunks=chunks)
+    if add_nan_by:
+        by[0:3] = np.nan
+    by = tuple(by)
+
+    expected = flox.groupby_scan(array.compute(), by, func=func)
+    actual = flox.groupby_scan(array, by, func=func)
+    assert_equal(expected, actual)
