@@ -14,6 +14,7 @@ from hypothesis import assume, given, note
 
 import flox
 from flox.core import groupby_reduce, groupby_scan
+from flox.xrutils import notnull
 
 from . import assert_equal
 from .strategies import by_arrays, chunked_arrays, func_st, numeric_arrays
@@ -48,6 +49,8 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
     else:
         return True
 
+    array = array.ravel()
+    array = array[notnull(array)]
     result = bool(np.all((array < info.max / array.size) & (array > info.min / array.size)))
     # note(f"returning {result}, {array.min()} vs {info.min}, {array.max()} vs {info.max}")
     return result
@@ -117,7 +120,8 @@ def test_groupby_reduce(data, array, func: str) -> None:
     func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
 )
 def test_scans(data, array: dask.array.Array, func: str) -> None:
-    assume(not_overflowing_array(np.asarray(array)))
+    if "cum" in func:
+        assume(not_overflowing_array(np.asarray(array)))
 
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
     axis = array.ndim - 1
@@ -150,8 +154,6 @@ def test_scans(data, array: dask.array.Array, func: str) -> None:
 
 @given(data=st.data(), array=chunked_arrays())
 def test_ffill_bfill_reverse(data, array: dask.array.Array) -> None:
-    # TODO: test NaT and timedelta, datetime
-    assume(not_overflowing_array(np.asarray(array)))
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
 
     def reverse(arr):

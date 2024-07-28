@@ -125,8 +125,9 @@ def get_neg_infinity(dtype, min_for_int=False):
     fill_value : positive infinity value corresponding to this dtype.
     """
 
-    if np.issubdtype(dtype, (np.timedelta64, np.datetime64)):
-        return dtype.type(np.iinfo(np.int64).min + 1)
+    if is_datetime_like(dtype):
+        unit, _ = np.datetime_data(dtype)
+        return dtype.type(np.iinfo(np.int64).min + 1, unit)
 
     if issubclass(dtype.type, np.floating):
         return -np.inf
