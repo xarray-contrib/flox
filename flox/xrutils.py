@@ -389,10 +389,13 @@ def topk(a, k, axis, keepdims):
     are not sorted internally.
     """
     assert keepdims is True
-    axis = axis[0]
+    (axis,) = axis
+    axis = normalize_axis_index(axis, a.ndim)
     if abs(k) >= a.shape[axis]:
         return a
 
+    # TODO: handle NaNs
     a = np.partition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
-    return a[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
+    result = a[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
+    return result

@@ -210,3 +210,16 @@ def test_first_last(data, array: dask.array.Array, func: str) -> None:
         first, *_ = groupby_reduce(array, by, func=func, engine="flox")
         second, *_ = groupby_reduce(array, by, func=mate, engine="flox")
         assert_equal(first, second)
+
+
+@given(data=st.data(), array=chunked_arrays())
+def test_topk_max_min(data, array):
+    "top 1 == max; top -1 == min"
+    size = array.shape[-1]
+    by = data.draw(by_arrays(shape=(size,)))
+    k, npfunc = data.draw(st.sampled_from([(1, "max"), (-1, "min")]))
+
+    for a in (array, array.compute()):
+        actual, _ = groupby_reduce(a, by, func="topk", finalize_kwargs={"k": k})
+        expected, _ = groupby_reduce(a, by, func=npfunc)
+        assert_equal(actual, expected[np.newaxis, :])

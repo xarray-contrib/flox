@@ -98,10 +98,8 @@ def quantile_or_topk(
         param = np.atleast_1d(param)
     param = np.reshape(param, (param.size,) + (1,) * array.ndim)
 
-    if is_scalar_param:
-        idxshape = array.shape[:-1] + (actual_sizes.shape[-1],)
-    else:
-        idxshape = (param.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
+    # For topk(.., k=+1 or -1), we always return the singleton dimension.
+    idxshape = (param.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
 
     if q is not None:
         # This is numpy's method="linear"
@@ -110,6 +108,7 @@ def quantile_or_topk(
 
         if is_scalar_param:
             virtual_index = virtual_index.squeeze(axis=0)
+            idxshape = array.shape[:-1] + (actual_sizes.shape[-1],)
 
         lo_ = np.floor(
             virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
@@ -122,7 +121,7 @@ def quantile_or_topk(
     else:
         virtual_index = inv_idx[:-1] + ((actual_sizes - k) if k > 0 else abs(k) - 1)
         kth = np.unique(virtual_index)
-        kth = kth[kth > 0]
+        kth = kth[kth >= 0]
         k_offset = param.reshape((abs(k),) + (1,) * virtual_index.ndim)
         lo_ = k_offset + virtual_index[np.newaxis, ...]
 
@@ -147,12 +146,18 @@ def quantile_or_topk(
         result = _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
     else:
         result = loval
-        result[lo_ < 0] = fill_value
+        # This happens if numel in group < abs(k)
+        badmask = lo_ < 0
+        if badmask.any():
+            result[badmask] = fill_value
+
     if not skipna and np.any(nanmask):
         result[..., nanmask] = fill_value
+
     if k is not None:
         result = result.astype(dtype, copy=False)
-        np.copyto(out, result)
+        if out is not None:
+            np.copyto(out, result)
     return result
 
 

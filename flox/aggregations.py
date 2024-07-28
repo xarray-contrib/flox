@@ -830,7 +830,7 @@ def _initialize_aggregation(
     )
 
     final_dtype = _normalize_dtype(dtype_ or agg.dtype_init["final"], array_dtype, fill_value)
-    if agg.name not in ["first", "last", "nanfirst", "nanlast", "min", "max", "nanmin", "nanmax"]:
+    if agg.name not in ["first", "last", "nanfirst", "nanlast", "min", "max", "nanmin", "nanmax", "topk"]:
         final_dtype = _maybe_promote_int(final_dtype)
     agg.dtype = {
         "user": dtype,  # Save to automatically choose an engine
@@ -892,6 +892,8 @@ def _initialize_aggregation(
         if isinstance(combine, str):
             simple_combine.append(getattr(np, combine))
         else:
+            if agg.name == "topk":
+                combine = partial(combine, **finalize_kwargs)
             simple_combine.append(combine)
 
     agg.simple_combine = tuple(simple_combine)

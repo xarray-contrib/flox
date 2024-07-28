@@ -958,7 +958,7 @@ def chunk_reduce(
     nfuncs = len(funcs)
     dtypes = _atleast_1d(dtype, nfuncs)
     fill_values = _atleast_1d(fill_value, nfuncs)
-    kwargss = _atleast_1d({}, nfuncs) if kwargs is None else kwargs
+    kwargss = _atleast_1d({} if kwargs is None else kwargs, nfuncs)
 
     if isinstance(axis, Sequence):
         axes: T_Axes = axis
@@ -1645,6 +1645,7 @@ def dask_groupby_agg(
             dtype=agg.dtype["intermediate"],
             reindex=reindex,
             user_dtype=agg.dtype["user"],
+            kwargs=agg.finalize_kwargs if agg.name == "topk" else None,
         )
         if do_simple_combine:
             # Add a dummy dimension that then gets reduced over
@@ -2372,6 +2373,9 @@ def groupby_reduce(
                     "Use engine='flox' instead (it is also much faster), "
                     "or set engine=None to use the default."
                 )
+    if func == "topk":
+        if finalize_kwargs is None or "k" not in finalize_kwargs:
+            raise ValueError("Please pass `k` for topk calculations.")
 
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
