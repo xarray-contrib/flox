@@ -158,7 +158,11 @@ def _get_fill_value(dtype, fill_value):
             return np.nan
         # This is madness, but npg checks that fill_value is compatible
         # with array dtype even if the fill_value is never used.
-        elif np.issubdtype(dtype, np.integer):
+        elif (
+            np.issubdtype(dtype, np.integer)
+            or np.issubdtype(dtype, np.timedelta64)
+            or np.issubdtype(dtype, np.datetime64)
+        ):
             return dtypes.get_neg_infinity(dtype, min_for_int=True)
         else:
             return None
