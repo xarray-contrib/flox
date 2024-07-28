@@ -212,6 +212,10 @@ def test_first_last(data, array: dask.array.Array, func: str) -> None:
         assert_equal(first, second)
 
 
+from hypothesis import settings
+
+
+@settings(report_multiple_bugs=False)
 @given(data=st.data(), array=chunked_arrays())
 def test_topk_max_min(data, array):
     "top 1 == max; top -1 == min"
