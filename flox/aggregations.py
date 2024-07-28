@@ -586,8 +586,8 @@ nanquantile = Aggregation(
 topk = Aggregation(
     name="topk",
     fill_value=dtypes.NINF,
-    chunk=None,
-    combine=None,
+    chunk="topk",
+    combine=xrutils.topk,
     final_dtype=None,
     new_dims_func=topk_new_dims_func,
 )
@@ -890,10 +890,7 @@ def _initialize_aggregation(
     simple_combine: list[Callable | None] = []
     for combine in agg.combine:
         if isinstance(combine, str):
-            if combine in ["nanfirst", "nanlast"]:
-                simple_combine.append(getattr(xrutils, combine))
-            else:
-                simple_combine.append(getattr(np, combine))
+            simple_combine.append(getattr(np, combine))
         else:
             simple_combine.append(combine)
 
