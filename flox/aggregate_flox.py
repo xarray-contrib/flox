@@ -2,6 +2,7 @@ from functools import partial
 
 import numpy as np
 
+from . import xrdtypes as dtypes
 from .xrutils import is_scalar, isnull, notnull
 
 
@@ -60,6 +61,7 @@ def quantile_or_topk(
     fill_value=None,
 ):
     assert q or k
+    assert axis == -1
 
     inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
 
@@ -84,7 +86,7 @@ def quantile_or_topk(
     nanmask = full_sizes != actual_sizes
     # TODO: Don't know if this array has been copied in _prepare_for_flox.
     #       This is potentially wasteful
-    array = np.where(array_nanmask, -np.inf, array)
+    array = np.where(array_nanmask, dtypes.get_neg_infinity(array.dtype, min_for_int=True), array)
     maxes = np.maximum.reduceat(array, inv_idx[:-1], axis=axis)
     replacement = np.repeat(maxes, np.diff(inv_idx), axis=axis)
     array[array_nanmask] = replacement[array_nanmask]
@@ -128,13 +130,16 @@ def quantile_or_topk(
     # partition the complex array in-place
     labels_broadcast = np.broadcast_to(group_idx, array.shape)
     with np.errstate(invalid="ignore"):
-        cmplx = labels_broadcast + 1j * array
+        cmplx = labels_broadcast + 1j * (array.view(int) if array.dtype.kind in "Mm" else array)
     cmplx.partition(kth=kth, axis=-1)
 
     if is_scalar_param:
         a_ = cmplx.imag
     else:
         a_ = np.broadcast_to(cmplx.imag, (param.shape[0],) + array.shape)
+
+    if array.dtype.kind in "Mm":
+        a_ = a_.astype(array.dtype)
 
     loval = np.take_along_axis(a_, np.broadcast_to(lo_, idxshape), axis=axis)
     if q is not None:
@@ -204,6 +209,8 @@ def _np_grouped_op(
 
 
 def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
+    if fillna in [dtypes.INF, dtypes.NINF]:
+        fillna = dtypes._get_fill_value(kwargs.get("dtype", array.dtype), fillna)
     result = func(group_idx, np.where(isnull(array), fillna, array), *args, **kwargs)
     # np.nanmax([np.nan, np.nan]) = np.nan
     # To recover this behaviour, we need to search for the fillna value
@@ -221,9 +228,9 @@ nansum = partial(_nan_grouped_op, func=sum, fillna=0)
 prod = partial(_np_grouped_op, op=np.multiply.reduceat)
 nanprod = partial(_nan_grouped_op, func=prod, fillna=1)
 max = partial(_np_grouped_op, op=np.maximum.reduceat)
-nanmax = partial(_nan_grouped_op, func=max, fillna=-np.inf)
+nanmax = partial(_nan_grouped_op, func=max, fillna=dtypes.NINF)
 min = partial(_np_grouped_op, op=np.minimum.reduceat)
-nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
+nanmin = partial(_nan_grouped_op, func=min, fillna=dtypes.INF)
 quantile = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=False))
 topk = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=True))
 nanquantile = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=True))

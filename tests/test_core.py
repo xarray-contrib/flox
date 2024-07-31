@@ -13,8 +13,9 @@ import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
 import flox
+from flox import xrdtypes as dtypes
 from flox import xrutils
-from flox.aggregations import Aggregation, _initialize_aggregation, _maybe_promote_int
+from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.core import (
     HAS_NUMBAGG,
     _choose_engine,
@@ -161,7 +162,7 @@ def test_groupby_reduce(
     if func == "mean" or func == "nanmean":
         expected_result = np.array(expected, dtype=np.float64)
     elif func == "sum":
-        expected_result = np.array(expected, dtype=_maybe_promote_int(array.dtype))
+        expected_result = np.array(expected, dtype=dtypes._maybe_promote_int(array.dtype))
     elif func == "count":
         expected_result = np.array(expected, dtype=np.intp)
 
@@ -389,7 +390,7 @@ def test_groupby_reduce_preserves_dtype(dtype, func):
     array = np.ones((2, 12), dtype=dtype)
     by = np.array([labels] * 2)
     result, _ = groupby_reduce(from_array(array, chunks=(-1, 4)), by, func=func)
-    expect_dtype = _maybe_promote_int(array.dtype)
+    expect_dtype = dtypes._maybe_promote_int(array.dtype)
     assert result.dtype == expect_dtype
 
 
@@ -1027,7 +1028,7 @@ def test_dtype_preservation(dtype, func, engine):
         # https://github.com/numbagg/numbagg/issues/121
         pytest.skip()
     if func == "sum":
-        expected = _maybe_promote_int(dtype)
+        expected = dtypes._maybe_promote_int(dtype)
     elif func == "mean" and "int" in dtype:
         expected = np.float64
     else:
@@ -1058,7 +1059,7 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
     actual, actual_groups = groupby_reduce(array, labels, func="sum", method=method)
     assert_equal(actual_groups, np.arange(6, dtype=labels.dtype))
 
-    expect_dtype = _maybe_promote_int(dtype)
+    expect_dtype = dtypes._maybe_promote_int(dtype)
     assert_equal(actual, np.array([0, 4, 24, 6, 12, 20], dtype=expect_dtype))
 
 

@@ -115,60 +115,6 @@ def generic_aggregate(
     return result
 
 
-def _normalize_dtype(dtype: DTypeLike, array_dtype: np.dtype, fill_value=None) -> np.dtype:
-    if dtype is None:
-        dtype = array_dtype
-    if dtype is np.floating:
-        # mean, std, var always result in floating
-        # but we preserve the array's dtype if it is floating
-        if array_dtype.kind in "fcmM":
-            dtype = array_dtype
-        else:
-            dtype = np.dtype("float64")
-    elif not isinstance(dtype, np.dtype):
-        dtype = np.dtype(dtype)
-    if fill_value not in [None, dtypes.INF, dtypes.NINF, dtypes.NA]:
-        dtype = np.result_type(dtype, fill_value)
-    return dtype
-
-
-def _maybe_promote_int(dtype) -> np.dtype:
-    # https://numpy.org/doc/stable/reference/generated/numpy.prod.html
-    # The dtype of a is used by default unless a has an integer dtype of less precision
-    # than the default platform integer.
-    if not isinstance(dtype, np.dtype):
-        dtype = np.dtype(dtype)
-    if dtype.kind == "i":
-        dtype = np.result_type(dtype, np.intp)
-    elif dtype.kind == "u":
-        dtype = np.result_type(dtype, np.uintp)
-    return dtype
-
-
-def _get_fill_value(dtype, fill_value):
-    """Returns dtype appropriate infinity. Returns +Inf equivalent for None."""
-    if fill_value in [None, dtypes.NA] and dtype.kind in "US":
-        return ""
-    if fill_value == dtypes.INF or fill_value is None:
-        return dtypes.get_pos_infinity(dtype, max_for_int=True)
-    if fill_value == dtypes.NINF:
-        return dtypes.get_neg_infinity(dtype, min_for_int=True)
-    if fill_value == dtypes.NA:
-        if np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.complexfloating):
-            return np.nan
-        # This is madness, but npg checks that fill_value is compatible
-        # with array dtype even if the fill_value is never used.
-        elif np.issubdtype(dtype, np.integer):
-            return dtypes.get_neg_infinity(dtype, min_for_int=True)
-        elif np.issubdtype(dtype, np.timedelta64):
-            return np.timedelta64("NaT")
-        elif np.issubdtype(dtype, np.datetime64):
-            return np.datetime64("NaT")
-        else:
-            return None
-    return fill_value
-
-
 def _atleast_1d(inp, min_length: int = 1):
     if xrutils.is_scalar(inp):
         inp = (inp,) * min_length
@@ -646,7 +592,7 @@ class AlignedArrays:
             # TODO: automate?
             engine="flox",
             dtype=self.array.dtype,
-            fill_value=_get_fill_value(self.array.dtype, dtypes.NA),
+            fill_value=dtypes._get_fill_value(self.array.dtype, dtypes.NA),
             expected_groups=None,
         )
         return AlignedArrays(array=reduced["intermediates"][0], group_idx=reduced["groups"])
@@ -829,7 +775,9 @@ def _initialize_aggregation(
         np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
     )
 
-    final_dtype = _normalize_dtype(dtype_ or agg.dtype_init["final"], array_dtype, fill_value)
+    final_dtype = dtypes._normalize_dtype(
+        dtype_ or agg.dtype_init["final"], array_dtype, fill_value
+    )
     if agg.name not in [
         "first",
         "last",
@@ -841,14 +789,14 @@ def _initialize_aggregation(
         "nanmax",
         "topk",
     ]:
-        final_dtype = _maybe_promote_int(final_dtype)
+        final_dtype = dtypes._maybe_promote_int(final_dtype)
     agg.dtype = {
         "user": dtype,  # Save to automatically choose an engine
         "final": final_dtype,
         "numpy": (final_dtype,),
         "intermediate": tuple(
             (
-                _normalize_dtype(int_dtype, np.result_type(array_dtype, final_dtype), int_fv)
+                dtypes._normalize_dtype(int_dtype, np.result_type(array_dtype, final_dtype), int_fv)
                 if int_dtype is None
                 else np.dtype(int_dtype)
             )
@@ -863,10 +811,10 @@ def _initialize_aggregation(
     # Replace sentinel fill values according to dtype
     agg.fill_value["user"] = fill_value
     agg.fill_value["intermediate"] = tuple(
-        _get_fill_value(dt, fv)
+        dtypes._get_fill_value(dt, fv)
         for dt, fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
     )
-    agg.fill_value[func] = _get_fill_value(agg.dtype["final"], agg.fill_value[func])
+    agg.fill_value[func] = dtypes._get_fill_value(agg.dtype["final"], agg.fill_value[func])
 
     fv = fill_value if fill_value is not None else agg.fill_value[agg.name]
     if _is_arg_reduction(agg):

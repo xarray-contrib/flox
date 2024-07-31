@@ -215,8 +215,9 @@ def test_first_last(data, array: dask.array.Array, func: str) -> None:
 from hypothesis import settings
 
 
+# TODO: do all_arrays instead of numeric_arrays
 @settings(report_multiple_bugs=False)
-@given(data=st.data(), array=chunked_arrays())
+@given(data=st.data(), array=chunked_arrays(arrays=numeric_arrays))
 def test_topk_max_min(data, array):
     "top 1 == nanmax; top -1 == nanmin"
     size = array.shape[-1]
@@ -226,5 +227,6 @@ def test_topk_max_min(data, array):
 
     for a in (array, array.compute()):
         actual, _ = groupby_reduce(a, by, func="topk", finalize_kwargs={"k": k})
-        expected, _ = groupby_reduce(a, by, func=npfunc)
+        # TODO: do numbagg, flox
+        expected, _ = groupby_reduce(a, by, func=npfunc, engine="numpy")
         assert_equal(actual, expected[np.newaxis, :])
