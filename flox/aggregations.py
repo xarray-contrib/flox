@@ -158,12 +158,12 @@ def _get_fill_value(dtype, fill_value):
             return np.nan
         # This is madness, but npg checks that fill_value is compatible
         # with array dtype even if the fill_value is never used.
-        elif (
-            np.issubdtype(dtype, np.integer)
-            or np.issubdtype(dtype, np.timedelta64)
-            or np.issubdtype(dtype, np.datetime64)
-        ):
+        elif np.issubdtype(dtype, np.integer):
             return dtypes.get_neg_infinity(dtype, min_for_int=True)
+        elif np.issubdtype(dtype, np.timedelta64):
+            return np.timedelta64("NaT")
+        elif np.issubdtype(dtype, np.datetime64):
+            return np.datetime64("NaT")
         else:
             return None
     return fill_value
@@ -435,9 +435,9 @@ nanstd = Aggregation(
 
 
 min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF)
-nanmin = Aggregation("nanmin", chunk="nanmin", combine="nanmin", fill_value=np.nan)
+nanmin = Aggregation("nanmin", chunk="nanmin", combine="nanmin", fill_value=dtypes.NA)
 max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF)
-nanmax = Aggregation("nanmax", chunk="nanmax", combine="nanmax", fill_value=np.nan)
+nanmax = Aggregation("nanmax", chunk="nanmax", combine="nanmax", fill_value=dtypes.NA)
 
 
 def argreduce_preprocess(array, axis):
@@ -741,7 +741,7 @@ ffill = Scan(
     binary_op=None,
     reduction="nanlast",
     scan="ffill",
-    identity=np.nan,
+    identity=dtypes.NA,
     mode="concat_then_scan",
 )
 bfill = Scan(
@@ -749,7 +749,7 @@ bfill = Scan(
     binary_op=None,
     reduction="nanlast",
     scan="ffill",
-    identity=np.nan,
+    identity=dtypes.NA,
     mode="concat_then_scan",
     preprocess=reverse,
     finalize=reverse,

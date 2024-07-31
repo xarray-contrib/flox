@@ -218,10 +218,11 @@ from hypothesis import settings
 @settings(report_multiple_bugs=False)
 @given(data=st.data(), array=chunked_arrays())
 def test_topk_max_min(data, array):
-    "top 1 == max; top -1 == min"
+    "top 1 == nanmax; top -1 == nanmin"
     size = array.shape[-1]
+    note(array.compute())
     by = data.draw(by_arrays(shape=(size,)))
-    k, npfunc = data.draw(st.sampled_from([(1, "max"), (-1, "min")]))
+    k, npfunc = data.draw(st.sampled_from([(1, "nanmax"), (-1, "nanmin")]))
 
     for a in (array, array.compute()):
         actual, _ = groupby_reduce(a, by, func="topk", finalize_kwargs={"k": k})
