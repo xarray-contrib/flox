@@ -488,7 +488,6 @@ def find_group_cohorts(
     # Now we also know "exact cohorts" -- cohorts whose constituent groups
     # occur in exactly the same chunks. We only need examine one member of each group.
     # Skip the others by first looping over the exact cohorts, and zero out those rows.
-    # mask = np.zeros_like(containment.data, dtype=bool)
     repeated = np.concatenate([v[1:] for v in chunks_cohorts.values()]).astype(int)
     repeated_idx = np.searchsorted(present_labels, repeated)
     for i in repeated_idx:
