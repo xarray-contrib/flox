@@ -511,6 +511,8 @@ def find_group_cohorts(
     merged_cohorts = {}
     merged_keys = set()
     for rowidx in order:
+        if present_labels[rowidx] in merged_keys:
+            continue
         cohidx = containment.indices[
             slice(containment.indptr[rowidx], containment.indptr[rowidx + 1])
         ]
