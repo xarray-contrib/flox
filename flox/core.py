@@ -514,7 +514,7 @@ def find_group_cohorts(
         ]
         cohort_ = present_labels[cohidx]
         cohort = [elem.item() for elem in cohort_ if elem not in merged_keys]
-        if len(cohort) == 0:
+        if not cohort:
             continue
         merged_keys.update(cohort)
         allchunks = (label_chunks[member].tolist() for member in cohort)
