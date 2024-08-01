@@ -494,18 +494,14 @@ def find_group_cohorts(
     for i in repeated_idx:
         mask[containment.indptr[i] : containment.indptr[i + 1]] = True
     containment.data[mask] = 0
-    print(containment.nnz)
     containment.eliminate_zeros()
-    print(containment.nnz)
 
     # Figure out all the labels we need to loop over later
     n_overlapping_labels = containment.astype(bool).sum(axis=1)
-    print(n_overlapping_labels.min())
     order = np.argsort(n_overlapping_labels)[::-1]
     # Order is such that we iterate over labels, beginning with those with most overlaps
     # Also filter out any "exact" cohorts
     order = order[n_overlapping_labels[order] > 0]
-    print(len(order), containment.shape)
 
     logger.debug("find_group_cohorts: merging cohorts")
     merged_cohorts = {}
