@@ -2,12 +2,11 @@
 
 import pytest
 
+pytest.importorskip("dask")
+
 from asv_bench.benchmarks import cohorts
 
-from . import requires_dask
 
-
-@requires_dask
 @pytest.mark.parametrize(
     "testcase",
     [
