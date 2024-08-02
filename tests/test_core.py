@@ -613,6 +613,33 @@ def test_dask_reduce_axis_subset():
         )
 
 
+@pytest.mark.parametrize("group_idx", [[0, 1, 0], [0, 0, 1], [1, 0, 0], [1, 1, 0]])
+@pytest.mark.parametrize(
+    "func",
+    [
+        # "first", "last",
+        "nanfirst",
+        "nanlast",
+    ],
+)
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        None,
+        pytest.param(1, marks=pytest.mark.skipif(not has_dask, reason="no dask")),
+        pytest.param(2, marks=pytest.mark.skipif(not has_dask, reason="no dask")),
+        pytest.param(3, marks=pytest.mark.skipif(not has_dask, reason="no dask")),
+    ],
+)
+def test_first_last_useless(func, chunks, group_idx):
+    array = np.array([[0, 0, 0], [0, 0, 0]], dtype=np.int8)
+    if chunks is not None:
+        array = dask.array.from_array(array, chunks=chunks)
+    actual, _ = groupby_reduce(array, np.array(group_idx), func=func, engine="numpy")
+    expected = np.array([[0, 0], [0, 0]], dtype=np.int8)
+    assert_equal(actual, expected)
+
+
 @pytest.mark.parametrize("func", ["first", "last", "nanfirst", "nanlast"])
 @pytest.mark.parametrize("axis", [(0, 1)])
 def test_first_last_disallowed(axis, func):
