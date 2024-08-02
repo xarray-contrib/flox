@@ -497,7 +497,7 @@ def find_group_cohorts(
 
     # Figure out all the labels we need to loop over later
     n_overlapping_labels = containment.astype(bool).sum(axis=1)
-    order = np.argsort(n_overlapping_labels)[::-1]
+    order = np.argsort(n_overlapping_labels, kind="stable")[::-1]
     # Order is such that we iterate over labels, beginning with those with most overlaps
     # Also filter out any "exact" cohorts
     order = order[n_overlapping_labels[order] > 0]

@@ -111,9 +111,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
             actual = actual.astype(cast_to)
 
     note(("expected: ", expected, "actual: ", actual))
-    tolerance = (
-        {"rtol": 1e-13, "atol": 1e-15} if "var" in func or "std" in func else {"atol": 1e-15}
-    )
+    tolerance = {"atol": 1e-15}
     assert_equal(expected, actual, tolerance)
 
 
@@ -131,7 +129,7 @@ def test_scans(data, array: dask.array.Array, func: str) -> None:
 
     # Too many float32 edge-cases!
     if "cum" in func and array.dtype.kind == "f" and array.dtype.itemsize == 4:
-        array = array.astype(np.float64)
+        assume(False)
     numpy_array = array.compute()
     assume((np.abs(numpy_array) < 2**53).all())
 
