@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test:
-    name: Test (${{ matrix.python-version }}, ${{ matrix.os }})
+    name: Test (${{matrix.env}}, ${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     defaults:
       run:
