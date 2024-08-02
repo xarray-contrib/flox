@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - codecov
+  - syrupy
   - pandas
   - numpy>=1.22
   - scipy
@@ -11,6 +12,7 @@ dependencies:
   - pytest-cov
   - pytest-pretty
   - pytest-xdist
+  - syrupy
   - dask-core
   - numpydoc
   - pre-commit

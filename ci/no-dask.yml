@@ -13,6 +13,7 @@ dependencies:
   - pytest-cov
   - pytest-pretty
   - pytest-xdist
+  - syrupy
   - xarray
   - numpydoc
   - pre-commit

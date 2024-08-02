@@ -394,7 +394,9 @@ def find_group_cohorts(
         chunks_per_label = chunks_per_label[present_labels_mask]
 
     label_chunks = {
-        present_labels[idx]: bitmask.indices[slice(bitmask.indptr[idx], bitmask.indptr[idx + 1])]
+        present_labels[idx].item(): bitmask.indices[
+            slice(bitmask.indptr[idx], bitmask.indptr[idx + 1])
+        ]
         for idx in range(bitmask.shape[LABEL_AXIS])
     }
 
@@ -485,7 +487,7 @@ def find_group_cohorts(
 
     # Iterate over labels, beginning with those with most chunks
     logger.debug("find_group_cohorts: merging cohorts")
-    order = np.argsort(containment.sum(axis=LABEL_AXIS))[::-1]
+    order = np.argsort(containment.sum(axis=LABEL_AXIS), kind="stable")[::-1]
     merged_cohorts = {}
     merged_keys = set()
     # TODO: we can optimize this to loop over chunk_cohorts instead
@@ -495,11 +497,11 @@ def find_group_cohorts(
             slice(containment.indptr[rowidx], containment.indptr[rowidx + 1])
         ]
         cohort_ = present_labels[cohidx]
-        cohort = [elem for elem in cohort_ if elem not in merged_keys]
+        cohort = [elem.item() for elem in cohort_ if elem not in merged_keys]
         if not cohort:
             continue
         merged_keys.update(cohort)
-        allchunks = (label_chunks[member] for member in cohort)
+        allchunks = (label_chunks[member].tolist() for member in cohort)
         chunk = tuple(set(itertools.chain(*allchunks)))
         merged_cohorts[chunk] = cohort
 
