@@ -128,6 +128,7 @@ jobs:
 
       - name: Run mypy
         run: |
+          mkdir .mypy_cache
           python -m mypy --install-types --non-interactive --cache-dir=.mypy_cache/ --cobertura-xml-report mypy_report
 
       - name: Upload mypy coverage to Codecov
