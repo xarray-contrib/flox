@@ -47,6 +47,9 @@ class Cohorts:
         except AttributeError:
             pass
 
+    def track_num_cohorts(self):
+        return len(self.chunks_cohorts())
+
     def time_graph_construct(self):
         flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis)
 
@@ -60,10 +63,11 @@ class Cohorts:
     def track_num_layers(self):
         return len(self.result.dask.layers)
 
+    track_num_cohorts.unit = "cohorts"  # type: ignore[attr-defined] # Lazy
     track_num_tasks.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_tasks_optimized.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_layers.unit = "layers"  # type: ignore[attr-defined] # Lazy
-    for f in [track_num_tasks, track_num_tasks_optimized, track_num_layers]:
+    for f in [track_num_tasks, track_num_tasks_optimized, track_num_layers, track_num_cohorts]:
         f.repeat = 1  # type: ignore[attr-defined] # Lazy
         f.rounds = 1  # type: ignore[attr-defined] # Lazy
         f.number = 1  # type: ignore[attr-defined] # Lazy

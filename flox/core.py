@@ -403,7 +403,7 @@ def find_group_cohorts(
     # Invert the label_chunks mapping so we know which labels occur together.
     def invert(x) -> tuple[np.ndarray, ...]:
         arr = label_chunks[x]
-        return tuple(arr)
+        return tuple(arr.tolist())
 
     chunks_cohorts = tlz.groupby(invert, label_chunks.keys())
 
@@ -477,22 +477,37 @@ def find_group_cohorts(
             containment.nnz / math.prod(containment.shape)
         )
     )
-    # Use a threshold to force some merging. We do not use the filtered
-    # containment matrix for estimating "sparsity" because it is a bit
-    # hard to reason about.
+
+    # Next we for-loop over groups and merge those that are quite similar.
+    # Use a threshold on containment to always force some merging.
+    # Note that we do not use the filtered containment matrix for estimating "sparsity"
+    # because it is a bit hard to reason about.
     MIN_CONTAINMENT = 0.75  # arbitrary
     mask = containment.data < MIN_CONTAINMENT
+
+    # Now we also know "exact cohorts" -- cohorts whose constituent groups
+    # occur in exactly the same chunks. We only need examine one member of each group.
+    # Skip the others by first looping over the exact cohorts, and zero out those rows.
+    repeated = np.concatenate([v[1:] for v in chunks_cohorts.values()]).astype(int)
+    repeated_idx = np.searchsorted(present_labels, repeated)
+    for i in repeated_idx:
+        mask[containment.indptr[i] : containment.indptr[i + 1]] = True
     containment.data[mask] = 0
     containment.eliminate_zeros()
 
-    # Iterate over labels, beginning with those with most chunks
+    # Figure out all the labels we need to loop over later
+    n_overlapping_labels = containment.astype(bool).sum(axis=1)
+    order = np.argsort(n_overlapping_labels, kind="stable")[::-1]
+    # Order is such that we iterate over labels, beginning with those with most overlaps
+    # Also filter out any "exact" cohorts
+    order = order[n_overlapping_labels[order] > 0]
+
     logger.debug("find_group_cohorts: merging cohorts")
-    order = np.argsort(containment.sum(axis=LABEL_AXIS), kind="stable")[::-1]
     merged_cohorts = {}
     merged_keys = set()
-    # TODO: we can optimize this to loop over chunk_cohorts instead
-    #       by zeroing out rows that are already in a cohort
     for rowidx in order:
+        if present_labels[rowidx] in merged_keys:
+            continue
         cohidx = containment.indices[
             slice(containment.indptr[rowidx], containment.indptr[rowidx + 1])
         ]
@@ -507,6 +522,7 @@ def find_group_cohorts(
 
     actual_ngroups = np.concatenate(tuple(merged_cohorts.values())).size
     expected_ngroups = present_labels.size
+    assert len(merged_keys) == actual_ngroups
     assert expected_ngroups == actual_ngroups, (expected_ngroups, actual_ngroups)
 
     # sort by first label in cohort
