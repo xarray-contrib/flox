@@ -101,7 +101,7 @@ def by_arrays(
 ) -> st.SearchStrategy[np.ndarray[Any, Any]]:
     if elements is None:
         elements = {}
-    elements.setdefault("alphabet", st.characters(exclude_categories=("C",)))
+    elements.setdefault("alphabet", st.characters(exclude_categories=["C"]))
     return st.one_of(
         npst.arrays(
             dtype=npst.integer_dtypes(endianness="=") | npst.unicode_string_dtypes(endianness="="),
