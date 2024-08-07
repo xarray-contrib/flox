@@ -691,7 +691,8 @@ ffill = Scan(
     binary_op=None,
     reduction="nanlast",
     scan="ffill",
-    identity=dtypes.NA,
+    # Important: this must be NaN otherwise, ffill does not work.
+    identity=np.nan,
     mode="concat_then_scan",
 )
 bfill = Scan(
@@ -699,7 +700,8 @@ bfill = Scan(
     binary_op=None,
     reduction="nanlast",
     scan="ffill",
-    identity=dtypes.NA,
+    # Important: this must be NaN otherwise, bfill does not work.
+    identity=np.nan,
     mode="concat_then_scan",
     preprocess=reverse,
     finalize=reverse,
@@ -777,7 +779,6 @@ def _initialize_aggregation(
     dtype_: np.dtype | None = (
         np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
     )
-
     final_dtype = dtypes._normalize_dtype(
         dtype_ or agg.dtype_init["final"], array_dtype, fill_value
     )
