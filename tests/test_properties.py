@@ -223,3 +223,23 @@ def test_first_last_useless(data, func):
     actual, groups = groupby_reduce(array, by, axis=-1, func=func, engine="numpy")
     expected = np.zeros(shape[:-1] + (len(groups),), dtype=array.dtype)
     assert_equal(actual, expected)
+
+
+from hypothesis import settings
+
+
+# TODO: do all_arrays instead of numeric_arrays
+@settings(report_multiple_bugs=False)
+@given(data=st.data(), array=chunked_arrays(arrays=numeric_arrays))
+def test_topk_max_min(data, array):
+    "top 1 == nanmax; top -1 == nanmin"
+    size = array.shape[-1]
+    note(array.compute())
+    by = data.draw(by_arrays(shape=(size,)))
+    k, npfunc = data.draw(st.sampled_from([(1, "nanmax"), (-1, "nanmin")]))
+
+    for a in (array, array.compute()):
+        actual, _ = groupby_reduce(a, by, func="topk", finalize_kwargs={"k": k})
+        # TODO: do numbagg, flox
+        expected, _ = groupby_reduce(a, by, func=npfunc, engine="numpy")
+        assert_equal(actual, expected[np.newaxis, :])
