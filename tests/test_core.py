@@ -614,6 +614,33 @@ def test_dask_reduce_axis_subset():
         )
 
 
+@pytest.mark.parametrize("group_idx", [[0, 1, 0], [0, 0, 1], [1, 0, 0], [1, 1, 0]])
+@pytest.mark.parametrize(
+    "func",
+    [
+        # "first", "last",
+        "nanfirst",
+        "nanlast",
+    ],
+)
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        None,
+        pytest.param(1, marks=pytest.mark.skipif(not has_dask, reason="no dask")),
+        pytest.param(2, marks=pytest.mark.skipif(not has_dask, reason="no dask")),
+        pytest.param(3, marks=pytest.mark.skipif(not has_dask, reason="no dask")),
+    ],
+)
+def test_first_last_useless(func, chunks, group_idx):
+    array = np.array([[0, 0, 0], [0, 0, 0]], dtype=np.int8)
+    if chunks is not None:
+        array = dask.array.from_array(array, chunks=chunks)
+    actual, _ = groupby_reduce(array, np.array(group_idx), func=func, engine="numpy")
+    expected = np.array([[0, 0], [0, 0]], dtype=np.int8)
+    assert_equal(actual, expected)
+
+
 @pytest.mark.parametrize("func", ["first", "last", "nanfirst", "nanlast"])
 @pytest.mark.parametrize("axis", [(0, 1)])
 def test_first_last_disallowed(axis, func):
@@ -1564,18 +1591,36 @@ def test_validate_reindex_map_reduce(
     dask_expected, reindex, func, expected_groups, any_by_dask
 ) -> None:
     actual = _validate_reindex(
-        reindex, func, "map-reduce", expected_groups, any_by_dask, is_dask_array=True
+        reindex,
+        func,
+        "map-reduce",
+        expected_groups,
+        any_by_dask,
+        is_dask_array=True,
+        array_dtype=np.dtype("int32"),
     )
     assert actual is dask_expected
 
     # always reindex with all numpy inputs
     actual = _validate_reindex(
-        reindex, func, "map-reduce", expected_groups, any_by_dask=False, is_dask_array=False
+        reindex,
+        func,
+        "map-reduce",
+        expected_groups,
+        any_by_dask=False,
+        is_dask_array=False,
+        array_dtype=np.dtype("int32"),
     )
     assert actual
 
     actual = _validate_reindex(
-        True, func, "map-reduce", expected_groups, any_by_dask=False, is_dask_array=False
+        True,
+        func,
+        "map-reduce",
+        expected_groups,
+        any_by_dask=False,
+        is_dask_array=False,
+        array_dtype=np.dtype("int32"),
     )
     assert actual
 
@@ -1585,19 +1630,37 @@ def test_validate_reindex() -> None:
     for method in methods:
         with pytest.raises(NotImplementedError):
             _validate_reindex(
-                True, "argmax", method, expected_groups=None, any_by_dask=False, is_dask_array=True
+                True,
+                "argmax",
+                method,
+                expected_groups=None,
+                any_by_dask=False,
+                is_dask_array=True,
+                array_dtype=np.dtype("int32"),
             )
 
     methods: list[T_Method] = ["blockwise", "cohorts"]
     for method in methods:
         with pytest.raises(ValueError):
             _validate_reindex(
-                True, "sum", method, expected_groups=None, any_by_dask=False, is_dask_array=True
+                True,
+                "sum",
+                method,
+                expected_groups=None,
+                any_by_dask=False,
+                is_dask_array=True,
+                array_dtype=np.dtype("int32"),
             )
 
         for func in ["sum", "argmax"]:
             actual = _validate_reindex(
-                None, func, method, expected_groups=None, any_by_dask=False, is_dask_array=True
+                None,
+                func,
+                method,
+                expected_groups=None,
+                any_by_dask=False,
+                is_dask_array=True,
+                array_dtype=np.dtype("int32"),
             )
             assert actual is False
 
@@ -1609,6 +1672,7 @@ def test_validate_reindex() -> None:
             expected_groups=np.array([1, 2, 3]),
             any_by_dask=False,
             is_dask_array=True,
+            array_dtype=np.dtype("int32"),
         )
 
     assert _validate_reindex(
@@ -1618,6 +1682,7 @@ def test_validate_reindex() -> None:
         expected_groups=np.array([1, 2, 3]),
         any_by_dask=True,
         is_dask_array=True,
+        array_dtype=np.dtype("int32"),
     )
     assert _validate_reindex(
         None,
@@ -1626,7 +1691,23 @@ def test_validate_reindex() -> None:
         expected_groups=np.array([1, 2, 3]),
         any_by_dask=True,
         is_dask_array=True,
+        array_dtype=np.dtype("int32"),
     )
+
+    kwargs = dict(
+        method="blockwise",
+        expected_groups=np.array([1, 2, 3]),
+        any_by_dask=True,
+        is_dask_array=True,
+    )
+
+    for func in ["nanfirst", "nanlast"]:
+        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs)  # type: ignore[arg-type]
+        assert _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs)  # type: ignore[arg-type]
+
+    for func in ["first", "last"]:
+        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs)  # type: ignore[arg-type]
+        assert not _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs)  # type: ignore[arg-type]
 
 
 @requires_dask

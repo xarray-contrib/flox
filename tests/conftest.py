@@ -10,11 +10,12 @@ settings.register_profile(
     suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow],
 )
 settings.register_profile(
-    "local",
+    "default",
     max_examples=300,
     suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow],
     verbosity=Verbosity.verbose,
 )
+settings.load_profile("default")
 
 
 @pytest.fixture(

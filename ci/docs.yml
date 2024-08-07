@@ -16,7 +16,7 @@ dependencies:
   - myst-parser
   - myst-nb
   - sphinx
-  - furo
+  - furo>=2024.08
   - ipykernel
   - jupyter
   - sphinx-codeautolink
