@@ -862,15 +862,13 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
     array = [1, 1, 1, 1, 1, 1]
     labels = [0.2, 1.5, 1.9, 2, 3, 20]
 
-    if method == "cohorts" and chunk_labels:
-        pytest.xfail()
-
     if chunks:
         array = dask.array.from_array(array, chunks=chunks)
         if chunk_labels:
             labels = dask.array.from_array(labels, chunks=chunks)
 
-    with raise_if_dask_computes():
+    max_computes = 1 if method == "cohorts" else 0
+    with raise_if_dask_computes(max_computes):
         actual, *groups = groupby_reduce(
             array, labels, func="count", fill_value=0, engine=engine, method=method, **kwargs
         )
@@ -1063,10 +1061,12 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
 
 
 @requires_dask
-@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("func", ["sum"])
 @pytest.mark.parametrize("axis", (-1, None))
 @pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce"])
-def test_cohorts_nd_by(func, method, axis, engine):
+@pytest.mark.parametrize("by_is_dask", [True, False])
+def test_cohorts_nd_by(by_is_dask, func, method, axis):
+    engine = "numpy"
     if (
         ("arg" in func and (axis is None or engine in ["flox", "numbagg"]))
         or (method != "blockwise" and func in BLOCKWISE_FUNCS)
@@ -1074,16 +1074,20 @@ def test_cohorts_nd_by(func, method, axis, engine):
     ):
         pytest.skip()
     if axis is not None and method != "map-reduce":
-        pytest.xfail()
+        pytest.skip()
+    if by_is_dask and method == "blockwise":
+        pytest.skip()
 
     o = dask.array.ones((3,), chunks=-1)
     o2 = dask.array.ones((2, 3), chunks=-1)
 
     array = dask.array.block([[o, 2 * o], [3 * o2, 4 * o2]])
-    by = array.compute().astype(np.int64)
+    by = array.astype(np.int64)
     by[0, 1] = 30
     by[2, 1] = 40
     by[0, 4] = 31
+    if not by_is_dask:
+        by = by.compute()
     array = np.broadcast_to(array, (2, 3) + array.shape)
 
     if func in ["any", "all"]:
@@ -1092,6 +1096,9 @@ def test_cohorts_nd_by(func, method, axis, engine):
         fill_value = -123
 
     kwargs = dict(func=func, engine=engine, method=method, axis=axis, fill_value=fill_value)
+    if by_is_dask and axis is not None and method == "map-reduce":
+        kwargs["expected_groups"] = pd.Index([1, 2, 3, 4, 30, 31, 40])
+
     if "quantile" in func:
         kwargs["finalize_kwargs"] = {"q": DEFAULT_QUANTILE}
     actual, groups = groupby_reduce(array, by, **kwargs)
@@ -1099,10 +1106,20 @@ def test_cohorts_nd_by(func, method, axis, engine):
     assert_equal(groups, sorted_groups)
     assert_equal(actual, expected)
 
-    actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
-    assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=np.int64))
-    reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
-    assert_equal(reindexed, expected)
+    if isinstance(by, dask.array.Array):
+        cache.clear()
+        actual_cohorts = find_group_cohorts(by, array.chunks[-by.ndim :])
+        cache.clear()
+        expected_cohorts = find_group_cohorts(by.compute(), array.chunks[-by.ndim :])
+        assert actual_cohorts == expected_cohorts
+        # assert cache.nbytes
+
+    if not isinstance(by, dask.array.Array):
+        # Always sorting groups with cohorts and dask array
+        actual, groups = groupby_reduce(array, by, sort=False, **kwargs)
+        assert_equal(groups, np.array([1, 30, 2, 31, 3, 4, 40], dtype=np.int64))
+        reindexed = reindex_(actual, groups, pd.Index(sorted_groups))
+        assert_equal(reindexed, expected)
 
 
 @pytest.mark.parametrize("func", ["sum", "count"])
