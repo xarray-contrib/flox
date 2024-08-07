@@ -2,7 +2,7 @@
 # flake8: noqa
 """Top-level module for flox ."""
 from . import cache
-from .aggregations import Aggregation  # noqa
+from .aggregations import Aggregation, Scan  # noqa
 from .core import groupby_reduce, groupby_scan, rechunk_for_blockwise, rechunk_for_cohorts  # noqa
 
 
