@@ -2,6 +2,7 @@ from functools import partial
 
 import numpy as np
 
+from . import xrdtypes as dtypes
 from .xrutils import is_scalar, isnull, notnull
 
 
@@ -98,7 +99,7 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
     # partition the complex array in-place
     labels_broadcast = np.broadcast_to(group_idx, array.shape)
     with np.errstate(invalid="ignore"):
-        cmplx = labels_broadcast + 1j * array
+        cmplx = labels_broadcast + 1j * (array.view(int) if array.dtype.kind in "Mm" else array)
     cmplx.partition(kth=kth, axis=-1)
     if is_scalar_q:
         a_ = cmplx.imag
@@ -158,6 +159,8 @@ def _np_grouped_op(
 
 
 def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
+    if fillna in [dtypes.INF, dtypes.NINF]:
+        fillna = dtypes._get_fill_value(kwargs.get("dtype", array.dtype), fillna)
     result = func(group_idx, np.where(isnull(array), fillna, array), *args, **kwargs)
     # np.nanmax([np.nan, np.nan]) = np.nan
     # To recover this behaviour, we need to search for the fillna value
@@ -175,9 +178,9 @@ nansum = partial(_nan_grouped_op, func=sum, fillna=0)
 prod = partial(_np_grouped_op, op=np.multiply.reduceat)
 nanprod = partial(_nan_grouped_op, func=prod, fillna=1)
 max = partial(_np_grouped_op, op=np.maximum.reduceat)
-nanmax = partial(_nan_grouped_op, func=max, fillna=-np.inf)
+nanmax = partial(_nan_grouped_op, func=max, fillna=dtypes.NINF)
 min = partial(_np_grouped_op, op=np.minimum.reduceat)
-nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
+nanmin = partial(_nan_grouped_op, func=min, fillna=dtypes.INF)
 quantile = partial(_np_grouped_op, op=partial(quantile_, skipna=False))
 nanquantile = partial(_np_grouped_op, op=partial(quantile_, skipna=True))
 median = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=False))
