@@ -61,7 +61,11 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
     return result
 
 
-@given(data=st.data(), array=numeric_arrays, func=func_st)
+@given(
+    data=st.data(),
+    array=st.one_of(numeric_arrays, chunked_arrays(arrays=numeric_arrays)),
+    func=func_st,
+)
 def test_groupby_reduce(data, array, func: str) -> None:
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(array))
