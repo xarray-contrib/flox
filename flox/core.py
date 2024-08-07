@@ -2425,6 +2425,9 @@ def groupby_reduce(
     if method == "cohorts" and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
 
+    if not is_duck_array(array):
+        array = np.asarray(array)
+
     reindex = _validate_reindex(
         reindex,
         func,
@@ -2435,8 +2438,6 @@ def groupby_reduce(
         array.dtype,
     )
 
-    if not is_duck_array(array):
-        array = np.asarray(array)
     is_bool_array = np.issubdtype(array.dtype, bool)
     array = array.astype(np.intp) if is_bool_array else array
 
