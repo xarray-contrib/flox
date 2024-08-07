@@ -1705,7 +1705,7 @@ def dask_groupby_agg(
 
         tree_reduce = partial(
             dask.array.reductions._tree_reduce,
-            name=f"{name}-reduce",
+            name=f"{name}-simple-reduce",
             dtype=array.dtype,
             axis=axis,
             keepdims=True,
@@ -1740,14 +1740,20 @@ def dask_groupby_agg(
             groups_ = []
             for blks, cohort in chunks_cohorts.items():
                 cohort_index = pd.Index(cohort)
-                reindexer = partial(reindex_intermediates, agg=agg, unique_groups=cohort_index)
+                reindexer = (
+                    partial(reindex_intermediates, agg=agg, unique_groups=cohort_index)
+                    if do_simple_combine
+                    else identity
+                )
                 reindexed = subset_to_blocks(intermediate, blks, block_shape, reindexer)
                 # now that we have reindexed, we can set reindex=True explicitlly
                 reduced_.append(
                     tree_reduce(
                         reindexed,
-                        combine=partial(combine, agg=agg, reindex=True),
-                        aggregate=partial(aggregate, expected_groups=cohort_index, reindex=True),
+                        combine=partial(combine, agg=agg, reindex=do_simple_combine),
+                        aggregate=partial(
+                            aggregate, expected_groups=cohort_index, reindex=do_simple_combine
+                        ),
                     )
                 )
                 # This is done because pandas promotes to 64-bit types when an Index is created
