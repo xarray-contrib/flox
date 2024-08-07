@@ -170,7 +170,9 @@ def _is_minmax_reduction(func: T_Agg) -> bool:
 
 
 def _is_first_last_reduction(func: T_Agg) -> bool:
-    return isinstance(func, str) and func in ["nanfirst", "nanlast", "first", "last"]
+    if isinstance(func, Aggregation):
+        func = func.name
+    return func in ["nanfirst", "nanlast", "first", "last"]
 
 
 def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
@@ -1642,7 +1644,12 @@ def dask_groupby_agg(
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
     labels_are_unknown = is_duck_dask_array(by_input) and expected_groups is None
-    do_simple_combine = not _is_arg_reduction(agg) and not labels_are_unknown
+    do_grouped_combine = (
+        _is_arg_reduction(agg)
+        or labels_are_unknown
+        or (_is_first_last_reduction(agg) and array.dtype.kind != "f")
+    )
+    do_simple_combine = not do_grouped_combine
 
     if method == "blockwise":
         #  use the "non dask" code path, but applied blockwise
@@ -1698,7 +1705,7 @@ def dask_groupby_agg(
 
         tree_reduce = partial(
             dask.array.reductions._tree_reduce,
-            name=f"{name}-reduce",
+            name=f"{name}-simple-reduce",
             dtype=array.dtype,
             axis=axis,
             keepdims=True,
@@ -1733,14 +1740,20 @@ def dask_groupby_agg(
             groups_ = []
             for blks, cohort in chunks_cohorts.items():
                 cohort_index = pd.Index(cohort)
-                reindexer = partial(reindex_intermediates, agg=agg, unique_groups=cohort_index)
+                reindexer = (
+                    partial(reindex_intermediates, agg=agg, unique_groups=cohort_index)
+                    if do_simple_combine
+                    else identity
+                )
                 reindexed = subset_to_blocks(intermediate, blks, block_shape, reindexer)
                 # now that we have reindexed, we can set reindex=True explicitlly
                 reduced_.append(
                     tree_reduce(
                         reindexed,
-                        combine=partial(combine, agg=agg, reindex=True),
-                        aggregate=partial(aggregate, expected_groups=cohort_index, reindex=True),
+                        combine=partial(combine, agg=agg, reindex=do_simple_combine),
+                        aggregate=partial(
+                            aggregate, expected_groups=cohort_index, reindex=do_simple_combine
+                        ),
                     )
                 )
                 # This is done because pandas promotes to 64-bit types when an Index is created
@@ -1986,8 +1999,13 @@ def _validate_reindex(
     expected_groups,
     any_by_dask: bool,
     is_dask_array: bool,
+    array_dtype: Any,
 ) -> bool | None:
     # logger.debug("Entering _validate_reindex: reindex is {}".format(reindex))  # noqa
+    def first_or_last():
+        return func in ["first", "last"] or (
+            _is_first_last_reduction(func) and array_dtype.kind != "f"
+        )
 
     all_numpy = not is_dask_array and not any_by_dask
     if reindex is True and not all_numpy:
@@ -1997,7 +2015,7 @@ def _validate_reindex(
             raise ValueError(
                 "reindex=True is not a valid choice for method='blockwise' or method='cohorts'."
             )
-        if func in ["first", "last"]:
+        if first_or_last():
             raise ValueError("reindex must be None or False when func is 'first' or 'last.")
 
     if reindex is None:
@@ -2008,9 +2026,10 @@ def _validate_reindex(
         if all_numpy:
             return True
 
-        if func in ["first", "last"]:
+        if first_or_last():
             # have to do the grouped_combine since there's no good fill_value
-            reindex = False
+            # Also needed for nanfirst, nanlast with no-NaN dtypes
+            return False
 
         if method == "blockwise":
             # for grouping by dask arrays, we set reindex=True
@@ -2412,12 +2431,19 @@ def groupby_reduce(
     if method == "cohorts" and any_by_dask:
         raise ValueError(f"method={method!r} can only be used when grouping by numpy arrays.")
 
-    reindex = _validate_reindex(
-        reindex, func, method, expected_groups, any_by_dask, is_duck_dask_array(array)
-    )
-
     if not is_duck_array(array):
         array = np.asarray(array)
+
+    reindex = _validate_reindex(
+        reindex,
+        func,
+        method,
+        expected_groups,
+        any_by_dask,
+        is_duck_dask_array(array),
+        array.dtype,
+    )
+
     is_bool_array = np.issubdtype(array.dtype, bool)
     array = array.astype(np.intp) if is_bool_array else array
 
@@ -2601,7 +2627,7 @@ def groupby_reduce(
 
         # TODO: clean this up
         reindex = _validate_reindex(
-            reindex, func, method, expected_, any_by_dask, is_duck_dask_array(array)
+            reindex, func, method, expected_, any_by_dask, is_duck_dask_array(array), array.dtype
         )
 
         if TYPE_CHECKING:

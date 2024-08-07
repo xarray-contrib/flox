@@ -9,6 +9,7 @@ pytest.importorskip("dask")
 pytest.importorskip("cftime")
 
 import dask
+import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
 from hypothesis import assume, given, note
@@ -19,6 +20,7 @@ from flox.xrutils import notnull
 
 from . import assert_equal
 from .strategies import by_arrays, chunked_arrays, func_st, numeric_arrays
+from .strategies import chunks as chunks_strategy
 
 dask.config.set(scheduler="sync")
 
@@ -208,3 +210,16 @@ def test_first_last(data, array: dask.array.Array, func: str) -> None:
         first, *_ = groupby_reduce(array, by, func=func, engine="flox")
         second, *_ = groupby_reduce(array, by, func=mate, engine="flox")
         assert_equal(first, second)
+
+
+@given(data=st.data(), func=st.sampled_from(["nanfirst", "nanlast"]))
+def test_first_last_useless(data, func):
+    shape = data.draw(npst.array_shapes())
+    by = data.draw(by_arrays(shape=shape[slice(-1, None)]))
+    chunks = data.draw(chunks_strategy(shape=shape))
+    array = np.zeros(shape, dtype=np.int8)
+    if chunks is not None:
+        array = dask.array.from_array(array, chunks=chunks)
+    actual, groups = groupby_reduce(array, by, axis=-1, func=func, engine="numpy")
+    expected = np.zeros(shape[:-1] + (len(groups),), dtype=array.dtype)
+    assert_equal(actual, expected)
