@@ -1929,3 +1929,17 @@ def test_ffill_bfill(chunks, size, add_nan_by, func):
     expected = flox.groupby_scan(array.compute(), by, func=func)
     actual = flox.groupby_scan(array, by, func=func)
     assert_equal(expected, actual)
+
+
+@requires_dask
+def test_blockwise_nans():
+    array = dask.array.ones((1, 10), chunks=2)
+    by = np.array([-1, 0, -1, 1, -1, 2, -1, 3, 4, 4])
+    actual, actual_groups = flox.groupby_reduce(
+        array, by, func="sum", expected_groups=pd.RangeIndex(0, 5)
+    )
+    expected, expected_groups = flox.groupby_reduce(
+        array.compute(), by, func="sum", expected_groups=pd.RangeIndex(0, 5)
+    )
+    assert_equal(expected_groups, actual_groups)
+    assert_equal(expected, actual)
