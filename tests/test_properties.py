@@ -97,7 +97,13 @@ def test_groupby_reduce(data, array, func: str) -> None:
 
         # numpy-groupies always does the calculation in float64
         if (
-            ("var" in func or "std" in func or "sum" in func or "mean" in func)
+            (
+                "var" in func
+                or "std" in func
+                or "sum" in func
+                or "mean" in func
+                or "quantile" in func
+            )
             and array.dtype.kind == "f"
             and array.dtype.itemsize != 8
         ):
