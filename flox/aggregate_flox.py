@@ -160,7 +160,7 @@ def _np_grouped_op(
 
 def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
     if fillna in [dtypes.INF, dtypes.NINF]:
-        fillna = dtypes._get_fill_value(kwargs.get("dtype", array.dtype), fillna)
+        fillna = dtypes._get_fill_value(kwargs.get("dtype", None) or array.dtype, fillna)
     result = func(group_idx, np.where(isnull(array), fillna, array), *args, **kwargs)
     # np.nanmax([np.nan, np.nan]) = np.nan
     # To recover this behaviour, we need to search for the fillna value
