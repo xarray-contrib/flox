@@ -6,7 +6,7 @@ dependencies:
   - build
   - cachey
   - dask-core
-  - numpy>=1.22
+  - numpy<2
   - mamba
   - pip
   - python=3.10
