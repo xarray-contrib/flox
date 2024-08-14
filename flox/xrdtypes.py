@@ -1,6 +1,7 @@
 import functools
 
 import numpy as np
+from numpy.typing import DTypeLike
 
 from . import xrutils as utils
 
@@ -147,3 +148,57 @@ def get_neg_infinity(dtype, min_for_int=False):
 def is_datetime_like(dtype):
     """Check if a dtype is a subclass of the numpy datetime types"""
     return np.issubdtype(dtype, np.datetime64) or np.issubdtype(dtype, np.timedelta64)
+
+
+def _normalize_dtype(dtype: DTypeLike, array_dtype: np.dtype, fill_value=None) -> np.dtype:
+    if dtype is None:
+        dtype = array_dtype
+    if dtype is np.floating:
+        # mean, std, var always result in floating
+        # but we preserve the array's dtype if it is floating
+        if array_dtype.kind in "fcmM":
+            dtype = array_dtype
+        else:
+            dtype = np.dtype("float64")
+    elif not isinstance(dtype, np.dtype):
+        dtype = np.dtype(dtype)
+    if fill_value not in [None, INF, NINF, NA]:
+        dtype = np.result_type(dtype, fill_value)
+    return dtype
+
+
+def _maybe_promote_int(dtype) -> np.dtype:
+    # https://numpy.org/doc/stable/reference/generated/numpy.prod.html
+    # The dtype of a is used by default unless a has an integer dtype of less precision
+    # than the default platform integer.
+    if not isinstance(dtype, np.dtype):
+        dtype = np.dtype(dtype)
+    if dtype.kind == "i":
+        dtype = np.result_type(dtype, np.intp)
+    elif dtype.kind == "u":
+        dtype = np.result_type(dtype, np.uintp)
+    return dtype
+
+
+def _get_fill_value(dtype, fill_value):
+    """Returns dtype appropriate infinity. Returns +Inf equivalent for None."""
+    if fill_value in [None, NA] and dtype.kind in "US":
+        return ""
+    if fill_value == INF or fill_value is None:
+        return get_pos_infinity(dtype, max_for_int=True)
+    if fill_value == NINF:
+        return get_neg_infinity(dtype, min_for_int=True)
+    if fill_value == NA:
+        if np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.complexfloating):
+            return np.nan
+        # This is madness, but npg checks that fill_value is compatible
+        # with array dtype even if the fill_value is never used.
+        elif np.issubdtype(dtype, np.integer):
+            return get_neg_infinity(dtype, min_for_int=True)
+        elif np.issubdtype(dtype, np.timedelta64):
+            return np.timedelta64("NaT")
+        elif np.issubdtype(dtype, np.datetime64):
+            return np.datetime64("NaT")
+        else:
+            return None
+    return fill_value
