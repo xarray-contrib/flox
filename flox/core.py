@@ -2663,10 +2663,18 @@ def groupby_reduce(
                 groups = (groups[0][sorted_idx],)
 
     if factorize_early:
+        assert len(groups) == 1
+        (groups_,) = groups
         # nan group labels are factorized to -1, and preserved
         # now we get rid of them by reindexing
-        # This also handles bins with no data
-        result = reindex_(result, from_=groups[0], to=expected_, fill_value=fill_value).reshape(
+        # First, for "blockwise", we can have -1 repeated in different blocks
+        # This breaks the reindexing so remove those first.
+        if method == "blockwise" and (mask := groups_ == -1).sum(axis=-1) > 1:
+            result = result[..., ~mask]
+            groups_ = groups_[..., ~mask]
+
+        # This reindex also handles bins with no data
+        result = reindex_(result, from_=groups_, to=expected_, fill_value=fill_value).reshape(
             result.shape[:-1] + grp_shape
         )
         groups = final_groups
