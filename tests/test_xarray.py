@@ -749,3 +749,20 @@ def test_direct_reduction(func):
     with xr.set_options(use_flox=False):
         expected = getattr(data.groupby("x", squeeze=False), func)(**kwargs)
     xr.testing.assert_identical(expected, actual)
+
+
+def test_non_dim_coords_with_core_dim():
+    coords = {"a": ("x", [0, 0, 1, 1]), "b": ("y", [0, 0, 1, 1])}
+    square = xr.DataArray(np.arange(16).reshape(4, 4), coords=coords, dims=["x", "y"])
+    actual = xarray_reduce(square, "a", "b", func="mean")
+    expected = xr.DataArray(
+        np.array([[2.5, 4.5], [10.5, 12.5]]),
+        dims=("a", "b"),
+        coords={"a": [0, 1], "b": [0, 1]},
+    )
+    xr.testing.assert_identical(actual, expected)
+
+    actual = xarray_reduce(square, "x", "y", func="mean")
+    expected = square.astype(np.float64).copy()
+    expected["a"], expected["b"] = xr.broadcast(square.a, square.b)
+    xr.testing.assert_identical(actual, expected)

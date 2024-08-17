@@ -250,6 +250,16 @@ def xarray_reduce(
     else:
         ds = obj._to_temp_dataset()
 
+    # These will need to be broadcast/reduced as data_vars
+    reset_non_dim_coords = [
+        name
+        for name in ds._coord_names
+        if any(dim in ds._variables[name].dims for dim in grouper_dims)
+        and name not in maybe_drop
+        and name not in ds._indexes
+    ]
+    ds = ds.reset_coords(reset_non_dim_coords)
+
     try:
         from xarray.indexes import PandasMultiIndex
     except ImportError:
@@ -475,6 +485,7 @@ def xarray_reduce(
         if all(d not in ds_broad[var].dims for d in dim_tuple):
             actual[var] = ds_broad[var]
 
+    actual = actual.set_coords(reset_non_dim_coords)
     for newdim in newdims:
         actual.coords[newdim.name] = newdim.values if newdim.is_scalar else np.array(newdim.values)
 
