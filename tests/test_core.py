@@ -1943,3 +1943,13 @@ def test_blockwise_nans():
     )
     assert_equal(expected_groups, actual_groups)
     assert_equal(expected, actual)
+
+
+def test_agg_dtypes():
+    # regression test for GH388
+    counts = np.array([0, 2, 1, 0, 1])
+    group = np.array([1, 1, 1, 2, 2])
+    actual, _ = groupby_reduce(
+        counts, group, expected_groups=(np.array([1, 2]),), func="sum", dtype="uint8"
+    )
+    assert actual.dtype == np.uint8

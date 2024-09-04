@@ -19,7 +19,7 @@ from flox.core import groupby_reduce, groupby_scan
 from flox.xrutils import notnull
 
 from . import assert_equal
-from .strategies import by_arrays, chunked_arrays, func_st, numeric_arrays
+from .strategies import array_dtypes, by_arrays, chunked_arrays, func_st, numeric_arrays
 from .strategies import chunks as chunks_strategy
 
 dask.config.set(scheduler="sync")
@@ -233,3 +233,25 @@ def test_first_last_useless(data, func):
     actual, groups = groupby_reduce(array, by, axis=-1, func=func, engine="numpy")
     expected = np.zeros(shape[:-1] + (len(groups),), dtype=array.dtype)
     assert_equal(actual, expected)
+
+
+@given(
+    func=st.sampled_from(["sum", "prod", "nansum", "nanprod"]),
+    engine=st.sampled_from(["numpy", "flox"]),
+    array_dtype=st.none() | array_dtypes,
+    dtype=st.none() | array_dtypes,
+)
+def test_agg_dtype_specified(func, array_dtype, dtype, engine):
+    # regression test for GH388
+    counts = np.array([0, 2, 1, 0, 1], dtype=array_dtype)
+    group = np.array([1, 1, 1, 2, 2])
+    actual, _ = groupby_reduce(
+        counts,
+        group,
+        expected_groups=(np.array([1, 2]),),
+        func=func,
+        dtype=dtype,
+        engine=engine,
+    )
+    expected = getattr(np, func)(counts, keepdims=True, dtype=dtype)
+    assert actual.dtype == expected.dtype

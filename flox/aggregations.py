@@ -292,8 +292,8 @@ count = Aggregation(
     combine="sum",
     fill_value=0,
     final_fill_value=0,
-    dtypes=np.intp,
-    final_dtype=np.intp,
+    dtypes=np.integer,
+    final_dtype=np.integer,
 )
 
 # note that the fill values are the result of np.func([np.nan, np.nan])
@@ -521,12 +521,15 @@ def quantile_new_dims_func(q) -> tuple[Dim]:
     return (Dim(name="quantile", values=q),)
 
 
+# if the input contains integers or floats smaller than float64,
+# the output data-type is float64. Otherwise, the output data-type is the same as that
+# of the input.
 quantile = Aggregation(
     name="quantile",
     fill_value=dtypes.NA,
     chunk=None,
     combine=None,
-    final_dtype=np.floating,
+    final_dtype=np.float64,
     new_dims_func=quantile_new_dims_func,
 )
 nanquantile = Aggregation(
@@ -534,7 +537,7 @@ nanquantile = Aggregation(
     fill_value=dtypes.NA,
     chunk=None,
     combine=None,
-    final_dtype=np.floating,
+    final_dtype=np.float64,
     new_dims_func=quantile_new_dims_func,
 )
 mode = Aggregation(
@@ -780,10 +783,8 @@ def _initialize_aggregation(
         np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
     )
     final_dtype = dtypes._normalize_dtype(
-        dtype_ or agg.dtype_init["final"], array_dtype, fill_value
+        dtype_ or agg.dtype_init["final"], array_dtype, agg.preserves_dtype, fill_value
     )
-    if not agg.preserves_dtype:
-        final_dtype = dtypes._maybe_promote_int(final_dtype)
     agg.dtype = {
         "user": dtype,  # Save to automatically choose an engine
         "final": final_dtype,
