@@ -524,7 +524,7 @@ def xarray_reduce(
                     obj, xr.Dataset
                 )  # do not re-order dataarrays inside datasets
                 actual[var] = _restore_dim_order(
-                    actual[var], template, by_da[0], no_groupby_reorder=no_groupby_reorder
+                    actual[var].variable, template, by_da[0], no_groupby_reorder=no_groupby_reorder
                 )
 
     if missing_dim:
