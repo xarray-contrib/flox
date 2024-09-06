@@ -19,7 +19,6 @@ dependencies:
   - pytest-pretty
   - pytest-xdist
   - syrupy
-  - xarray
   - pre-commit
   - numpy_groupies>=0.9.19
   - pooch
@@ -27,3 +26,5 @@ dependencies:
   - numba
   - numbagg>=0.3
   - hypothesis
+  - pip:
+      - git+https://github.com/dcherian/xarray.git@flox-preserve-dtype
