@@ -766,7 +766,7 @@ def test_groupby_preserve_dtype(reduction):
         coords={"idx": ("x", [1, 2, 1])},
     )
 
-    kwargs = {}
+    kwargs = {"engine": "numpy"}
     if "nan" in reduction:
         kwargs["skipna"] = True
     # TODO: fix dtype with numbagg/bottleneck and use_flox=False
