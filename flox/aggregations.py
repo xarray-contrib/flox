@@ -292,8 +292,8 @@ count = Aggregation(
     combine="sum",
     fill_value=0,
     final_fill_value=0,
-    dtypes=np.integer,
-    final_dtype=np.integer,
+    dtypes=np.intp,
+    final_dtype=np.intp,
 )
 
 # note that the fill values are the result of np.func([np.nan, np.nan])

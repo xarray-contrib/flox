@@ -769,8 +769,7 @@ def test_groupby_preserve_dtype(reduction):
     kwargs = {"engine": "numpy"}
     if "nan" in reduction:
         kwargs["skipna"] = True
-    # TODO: fix dtype with numbagg/bottleneck and use_flox=False
-    with xr.set_options(use_numbagg=False, use_bottleneck=False):
+    with xr.set_options(use_flox=True, use_numbagg=False, use_bottleneck=False):
         actual = getattr(ds.groupby("idx"), reduction.removeprefix("nan"))(**kwargs).test.dtype
     expected = getattr(np, reduction)(ds.test.data, axis=0).dtype
 
