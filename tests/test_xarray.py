@@ -24,7 +24,7 @@ if has_dask:
 
 # test against legacy xarray implementation
 # avoid some compilation overhead
-xr.set_options(use_flox=False, use_numbagg=False)
+xr.set_options(use_flox=False, use_numbagg=False, use_bottleneck=False)
 tolerance64 = {"rtol": 1e-15, "atol": 1e-18}
 np.random.seed(123)
 
@@ -769,7 +769,7 @@ def test_groupby_preserve_dtype(reduction):
     kwargs = {"engine": "numpy"}
     if "nan" in reduction:
         kwargs["skipna"] = True
-    with xr.set_options(use_flox=True, use_numbagg=False, use_bottleneck=False):
+    with xr.set_options(use_flox=True):
         actual = getattr(ds.groupby("idx"), reduction.removeprefix("nan"))(**kwargs).test.dtype
     expected = getattr(np, reduction)(ds.test.data, axis=0).dtype
 
