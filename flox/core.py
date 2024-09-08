@@ -17,6 +17,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Literal,
+    TypeAlias,
     TypedDict,
     TypeVar,
     Union,
@@ -73,8 +74,8 @@ if TYPE_CHECKING:
     import dask.array.Array as DaskArray
     from dask.typing import Graph
 
-    T_DuckArray = np.ndarray | DaskArray | CubedArray  # Any ?
-    T_By = T_DuckArray
+    T_DuckArray: TypeAlias = np.ndarray | DaskArray | CubedArray  # Any ?
+    T_By: TypeAlias = T_DuckArray
     T_Bys = tuple[T_By, ...]
     T_ExpectIndex = pd.Index
     T_ExpectIndexTuple = tuple[T_ExpectIndex, ...]
