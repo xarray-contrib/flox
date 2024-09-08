@@ -65,12 +65,8 @@ class Combine1d(Combine):
             * 2
         ]
 
-        self.x_chunk_reindexed = [
-            construct_member(groups) for groups in [np.array((1, 2, 3, 4))] * 4
-        ]
+        self.x_chunk_reindexed = [construct_member(groups) for groups in [np.array((1, 2, 3, 4))] * 4]
         self.kwargs = {
-            "agg": flox.aggregations._initialize_aggregation(
-                "sum", "float64", np.float64, 0, 0, {}
-            ),
+            "agg": flox.aggregations._initialize_aggregation("sum", "float64", np.float64, 0, 0, {}),
             "axis": (3,),
         }

@@ -67,7 +67,12 @@ class Cohorts:
     track_num_tasks.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_tasks_optimized.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_layers.unit = "layers"  # type: ignore[attr-defined] # Lazy
-    for f in [track_num_tasks, track_num_tasks_optimized, track_num_layers, track_num_cohorts]:
+    for f in [
+        track_num_tasks,
+        track_num_tasks_optimized,
+        track_num_layers,
+        track_num_cohorts,
+    ]:
         f.repeat = 1  # type: ignore[attr-defined] # Lazy
         f.rounds = 1  # type: ignore[attr-defined] # Lazy
         f.number = 1  # type: ignore[attr-defined] # Lazy
@@ -82,9 +87,7 @@ class NWMMidwest(Cohorts):
         y = np.repeat(np.arange(30), 60)
         by = x[np.newaxis, :] * y[:, np.newaxis]
 
-        self.by = flox.core._factorize_multiple((by,), expected_groups=(None,), any_by_dask=False)[
-            0
-        ][0]
+        self.by = flox.core._factorize_multiple((by,), expected_groups=(None,), any_by_dask=False)[0][0]
 
         self.array = dask.array.ones(self.by.shape, chunks=(350, 350))
         self.axis = (-2, -1)
@@ -101,7 +104,12 @@ class ERA5Dataset:
 
     def rechunk(self):
         self.array = flox.core.rechunk_for_cohorts(
-            self.array, -1, self.by, force_new_chunk_at=[1], chunksize=48, ignore_old_chunks=True
+            self.array,
+            -1,
+            self.by,
+            force_new_chunk_at=[1],
+            chunksize=48,
+            ignore_old_chunks=True,
         )
 
 
@@ -151,7 +159,12 @@ class PerfectMonthly(Cohorts):
 
     def rechunk(self):
         self.array = flox.core.rechunk_for_cohorts(
-            self.array, -1, self.by, force_new_chunk_at=[1], chunksize=4, ignore_old_chunks=True
+            self.array,
+            -1,
+            self.by,
+            force_new_chunk_at=[1],
+            chunksize=4,
+            ignore_old_chunks=True,
         )
 
 

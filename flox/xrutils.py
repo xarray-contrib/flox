@@ -4,14 +4,14 @@
 import datetime
 import importlib
 from collections.abc import Iterable
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from packaging.version import Version
 
 
-def module_available(module: str, minversion: Optional[str] = None) -> bool:
+def module_available(module: str, minversion: str | None = None) -> bool:
     """Checks whether a module is installed without importing it.
 
     Use this for a lightweight check and lazy imports.
@@ -137,7 +137,7 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
         include_0d = getattr(value, "ndim", None) == 0
     return (
         include_0d
-        or isinstance(value, (str, bytes, dict))
+        or isinstance(value, str | bytes | dict)
         or not (
             isinstance(value, (Iterable,) + NON_NUMPY_SUPPORTED_ARRAY_TYPES)
             or hasattr(value, "__array_function__")
@@ -150,7 +150,7 @@ def notnull(data):
         data = np.asarray(data)
 
     scalar_type = data.dtype.type
-    if issubclass(scalar_type, (np.bool_, np.integer, np.character, np.void)):
+    if issubclass(scalar_type, np.bool_ | np.integer | np.character | np.void):
         # these types cannot represent missing values
         return np.ones_like(data, dtype=bool)
     else:
@@ -163,7 +163,7 @@ def isnull(data):
     if not is_duck_array(data):
         data = np.asarray(data)
     scalar_type = data.dtype.type
-    if issubclass(scalar_type, (np.datetime64, np.timedelta64)):
+    if issubclass(scalar_type, np.datetime64 | np.timedelta64):
         # datetime types use NaT for null
         # note: must check timedelta64 before integers, because currently
         # timedelta64 inherits from np.integer
@@ -171,12 +171,12 @@ def isnull(data):
     elif issubclass(scalar_type, np.inexact):
         # float types use NaN for null
         return np.isnan(data)
-    elif issubclass(scalar_type, (np.bool_, np.integer, np.character, np.void)):
+    elif issubclass(scalar_type, np.bool_ | np.integer | np.character | np.void):
         # these types cannot represent missing values
         return np.zeros_like(data, dtype=bool)
     else:
         # at this point, array should have dtype=object
-        if isinstance(data, (np.ndarray, dask_array_type)):
+        if isinstance(data, np.ndarray | dask_array_type):
             return pd.isnull(data)
         else:
             # Not reachable yet, but intended for use with other duck array
@@ -275,9 +275,7 @@ def timedelta_to_numeric(value, datetime_unit="ns", dtype=float):
         try:
             a = pd.to_timedelta(value)
         except ValueError:
-            raise ValueError(
-                f"Could not convert {value!r} to timedelta64 using pandas.to_timedelta"
-            )
+            raise ValueError(f"Could not convert {value!r} to timedelta64 using pandas.to_timedelta")
         return py_timedelta_to_float(a, datetime_unit)
     else:
         raise TypeError(
