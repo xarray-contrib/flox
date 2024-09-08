@@ -176,7 +176,7 @@ def isnull(data):
         return np.zeros_like(data, dtype=bool)
     else:
         # at this point, array should have dtype=object
-        if isinstance(data, np.ndarray | dask_array_type):
+        if isinstance(data, (np.ndarray, dask_array_type)):  # noqa
             return pd.isnull(data)
         else:
             # Not reachable yet, but intended for use with other duck array
