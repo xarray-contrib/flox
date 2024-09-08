@@ -150,9 +150,14 @@ def is_datetime_like(dtype):
     return np.issubdtype(dtype, np.datetime64) or np.issubdtype(dtype, np.timedelta64)
 
 
-def _normalize_dtype(dtype: DTypeLike, array_dtype: np.dtype, fill_value=None) -> np.dtype:
+def _normalize_dtype(
+    dtype: DTypeLike, array_dtype: np.dtype, preserves_dtype: bool, fill_value=None
+) -> np.dtype:
     if dtype is None:
-        dtype = array_dtype
+        if not preserves_dtype:
+            dtype = _maybe_promote_int(array_dtype)
+        else:
+            dtype = array_dtype
     if dtype is np.floating:
         # mean, std, var always result in floating
         # but we preserve the array's dtype if it is floating

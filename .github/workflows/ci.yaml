@@ -70,6 +70,7 @@ jobs:
       - name: Run Tests
         id: status
         run: |
+          python -c "import xarray; xarray.show_versions()"
           pytest --durations=20 --durations-min=0.5 -n auto --cov=./ --cov-report=xml --hypothesis-profile ci
       - name: Upload code coverage to Codecov
         uses: codecov/codecov-action@v4.5.0
@@ -98,7 +99,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: "pydata/xarray"
+          repository: "dcherian/xarray"
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set up conda environment
         uses: mamba-org/setup-micromamba@v1
@@ -112,6 +113,7 @@ jobs:
             pint>=0.22
       - name: Install xarray
         run: |
+          git checkout flox-preserve-dtype
           python -m pip install --no-deps .
       - name: Install upstream flox
         run: |

@@ -81,7 +81,7 @@ def _get_array_func(func: str) -> Callable:
 
         def npfunc(x, **kwargs):
             x = np.asarray(x)
-            return (~np.isnan(x)).sum()
+            return (~xrutils.isnull(x)).sum(**kwargs)
 
     elif func in ["nanfirst", "nanlast"]:
         npfunc = getattr(xrutils, func)
@@ -1984,3 +1984,16 @@ def test_blockwise_nans():
     )
     assert_equal(expected_groups, actual_groups)
     assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize("func", ["sum", "prod", "count", "nansum"])
+@pytest.mark.parametrize("engine", ["flox", "numpy"])
+def test_agg_dtypes(func, engine):
+    # regression test for GH388
+    counts = np.array([0, 2, 1, 0, 1])
+    group = np.array([1, 1, 1, 2, 2])
+    actual, _ = groupby_reduce(
+        counts, group, expected_groups=(np.array([1, 2]),), func=func, dtype="uint8", engine=engine
+    )
+    expected = _get_array_func(func)(counts, dtype="uint8")
+    assert actual.dtype == np.uint8 == expected.dtype

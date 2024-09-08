@@ -27,7 +27,7 @@ def supported_dtypes() -> st.SearchStrategy[np.dtype]:
 
 
 # TODO: stop excluding everything but U
-array_dtype_st = supported_dtypes().filter(lambda x: x.kind not in "cmMU")
+array_dtypes = supported_dtypes().filter(lambda x: x.kind not in "cmMU")
 by_dtype_st = supported_dtypes()
 
 NON_NUMPY_FUNCS = [
@@ -43,7 +43,7 @@ SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
 
 func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS and f not in SKIPPED_FUNCS])
 numeric_arrays = npst.arrays(
-    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtype_st
+    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtypes
 )
 all_arrays = npst.arrays(
     elements={"allow_subnormal": False},

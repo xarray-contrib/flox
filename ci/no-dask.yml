@@ -14,7 +14,6 @@ dependencies:
   - pytest-pretty
   - pytest-xdist
   - syrupy
-  - xarray
   - numpydoc
   - pre-commit
   - numpy_groupies>=0.9.19
@@ -22,3 +21,5 @@ dependencies:
   - toolz
   - numba
   - numbagg>=0.3
+  - pip:
+      - git+https://github.com/dcherian/xarray.git@flox-preserve-dtype

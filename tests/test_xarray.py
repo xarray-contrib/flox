@@ -24,7 +24,7 @@ if has_dask:
 
 # test against legacy xarray implementation
 # avoid some compilation overhead
-xr.set_options(use_flox=False, use_numbagg=False)
+xr.set_options(use_flox=False, use_numbagg=False, use_bottleneck=False)
 tolerance64 = {"rtol": 1e-15, "atol": 1e-18}
 np.random.seed(123)
 
@@ -760,3 +760,26 @@ def test_direct_reduction(func):
     with xr.set_options(use_flox=False):
         expected = getattr(data.groupby("x", squeeze=False), func)(**kwargs)
     xr.testing.assert_identical(expected, actual)
+
+
+@pytest.mark.parametrize("reduction", ["max", "min", "nanmax", "nanmin", "sum", "nansum", "prod", "nanprod"])
+def test_groupby_preserve_dtype(reduction):
+    # all groups are present, we should follow numpy exactly
+    ds = xr.Dataset(
+        {
+            "test": (
+                ["x", "y"],
+                np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype="int16"),
+            )
+        },
+        coords={"idx": ("x", [1, 2, 1])},
+    )
+
+    kwargs = {"engine": "numpy"}
+    if "nan" in reduction:
+        kwargs["skipna"] = True
+    with xr.set_options(use_flox=True):
+        actual = getattr(ds.groupby("idx"), reduction.removeprefix("nan"))(**kwargs).test.dtype
+    expected = getattr(np, reduction)(ds.test.data, axis=0).dtype
+
+    assert actual == expected
