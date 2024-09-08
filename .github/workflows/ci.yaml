@@ -26,7 +26,7 @@ jobs:
       matrix:
         os: ["ubuntu-latest"]
         env: ["environment"]
-        python-version: ["3.9", "3.12"]
+        python-version: ["3.10", "3.12"]
         include:
           - os: "windows-latest"
             env: "environment"
@@ -36,7 +36,7 @@ jobs:
             python-version: "3.12"
           - os: "ubuntu-latest"
             env: "minimal-requirements"
-            python-version: "3.9"
+            python-version: "3.10"
     steps:
       - uses: actions/checkout@v4
         with:

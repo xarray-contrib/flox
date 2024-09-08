@@ -7,9 +7,7 @@ pytest.importorskip("dask")
 from asv_bench.benchmarks import reduce
 
 
-@pytest.mark.parametrize(
-    "problem", [reduce.ChunkReduce1D, reduce.ChunkReduce2D, reduce.ChunkReduce2DAllAxes]
-)
+@pytest.mark.parametrize("problem", [reduce.ChunkReduce1D, reduce.ChunkReduce2D, reduce.ChunkReduce2DAllAxes])
 def test_reduce(problem) -> None:
     testcase = problem()
     testcase.setup()

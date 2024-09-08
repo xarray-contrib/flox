@@ -89,10 +89,14 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
         idxshape = (q.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
 
     lo_ = np.floor(
-        virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
+        virtual_index,
+        casting="unsafe",
+        out=np.empty(virtual_index.shape, dtype=np.int64),
     )
     hi_ = np.ceil(
-        virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
+        virtual_index,
+        casting="unsafe",
+        out=np.empty(virtual_index.shape, dtype=np.int64),
     )
     kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
 
@@ -119,7 +123,15 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
 
 
 def _np_grouped_op(
-    group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None, **kwargs
+    group_idx,
+    array,
+    op,
+    axis=-1,
+    size=None,
+    fill_value=None,
+    dtype=None,
+    out=None,
+    **kwargs,
 ):
     """
     most of this code is from shoyer's gist

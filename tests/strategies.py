@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import cftime
 import dask
@@ -29,19 +30,25 @@ def supported_dtypes() -> st.SearchStrategy[np.dtype]:
 array_dtypes = supported_dtypes().filter(lambda x: x.kind not in "cmMU")
 by_dtype_st = supported_dtypes()
 
-NON_NUMPY_FUNCS = ["first", "last", "nanfirst", "nanlast", "count", "any", "all"] + list(
-    SCIPY_STATS_FUNCS
-)
+NON_NUMPY_FUNCS = [
+    "first",
+    "last",
+    "nanfirst",
+    "nanlast",
+    "count",
+    "any",
+    "all",
+] + list(SCIPY_STATS_FUNCS)
 SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
 
-func_st = st.sampled_from(
-    [f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS and f not in SKIPPED_FUNCS]
-)
+func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS and f not in SKIPPED_FUNCS])
 numeric_arrays = npst.arrays(
     elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtypes
 )
 all_arrays = npst.arrays(
-    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=supported_dtypes()
+    elements={"allow_subnormal": False},
+    shape=npst.array_shapes(),
+    dtype=supported_dtypes(),
 )
 
 calendars = st.sampled_from(
