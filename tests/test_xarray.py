@@ -49,7 +49,9 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine_no_numba, reindex):
     labels2 = np.array([1, 2, 2, 1])
 
     da = xr.DataArray(
-        arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels": ("y", labels)}
+        arr,
+        dims=("x", "y"),
+        coords={"labels2": ("x", labels2), "labels": ("y", labels)},
     ).expand_dims(z=4)
 
     expected = da.groupby("labels").sum(skipna=skipna, min_count=min_count)
@@ -98,7 +100,9 @@ def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine_no_
     labels2 = np.array([1, 2, 2, 1])
 
     da = xr.DataArray(
-        arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels": ("y", labels)}
+        arr,
+        dims=("x", "y"),
+        coords={"labels2": ("x", labels2), "labels": ("y", labels)},
     ).expand_dims(z=4)
 
     if chunk:
@@ -177,9 +181,7 @@ def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine_n
     (None, (None, None), [[1, 2], [1, 2]]),
 )
 def test_validate_expected_groups(expected_groups):
-    da = xr.DataArray(
-        [1.0, 2.0], dims="x", coords={"labels": ("x", [1, 2]), "labels2": ("x", [1, 2])}
-    )
+    da = xr.DataArray([1.0, 2.0], dims="x", coords={"labels": ("x", [1, 2]), "labels2": ("x", [1, 2])})
     with pytest.raises(ValueError):
         xarray_reduce(
             da.chunk({"x": 1}),
@@ -196,12 +198,13 @@ def test_xarray_reduce_single_grouper(engine_no_numba):
     engine = engine_no_numba
     # DataArray
     ds = xr.Dataset(
-        {"Tair": (("time", "x", "y"), dask.array.ones((36, 205, 275), chunks=(9, -1, -1)))},
-        coords={
-            "time": xr.date_range(
-                "1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap"
+        {
+            "Tair": (
+                ("time", "x", "y"),
+                dask.array.ones((36, 205, 275), chunks=(9, -1, -1)),
             )
         },
+        coords={"time": xr.date_range("1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap")},
     )
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", engine=engine)
     expected = ds.Tair.groupby("time.month").mean()
@@ -380,12 +383,13 @@ def test_func_is_aggregation():
     from flox.aggregations import mean
 
     ds = xr.Dataset(
-        {"Tair": (("time", "x", "y"), dask.array.ones((36, 205, 275), chunks=(9, -1, -1)))},
-        coords={
-            "time": xr.date_range(
-                "1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap"
+        {
+            "Tair": (
+                ("time", "x", "y"),
+                dask.array.ones((36, 205, 275), chunks=(9, -1, -1)),
             )
         },
+        coords={"time": xr.date_range("1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap")},
     )
     expected = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func=mean)
@@ -520,7 +524,10 @@ def test_dtype(add_nan, chunk, dtype, dtype_out, engine_no_numba):
         data,
         dims=("x", "t"),
         coords={
-            "labels": ("t", np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"]))
+            "labels": (
+                "t",
+                np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"]),
+            )
         },
         name="arr",
     )
@@ -642,7 +649,11 @@ def test_fill_value_xarray_binning():
 def test_groupby_2d_dataset():
     d = {
         "coords": {
-            "bit_index": {"dims": ("bit_index",), "attrs": {"name": "bit_index"}, "data": [0, 1]},
+            "bit_index": {
+                "dims": ("bit_index",),
+                "attrs": {"name": "bit_index"},
+                "data": [0, 1],
+            },
             "index": {"dims": ("index",), "data": [0, 6, 8, 10, 14]},
             "clifford": {"dims": ("index",), "attrs": {}, "data": [1, 1, 4, 10, 4]},
         },
@@ -664,18 +675,14 @@ def test_groupby_2d_dataset():
         expected = ds.groupby("clifford").mean()
     with xr.set_options(use_flox=True):
         actual = ds.groupby("clifford").mean()
-    assert (
-        expected.counts.dims == actual.counts.dims
-    )  # https://github.com/pydata/xarray/issues/8292
+    assert expected.counts.dims == actual.counts.dims  # https://github.com/pydata/xarray/issues/8292
     xr.testing.assert_identical(expected, actual)
 
 
 @pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
 def test_resampling_missing_groups(chunk):
     # Regression test for https://github.com/pydata/xarray/issues/8592
-    time_coords = pd.to_datetime(
-        ["2018-06-13T03:40:36", "2018-06-13T05:50:37", "2018-06-15T03:02:34"]
-    )
+    time_coords = pd.to_datetime(["2018-06-13T03:40:36", "2018-06-13T05:50:37", "2018-06-15T03:02:34"])
 
     latitude_coords = [0.0]
     longitude_coords = [0.0]
@@ -684,7 +691,11 @@ def test_resampling_missing_groups(chunk):
 
     da = xr.DataArray(
         data,
-        coords={"time": time_coords, "latitude": latitude_coords, "longitude": longitude_coords},
+        coords={
+            "time": time_coords,
+            "latitude": latitude_coords,
+            "longitude": longitude_coords,
+        },
         dims=["time", "latitude", "longitude"],
     )
     if chunk:

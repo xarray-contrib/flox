@@ -3,10 +3,10 @@ from __future__ import annotations
 import copy
 import logging
 import warnings
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import cached_property, partial
-from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import numpy as np
 import pandas as pd
@@ -110,7 +110,13 @@ def generic_aggregate(
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
         result = method(
-            group_idx, array, axis=axis, size=size, fill_value=fill_value, dtype=dtype, **kwargs
+            group_idx,
+            array,
+            axis=axis,
+            size=size,
+            fill_value=fill_value,
+            dtype=dtype,
+            **kwargs,
         )
     return result
 
@@ -238,9 +244,7 @@ class Aggregation:
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
         self.min_count: int = 0
-        self.new_dims_func: Callable = (
-            returns_empty_tuple if new_dims_func is None else new_dims_func
-        )
+        self.new_dims_func: Callable = returns_empty_tuple if new_dims_func is None else new_dims_func
         self.preserves_dtype = preserves_dtype
 
     @cached_property
@@ -386,11 +390,19 @@ nanstd = Aggregation(
 
 min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF, preserves_dtype=True)
 nanmin = Aggregation(
-    "nanmin", chunk="nanmin", combine="nanmin", fill_value=dtypes.NA, preserves_dtype=True
+    "nanmin",
+    chunk="nanmin",
+    combine="nanmin",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
 )
 max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF, preserves_dtype=True)
 nanmax = Aggregation(
-    "nanmax", chunk="nanmax", combine="nanmax", fill_value=dtypes.NA, preserves_dtype=True
+    "nanmax",
+    chunk="nanmax",
+    combine="nanmax",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
 )
 
 
@@ -482,10 +494,18 @@ nanargmin = Aggregation(
 first = Aggregation("first", chunk=None, combine=None, fill_value=None, preserves_dtype=True)
 last = Aggregation("last", chunk=None, combine=None, fill_value=None, preserves_dtype=True)
 nanfirst = Aggregation(
-    "nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=dtypes.NA, preserves_dtype=True
+    "nanfirst",
+    chunk="nanfirst",
+    combine="nanfirst",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
 )
 nanlast = Aggregation(
-    "nanlast", chunk="nanlast", combine="nanlast", fill_value=dtypes.NA, preserves_dtype=True
+    "nanlast",
+    chunk="nanlast",
+    combine="nanlast",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
 )
 
 all_ = Aggregation(
@@ -510,10 +530,18 @@ any_ = Aggregation(
 # Support statistical quantities only blockwise
 # The parallel versions will be approximate and are hard to implement!
 median = Aggregation(
-    name="median", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.floating
+    name="median",
+    fill_value=dtypes.NA,
+    chunk=None,
+    combine=None,
+    final_dtype=np.floating,
 )
 nanmedian = Aggregation(
-    name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.floating
+    name="nanmedian",
+    fill_value=dtypes.NA,
+    chunk=None,
+    combine=None,
+    final_dtype=np.floating,
 )
 
 
@@ -537,12 +565,8 @@ nanquantile = Aggregation(
     final_dtype=np.floating,
     new_dims_func=quantile_new_dims_func,
 )
-mode = Aggregation(
-    name="mode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True
-)
-nanmode = Aggregation(
-    name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True
-)
+mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
+nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
 
 
 @dataclass
@@ -658,9 +682,7 @@ def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) 
             engine="flox",
             fill_value=agg.identity,
         )
-        result = AlignedArrays(
-            array=final_value[..., left.group_idx.size :], group_idx=right.group_idx
-        )
+        result = AlignedArrays(array=final_value[..., left.group_idx.size :], group_idx=right.group_idx)
     else:
         raise ValueError(f"Unknown binary op application mode: {agg.mode!r}")
 
@@ -779,9 +801,7 @@ def _initialize_aggregation(
     dtype_: np.dtype | None = (
         np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
     )
-    final_dtype = dtypes._normalize_dtype(
-        dtype_ or agg.dtype_init["final"], array_dtype, fill_value
-    )
+    final_dtype = dtypes._normalize_dtype(dtype_ or agg.dtype_init["final"], array_dtype, fill_value)
     if not agg.preserves_dtype:
         final_dtype = dtypes._maybe_promote_int(final_dtype)
     agg.dtype = {
@@ -794,9 +814,7 @@ def _initialize_aggregation(
                 if int_dtype is None
                 else np.dtype(int_dtype)
             )
-            for int_dtype, int_fv in zip(
-                agg.dtype_init["intermediate"], agg.fill_value["intermediate"]
-            )
+            for int_dtype, int_fv in zip(agg.dtype_init["intermediate"], agg.fill_value["intermediate"])
         ),
     }
 

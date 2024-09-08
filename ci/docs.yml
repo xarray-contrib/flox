@@ -16,6 +16,7 @@ dependencies:
   - myst-parser
   - myst-nb
   - sphinx
+  - sphinx-remove-toctrees
   - furo>=2024.08
   - ipykernel
   - jupyter
