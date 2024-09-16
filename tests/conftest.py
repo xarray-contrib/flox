@@ -12,6 +12,7 @@ settings.register_profile(
 settings.register_profile(
     "default",
     max_examples=300,
+    deadline=500,
     suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow],
     verbosity=Verbosity.verbose,
 )

@@ -2776,7 +2776,7 @@ def groupby_scan(
         return array
 
     is_bool_array = np.issubdtype(array.dtype, bool)
-    array = array.astype(np.intp) if is_bool_array else array
+    array = array.astype(np.int_) if is_bool_array else array
 
     if expected_groups is not None:
         raise NotImplementedError("Setting `expected_groups` and binning is not supported yet.")
@@ -2810,9 +2810,9 @@ def groupby_scan(
         # it defaults to the dtype of a, unless a
         # has an integer dtype with a precision less than that of the default platform integer.
         if array.dtype.kind == "i":
-            agg.dtype = np.result_type(array.dtype, np.intp)
+            agg.dtype = np.result_type(array.dtype, np.int_)
         elif array.dtype.kind == "u":
-            agg.dtype = np.result_type(array.dtype, np.uintp)
+            agg.dtype = np.result_type(array.dtype, np.uint)
     else:
         agg.dtype = array.dtype if dtype is None else dtype
 
