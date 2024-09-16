@@ -642,6 +642,7 @@ def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray) ->
     DaskArray
         Rechunked array
     """
+    # TODO: this should be unnecessary?
     labels = factorize_((labels,), axes=())[0]
     chunks = array.chunks[axis]
     newchunks = _get_optimal_chunks_for_groups(chunks, labels)
@@ -2623,7 +2624,8 @@ def groupby_reduce(
 
         partial_agg = partial(dask_groupby_agg, **kwargs)
 
-        if method == "blockwise" and by_.ndim == 1:
+        # if preferred method is already blockwise, no need to rechunk
+        if preferred_method != "blockwise" and method == "blockwise" and by_.ndim == 1:
             array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
         result, groups = partial_agg(

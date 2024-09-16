@@ -1997,3 +1997,12 @@ def test_agg_dtypes(func, engine):
     )
     expected = _get_array_func(func)(counts, dtype="uint8")
     assert actual.dtype == np.uint8 == expected.dtype
+
+
+@requires_dask
+def test_blockwise_avoid_rechunk():
+    array = dask.array.zeros((6,), chunks=(2, 4), dtype=np.int64)
+    by = np.array(["1", "1", "0", "", "0", ""], dtype="<U1")
+    actual, groups = groupby_reduce(array, by, func="first")
+    assert_equal(groups, ["", "0", "1"])
+    assert_equal(actual, [0, 0, 0])
