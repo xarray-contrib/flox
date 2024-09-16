@@ -1999,6 +1999,7 @@ def test_agg_dtypes(func, engine):
     assert actual.dtype == np.uint8 == expected.dtype
 
 
+@requires_dask
 def test_blockwise_avoid_rechunk():
     array = dask.array.zeros((6,), chunks=(2, 4), dtype=np.int64)
     by = np.array(["1", "1", "0", "", "0", ""], dtype="<U1")
