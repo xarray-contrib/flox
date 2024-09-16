@@ -2418,7 +2418,7 @@ def groupby_reduce(
     )
 
     is_bool_array = np.issubdtype(array.dtype, bool)
-    array = array.astype(np.intp) if is_bool_array else array
+    array = array.astype(np.int_) if is_bool_array else array
 
     isbins = _atleast_1d(isbin, nby)
 
