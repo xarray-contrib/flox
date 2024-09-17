@@ -1,0 +1,30 @@
+name: flox-tests
+channels:
+  - conda-forge
+dependencies:
+  - asv
+  - cachey
+  - cftime
+  - codecov
+  - cubed>=0.14.3
+  - dask-core
+  - pandas
+  - numpy<2
+  - scipy
+  - lxml # for mypy coverage report
+  - matplotlib
+  - pip
+  - pytest
+  - pytest-cov
+  - pytest-pretty
+  - pytest-xdist
+  - syrupy
+  - pre-commit
+  - numpy_groupies>=0.9.19
+  - pooch
+  - toolz
+  - numba
+  - numbagg>=0.3
+  - hypothesis
+  - pip:
+      - git+https://github.com/dcherian/xarray.git@flox-preserve-dtype
