@@ -1496,7 +1496,7 @@ def subset_to_blocks(
     flatblocks: Sequence[int],
     blkshape: tuple[int, ...] | None = None,
     reindexer=identity,
-    chunks_as_array: tuple[int, ...] | None = None,
+    chunks_as_array: tuple[np.ndarray, ...] | None = None,
 ) -> DaskArray:
     """
     Advanced indexing of .blocks such that we always get a regular array back.
