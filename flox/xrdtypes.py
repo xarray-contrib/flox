@@ -179,9 +179,9 @@ def _maybe_promote_int(dtype) -> np.dtype:
     if not isinstance(dtype, np.dtype):
         dtype = np.dtype(dtype)
     if dtype.kind == "i":
-        dtype = np.result_type(dtype, np.intp)
+        dtype = np.result_type(dtype, np.int_)
     elif dtype.kind == "u":
-        dtype = np.result_type(dtype, np.uintp)
+        dtype = np.result_type(dtype, np.uint)
     return dtype
 
 
