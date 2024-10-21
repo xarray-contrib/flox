@@ -26,4 +26,5 @@ dependencies:
   - numba
   - numbagg>=0.3
   - hypothesis
-  - xarray
+  - pip:
+      - git+https://github.com/dcherian/xarray.git

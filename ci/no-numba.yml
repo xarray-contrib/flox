@@ -19,8 +19,9 @@ dependencies:
   - pytest-pretty
   - pytest-xdist
   - syrupy
-  - xarray
   - pre-commit
   - numpy_groupies>=0.9.19
   - pooch
   - toolz
+  - pip:
+      - git+https://github.com/dcherian/xarray.git
