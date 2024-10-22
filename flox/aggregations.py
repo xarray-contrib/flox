@@ -149,9 +149,9 @@ class Dim:
 class Aggregation:
     def __init__(
         self,
-        name,
+        name: str,
         *,
-        numpy: str | FuncTuple | None = None,
+        numpy: str | None = None,
         chunk: str | FuncTuple | None,
         combine: str | FuncTuple | None,
         preprocess: Callable | None = None,
@@ -217,7 +217,7 @@ class Aggregation:
         self.preprocess = preprocess
         # Use "chunk_reduce" or "chunk_argreduce"
         self.reduction_type = reduction_type
-        self.numpy: FuncTuple = (numpy,) if numpy else (self.name,)
+        self.numpy: FuncTuple = (numpy,) if numpy is not None else (self.name,)
         # initialize blockwise reduction
         self.chunk: OptionalFuncTuple = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
