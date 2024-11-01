@@ -48,7 +48,7 @@ jobs:
         run: |
           echo "PYTHON_VERSION=${{ matrix.python-version }}" >> $GITHUB_ENV
       - name: Set up conda environment
-        uses: mamba-org/setup-micromamba@v1
+        uses: mamba-org/setup-micromamba@v2
         with:
           environment-file: ci/${{ matrix.env }}.yml
           environment-name: flox-tests
@@ -105,7 +105,7 @@ jobs:
           repository: "pydata/xarray"
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set up conda environment
-        uses: mamba-org/setup-micromamba@v1
+        uses: mamba-org/setup-micromamba@v2
         with:
           environment-file: ci/requirements/environment.yml
           environment-name: xarray-tests
