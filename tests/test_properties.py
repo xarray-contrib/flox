@@ -13,11 +13,11 @@ import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
-from hypothesis import assume, given, note
+from hypothesis import assume, given, note, settings
 
 import flox
 from flox.core import groupby_reduce, groupby_scan
-from flox.xrutils import notnull
+from flox.xrutils import isnull, notnull
 
 from . import assert_equal
 from .strategies import array_dtypes, by_arrays, chunked_arrays, func_st, numeric_arrays
@@ -46,6 +46,8 @@ NUMPY_SCAN_FUNCS: dict[str, Callable] = {
 
 
 def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
+    if array.dtype.kind in "Mm":
+        array = array.view(np.int64)
     if array.dtype.kind == "f":
         info = np.finfo(array.dtype)
     elif array.dtype.kind in ["i", "u"]:
@@ -73,7 +75,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
     # TODO: fix var for complex numbers upstream
     assume(not (("quantile" in func or "var" in func or "std" in func) and array.dtype.kind == "c"))
     # arg* with nans in array are weird
-    assume("arg" not in func and not np.any(np.isnan(array).ravel()))
+    assume("arg" not in func and not np.any(isnull(array).ravel()))
 
     axis = -1
     by = data.draw(
@@ -116,6 +118,10 @@ def test_groupby_reduce(data, array, func: str) -> None:
             note(f"casting array to float64, cast_to={cast_to!r}")
         else:
             cast_to = None
+
+        if array.dtype.kind in "Mm":
+            array = array.view(np.int64)
+            cast_to = array.dtype
         note(("kwargs:", kwargs, "cast_to:", cast_to))
         expected = getattr(np, func)(array, axis=axis, keepdims=True, **kwargs)
         if cast_to is not None:
@@ -140,7 +146,7 @@ def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
     # TODO: fix var for complex numbers upstream
     assume(not (("quantile" in func or "var" in func or "std" in func) and array.dtype.kind == "c"))
     # # arg* with nans in array are weird
-    assume("arg" not in func and not np.any(np.isnan(numpy_array.ravel())))
+    assume("arg" not in func and not np.any(isnull(numpy_array.ravel())))
     if func in ["nanmedian", "nanquantile", "median", "quantile"]:
         array = array.rechunk({-1: -1})
 
@@ -161,6 +167,7 @@ def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
     assert_equal(result_numpy, result_dask)
 
 
+@settings(report_multiple_bugs=False)
 @given(
     data=st.data(),
     array=chunked_arrays(arrays=numeric_arrays),
@@ -177,9 +184,15 @@ def test_scans(data, array: dask.array.Array, func: str) -> None:
     if "cum" in func and array.dtype.kind == "f" and array.dtype.itemsize == 4:
         assume(False)
     numpy_array = array.compute()
-    assume((np.abs(numpy_array) < 2**53).all())
+    if numpy_array.dtype.kind not in "Mm":
+        assume((np.abs(numpy_array) < 2**53).all())
 
-    dtype = NUMPY_SCAN_FUNCS[func](numpy_array[..., [0]], axis=axis).dtype
+    if numpy_array.dtype.kind in "Mm":
+        dtype = numpy_array.dtype
+        asnumeric = numpy_array.view(np.int64)
+    else:
+        asnumeric = numpy_array
+        dtype = NUMPY_SCAN_FUNCS[func](asnumeric[..., [0]], axis=axis).dtype
     expected = np.empty_like(numpy_array, dtype=dtype)
     group_idx, uniques = pd.factorize(by)
     for i in range(len(uniques)):
@@ -187,8 +200,10 @@ def test_scans(data, array: dask.array.Array, func: str) -> None:
         if not mask.any():
             note((by, group_idx, uniques))
             raise ValueError
-        expected[..., mask] = NUMPY_SCAN_FUNCS[func](numpy_array[..., mask], axis=axis, dtype=dtype)
+        expected[..., mask] = NUMPY_SCAN_FUNCS[func](asnumeric[..., mask], axis=axis)
 
+    if dtype:
+        expected = expected.astype(dtype)
     note((numpy_array, group_idx, array.chunks))
 
     tolerance = {"rtol": 1e-13, "atol": 1e-15}
@@ -257,7 +272,7 @@ def test_first_last(data, array: dask.array.Array, func: str) -> None:
         assert_equal(fg, rg)
         assert_equal(forward, reverse)
 
-    if arr.dtype.kind == "f" and not np.isnan(array.compute()).any():
+    if arr.dtype.kind == "f" and not isnull(array.compute()).any():
         if mate in ["first", "last"]:
             array = array.rechunk((*array.chunks[:-1], -1))
 

@@ -27,7 +27,7 @@ def supported_dtypes() -> st.SearchStrategy[np.dtype]:
 
 
 # TODO: stop excluding everything but U
-array_dtypes = supported_dtypes().filter(lambda x: x.kind not in "cmMU")
+array_dtypes = supported_dtypes().filter(lambda x: x.kind not in "cU")
 by_dtype_st = supported_dtypes()
 
 NON_NUMPY_FUNCS = [
