@@ -45,10 +45,6 @@ from .aggregations import (
 )
 from .cache import memoize
 from .xrutils import (
-    _contains_cftime_datetimes,
-    _datetime_nanmin,
-    _to_pytimedelta,
-    datetime_to_numeric,
     is_chunked_array,
     is_duck_array,
     is_duck_cubed_array,
@@ -2477,8 +2473,7 @@ def groupby_reduce(
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
     has_cubed = is_duck_cubed_array(array) or is_duck_cubed_array(by_)
 
-    is_first_last = _is_first_last_reduction(func)
-    if is_first_last:
+    if _is_first_last_reduction(func):
         if has_dask and nax != 1:
             raise ValueError(
                 "For dask arrays: first, last, nanfirst, nanlast reductions are "
@@ -2490,24 +2485,6 @@ def groupby_reduce(
                 "first, last, nanfirst, nanlast reductions are only supported "
                 "along a single axis or when reducing across all dimensions of `by`."
             )
-
-    # Flox's count works with non-numeric and its faster than converting.
-    is_npdatetime = array.dtype.kind in "Mm"
-    is_cftime = _contains_cftime_datetimes(array)
-    requires_numeric = (
-        (func not in ["count", "any", "all"] and not is_first_last)
-        or (func == "count" and engine != "flox")
-        or (is_first_last and is_cftime)
-    )
-    if requires_numeric:
-        if is_npdatetime:
-            offset = _datetime_nanmin(array)
-            # xarray always uses np.datetime64[ns] for np.datetime64 data
-            dtype = "timedelta64[ns]"
-            array = datetime_to_numeric(array, offset)
-        elif is_cftime:
-            offset = array.min()
-            array = datetime_to_numeric(array, offset, datetime_unit="us")
 
     if nax == 1 and by_.ndim > 1 and expected_ is None:
         # When we reduce along all axes, we are guaranteed to see all
@@ -2694,14 +2671,6 @@ def groupby_reduce(
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
         result = result.astype(bool)
-
-    # Output of count has an int dtype.
-    if requires_numeric and func != "count":
-        if is_npdatetime:
-            return result.astype(dtype) + offset
-        elif is_cftime:
-            return _to_pytimedelta(result, unit="us") + offset
-
     return (result, *groups)
 
 
