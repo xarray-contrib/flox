@@ -192,7 +192,7 @@ def _np_grouped_op(
     if out is None:
         q = kwargs.get("q", None)
         k = kwargs.get("k", None)
-        if not q and not k:
+        if q is None and k is None:
             out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
         else:
             nq = len(np.atleast_1d(q)) if q is not None else abs(k)
