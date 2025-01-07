@@ -877,7 +877,10 @@ def _initialize_aggregation(
     simple_combine: list[Callable | None] = []
     for combine in agg.combine:
         if isinstance(combine, str):
-            simple_combine.append(getattr(np, combine))
+            if combine in ["nanfirst", "nanlast"]:
+                simple_combine.append(getattr(xrutils, combine))
+            else:
+                simple_combine.append(getattr(np, combine))
         else:
             if agg.name == "topk":
                 combine = partial(combine, **finalize_kwargs)

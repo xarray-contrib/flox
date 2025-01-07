@@ -879,6 +879,7 @@ def chunk_argreduce(
     engine: T_Engine = "numpy",
     sort: bool = True,
     user_dtype=None,
+    kwargs: Sequence[dict] | None = None,
 ) -> IntermediateDict:
     """
     Per-chunk arg reduction.

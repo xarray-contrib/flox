@@ -385,6 +385,9 @@ def topk(a, k, axis, keepdims):
     If k is negative, extract the -k smallest elements instead.
     Note that, unlike in the parent function, the returned elements
     are not sorted internally.
+
+    NOTE: This function was copied from the dask project under the terms
+    of their LICENSE.
     """
     assert keepdims is True
     (axis,) = axis
