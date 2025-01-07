@@ -65,58 +65,57 @@ def quantile_or_topk(
 
     inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
 
-    # The approach for quantiles and topk, both of which are basically grouped partition,
-    # here is to use (complex_array.partition) because
+    array_validmask = notnull(array)
+    actual_sizes = np.add.reduceat(array_validmask, inv_idx[:-1], axis=axis)
+    newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
+    full_sizes = np.reshape(np.diff(inv_idx), newshape)
+
+    # The approach here is to use (complex_array.partition) because
     # 1. The full np.lexsort((array, labels), axis=-1) is slow and unnecessary
     # 2. Using record_array.partition(..., order=["labels", "array"]) is incredibly slow.
     # partition will first sort by real part, then by imaginary part, so it is a two element
     # lex-partition. Therefore we set
+    # partition will first sort by real part, then by imaginary part, so it is a two element lex-partition.
+    # So we set
+    # 3. For complex arrays, partition will first sort by real part, then by imaginary part, so it is a two element
+    #     lex-partition.
+    # Therefore we use approach (3) and set
     #     complex_array = group_idx + 1j * array
-    # group_idx is an integer (guaranteed), but array can have NaNs. Now,
-    #     1 + 1j*NaN = NaN + 1j * NaN
-    # so we must replace all NaNs with the maximum array value in the group so these NaNs
-    # get sorted to the end.
-
-    # Replace NaNs with the maximum value for each group.
-    # Partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
-    # TODO: optimize for int, string?
-    array_nanmask = isnull(array)
-    actual_sizes = np.add.reduceat(~array_nanmask, inv_idx[:-1], axis=axis)
-    newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
-    full_sizes = np.reshape(np.diff(inv_idx), newshape)
-    # These groups get replaced with the fill_value. For topk, we only replace with fill-values
-    # if non-NaN values in group < k
+    # group_idx is an integer (guaranteed), but array can have NaNs.
+    # Now the sort order of np.nan is bigger than np.inf
+    #     >>> c = (np.array([0, 1, 2, np.nan]) + np.array([np.nan, 2, 3, 4]) * 1j)
+    #     >>> c.partition(2)
+    #     >>> c
+    #     array([ 1. +2.j,  2. +3.j, nan +4.j, nan+nanj])
+    # So we determine which indices we need using the fact that NaNs get sorted to the end.
+    # This *was* partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
+    # but not any more now that I use partition and avoid replacing NaNs
     if k is not None:
-        nanmask = (actual_sizes < abs(k))
+        nanmask = actual_sizes < abs(k)
     else:
         nanmask = full_sizes != actual_sizes
-    # TODO: Don't know if this array has been copied in _prepare_for_flox.
-    #       This is potentially wasteful
-    # FIXME: should the filling handle sign(k)
-    fill = dtypes.get_neg_infinity(array.dtype, min_for_int=True)
-    if k is not None and k < 0:
-        fill = dtypes.get_pos_infinity(array.dtype, max_for_int=True)
-    array = np.where(array_nanmask, fill, array)
-    maxes = np.maximum.reduceat(array, inv_idx[:-1], axis=axis)
-    replacement = np.repeat(maxes, np.diff(inv_idx), axis=axis)
-    array[array_nanmask] = replacement[array_nanmask]
 
-    param = q if q is not None else k
     if k is not None:
         is_scalar_param = False
         param = np.arange(abs(k))
     else:
         is_scalar_param = is_scalar(q)
-        param = np.atleast_1d(param)
+        param = np.atleast_1d(q)
     param = np.reshape(param, (param.size,) + (1,) * array.ndim)
 
+    # This is numpy's method="linear"
+    # TODO: could support all the interpolations here
+    offset = actual_sizes.cumsum(axis=-1)
+    actual_sizes -= 1
     # For topk(.., k=+1 or -1), we always return the singleton dimension.
     idxshape = (param.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
 
     if q is not None:
         # This is numpy's method="linear"
         # TODO: could support all the interpolations here
-        virtual_index = param * (actual_sizes - 1) + inv_idx[:-1]
+        virtual_index = param * actual_sizes
+        # virtual_index is relative to group starts, so now offset that
+        virtual_index[..., 1:] += offset[..., :-1]
 
         if is_scalar_param:
             virtual_index = virtual_index.squeeze(axis=0)
@@ -127,7 +126,9 @@ def quantile_or_topk(
         kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
 
     else:
-        virtual_index = inv_idx[:-1] + ((actual_sizes - k) if k > 0 else abs(k) - 1)
+        virtual_index = (actual_sizes - k) if k > 0 else (abs(k) - 1)
+        # virtual_index is relative to group starts, so now offset that
+        virtual_index[..., 1:] += offset[..., :-1]
         kth = np.unique(virtual_index)
         kth = kth[kth >= 0]
         k_offset = param.reshape((abs(k),) + (1,) * virtual_index.ndim)
@@ -139,7 +140,6 @@ def quantile_or_topk(
         cmplx = 1j * (array.view(int) if array.dtype.kind in "Mm" else array)
         # This is a very intentional way of handling `array` with -inf/+inf values :/
         # a simple (labels + 1j * array) will yield `nan+inf * 1j` instead of `0 + inf * j`
-        # TODO: optimize copies here
         cmplx.real = labels_broadcast
     cmplx.partition(kth=kth, axis=-1)
 
@@ -196,7 +196,8 @@ def _np_grouped_op(
     (inv_idx,) = flag.nonzero()
 
     if size is None:
-        size = np.max(uniques) + 1
+        # This is sorted, so the last value is the largest label
+        size = uniques[-1] + 1
     if dtype is None:
         dtype = array.dtype
 
