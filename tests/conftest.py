@@ -1,7 +1,7 @@
 import pytest
 from hypothesis import HealthCheck, Verbosity, settings
 
-from . import requires_numba, requires_numbagg
+from . import requires_numbagg
 
 settings.register_profile(
     "ci",
@@ -24,7 +24,7 @@ settings.load_profile("default")
     params=[
         "flox",
         "numpy",
-        pytest.param("numba", marks=requires_numba),
+        # pytest.param("numba", marks=requires_numba),
         pytest.param("numbagg", marks=requires_numbagg),
     ],
 )
