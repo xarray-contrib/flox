@@ -188,9 +188,9 @@ def dask_assert_eq(
     a_original = a
     b_original = b
 
-    if isinstance(a, (list, int, float)):
+    if isinstance(a, list | int | float):
         a = np.array(a)
-    if isinstance(b, (list, int, float)):
+    if isinstance(b, list | int | float):
         b = np.array(b)
 
     a, adt, a_meta, a_computed = _get_dt_meta_computed(

@@ -6,10 +6,10 @@ dependencies:
   - cachey
   - cftime
   - codecov
+  - cubed>=0.14.3
   - dask-core
-  - hypothesis
   - pandas
-  - numpy>=1.22
+  - numpy<2
   - scipy
   - lxml # for mypy coverage report
   - matplotlib
@@ -23,5 +23,8 @@ dependencies:
   - numpy_groupies>=0.9.19
   - pooch
   - toolz
+  - numba
+  - numbagg>=0.3
+  - hypothesis
   - pip:
       - git+https://github.com/dcherian/xarray.git

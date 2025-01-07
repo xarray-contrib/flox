@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from .core import T_ExpectedGroupsOpt, T_ExpectIndex, T_ExpectOpt
 
-    Dims = Union[str, Iterable[Hashable], None]
+    Dims = str | Iterable[Hashable] | None
 
 
 def _restore_dim_order(result, obj, by, no_groupby_reorder=False):
@@ -292,9 +292,7 @@ def xarray_reduce(
     try:
         xr.align(ds, *by_da, join="exact", copy=False)
     except ValueError as e:
-        raise ValueError(
-            "Object being grouped must be exactly aligned with every array in `by`."
-        ) from e
+        raise ValueError("Object being grouped must be exactly aligned with every array in `by`.") from e
 
     needs_broadcast = any(
         not set(grouper_dims).issubset(set(variable.dims)) for variable in ds.data_vars.values()
@@ -335,15 +333,11 @@ def xarray_reduce(
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
     for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups_valid, isbins)):
-        group_name = (
-            f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
-        )
+        group_name = f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
         group_names += (group_name,)
 
         if isbin_ and isinstance(expect, int):
-            raise NotImplementedError(
-                "flox does not support binning into an integer number of bins yet."
-            )
+            raise NotImplementedError("flox does not support binning into an integer number of bins yet.")
 
         expect1: T_ExpectOpt
         if expect is None:
@@ -457,7 +451,8 @@ def xarray_reduce(
         output_core_dims=[output_core_dims],
         dask="allowed",
         dask_gufunc_kwargs=dict(
-            output_sizes=output_sizes, output_dtypes=[dtype] if dtype is not None else None
+            output_sizes=output_sizes,
+            output_dtypes=[dtype] if dtype is not None else None,
         ),
         keep_attrs=keep_attrs,
         kwargs={
@@ -529,11 +524,12 @@ def xarray_reduce(
                 template = obj
 
             if actual[var].ndim > 1 + len(vector_dims):
-                no_groupby_reorder = isinstance(
-                    obj, xr.Dataset
-                )  # do not re-order dataarrays inside datasets
+                no_groupby_reorder = isinstance(obj, xr.Dataset)  # do not re-order dataarrays inside datasets
                 actual[var] = _restore_dim_order(
-                    actual[var], template, by_da[0], no_groupby_reorder=no_groupby_reorder
+                    actual[var].variable,
+                    template,
+                    by_da[0],
+                    no_groupby_reorder=no_groupby_reorder,
                 )
 
     if missing_dim:
@@ -634,13 +630,14 @@ def _rechunk(func, obj, dim, labels, **kwargs):
             if obj[var].chunks is not None:
                 obj[var] = obj[var].copy(
                     data=func(
-                        obj[var].data, axis=obj[var].get_axis_num(dim), labels=labels.data, **kwargs
+                        obj[var].data,
+                        axis=obj[var].get_axis_num(dim),
+                        labels=labels.data,
+                        **kwargs,
                     )
                 )
     else:
         if obj.chunks is not None:
-            obj = obj.copy(
-                data=func(obj.data, axis=obj.get_axis_num(dim), labels=labels.data, **kwargs)
-            )
+            obj = obj.copy(data=func(obj.data, axis=obj.get_axis_num(dim), labels=labels.data, **kwargs))
 
     return obj

@@ -3,10 +3,10 @@ from __future__ import annotations
 import copy
 import logging
 import warnings
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import cached_property, partial
-from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import numpy as np
 import pandas as pd
@@ -110,7 +110,13 @@ def generic_aggregate(
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
         result = method(
-            group_idx, array, axis=axis, size=size, fill_value=fill_value, dtype=dtype, **kwargs
+            group_idx,
+            array,
+            axis=axis,
+            size=size,
+            fill_value=fill_value,
+            dtype=dtype,
+            **kwargs,
         )
     return result
 
@@ -143,9 +149,9 @@ class Dim:
 class Aggregation:
     def __init__(
         self,
-        name,
+        name: str,
         *,
-        numpy: str | FuncTuple | None = None,
+        numpy: str | None = None,
         chunk: str | FuncTuple | None,
         combine: str | FuncTuple | None,
         preprocess: Callable | None = None,
@@ -156,6 +162,7 @@ class Aggregation:
         final_dtype: DTypeLike | None = None,
         reduction_type: Literal["reduce", "argreduce"] = "reduce",
         new_dims_func: Callable | None = None,
+        preserves_dtype: bool = False,
     ):
         """
         Blueprint for computing grouped aggregations.
@@ -202,13 +209,15 @@ class Aggregation:
             Function that receives finalize_kwargs and returns a tupleof sizes of any new dimensions
             added by the reduction. For e.g. quantile for q=(0.5, 0.85) adds a new dimension of size 2,
             so returns (2,)
+        preserves_dtype: bool,
+           Whether a function preserves the dtype on return E.g. min, max, first, last, mode
         """
         self.name = name
         # preprocess before blockwise
         self.preprocess = preprocess
         # Use "chunk_reduce" or "chunk_argreduce"
         self.reduction_type = reduction_type
-        self.numpy: FuncTuple = (numpy,) if numpy else (self.name,)
+        self.numpy: FuncTuple = (numpy,) if numpy is not None else (self.name,)
         # initialize blockwise reduction
         self.chunk: OptionalFuncTuple = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
@@ -235,9 +244,8 @@ class Aggregation:
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
         self.min_count: int = 0
-        self.new_dims_func: Callable = (
-            returns_empty_tuple if new_dims_func is None else new_dims_func
-        )
+        self.new_dims_func: Callable = returns_empty_tuple if new_dims_func is None else new_dims_func
+        self.preserves_dtype = preserves_dtype
 
     @cached_property
     def new_dims(self) -> tuple[Dim]:
@@ -380,10 +388,22 @@ nanstd = Aggregation(
 )
 
 
-min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF)
-nanmin = Aggregation("nanmin", chunk="nanmin", combine="nanmin", fill_value=dtypes.NA)
-max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF)
-nanmax = Aggregation("nanmax", chunk="nanmax", combine="nanmax", fill_value=dtypes.NA)
+min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF, preserves_dtype=True)
+nanmin = Aggregation(
+    "nanmin",
+    chunk="nanmin",
+    combine="nanmin",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
+)
+max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF, preserves_dtype=True)
+nanmax = Aggregation(
+    "nanmax",
+    chunk="nanmax",
+    combine="nanmax",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
+)
 
 
 def argreduce_preprocess(array, axis):
@@ -471,10 +491,22 @@ nanargmin = Aggregation(
     final_dtype=np.intp,
 )
 
-first = Aggregation("first", chunk=None, combine=None, fill_value=None)
-last = Aggregation("last", chunk=None, combine=None, fill_value=None)
-nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=dtypes.NA)
-nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=dtypes.NA)
+first = Aggregation("first", chunk=None, combine=None, fill_value=None, preserves_dtype=True)
+last = Aggregation("last", chunk=None, combine=None, fill_value=None, preserves_dtype=True)
+nanfirst = Aggregation(
+    "nanfirst",
+    chunk="nanfirst",
+    combine="nanfirst",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
+)
+nanlast = Aggregation(
+    "nanlast",
+    chunk="nanlast",
+    combine="nanlast",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
+)
 
 all_ = Aggregation(
     "all",
@@ -498,10 +530,18 @@ any_ = Aggregation(
 # Support statistical quantities only blockwise
 # The parallel versions will be approximate and are hard to implement!
 median = Aggregation(
-    name="median", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.floating
+    name="median",
+    fill_value=dtypes.NA,
+    chunk=None,
+    combine=None,
+    final_dtype=np.floating,
 )
 nanmedian = Aggregation(
-    name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.floating
+    name="nanmedian",
+    fill_value=dtypes.NA,
+    chunk=None,
+    combine=None,
+    final_dtype=np.floating,
 )
 
 
@@ -513,12 +553,15 @@ def topk_new_dims_func(k) -> tuple[Dim]:
     return (Dim(name="k", values=np.arange(abs(k))),)
 
 
+# if the input contains integers or floats smaller than float64,
+# the output data-type is float64. Otherwise, the output data-type is the same as that
+# of the input.
 quantile = Aggregation(
     name="quantile",
     fill_value=dtypes.NA,
     chunk=None,
     combine=None,
-    final_dtype=np.floating,
+    final_dtype=np.float64,
     new_dims_func=quantile_new_dims_func,
 )
 nanquantile = Aggregation(
@@ -526,7 +569,7 @@ nanquantile = Aggregation(
     fill_value=dtypes.NA,
     chunk=None,
     combine=None,
-    final_dtype=np.floating,
+    final_dtype=np.float64,
     new_dims_func=quantile_new_dims_func,
 )
 topk = Aggregation(
@@ -536,9 +579,10 @@ topk = Aggregation(
     combine=xrutils.topk,
     final_dtype=None,
     new_dims_func=topk_new_dims_func,
+    preserves_dtype=True,
 )
-mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
-nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
+mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
+nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
 
 
 @dataclass
@@ -654,9 +698,7 @@ def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) 
             engine="flox",
             fill_value=agg.identity,
         )
-        result = AlignedArrays(
-            array=final_value[..., left.group_idx.size :], group_idx=right.group_idx
-        )
+        result = AlignedArrays(array=final_value[..., left.group_idx.size :], group_idx=right.group_idx)
     else:
         raise ValueError(f"Unknown binary op application mode: {agg.mode!r}")
 
@@ -687,7 +729,8 @@ ffill = Scan(
     binary_op=None,
     reduction="nanlast",
     scan="ffill",
-    identity=dtypes.NA,
+    # Important: this must be NaN otherwise, ffill does not work.
+    identity=np.nan,
     mode="concat_then_scan",
 )
 bfill = Scan(
@@ -695,7 +738,8 @@ bfill = Scan(
     binary_op=None,
     reduction="nanlast",
     scan="ffill",
-    identity=dtypes.NA,
+    # Important: this must be NaN otherwise, bfill does not work.
+    identity=np.nan,
     mode="concat_then_scan",
     preprocess=reverse,
     finalize=reverse,
@@ -774,22 +818,9 @@ def _initialize_aggregation(
     dtype_: np.dtype | None = (
         np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
     )
-
     final_dtype = dtypes._normalize_dtype(
-        dtype_ or agg.dtype_init["final"], array_dtype, fill_value
+        dtype_ or agg.dtype_init["final"], array_dtype, agg.preserves_dtype, fill_value
     )
-    if agg.name not in [
-        "first",
-        "last",
-        "nanfirst",
-        "nanlast",
-        "min",
-        "max",
-        "nanmin",
-        "nanmax",
-        "topk",
-    ]:
-        final_dtype = dtypes._maybe_promote_int(final_dtype)
     agg.dtype = {
         "user": dtype,  # Save to automatically choose an engine
         "final": final_dtype,
@@ -800,9 +831,7 @@ def _initialize_aggregation(
                 if int_dtype is None
                 else np.dtype(int_dtype)
             )
-            for int_dtype, int_fv in zip(
-                agg.dtype_init["intermediate"], agg.fill_value["intermediate"]
-            )
+            for int_dtype, int_fv in zip(agg.dtype_init["intermediate"], agg.fill_value["intermediate"])
         ),
     }
 

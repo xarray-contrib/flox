@@ -7,7 +7,11 @@ import flox.aggregations
 
 N = 3000
 funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "count"]
-engines = [None, "flox", "numpy"]  # numbagg is disabled for now since it takes ages in CI
+engines = [
+    None,
+    "flox",
+    "numpy",
+]  # numbagg is disabled for now since it takes ages in CI
 expected_groups = {
     "None": None,
     "bins": pd.IntervalIndex.from_breaks([1, 2, 4]),
@@ -17,9 +21,7 @@ expected_names = tuple(expected_groups)
 NUMBAGG_FUNCS = ["nansum", "nanmean", "nanmax", "count", "all"]
 numbagg_skip = []
 for name in expected_names:
-    numbagg_skip.extend(
-        list((func, name, "numbagg") for func in funcs if func not in NUMBAGG_FUNCS)
-    )
+    numbagg_skip.extend(list((func, name, "numbagg") for func in funcs if func not in NUMBAGG_FUNCS))
 
 
 def setup_jit():

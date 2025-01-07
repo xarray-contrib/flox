@@ -112,12 +112,8 @@ def quantile_or_topk(
             virtual_index = virtual_index.squeeze(axis=0)
             idxshape = array.shape[:-1] + (actual_sizes.shape[-1],)
 
-        lo_ = np.floor(
-            virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
-        )
-        hi_ = np.ceil(
-            virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
-        )
+        lo_ = np.floor(virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64))
+        hi_ = np.ceil(virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64))
         kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
 
     else:
@@ -167,7 +163,15 @@ def quantile_or_topk(
 
 
 def _np_grouped_op(
-    group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None, **kwargs
+    group_idx,
+    array,
+    op,
+    axis=-1,
+    size=None,
+    fill_value=None,
+    dtype=None,
+    out=None,
+    **kwargs,
 ):
     """
     most of this code is from shoyer's gist
@@ -210,7 +214,7 @@ def _np_grouped_op(
 
 def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
     if fillna in [dtypes.INF, dtypes.NINF]:
-        fillna = dtypes._get_fill_value(kwargs.get("dtype", array.dtype), fillna)
+        fillna = dtypes._get_fill_value(kwargs.get("dtype", None) or array.dtype, fillna)
     result = func(group_idx, np.where(isnull(array), fillna, array), *args, **kwargs)
     # np.nanmax([np.nan, np.nan]) = np.nan
     # To recover this behaviour, we need to search for the fillna value

@@ -1,5 +1,6 @@
 import warnings
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -19,7 +20,7 @@ from flox.core import groupby_reduce, groupby_scan
 from flox.xrutils import notnull
 
 from . import assert_equal
-from .strategies import by_arrays, chunked_arrays, func_st, numeric_arrays
+from .strategies import array_dtypes, by_arrays, chunked_arrays, func_st, numeric_arrays
 from .strategies import chunks as chunks_strategy
 
 dask.config.set(scheduler="sync")
@@ -61,7 +62,11 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
     return result
 
 
-@given(data=st.data(), array=numeric_arrays, func=func_st)
+@given(
+    data=st.data(),
+    array=st.one_of(numeric_arrays, chunked_arrays(arrays=numeric_arrays)),
+    func=func_st,
+)
 def test_groupby_reduce(data, array, func: str) -> None:
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(array))
@@ -88,12 +93,18 @@ def test_groupby_reduce(data, array, func: str) -> None:
     flox_kwargs: dict[str, Any] = {}
     with np.errstate(invalid="ignore", divide="ignore"):
         actual, *_ = groupby_reduce(
-            array, by, func=func, axis=axis, engine="numpy", **flox_kwargs, finalize_kwargs=kwargs
+            array,
+            by,
+            func=func,
+            axis=axis,
+            engine="numpy",
+            **flox_kwargs,
+            finalize_kwargs=kwargs,
         )
 
         # numpy-groupies always does the calculation in float64
         if (
-            ("var" in func or "std" in func or "sum" in func or "mean" in func)
+            ("var" in func or "std" in func or "sum" in func or "mean" in func or "quantile" in func)
             and array.dtype.kind == "f"
             and array.dtype.itemsize != 8
         ):
@@ -185,8 +196,18 @@ def test_ffill_bfill_reverse(data, array: dask.array.Array) -> None:
 def test_first_last(data, array: dask.array.Array, func: str) -> None:
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
 
-    INVERSES = {"first": "last", "last": "first", "nanfirst": "nanlast", "nanlast": "nanfirst"}
-    MATES = {"first": "nanfirst", "last": "nanlast", "nanfirst": "first", "nanlast": "last"}
+    INVERSES = {
+        "first": "last",
+        "last": "first",
+        "nanfirst": "nanlast",
+        "nanlast": "nanfirst",
+    }
+    MATES = {
+        "first": "nanfirst",
+        "last": "nanlast",
+        "nanfirst": "first",
+        "nanlast": "last",
+    }
     inverse = INVERSES[func]
     mate = MATES[func]
 
@@ -243,3 +264,25 @@ def test_topk_max_min(data, array):
         # TODO: do numbagg, flox
         expected, _ = groupby_reduce(a, by, func=npfunc, engine="numpy")
         assert_equal(actual, expected[np.newaxis, :])
+
+
+@given(
+    func=st.sampled_from(["sum", "prod", "nansum", "nanprod"]),
+    engine=st.sampled_from(["numpy", "flox"]),
+    array_dtype=st.none() | array_dtypes,
+    dtype=st.none() | array_dtypes,
+)
+def test_agg_dtype_specified(func, array_dtype, dtype, engine):
+    # regression test for GH388
+    counts = np.array([0, 2, 1, 0, 1], dtype=array_dtype)
+    group = np.array([1, 1, 1, 2, 2])
+    actual, _ = groupby_reduce(
+        counts,
+        group,
+        expected_groups=(np.array([1, 2]),),
+        func=func,
+        dtype=dtype,
+        engine=engine,
+    )
+    expected = getattr(np, func)(counts, keepdims=True, dtype=dtype)
+    assert actual.dtype == expected.dtype
