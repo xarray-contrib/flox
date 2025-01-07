@@ -60,7 +60,7 @@ def quantile_or_topk(
     out=None,
     fill_value=None,
 ):
-    assert q or k
+    assert q is not None or k is not None
     assert axis == -1
 
     inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
@@ -91,7 +91,7 @@ def quantile_or_topk(
     replacement = np.repeat(maxes, np.diff(inv_idx), axis=axis)
     array[array_nanmask] = replacement[array_nanmask]
 
-    param = q or k
+    param = q if q is not None else k
     if k is not None:
         is_scalar_param = False
         param = np.arange(abs(k))
