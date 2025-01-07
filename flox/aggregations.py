@@ -575,21 +575,12 @@ nanquantile = Aggregation(
 )
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
-
-
-def _topk_finalize(result, counts, *, k):
-    # TODO: pass through final_fill_value
-    # TODO: apply in numpy code-path too
-    result[..., counts < k] = np.nan
-    return result
-
-
 topk = Aggregation(
     name="topk",
     fill_value=(dtypes.NINF, 0),
+    final_fill_value=dtypes.NA,
     chunk=("topk", "nanlen"),
     combine=(xrutils.topk, "sum"),
-    finalize=_topk_finalize,
     new_dims_func=topk_new_dims_func,
     preserves_dtype=True,
 )
@@ -850,7 +841,7 @@ def _initialize_aggregation(
         agg.finalize_kwargs = finalize_kwargs
 
     if agg.name == "topk" and agg.finalize_kwargs["k"] < 0:
-        agg.fill_value["intermediate"] = (dtypes.INF,)
+        agg.fill_value["intermediate"] = (dtypes.INF, 0)
     # Replace sentinel fill values according to dtype
     agg.fill_value["user"] = fill_value
     agg.fill_value["intermediate"] = tuple(
@@ -865,6 +856,9 @@ def _initialize_aggregation(
         agg.fill_value["numpy"] = (0,)
     else:
         agg.fill_value["numpy"] = (fv,)
+
+    if agg.name == "topk":
+        min_count = max(min_count or 0, abs(agg.finalize_kwargs["k"]))
 
     # This is needed for the dask pathway.
     # Because we use intermediate fill_value since a group could be

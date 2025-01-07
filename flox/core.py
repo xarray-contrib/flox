@@ -1150,6 +1150,7 @@ def _finalize_results(
         if count_mask.any():
             # For one count_mask.any() prevents promoting bool to dtype(fill_value) unless
             # necessary
+            fill_value = fill_value or agg.fill_value[agg.name]
             if fill_value is None:
                 raise ValueError("Filling is required but fill_value is None.")
             # This allows us to match xarray's type promotion rules
