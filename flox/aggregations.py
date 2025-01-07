@@ -835,7 +835,11 @@ def _initialize_aggregation(
         ),
     }
 
-    if agg.name == "topk" and finalize_kwargs["k"] < 0:
+    if finalize_kwargs is not None:
+        assert isinstance(finalize_kwargs, dict)
+        agg.finalize_kwargs = finalize_kwargs
+
+    if agg.name == "topk" and agg.finalize_kwargs["k"] < 0:
         agg.fill_value["intermediate"] = (dtypes.INF,)
     # Replace sentinel fill values according to dtype
     agg.fill_value["user"] = fill_value
@@ -851,10 +855,6 @@ def _initialize_aggregation(
         agg.fill_value["numpy"] = (0,)
     else:
         agg.fill_value["numpy"] = (fv,)
-
-    if finalize_kwargs is not None:
-        assert isinstance(finalize_kwargs, dict)
-        agg.finalize_kwargs = finalize_kwargs
 
     # This is needed for the dask pathway.
     # Because we use intermediate fill_value since a group could be
@@ -883,7 +883,7 @@ def _initialize_aggregation(
                 simple_combine.append(getattr(np, combine))
         else:
             if agg.name == "topk":
-                combine = partial(combine, **finalize_kwargs)
+                combine = partial(combine, **agg.finalize_kwargs)
             simple_combine.append(combine)
 
     agg.simple_combine = tuple(simple_combine)
