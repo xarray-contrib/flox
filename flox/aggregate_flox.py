@@ -79,14 +79,21 @@ def quantile_or_topk(
 
     # Replace NaNs with the maximum value for each group.
     # Partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
+    # TODO: optimize for int, string?
     array_nanmask = isnull(array)
     actual_sizes = np.add.reduceat(~array_nanmask, inv_idx[:-1], axis=axis)
     newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
     full_sizes = np.reshape(np.diff(inv_idx), newshape)
-    nanmask = full_sizes != actual_sizes
+    # These groups get replaced with the fill_value. For topk, we only replace with fill-values
+    # if non-NaN values in group < k
+    nanmask = (full_sizes - actual_sizes) > (abs(k) if k is not None else 0)
     # TODO: Don't know if this array has been copied in _prepare_for_flox.
     #       This is potentially wasteful
-    array = np.where(array_nanmask, dtypes.get_neg_infinity(array.dtype, min_for_int=True), array)
+    # FIXME: should the filling handle sign(k)
+    fill = dtypes.get_neg_infinity(array.dtype, min_for_int=True)
+    if k is not None and k < 0:
+        fill = dtypes.get_pos_infinity(array.dtype, max_for_int=True)
+    array = np.where(array_nanmask, fill, array)
     maxes = np.maximum.reduceat(array, inv_idx[:-1], axis=axis)
     replacement = np.repeat(maxes, np.diff(inv_idx), axis=axis)
     array[array_nanmask] = replacement[array_nanmask]
@@ -126,16 +133,19 @@ def quantile_or_topk(
     # partition the complex array in-place
     labels_broadcast = np.broadcast_to(group_idx, array.shape)
     with np.errstate(invalid="ignore"):
-        cmplx = labels_broadcast + 1j * (array.view(int) if array.dtype.kind in "Mm" else array)
+        cmplx = 1j * (array.view(int) if array.dtype.kind in "Mm" else array)
+        # This is a very intentional way of handling `array` with -inf/+inf values :/
+        # a simple (labels + 1j * array) will yield `nan+inf * 1j` instead of `0 + inf * j`
+        # TODO: optimize copies here
+        cmplx.real = labels_broadcast
     cmplx.partition(kth=kth, axis=-1)
 
-    if is_scalar_param:
-        a_ = cmplx.imag
-    else:
+    a_ = cmplx.imag
+    if not is_scalar_param:
         a_ = np.broadcast_to(cmplx.imag, (param.shape[0],) + array.shape)
 
     if array.dtype.kind in "Mm":
-        a_ = a_.astype(array.dtype)
+        a_ = a_.view(array.dtype)
 
     loval = np.take_along_axis(a_, np.broadcast_to(lo_, idxshape), axis=axis)
     if q is not None:
@@ -145,15 +155,13 @@ def quantile_or_topk(
         # TODO: could support all the interpolations here
         gamma = np.broadcast_to(virtual_index, idxshape) - lo_
         result = _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
+        if not skipna and np.any(nanmask):
+            result[..., nanmask] = fill_value
     else:
         result = loval
-        # This happens if numel in group < abs(k)
-        badmask = lo_ < 0
-        if badmask.any():
-            result[badmask] = fill_value
-
-    if not skipna and np.any(nanmask):
-        result[..., nanmask] = fill_value
+        # The first clause is True if numel in group < abs(k)
+        badmask = np.broadcast_to(lo_ < 0, idxshape) | nanmask
+        result[badmask] = fill_value
 
     if k is not None:
         result = result.astype(dtype, copy=False)
@@ -235,8 +243,8 @@ max = partial(_np_grouped_op, op=np.maximum.reduceat)
 nanmax = partial(_nan_grouped_op, func=max, fillna=dtypes.NINF)
 min = partial(_np_grouped_op, op=np.minimum.reduceat)
 nanmin = partial(_nan_grouped_op, func=min, fillna=dtypes.INF)
-quantile = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=False))
 topk = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=True))
+quantile = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=False))
 nanquantile = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=True))
 median = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_or_topk, skipna=False))
 nanmedian = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_or_topk, skipna=True))

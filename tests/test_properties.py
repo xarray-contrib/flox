@@ -246,26 +246,6 @@ def test_first_last_useless(data, func):
     assert_equal(actual, expected)
 
 
-from hypothesis import settings
-
-
-# TODO: do all_arrays instead of numeric_arrays
-@settings(report_multiple_bugs=False)
-@given(data=st.data(), array=chunked_arrays(arrays=numeric_arrays))
-def test_topk_max_min(data, array):
-    "top 1 == nanmax; top -1 == nanmin"
-    size = array.shape[-1]
-    note(array.compute())
-    by = data.draw(by_arrays(shape=(size,)))
-    k, npfunc = data.draw(st.sampled_from([(1, "nanmax"), (-1, "nanmin")]))
-
-    for a in (array, array.compute()):
-        actual, _ = groupby_reduce(a, by, func="topk", finalize_kwargs={"k": k})
-        # TODO: do numbagg, flox
-        expected, _ = groupby_reduce(a, by, func=npfunc, engine="numpy")
-        assert_equal(actual, expected[np.newaxis, :])
-
-
 @given(
     func=st.sampled_from(["sum", "prod", "nansum", "nanprod"]),
     engine=st.sampled_from(["numpy", "flox"]),
@@ -286,3 +266,26 @@ def test_agg_dtype_specified(func, array_dtype, dtype, engine):
     )
     expected = getattr(np, func)(counts, keepdims=True, dtype=dtype)
     assert actual.dtype == expected.dtype
+
+
+from hypothesis import settings
+
+
+# TODO: do all_arrays instead of numeric_arrays
+@settings(report_multiple_bugs=False)
+@given(data=st.data(), array=chunked_arrays(arrays=numeric_arrays))
+def test_topk_max_min(data, array):
+    "top 1 == nanmax; top -1 == nanmin"
+    size = array.shape[-1]
+    note(array.compute())  # FIXME
+    by = data.draw(by_arrays(shape=(size,)))
+    k, npfunc = data.draw(st.sampled_from([(1, "nanmax"), (-1, "nanmin")]))
+
+    for a in (array, array.compute()):
+        actual, _ = groupby_reduce(a, by, func="topk", finalize_kwargs={"k": k})
+        # TODO: do numbagg, flox
+        # FIXME: this is wrong
+        expected, _ = groupby_reduce(a, by, func=npfunc, engine="numpy")
+        # if a.dtype.kind in "cf":
+        #     expected[np.isnan(expected)] = -np.inf if k == 1 else np.inf
+        assert_equal(actual, expected[np.newaxis, :])

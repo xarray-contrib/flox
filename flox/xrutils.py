@@ -395,8 +395,11 @@ def topk(a, k, axis, keepdims):
     if abs(k) >= a.shape[axis]:
         return a
 
-    # TODO: handle NaNs
+    # TODO: This may not need to handle NaNs
+    # if a.dtype.kind in ["cfO"]:
+    #     fill = xrdtypes.get_neg_infinity(a.dtype) if k > 0 else xrdtypes.get_pos_infinity(a.dtype)
+    #     a = np.where(isnull(a), fill)
     a = np.partition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
     result = a[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
-    return result
+    return result.astype(a.dtype, copy=False)

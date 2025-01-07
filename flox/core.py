@@ -879,7 +879,6 @@ def chunk_argreduce(
     engine: T_Engine = "numpy",
     sort: bool = True,
     user_dtype=None,
-    kwargs: Sequence[dict] | None = None,
 ) -> IntermediateDict:
     """
     Per-chunk arg reduction.
@@ -1653,6 +1652,9 @@ def dask_groupby_agg(
         #  use the "non dask" code path, but applied blockwise
         blockwise_method = partial(_reduce_blockwise, agg=agg, fill_value=fill_value, reindex=reindex)
     else:
+        extra = {}
+        if agg.name == "topk":
+            extra["kwargs"] = (agg.finalize_kwargs, *(({},) * (len(agg.chunk) - 1)))
         # choose `chunk_reduce` or `chunk_argreduce`
         blockwise_method = partial(
             _get_chunk_reduction(agg.reduction_type),
@@ -1661,7 +1663,7 @@ def dask_groupby_agg(
             dtype=agg.dtype["intermediate"],
             reindex=reindex,
             user_dtype=agg.dtype["user"],
-            kwargs=agg.finalize_kwargs if agg.name == "topk" else None,
+            **extra,
         )
         if do_simple_combine:
             # Add a dummy dimension that then gets reduced over
@@ -2392,9 +2394,8 @@ def groupby_reduce(
                     "Use engine='flox' instead (it is also much faster), "
                     "or set engine=None to use the default."
                 )
-    if func == "topk":
-        if finalize_kwargs is None or "k" not in finalize_kwargs:
-            raise ValueError("Please pass `k` for topk calculations.")
+    if func == "topk" and (finalize_kwargs is None or "k" not in finalize_kwargs):
+        raise ValueError("Please pass `k` in ``finalize_kwargs`` for topk calculations.")
 
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)

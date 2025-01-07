@@ -393,6 +393,7 @@ nanmin = Aggregation(
     "nanmin",
     chunk="nanmin",
     combine="nanmin",
+    # FIXME: This is wrong, we need it to be NA for nan, INF for nanmin, NINF for nanmax, I think
     fill_value=dtypes.NA,
     preserves_dtype=True,
 )
@@ -882,7 +883,9 @@ def _initialize_aggregation(
             else:
                 simple_combine.append(getattr(np, combine))
         else:
-            if agg.name == "topk":
+            # TODO: bah, we need to pass `k` to the combine topk function
+            # this is ugly.
+            if agg.name == "topk" and not isinstance(combine, str):
                 combine = partial(combine, **agg.finalize_kwargs)
             simple_combine.append(combine)
 
