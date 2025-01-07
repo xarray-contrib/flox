@@ -284,8 +284,6 @@ def test_topk_max_min(data, array):
     for a in (array, array.compute()):
         actual, _ = groupby_reduce(a, by, func="topk", finalize_kwargs={"k": k})
         # TODO: do numbagg, flox
-        # FIXME: this is wrong
-        expected, _ = groupby_reduce(a, by, func=npfunc, engine="numpy")
-        # if a.dtype.kind in "cf":
-        #     expected[np.isnan(expected)] = -np.inf if k == 1 else np.inf
+        # FIXME: this is wrong, remove this compute, add a property test checking dask vs numpy
+        expected, _ = groupby_reduce(dask.compute(a)[0], by, func=npfunc, engine="numpy")
         assert_equal(actual, expected[np.newaxis, :])
