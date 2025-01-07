@@ -286,6 +286,6 @@ def test_topk_max_min(data, array):
         # TODO: do numbagg, flox
         # FIXME: this is wrong
         expected, _ = groupby_reduce(a, by, func=npfunc, engine="numpy")
-        if a.dtype.kind in "cf":
-            expected[np.isnan(expected)] = -np.inf if k == 1 else np.inf
+        # if a.dtype.kind in "cf":
+        #     expected[np.isnan(expected)] = -np.inf if k == 1 else np.inf
         assert_equal(actual, expected[np.newaxis, :])

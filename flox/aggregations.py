@@ -573,16 +573,26 @@ nanquantile = Aggregation(
     final_dtype=np.float64,
     new_dims_func=quantile_new_dims_func,
 )
+mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
+nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
+
+
+def _topk_finalize(result, counts, *, k):
+    # TODO: pass through final_fill_value
+    # TODO: apply in numpy code-path too
+    result[..., counts < k] = np.nan
+    return result
+
+
 topk = Aggregation(
     name="topk",
-    fill_value=dtypes.NINF,
-    chunk="topk",
-    combine=xrutils.topk,
+    fill_value=(dtypes.NINF, 0),
+    chunk=("topk", "nanlen"),
+    combine=(xrutils.topk, "sum"),
+    finalize=_topk_finalize,
     new_dims_func=topk_new_dims_func,
     preserves_dtype=True,
 )
-mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
-nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
 
 
 @dataclass

@@ -73,10 +73,6 @@ def quantile_or_topk(
     # The approach here is to use (complex_array.partition) because
     # 1. The full np.lexsort((array, labels), axis=-1) is slow and unnecessary
     # 2. Using record_array.partition(..., order=["labels", "array"]) is incredibly slow.
-    # partition will first sort by real part, then by imaginary part, so it is a two element
-    # lex-partition. Therefore we set
-    # partition will first sort by real part, then by imaginary part, so it is a two element lex-partition.
-    # So we set
     # 3. For complex arrays, partition will first sort by real part, then by imaginary part, so it is a two element
     #     lex-partition.
     # Therefore we use approach (3) and set
@@ -106,7 +102,6 @@ def quantile_or_topk(
     # This is numpy's method="linear"
     # TODO: could support all the interpolations here
     offset = actual_sizes.cumsum(axis=-1)
-    actual_sizes -= 1
     # For topk(.., k=+1 or -1), we always return the singleton dimension.
     idxshape = (param.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
 
@@ -114,6 +109,7 @@ def quantile_or_topk(
         # This is numpy's method="linear"
         # TODO: could support all the interpolations here
         virtual_index = param * actual_sizes
+        actual_sizes -= 1
         # virtual_index is relative to group starts, so now offset that
         virtual_index[..., 1:] += offset[..., :-1]
 
@@ -126,7 +122,7 @@ def quantile_or_topk(
         kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
 
     else:
-        virtual_index = (actual_sizes - k) if k > 0 else (abs(k) - 1)
+        virtual_index = (actual_sizes - k) if k > 0 else (np.zeros_like(actual_sizes) + abs(k) - 1)
         # virtual_index is relative to group starts, so now offset that
         virtual_index[..., 1:] += offset[..., :-1]
         kth = np.unique(virtual_index)
