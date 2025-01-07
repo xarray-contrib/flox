@@ -578,7 +578,6 @@ topk = Aggregation(
     fill_value=dtypes.NINF,
     chunk="topk",
     combine=xrutils.topk,
-    final_dtype=None,
     new_dims_func=topk_new_dims_func,
     preserves_dtype=True,
 )

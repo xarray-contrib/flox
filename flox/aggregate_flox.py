@@ -86,7 +86,10 @@ def quantile_or_topk(
     full_sizes = np.reshape(np.diff(inv_idx), newshape)
     # These groups get replaced with the fill_value. For topk, we only replace with fill-values
     # if non-NaN values in group < k
-    nanmask = (full_sizes - actual_sizes) > (abs(k) if k is not None else 0)
+    if k is not None:
+        nanmask = (actual_sizes < abs(k))
+    else:
+        nanmask = full_sizes != actual_sizes
     # TODO: Don't know if this array has been copied in _prepare_for_flox.
     #       This is potentially wasteful
     # FIXME: should the filling handle sign(k)
