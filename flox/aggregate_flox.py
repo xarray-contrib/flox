@@ -68,7 +68,11 @@ def quantile_or_topk(
     array_validmask = notnull(array)
     actual_sizes = np.add.reduceat(array_validmask, inv_idx[:-1], axis=axis)
     newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
-    full_sizes = np.reshape(np.diff(inv_idx), newshape)
+    if k is not None:
+        nanmask = actual_sizes < abs(k)
+    else:
+        full_sizes = np.reshape(np.diff(inv_idx), newshape)
+        nanmask = full_sizes != actual_sizes
 
     # The approach here is to use (complex_array.partition) because
     # 1. The full np.lexsort((array, labels), axis=-1) is slow and unnecessary
@@ -86,11 +90,6 @@ def quantile_or_topk(
     # So we determine which indices we need using the fact that NaNs get sorted to the end.
     # This *was* partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
     # but not any more now that I use partition and avoid replacing NaNs
-    if k is not None:
-        nanmask = actual_sizes < abs(k)
-    else:
-        nanmask = full_sizes != actual_sizes
-
     if k is not None:
         is_scalar_param = False
         param = np.arange(abs(k))
