@@ -107,8 +107,8 @@ def quantile_or_topk(
     if q is not None:
         # This is numpy's method="linear"
         # TODO: could support all the interpolations here
-        virtual_index = param * actual_sizes
         actual_sizes -= 1
+        virtual_index = param * actual_sizes
         # virtual_index is relative to group starts, so now offset that
         virtual_index[..., 1:] += offset[..., :-1]
 
