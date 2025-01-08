@@ -131,6 +131,39 @@ def test_groupby_reduce(data, array, func: str) -> None:
 @given(
     data=st.data(),
     array=chunked_arrays(arrays=numeric_arrays),
+    func=func_st,
+)
+def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
+    numpy_array = array.compute()
+    # overflow behaviour differs between bincount and sum (for example)
+    assume(not_overflowing_array(numpy_array))
+    # TODO: fix var for complex numbers upstream
+    assume(not (("quantile" in func or "var" in func or "std" in func) and array.dtype.kind == "c"))
+    # # arg* with nans in array are weird
+    assume("arg" not in func and not np.any(np.isnan(numpy_array.ravel())))
+    if func in ["nanmedian", "nanquantile", "median", "quantile"]:
+        array = array.rechunk({-1: -1})
+
+    axis = -1
+    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+    kwargs = {"q": 0.8} if "quantile" in func else {}
+    flox_kwargs: dict[str, Any] = {}
+
+    kwargs = dict(
+        func=func,
+        axis=axis,
+        engine="numpy",
+        **flox_kwargs,
+        finalize_kwargs=kwargs,
+    )
+    result_dask, *_ = groupby_reduce(array, by, **kwargs)
+    result_numpy, *_ = groupby_reduce(numpy_array, by, **kwargs)
+    assert_equal(result_numpy, result_dask)
+
+
+@given(
+    data=st.data(),
+    array=chunked_arrays(arrays=numeric_arrays),
     func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
 )
 def test_scans(data, array: dask.array.Array, func: str) -> None:
