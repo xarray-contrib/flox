@@ -1,3 +1,4 @@
+import math
 import warnings
 from collections.abc import Callable
 from typing import Any
@@ -74,6 +75,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
     assume(not (("quantile" in func or "var" in func or "std" in func) and array.dtype.kind == "c"))
     # arg* with nans in array are weird
     assume("arg" not in func and not np.any(np.isnan(array).ravel()))
+    assume(False if func in ["median", "quantile"] and math.prod(array.numblocks) > 1 else True)
 
     axis = -1
     by = data.draw(
@@ -126,6 +128,38 @@ def test_groupby_reduce(data, array, func: str) -> None:
     note(("expected: ", expected, "actual: ", actual))
     tolerance = {"atol": 1e-15}
     assert_equal(expected, actual, tolerance)
+
+
+@given(
+    data=st.data(),
+    array=chunked_arrays(arrays=numeric_arrays),
+    func=func_st,
+)
+def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
+    numpy_array = array.compute()
+    # overflow behaviour differs between bincount and sum (for example)
+    assume(not_overflowing_array(numpy_array))
+    # TODO: fix var for complex numbers upstream
+    assume(not (("quantile" in func or "var" in func or "std" in func) and array.dtype.kind == "c"))
+    # # arg* with nans in array are weird
+    assume("arg" not in func and not np.any(np.isnan(numpy_array.ravel())))
+    assume(False if func in ["median", "quantile"] and math.prod(array.numblocks) > 1 else True)
+
+    axis = -1
+    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+    kwargs = {"q": 0.8} if "quantile" in func else {}
+    flox_kwargs: dict[str, Any] = {}
+
+    kwargs = dict(
+        func=func,
+        axis=axis,
+        engine="numpy",
+        **flox_kwargs,
+        finalize_kwargs=kwargs,
+    )
+    result_dask, *_ = groupby_reduce(array, by, **kwargs)
+    result_numpy, *_ = groupby_reduce(numpy_array, by, **kwargs)
+    assert_equal(result_numpy, result_dask)
 
 
 @given(
