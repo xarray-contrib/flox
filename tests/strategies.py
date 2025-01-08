@@ -13,22 +13,22 @@ from . import ALL_FUNCS, SCIPY_STATS_FUNCS
 
 Chunks = tuple[tuple[int, ...], ...]
 
-
-def supported_dtypes() -> st.SearchStrategy[np.dtype]:
-    return (
-        npst.integer_dtypes(endianness="=")
-        | npst.unsigned_integer_dtypes(endianness="=")
-        | npst.floating_dtypes(endianness="=", sizes=(32, 64))
-        | npst.complex_number_dtypes(endianness="=")
-        | npst.datetime64_dtypes(endianness="=")
-        | npst.timedelta64_dtypes(endianness="=")
-        | npst.unicode_string_dtypes(endianness="=")
-    )
-
-
+numeric_dtypes = (
+    npst.integer_dtypes(endianness="=")
+    | npst.unsigned_integer_dtypes(endianness="=")
+    | npst.floating_dtypes(endianness="=", sizes=(32, 64))
+    # TODO: add complex here not in supported_dtypes
+)
 # TODO: stop excluding everything but U
-array_dtypes = supported_dtypes().filter(lambda x: x.kind not in "cU")
-by_dtype_st = supported_dtypes()
+numeric_like_dtypes = (
+    numeric_dtypes | npst.datetime64_dtypes(endianness="=") | npst.timedelta64_dtypes(endianness="=")
+)
+supported_dtypes = (
+    numeric_like_dtypes
+    | npst.unicode_string_dtypes(endianness="=")
+    | npst.complex_number_dtypes(endianness="=")
+)
+by_dtype_st = supported_dtypes
 
 NON_NUMPY_FUNCS = [
     "first",
@@ -43,12 +43,15 @@ SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
 
 func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS and f not in SKIPPED_FUNCS])
 numeric_arrays = npst.arrays(
-    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=array_dtypes
+    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=numeric_dtypes
+)
+numeric_like_arrays = npst.arrays(
+    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=numeric_like_dtypes
 )
 all_arrays = npst.arrays(
     elements={"allow_subnormal": False},
     shape=npst.array_shapes(),
-    dtype=supported_dtypes(),
+    dtype=supported_dtypes,
 )
 
 calendars = st.sampled_from(

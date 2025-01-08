@@ -20,7 +20,7 @@ from flox.core import groupby_reduce, groupby_scan
 from flox.xrutils import isnull, notnull
 
 from . import assert_equal
-from .strategies import array_dtypes, by_arrays, chunked_arrays, func_st, numeric_arrays
+from .strategies import by_arrays, chunked_arrays, func_st, numeric_dtypes, numeric_like_arrays
 from .strategies import chunks as chunks_strategy
 
 dask.config.set(scheduler="sync")
@@ -66,7 +66,7 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
 
 @given(
     data=st.data(),
-    array=st.one_of(numeric_arrays, chunked_arrays(arrays=numeric_arrays)),
+    array=st.one_of(numeric_like_arrays, chunked_arrays(arrays=numeric_like_arrays)),
     func=func_st,
 )
 def test_groupby_reduce(data, array, func: str) -> None:
@@ -136,7 +136,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
 
 @given(
     data=st.data(),
-    array=chunked_arrays(arrays=numeric_arrays),
+    array=chunked_arrays(arrays=numeric_like_arrays),
     func=func_st,
 )
 def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
@@ -170,7 +170,7 @@ def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
 @settings(report_multiple_bugs=False)
 @given(
     data=st.data(),
-    array=chunked_arrays(arrays=numeric_arrays),
+    array=chunked_arrays(arrays=numeric_like_arrays),
     func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
 )
 def test_scans(data, array: dask.array.Array, func: str) -> None:
@@ -297,8 +297,8 @@ def test_first_last_useless(data, func):
 @given(
     func=st.sampled_from(["sum", "prod", "nansum", "nanprod"]),
     engine=st.sampled_from(["numpy", "flox"]),
-    array_dtype=st.none() | array_dtypes,
-    dtype=st.none() | array_dtypes,
+    array_dtype=st.none() | numeric_dtypes,
+    dtype=st.none() | numeric_dtypes,
 )
 def test_agg_dtype_specified(func, array_dtype, dtype, engine):
     # regression test for GH388
