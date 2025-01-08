@@ -393,8 +393,8 @@ nanmin = Aggregation(
     "nanmin",
     chunk="nanmin",
     combine="nanmin",
-    # FIXME: This is wrong, we need it to be NA for nan, INF for nanmin, NINF for nanmax, I think
-    fill_value=dtypes.NA,
+    fill_value=dtypes.INF,
+    final_fill_value=dtypes.NA,
     preserves_dtype=True,
 )
 max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF, preserves_dtype=True)
@@ -402,7 +402,8 @@ nanmax = Aggregation(
     "nanmax",
     chunk="nanmax",
     combine="nanmax",
-    fill_value=dtypes.NA,
+    fill_value=dtypes.NINF,
+    final_fill_value=dtypes.NA,
     preserves_dtype=True,
 )
 
@@ -865,6 +866,16 @@ def _initialize_aggregation(
     # absent in one block, but present in another block
     # We set it for numpy to get nansum, nanprod tests to pass
     # where the identity element is 0, 1
+    # Also needed for nanmin, nanmax where intermediate fill_value is +-np.inf,
+    # but final_fill_value is dtypes.NA
+    if (
+        # TODO: this is a total hack, setting a default fill_value
+        # even though numpy doesn't define identity for nanmin, nanmax
+        agg.name in ["nanmin", "nanmax"] and min_count == 0
+    ):
+        min_count = 1
+        agg.fill_value["user"] = agg.fill_value["user"] or agg.fill_value[agg.name]
+
     if min_count > 0:
         agg.min_count = min_count
         agg.numpy += ("nanlen",)

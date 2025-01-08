@@ -1122,7 +1122,6 @@ def _finalize_results(
     agg: Aggregation,
     axis: T_Axes,
     expected_groups: pd.Index | None,
-    fill_value: Any,
     reindex: bool,
 ) -> FinalResultsDict:
     """Finalize results by
@@ -1145,6 +1144,7 @@ def _finalize_results(
     else:
         finalized[agg.name] = agg.finalize(*squeezed["intermediates"], **agg.finalize_kwargs)
 
+    fill_value = agg.fill_value["user"]
     if min_count > 0:
         count_mask = counts < min_count
         if count_mask.any():
@@ -1187,7 +1187,7 @@ def _aggregate(
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
     results = combine(x_chunk, agg, axis, keepdims, is_aggregate=True)
-    return _finalize_results(results, agg, axis, expected_groups, fill_value, reindex)
+    return _finalize_results(results, agg, axis, expected_groups, reindex)
 
 
 def _expand_dims(results: IntermediateDict) -> IntermediateDict:
@@ -1453,7 +1453,7 @@ def _reduce_blockwise(
     if _is_arg_reduction(agg):
         results["intermediates"][0] = np.unravel_index(results["intermediates"][0], array.shape)[-1]
 
-    result = _finalize_results(results, agg, axis, expected_groups, fill_value=fill_value, reindex=reindex)
+    result = _finalize_results(results, agg, axis, expected_groups, reindex=reindex)
     return result
 
 
@@ -1934,7 +1934,7 @@ def cubed_groupby_agg(
         def _groupby_aggregate(a):
             # Convert cubed dict to one that _finalize_results works with
             results = {"groups": expected_groups, "intermediates": a.values()}
-            out = _finalize_results(results, agg, axis, expected_groups, fill_value, reindex)
+            out = _finalize_results(results, agg, axis, expected_groups, reindex)
             return out[agg.name]
 
         # convert list of dtypes to a structured dtype for cubed
