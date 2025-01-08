@@ -1,4 +1,3 @@
-import math
 import warnings
 from collections.abc import Callable
 from typing import Any
@@ -75,7 +74,6 @@ def test_groupby_reduce(data, array, func: str) -> None:
     assume(not (("quantile" in func or "var" in func or "std" in func) and array.dtype.kind == "c"))
     # arg* with nans in array are weird
     assume("arg" not in func and not np.any(np.isnan(array).ravel()))
-    assume(False if func in ["median", "quantile"] and math.prod(array.numblocks) > 1 else True)
 
     axis = -1
     by = data.draw(
@@ -143,7 +141,8 @@ def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
     assume(not (("quantile" in func or "var" in func or "std" in func) and array.dtype.kind == "c"))
     # # arg* with nans in array are weird
     assume("arg" not in func and not np.any(np.isnan(numpy_array.ravel())))
-    assume(False if func in ["median", "quantile"] and math.prod(array.numblocks) > 1 else True)
+    if func in ["nanmedian", "nanquantile", "median", "quantile"]:
+        array = array.rechunk({-1: -1})
 
     axis = -1
     by = data.draw(by_arrays(shape=(array.shape[-1],)))
