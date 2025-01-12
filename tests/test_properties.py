@@ -17,10 +17,10 @@ from hypothesis import assume, given, note, settings
 
 import flox
 from flox.core import groupby_reduce, groupby_scan
-from flox.xrutils import isnull, notnull
+from flox.xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric, isnull, notnull
 
-from . import assert_equal
-from .strategies import by_arrays, chunked_arrays, func_st, numeric_dtypes, numeric_like_arrays
+from . import BLOCKWISE_FUNCS, assert_equal
+from .strategies import all_arrays, by_arrays, chunked_arrays, func_st, numeric_dtypes, numeric_like_arrays
 from .strategies import chunks as chunks_strategy
 
 dask.config.set(scheduler="sync")
@@ -66,9 +66,10 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
 
 @given(
     data=st.data(),
-    array=st.one_of(numeric_like_arrays, chunked_arrays(arrays=numeric_like_arrays)),
+    array=st.one_of(all_arrays, chunked_arrays()),
     func=func_st,
 )
+@settings(report_multiple_bugs=False, deadline=None)
 def test_groupby_reduce(data, array, func: str) -> None:
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(array))
@@ -90,6 +91,8 @@ def test_groupby_reduce(data, array, func: str) -> None:
             shape=(array.shape[-1],),
         )
     )
+    if func in BLOCKWISE_FUNCS and isinstance(array, dask.array.Array):
+        array = array.rechunk({axis: -1})
     assert len(np.unique(by)) == 1
     kwargs = {"q": 0.8} if "quantile" in func else {}
     flox_kwargs: dict[str, Any] = {}
@@ -119,15 +122,21 @@ def test_groupby_reduce(data, array, func: str) -> None:
         else:
             cast_to = None
 
+        is_cftime = _contains_cftime_datetimes(array)
         if array.dtype.kind in "Mm":
             array = array.view(np.int64)
             cast_to = array.dtype
+        elif is_cftime:
+            offset = array.min()
+            array = datetime_to_numeric(array, offset, datetime_unit="us")
         note(("kwargs:", kwargs, "cast_to:", cast_to))
         expected = getattr(np, func)(array, axis=axis, keepdims=True, **kwargs)
         if cast_to is not None:
             note(("casting to:", cast_to))
             expected = expected.astype(cast_to)
             actual = actual.astype(cast_to)
+        if is_cftime:
+            expected = _to_pytimedelta(expected, unit="us") + offset
 
     note(("expected: ", expected, "actual: ", actual))
     tolerance = {"atol": 1e-15}

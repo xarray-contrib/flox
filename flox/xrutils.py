@@ -327,6 +327,10 @@ def py_timedelta_to_float(array, datetime_unit):
     return conversion_factor * array
 
 
+def _to_pytimedelta(array, unit="us"):
+    return array.astype(f"timedelta64[{unit}]").astype(datetime.timedelta)
+
+
 def _contains_cftime_datetimes(array) -> bool:
     """Check if an array contains cftime.datetime objects"""
     if cftime is None:
