@@ -75,6 +75,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
     assume(not_overflowing_array(array))
     # TODO: fix var for complex numbers upstream
     assume(not (("quantile" in func or "var" in func or "std" in func) and array.dtype.kind == "c"))
+    assume(not ("quantile" in func and array.dtype.kind == "b"))
     # arg* with nans in array are weird
     assume("arg" not in func and not np.any(isnull(array).ravel()))
 

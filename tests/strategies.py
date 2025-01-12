@@ -71,9 +71,11 @@ numeric_dtypes = (
     | npst.floating_dtypes(endianness="=", sizes=(32, 64))
     # TODO: add complex here not in supported_dtypes
 )
-# TODO: stop excluding everything but U
 numeric_like_dtypes = (
-    numeric_dtypes | npst.datetime64_dtypes(endianness="=") | npst.timedelta64_dtypes(endianness="=")
+    npst.boolean_dtypes()
+    | numeric_dtypes
+    | npst.datetime64_dtypes(endianness="=")
+    | npst.timedelta64_dtypes(endianness="=")
 )
 supported_dtypes = (
     numeric_like_dtypes

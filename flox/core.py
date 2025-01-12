@@ -174,6 +174,17 @@ def _is_first_last_reduction(func: T_Agg) -> bool:
     return func in ["nanfirst", "nanlast", "first", "last"]
 
 
+def _is_bool_supported_reduction(func: T_Agg) -> bool:
+    if isinstance(func, Aggregation):
+        func = func.name
+    return (
+        func in ["all", "any"]
+        # TODO: enable in npg
+        # or _is_first_last_reduction(func)
+        # or _is_minmax_reduction(func)
+    )
+
+
 def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
     if is_duck_dask_array(by):
         raise ValueError("Please provide expected_groups if not grouping by a numpy array.")
@@ -2426,7 +2437,7 @@ def groupby_reduce(
         array.dtype,
     )
 
-    is_bool_array = np.issubdtype(array.dtype, bool)
+    is_bool_array = np.issubdtype(array.dtype, bool) and not _is_bool_supported_reduction(func)
     array = array.astype(np.int_) if is_bool_array else array
 
     isbins = _atleast_1d(isbin, nby)
