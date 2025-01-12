@@ -89,7 +89,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
                 "min_size": 1,
                 "max_size": 1,
             },
-            shape=(array.shape[-1],),
+            shape=st.just((array.shape[-1],)),
         )
     )
     if func in BLOCKWISE_FUNCS and isinstance(array, dask.array.Array):
@@ -161,7 +161,7 @@ def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
         array = array.rechunk({-1: -1})
 
     axis = -1
-    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+    by = data.draw(by_arrays(shape=st.just((array.shape[-1],))))
     kwargs = {"q": 0.8} if "quantile" in func else {}
     flox_kwargs: dict[str, Any] = {}
 
@@ -187,7 +187,7 @@ def test_scans(data, array: dask.array.Array, func: str) -> None:
     if "cum" in func:
         assume(not_overflowing_array(np.asarray(array)))
 
-    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+    by = data.draw(by_arrays(shape=st.just((array.shape[-1],))))
     axis = array.ndim - 1
 
     # Too many float32 edge-cases!
@@ -226,7 +226,7 @@ def test_scans(data, array: dask.array.Array, func: str) -> None:
 
 @given(data=st.data(), array=chunked_arrays())
 def test_ffill_bfill_reverse(data, array: dask.array.Array) -> None:
-    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+    by = data.draw(by_arrays(shape=st.just((array.shape[-1],))))
 
     def reverse(arr):
         return arr[..., ::-1]
@@ -252,7 +252,7 @@ def test_ffill_bfill_reverse(data, array: dask.array.Array) -> None:
     func=st.sampled_from(["first", "last", "nanfirst", "nanlast"]),
 )
 def test_first_last(data, array: dask.array.Array, func: str) -> None:
-    by = data.draw(by_arrays(shape=(array.shape[-1],)))
+    by = data.draw(by_arrays(shape=st.just((array.shape[-1],))))
 
     INVERSES = {
         "first": "last",
@@ -294,7 +294,7 @@ def test_first_last(data, array: dask.array.Array, func: str) -> None:
 @given(data=st.data(), func=st.sampled_from(["nanfirst", "nanlast"]))
 def test_first_last_useless(data, func):
     shape = data.draw(npst.array_shapes())
-    by = data.draw(by_arrays(shape=shape[slice(-1, None)]))
+    by = data.draw(by_arrays(shape=st.just(shape[slice(-1, None)])))
     chunks = data.draw(chunks_strategy(shape=shape))
     array = np.zeros(shape, dtype=np.int8)
     if chunks is not None:
