@@ -51,7 +51,7 @@ def units(draw, *, calendar: str) -> str:
 def cftime_arrays(
     draw: st.DrawFn,
     *,
-    shape: tuple[int, ...] = npst.array_shapes(),
+    shape: st.SearchStrategy[tuple[int, ...]] = npst.array_shapes(),
     calendars: st.SearchStrategy[str] = calendars,
     elements: dict[str, Any] | None = None,
 ) -> np.ndarray[Any, Any]:
@@ -113,7 +113,7 @@ all_arrays = (
 
 
 def by_arrays(
-    shape: tuple[int, ...], *, elements: dict[str, Any] | None = None
+    shape: st.SearchStrategy[tuple[int, ...]], *, elements: dict[str, Any] | None = None
 ) -> st.SearchStrategy[np.ndarray[Any, Any]]:
     if elements is None:
         elements = {}
