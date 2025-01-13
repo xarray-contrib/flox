@@ -27,3 +27,4 @@ dependencies:
   - numbagg>=0.3
   - hypothesis
   - xarray
+  - zarr<3 # unpin when cubed is fixed.
