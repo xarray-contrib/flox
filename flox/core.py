@@ -2364,8 +2364,7 @@ def groupby_reduce(
 
     if engine == "flox" and _is_arg_reduction(func):
         raise NotImplementedError(
-            "argreductions not supported for engine='flox' yet."
-            "Try engine='numpy' or engine='numba' instead."
+            "argreductions not supported for engine='flox' yet. Try engine='numpy' or engine='numba' instead."
         )
 
     if engine == "numbagg" and dtype is not None:
