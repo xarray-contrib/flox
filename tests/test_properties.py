@@ -69,7 +69,7 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
     array=st.one_of(all_arrays, chunked_arrays()),
     func=func_st,
 )
-@settings(report_multiple_bugs=False, deadline=None)
+@settings(deadline=None)
 def test_groupby_reduce(data, array, func: str) -> None:
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(array))
@@ -81,7 +81,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
 
     # TODO: funny bugs with overflows here
     is_cftime = _contains_cftime_datetimes(array)
-    assume(not (is_cftime and func == "prod"))
+    assume(not (is_cftime and func in ["prod", "nanprod"]))
 
     axis = -1
     by = data.draw(
