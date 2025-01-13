@@ -41,6 +41,8 @@ from .aggregations import (
     _atleast_1d,
     _initialize_aggregation,
     generic_aggregate,
+    quantile_new_dims_func,
+    topk_new_dims_func,
 )
 from .cache import memoize
 from .xrutils import (
@@ -935,7 +937,6 @@ def chunk_reduce(
     kwargs: Sequence[dict] | None = None,
     sort: bool = True,
     user_dtype=None,
-    new_dims_func: Callable | None = None,
 ) -> IntermediateDict:
     """
     Wrapper for numpy_groupies aggregate that supports nD ``array`` and
@@ -960,9 +961,6 @@ def chunk_reduce(
     axis : (optional) int or Sequence[int]
         If None, reduce along all dimensions of array.
         Else reduce along specified axes.
-    new_dims_func: Callable
-        Function that returns expected shape for any new dimensions
-        (needed for quantile and topk)
 
     Returns
     -------
@@ -1091,8 +1089,11 @@ def chunk_reduce(
             if hasnan:
                 # remove NaN group label which should be last
                 result = result[..., :-1]
-            if new_dims_func is not None:
-                new_dims_shape = tuple(dim.size for dim in new_dims_func(**kw) if not dim.is_scalar)
+            # TODO: Figure out how to generalize this
+            if reduction in ("quantile", "nanquantile"):
+                new_dims_shape = tuple(dim.size for dim in quantile_new_dims_func(**kw) if not dim.is_scalar)
+            elif reduction == "topk":
+                new_dims_shape = tuple(dim.size for dim in topk_new_dims_func(**kw) if not dim.is_scalar)
             else:
                 new_dims_shape = tuple()
             result = result.reshape(new_dims_shape + final_array_shape[:-1] + found_groups_shape)
@@ -1447,7 +1448,6 @@ def _reduce_blockwise(
         sort=sort,
         reindex=reindex,
         user_dtype=agg.dtype["user"],
-        new_dims_func=agg.new_dims_func,
     )
 
     if _is_arg_reduction(agg):
