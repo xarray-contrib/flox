@@ -179,7 +179,7 @@ def _is_bool_supported_reduction(func: T_Agg) -> bool:
     if isinstance(func, Aggregation):
         func = func.name
     return (
-        func in ["all", "any"]
+        func in ["all", "any", "topk"]
         # TODO: enable in npg
         # or _is_first_last_reduction(func)
         # or _is_minmax_reduction(func)
