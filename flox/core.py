@@ -1931,7 +1931,7 @@ def cubed_groupby_agg(
                 out[field] = combine(a[field], axis=dummy_axis, keepdims=keepdims)
             return out
 
-        def _groupby_aggregate(a):
+        def _groupby_aggregate(a, **kwargs):
             # Convert cubed dict to one that _finalize_results works with
             results = {"groups": expected_groups, "intermediates": a.values()}
             out = _finalize_results(results, agg, axis, expected_groups, reindex)
@@ -2372,8 +2372,7 @@ def groupby_reduce(
 
     if engine == "flox" and _is_arg_reduction(func):
         raise NotImplementedError(
-            "argreductions not supported for engine='flox' yet."
-            "Try engine='numpy' or engine='numba' instead."
+            "argreductions not supported for engine='flox' yet. Try engine='numpy' or engine='numba' instead."
         )
 
     if engine == "numbagg" and dtype is not None:
