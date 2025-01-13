@@ -337,6 +337,12 @@ from hypothesis import settings
 @given(data=st.data(), array=chunked_arrays())
 def test_topk_max_min(data, array):
     "top 1 == nanmax; top -1 == nanmin"
+
+    if array.dtype.kind in "mM":
+        # we cast to float and back, so this is the effective limit
+        assume((array.view(np.int64) < 2**53).all())
+    elif array.dtype.kind == "i":
+        assume((array < 2**53).all())
     size = array.shape[-1]
     note(array.compute())  # FIXME
     by = data.draw(by_arrays(shape=(size,)))
