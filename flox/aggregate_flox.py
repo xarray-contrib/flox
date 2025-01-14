@@ -159,7 +159,8 @@ def quantile_or_topk(
         result = loval
         # The first clause is True if numel in group < abs(k)
         badmask = np.broadcast_to(lo_ < 0, idxshape) | nanmask
-        result[badmask] = fill_value
+        if badmask.any():
+            result[badmask] = fill_value
 
     if k is not None:
         result = result.astype(dtype, copy=False)
