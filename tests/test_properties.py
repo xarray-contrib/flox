@@ -338,11 +338,13 @@ from hypothesis import settings
 def test_topk_max_min(data, array):
     "top 1 == nanmax; top -1 == nanmin"
 
-    if array.dtype.kind in "mM":
+    if array.dtype.kind in "Mm":
         # we cast to float and back, so this is the effective limit
-        assume((array.view(np.int64) < 2**53).all())
-    elif array.dtype.kind == "i":
-        assume((array < 2**53).all())
+        assume((np.abs(array.view(np.int64)) < 2**53).all())
+    elif _contains_cftime_datetimes(array):
+        asint = datetime_to_numeric(array, datetime_unit="us")
+        assume((np.abs(asint.view(np.int64)) < 2**53).all())
+
     size = array.shape[-1]
     note(array.compute())  # FIXME
     by = data.draw(by_arrays(shape=(size,)))
