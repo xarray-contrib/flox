@@ -1159,8 +1159,6 @@ def test_cohorts_nd_by(func, method, axis, engine):
     kwargs = dict(func=func, engine=engine, method=method, axis=axis, fill_value=fill_value)
     if "quantile" in func:
         kwargs["finalize_kwargs"] = {"q": DEFAULT_QUANTILE}
-    # FIXME
-    import ipdb; ipdb.set_trace()
     actual, groups = groupby_reduce(array, by, **kwargs)
     expected, sorted_groups = groupby_reduce(array.compute(), by, **kwargs)
     assert_equal(groups, sorted_groups)

@@ -94,7 +94,6 @@ def partial_reduce(func, dsk, *, chunks, name, dep_name, split_every, axis, coho
         for (i, c) in enumerate(chunks)
     ]
     for k, p in zip(keys, product(*parts)):
-        print(name, k)
         free = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1 and i not in split_every}
         dummy = dict(i for i in enumerate(p) if i[0] in split_every)
         g = lol_tuples((dep_name,), range(ndim), free, dummy)

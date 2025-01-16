@@ -1613,6 +1613,8 @@ def dask_groupby_agg(
     import dask.array
     from dask.array.core import slices_from_chunks
 
+    from .dask_array_compat import _tree_reduce
+
     # I think _tree_reduce expects this
     assert isinstance(axis, Sequence)
     assert all(ax >= 0 for ax in axis)
@@ -1755,12 +1757,9 @@ def dask_groupby_agg(
                 dsk_, subset_chunks, dep_name = subset_to_blocks(
                     intermediate, blks, block_shape, reindexer, chunks_as_array
                 )
-                print(dsk_.keys())
                 dsk |= dsk_
-                from . import dask_array_compat
-
                 # now that we have reindexed, we can set reindex=True explicitlly
-                dask_array_compat._tree_reduce(
+                _tree_reduce(
                     dsk,
                     chunks=subset_chunks,
                     name=out_name,
@@ -1785,6 +1784,8 @@ def dask_groupby_agg(
 
             out_chunks = list(array.chunks)
             out_chunks[axis[-1]] = tuple(len(c) for c in chunks_cohorts.values())
+            for ax in axis[:-1]:
+                out_chunks[ax] = (1,)
             reduced = Array(graph, out_name, out_chunks, meta=array._meta)
 
             # reduced = dask.array.concatenate(reduced_, axis=-1)
