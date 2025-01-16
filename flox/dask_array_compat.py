@@ -55,7 +55,7 @@ def _tree_reduce(
             axis=axis,
         )
         dep_name = name + "-combine"
-    func = partial(aggregate, axis=axis, keepdims=True)
+    func = partial(aggregate, axis=axis)
     return partial_reduce(
         func,
         dsk,

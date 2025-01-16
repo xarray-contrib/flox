@@ -1768,8 +1768,8 @@ def dask_groupby_agg(
                     # (i.e. effectively concatenate it)
                     cohort_index=icohort,
                     axis=axis,
-                    combine=partial(combine, agg=agg, reindex=True),
-                    aggregate=partial(aggregate, expected_groups=cohort_index, reindex=True),
+                    combine=partial(combine, agg=agg, reindex=True, keepdims=True),
+                    aggregate=partial(aggregate, expected_groups=cohort_index, reindex=True, keepdims=True),
                 )
                 # dsks.append(dsk)
                 # This is done because pandas promotes to 64-bit types when an Index is created
