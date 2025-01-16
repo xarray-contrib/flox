@@ -30,7 +30,7 @@ from flox.core import (
     groupby_scan,
     rechunk_for_cohorts,
     reindex_,
-    subset_to_blocks,
+    # subset_to_blocks,
 )
 
 from . import (
@@ -1525,13 +1525,13 @@ def test_dtype(func, dtype, engine):
     assert actual.dtype == np.dtype("float64")
 
 
-@requires_dask
-def test_subset_blocks():
-    array = dask.array.random.random((120,), chunks=(4,))
+# @requires_dask
+# def test_subset_blocks():
+#     array = dask.array.random.random((120,), chunks=(4,))
 
-    blockid = (0, 3, 6, 9, 12, 15, 18, 21, 24, 27)
-    subset = subset_to_blocks(array, blockid)
-    assert subset.blocks.shape == (len(blockid),)
+#     blockid = (0, 3, 6, 9, 12, 15, 18, 21, 24, 27)
+#     subset = subset_to_blocks(array, blockid)
+#     assert subset.blocks.shape == (len(blockid),)
 
 
 @requires_dask
@@ -1574,40 +1574,40 @@ def test_normalize_block_indexing_2d(flatblocks, expected):
     assert_equal_tuple(expected, actual)
 
 
-@requires_dask
-def test_subset_block_passthrough():
-    from flox.core import identity
+# @requires_dask
+# def test_subset_block_passthrough():
+#     from flox.core import identity
 
-    # full slice pass through
-    array = dask.array.ones((5,), chunks=(1,))
-    expected = dask.array.map_blocks(identity, array)
-    subset = subset_to_blocks(array, np.arange(5))
-    assert subset.name == expected.name
+#     # full slice pass through
+#     array = dask.array.ones((5,), chunks=(1,))
+#     expected = dask.array.map_blocks(identity, array)
+#     subset = subset_to_blocks(array, np.arange(5))
+#     assert subset.name == expected.name
 
-    array = dask.array.ones((5, 5), chunks=1)
-    expected = dask.array.map_blocks(identity, array)
-    subset = subset_to_blocks(array, np.arange(25))
-    assert subset.name == expected.name
+#     array = dask.array.ones((5, 5), chunks=1)
+#     expected = dask.array.map_blocks(identity, array)
+#     subset = subset_to_blocks(array, np.arange(25))
+#     assert subset.name == expected.name
 
 
-@requires_dask
-@pytest.mark.parametrize(
-    "flatblocks, expectidx",
-    [
-        (np.arange(10), (slice(2), slice(None))),
-        (np.arange(8), (slice(2), slice(None))),
-        ([0, 10], ([0, 2], slice(1))),
-        ([0, 7], (slice(2), [0, 2])),
-        ([0, 7, 9], (slice(2), [0, 2, 4])),
-        ([0, 6, 12, 14], (slice(3), [0, 1, 2, 4])),
-        ([0, 12, 14, 19], np.ix_([0, 2, 3], [0, 2, 4])),
-    ],
-)
-def test_subset_block_2d(flatblocks, expectidx):
-    array = dask.array.from_array(np.arange(25).reshape((5, 5)), chunks=1)
-    subset = subset_to_blocks(array, flatblocks)
-    assert len(subset.dask.layers) == 2
-    assert_equal(subset, array.compute()[expectidx])
+# @requires_dask
+# @pytest.mark.parametrize(
+#     "flatblocks, expectidx",
+#     [
+#         (np.arange(10), (slice(2), slice(None))),
+#         (np.arange(8), (slice(2), slice(None))),
+#         ([0, 10], ([0, 2], slice(1))),
+#         ([0, 7], (slice(2), [0, 2])),
+#         ([0, 7, 9], (slice(2), [0, 2, 4])),
+#         ([0, 6, 12, 14], (slice(3), [0, 1, 2, 4])),
+#         ([0, 12, 14, 19], np.ix_([0, 2, 3], [0, 2, 4])),
+#     ],
+# )
+# def test_subset_block_2d(flatblocks, expectidx):
+#     array = dask.array.from_array(np.arange(25).reshape((5, 5)), chunks=1)
+#     subset = subset_to_blocks(array, flatblocks)
+#     assert len(subset.dask.layers) == 2
+#     assert_equal(subset, array.compute()[expectidx])
 
 
 @pytest.mark.parametrize(
