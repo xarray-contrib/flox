@@ -6,7 +6,7 @@ dependencies:
   - cachey
   - cftime
   - codecov
-  - cubed>=0.14.3
+  - cubed>=0.20.0
   - dask-core
   - pandas
   - numpy>=1.22
@@ -27,4 +27,4 @@ dependencies:
   - numbagg>=0.3
   - hypothesis
   - xarray
-  - zarr<3 # unpin when cubed is fixed.
+  - zarr
