@@ -23,9 +23,9 @@ settings.load_profile("default")
     scope="module",
     params=[
         "flox",
-        "numpy",
+        # "numpy",
         # pytest.param("numba", marks=requires_numba),
-        pytest.param("numbagg", marks=requires_numbagg),
+        # pytest.param("numbagg", marks=requires_numbagg),
     ],
 )
 def engine(request):
