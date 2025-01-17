@@ -8,12 +8,12 @@ from dask import config
 from dask.blockwise import lol_tuples
 from tlz import partition_all
 
-from .lib import ArrayLike
+from .lib import ArrayLayer
 from .types import Graph
 
 
 def _tree_reduce(
-    x: ArrayLike,
+    x: ArrayLayer,
     *,
     name: str,
     out_dsk: Graph,

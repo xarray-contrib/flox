@@ -7,11 +7,10 @@ from .types import DaskArray, Graph
 
 
 @dataclass
-class ArrayLike:
+class ArrayLayer:
     name: str
     layer: Graph
     chunks: tuple[tuple[int, ...], ...]
-    prev_layer_name: str
 
     def to_array(self, dep: DaskArray) -> DaskArray:
         from dask.array import Array

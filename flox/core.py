@@ -44,7 +44,7 @@ from .aggregations import (
     quantile_new_dims_func,
 )
 from .cache import memoize
-from .lib import ArrayLike
+from .lib import ArrayLayer
 from .xrutils import (
     _contains_cftime_datetimes,
     _to_pytimedelta,
@@ -1509,9 +1509,7 @@ def subset_to_blocks(
     blkshape: tuple[int, ...] | None = None,
     reindexer: Callable = identity,
     chunks_as_array: tuple[np.ndarray, ...] | None = None,
-    *,
-    return_array: bool = True,
-) -> ArrayLike:
+) -> ArrayLayer:
     """
     Advanced indexing of .blocks such that we always get a regular array back.
 
@@ -1536,10 +1534,6 @@ def subset_to_blocks(
 
     index = _normalize_indexes(array, flatblocks, blkshape)
 
-    # FIXME:
-    # if all(not isinstance(i, np.ndarray) and i == slice(None) for i in index):
-    #     return dask.array.map_blocks(reindexer, array, meta=array._meta)
-
     # These rest is copied from dask.array.core.py with slight modifications
     index = normalize_index(index, array.numblocks)
     index = tuple(slice(k, k + 1) if isinstance(k, Integral) else k for k in index)
@@ -1552,7 +1546,7 @@ def subset_to_blocks(
 
     keys = itertools.product(*(range(len(c)) for c in chunks))
     layer: Graph = {(name,) + key: (reindexer, tuple(new_keys[key].tolist())) for key in keys}
-    return ArrayLike(layer=layer, chunks=chunks, name=name, prev_layer_name=array.name)
+    return ArrayLayer(layer=layer, chunks=chunks, name=name)
 
 
 def _extract_unknown_groups(reduced, dtype) -> tuple[DaskArray]:
@@ -1752,9 +1746,7 @@ def dask_groupby_agg(
                     if do_simple_combine
                     else identity
                 )
-                subset = subset_to_blocks(
-                    intermediate, blks, block_shape, reindexer, chunks_as_array, return_array=False
-                )
+                subset = subset_to_blocks(intermediate, blks, block_shape, reindexer, chunks_as_array)
                 dsk |= subset.layer
                 # now that we have reindexed, we can set reindex=True explicitlly
                 _tree_reduce(
