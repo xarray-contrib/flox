@@ -44,17 +44,20 @@ def _tree_reduce(
         if i in split_every and split_every[i] != 1:
             depth = int(builtins.max(depth, math.ceil(math.log(n, split_every[i]))))
     func = partial(combine or aggregate, axis=axis)
-    for _ in range(depth - 1):
+
+    agg_dep_name = dep_name
+    for level in range(depth - 1):
+        newname = name + f"-{cohort_index}-partial-{level}"
         dsk, out_chunks = partial_reduce(
             func,
             dsk,
             chunks=out_chunks,
             split_every=split_every,
-            name=name + "-combine",
-            dep_name=dep_name,
+            name=newname,
+            dep_name=agg_dep_name,
             axis=axis,
         )
-        dep_name = name + "-combine"
+        agg_dep_name = newname
     func = partial(aggregate, axis=axis)
     return partial_reduce(
         func,
@@ -62,7 +65,7 @@ def _tree_reduce(
         chunks=out_chunks,
         split_every=split_every,
         name=name,
-        dep_name=dep_name,
+        dep_name=agg_dep_name,
         axis=axis,
         cohort_index=cohort_index,
     )
@@ -97,6 +100,7 @@ def partial_reduce(func, dsk, *, chunks, name, dep_name, split_every, axis, coho
         free = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1 and i not in split_every}
         dummy = dict(i for i in enumerate(p) if i[0] in split_every)
         g = lol_tuples((dep_name,), range(ndim), free, dummy)
+        assert dep_name != name
         if cohort_index is not None:
             k = list(k)
             k[axis[-1]] = cohort_index

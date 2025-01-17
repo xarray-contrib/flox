@@ -1754,24 +1754,21 @@ def dask_groupby_agg(
                     if do_simple_combine
                     else identity
                 )
-                dsk_, subset_chunks, dep_name = subset_to_blocks(
+                subset_layer, subset_chunks, dep_name = subset_to_blocks(
                     intermediate, blks, block_shape, reindexer, chunks_as_array
                 )
-                dsk |= dsk_
+                dsk |= subset_layer
                 # now that we have reindexed, we can set reindex=True explicitlly
                 _tree_reduce(
                     dsk,
                     chunks=subset_chunks,
                     name=out_name,
                     dep_name=dep_name,
-                    # TODO: use this to rename the last aggregate task appropriately
-                    # (i.e. effectively concatenate it)
                     cohort_index=icohort,
                     axis=axis,
                     combine=partial(combine, agg=agg, reindex=True, keepdims=True),
                     aggregate=partial(aggregate, expected_groups=cohort_index, reindex=True, keepdims=True),
                 )
-                # dsks.append(dsk)
                 # This is done because pandas promotes to 64-bit types when an Index is created
                 # So we use the index to generate the return value for consistency with "map-reduce"
                 # This is important on windows
@@ -1788,7 +1785,6 @@ def dask_groupby_agg(
                 out_chunks[ax] = (1,)
             reduced = Array(graph, out_name, out_chunks, meta=array._meta)
 
-            # reduced = dask.array.concatenate(reduced_, axis=-1)
             groups = (np.concatenate(groups_),)
             group_chunks = (tuple(len(cohort) for cohort in groups_),)
 
