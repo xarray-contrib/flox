@@ -1511,6 +1511,8 @@ def subset_to_blocks(
     blkshape: tuple[int, ...] | None = None,
     reindexer: Callable = identity,
     chunks_as_array: tuple[np.ndarray, ...] | None = None,
+    *,
+    return_array: bool = True,
 ) -> Graph:
     """
     Advanced indexing of .blocks such that we always get a regular array back.
@@ -1525,8 +1527,10 @@ def subset_to_blocks(
     -------
     dask.array
     """
+    import dask.array
     from dask.array.slicing import normalize_index
     from dask.base import tokenize
+    from dask.highlevelgraph import HighLevelGraph
 
     if blkshape is None:
         blkshape = array.blocks.shape
@@ -1552,7 +1556,11 @@ def subset_to_blocks(
 
     keys = itertools.product(*(range(len(c)) for c in chunks))
     layer: Graph = {(name,) + key: (reindexer, tuple(new_keys[key].tolist())) for key in keys}
-    return layer, chunks, name
+    if return_array:
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
+        return dask.array.Array(graph, name, chunks, meta=array)
+    else:
+        return layer, chunks, name
 
 
 def _extract_unknown_groups(reduced, dtype) -> tuple[DaskArray]:
@@ -1752,7 +1760,7 @@ def dask_groupby_agg(
                     else identity
                 )
                 subset_layer, subset_chunks, dep_name = subset_to_blocks(
-                    intermediate, blks, block_shape, reindexer, chunks_as_array
+                    intermediate, blks, block_shape, reindexer, chunks_as_array, return_array=False
                 )
                 dsk |= subset_layer
                 # now that we have reindexed, we can set reindex=True explicitlly
