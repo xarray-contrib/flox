@@ -1770,10 +1770,12 @@ def dask_groupby_agg(
                     chunks=subset_chunks,
                     name=out_name,
                     dep_name=dep_name,
-                    cohort_index=icohort,
+                    block_index=icohort,
                     axis=axis,
-                    combine=partial(combine, agg=agg, reindex=True, keepdims=True),
-                    aggregate=partial(aggregate, expected_groups=cohort_index, reindex=True, keepdims=True),
+                    combine=partial(combine, agg=agg, reindex=do_simple_combine, keepdims=True),
+                    aggregate=partial(
+                        aggregate, expected_groups=cohort_index, reindex=do_simple_combine, keepdims=True
+                    ),
                 )
                 # This is done because pandas promotes to 64-bit types when an Index is created
                 # So we use the index to generate the return value for consistency with "map-reduce"

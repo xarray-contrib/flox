@@ -15,9 +15,9 @@ def _tree_reduce(
     chunks,
     aggregate,
     axis,
-    name,
-    dep_name,
-    cohort_index: int,
+    name: str,
+    dep_name: str,
+    block_index: int,
     split_every=None,
     combine=None,
 ):
@@ -47,7 +47,7 @@ def _tree_reduce(
 
     agg_dep_name = dep_name
     for level in range(depth - 1):
-        newname = name + f"-{cohort_index}-partial-{level}"
+        newname = name + f"-{block_index}-partial-{level}"
         dsk, out_chunks = partial_reduce(
             func,
             dsk,
@@ -67,11 +67,11 @@ def _tree_reduce(
         name=name,
         dep_name=agg_dep_name,
         axis=axis,
-        cohort_index=cohort_index,
+        block_index=block_index,
     )
 
 
-def partial_reduce(func, dsk, *, chunks, name, dep_name, split_every, axis, cohort_index=None):
+def partial_reduce(func, dsk, *, chunks, name, dep_name, split_every, axis, block_index=None):
     """Partial reduction across multiple axes.
 
     Parameters
@@ -101,9 +101,9 @@ def partial_reduce(func, dsk, *, chunks, name, dep_name, split_every, axis, coho
         dummy = dict(i for i in enumerate(p) if i[0] in split_every)
         g = lol_tuples((dep_name,), range(ndim), free, dummy)
         assert dep_name != name
-        if cohort_index is not None:
+        if block_index is not None:
             k = list(k)
-            k[axis[-1]] = cohort_index
+            k[axis[-1]] = block_index
             k = tuple(k)
         dsk[(name,) + k] = (func, g)
     return dsk, out_chunks
