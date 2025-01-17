@@ -1513,7 +1513,7 @@ def subset_to_blocks(
     chunks_as_array: tuple[np.ndarray, ...] | None = None,
     *,
     return_array: bool = True,
-) -> Graph:
+) -> Any:
     """
     Advanced indexing of .blocks such that we always get a regular array back.
 
@@ -1558,6 +1558,7 @@ def subset_to_blocks(
     layer: Graph = {(name,) + key: (reindexer, tuple(new_keys[key].tolist())) for key in keys}
     if return_array:
         graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
+
         return dask.array.Array(graph, name, chunks, meta=array)
     else:
         return layer, chunks, name
@@ -1751,7 +1752,7 @@ def dask_groupby_agg(
             out_name = f"{name}-reduce-{method}-{token}"
             groups_ = []
             chunks_as_array = tuple(np.array(c) for c in array.chunks)
-            dsk = {}
+            dsk: Graph = {}
             for icohort, (blks, cohort) in enumerate(chunks_cohorts.items()):
                 cohort_index = pd.Index(cohort)
                 reindexer = (
