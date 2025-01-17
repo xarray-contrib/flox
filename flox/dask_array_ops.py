@@ -12,6 +12,10 @@ from .lib import ArrayLayer
 from .types import Graph
 
 
+# _tree_reduce and partial_reduce are copied from dask.array.reductions
+# They have been modified to work purely with graphs, and without creating new Array layers
+# in the graph. The `block_index` kwarg is new and avoids a concatenation by simply setting the right
+# key initially
 def _tree_reduce(
     x: ArrayLayer,
     *,
@@ -23,10 +27,6 @@ def _tree_reduce(
     split_every=None,
     combine=None,
 ):
-    """Perform the tree reduction step of a reduction.
-
-    Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
-    """
     # Normalize split_every
     split_every = split_every or config.get("split_every", 4)
     if isinstance(split_every, dict):
@@ -84,22 +84,6 @@ def partial_reduce(
     axis: tuple[int, ...],
     block_index: int | None = None,
 ):
-    """Partial reduction across multiple axes.
-
-    Parameters
-    ----------
-    func : function
-    x : Array
-    split_every : dict
-        Maximum reduction block sizes in each dimension.
-
-    Examples
-    --------
-    Reduce across axis 0 and 2, merging a maximum of 1 block in the 0th
-    dimension, and 3 blocks in the 2nd dimension:
-
-    >>> partial_reduce(np.min, x, {0: 1, 2: 3})  # doctest: +SKIP
-    """
     numblocks = tuple(len(c) for c in chunks)
     ndim = len(numblocks)
     parts = [list(partition_all(split_every.get(i, 1), range(n))) for (i, n) in enumerate(numblocks)]
