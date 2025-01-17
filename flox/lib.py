@@ -1,8 +1,5 @@
 from dataclasses import dataclass
 
-import numpy as np
-import pandas as pd
-
 from .types import DaskArray, Graph
 
 
@@ -18,9 +15,3 @@ class ArrayLayer:
 
         graph = HighLevelGraph.from_collections(self.name, self.layer, dependencies=[dep])
         return Array(graph, self.name, self.chunks, meta=dep._meta)
-
-
-def _unique(a: np.ndarray) -> np.ndarray:
-    """Much faster to use pandas unique and sort the results.
-    np.unique sorts before uniquifying and is slow."""
-    return np.sort(pd.unique(a.reshape(-1)))
