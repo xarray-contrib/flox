@@ -44,6 +44,7 @@ from .aggregations import (
     quantile_new_dims_func,
 )
 from .cache import memoize
+from .lib import ArrayLike
 from .xrutils import (
     _contains_cftime_datetimes,
     _to_pytimedelta,
@@ -72,10 +73,7 @@ if TYPE_CHECKING:
             from typing import Unpack
     except (ModuleNotFoundError, ImportError):
         Unpack: Any  # type: ignore[no-redef]
-
-    import cubed.Array as CubedArray
-    import dask.array.Array as DaskArray
-    from dask.typing import Graph
+    from .types import CubedArray, DaskArray, Graph
 
     T_DuckArray: TypeAlias = np.ndarray | DaskArray | CubedArray  # Any ?
     T_By: TypeAlias = T_DuckArray
@@ -1513,7 +1511,7 @@ def subset_to_blocks(
     chunks_as_array: tuple[np.ndarray, ...] | None = None,
     *,
     return_array: bool = True,
-) -> Any:
+) -> ArrayLike:
     """
     Advanced indexing of .blocks such that we always get a regular array back.
 
@@ -1527,10 +1525,8 @@ def subset_to_blocks(
     -------
     dask.array
     """
-    import dask.array
     from dask.array.slicing import normalize_index
     from dask.base import tokenize
-    from dask.highlevelgraph import HighLevelGraph
 
     if blkshape is None:
         blkshape = array.blocks.shape
@@ -1556,12 +1552,7 @@ def subset_to_blocks(
 
     keys = itertools.product(*(range(len(c)) for c in chunks))
     layer: Graph = {(name,) + key: (reindexer, tuple(new_keys[key].tolist())) for key in keys}
-    if return_array:
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array])
-
-        return dask.array.Array(graph, name, chunks, meta=array)
-    else:
-        return layer, chunks, name
+    return ArrayLike(layer=layer, chunks=chunks, name=name, prev_layer_name=array.name)
 
 
 def _extract_unknown_groups(reduced, dtype) -> tuple[DaskArray]:
@@ -1618,8 +1609,9 @@ def dask_groupby_agg(
 ) -> tuple[DaskArray, tuple[np.ndarray | DaskArray]]:
     import dask.array
     from dask.array.core import slices_from_chunks
+    from dask.highlevelgraph import HighLevelGraph
 
-    from .dask_array_compat import _tree_reduce
+    from .dask_array_ops import _tree_reduce
 
     # I think _tree_reduce expects this
     assert isinstance(axis, Sequence)
@@ -1760,16 +1752,15 @@ def dask_groupby_agg(
                     if do_simple_combine
                     else identity
                 )
-                subset_layer, subset_chunks, dep_name = subset_to_blocks(
+                subset = subset_to_blocks(
                     intermediate, blks, block_shape, reindexer, chunks_as_array, return_array=False
                 )
-                dsk |= subset_layer
+                dsk |= subset.layer
                 # now that we have reindexed, we can set reindex=True explicitlly
                 _tree_reduce(
-                    dsk,
-                    chunks=subset_chunks,
+                    subset,
+                    out_dsk=dsk,
                     name=out_name,
-                    dep_name=dep_name,
                     block_index=icohort,
                     axis=axis,
                     combine=partial(combine, agg=agg, reindex=do_simple_combine, keepdims=True),
@@ -1782,16 +1773,13 @@ def dask_groupby_agg(
                 # This is important on windows
                 groups_.append(cohort_index.values)
 
-            from dask.array import Array
-            from dask.highlevelgraph import HighLevelGraph
-
             graph = HighLevelGraph.from_collections(out_name, dsk, dependencies=[intermediate])
 
             out_chunks = list(array.chunks)
             out_chunks[axis[-1]] = tuple(len(c) for c in chunks_cohorts.values())
             for ax in axis[:-1]:
                 out_chunks[ax] = (1,)
-            reduced = Array(graph, out_name, out_chunks, meta=array._meta)
+            reduced = dask.array.Array(graph, out_name, out_chunks, meta=array._meta)
 
             groups = (np.concatenate(groups_),)
             group_chunks = (tuple(len(cohort) for cohort in groups_),)

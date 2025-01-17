@@ -8,15 +8,17 @@ from dask import config
 from dask.blockwise import lol_tuples
 from tlz import partition_all
 
+from .lib import ArrayLike
+from .types import Graph
+
 
 def _tree_reduce(
-    dsk,
+    x: ArrayLike,
     *,
-    chunks,
+    name: str,
+    out_dsk: Graph,
     aggregate,
     axis,
-    name: str,
-    dep_name: str,
     block_index: int,
     split_every=None,
     combine=None,
@@ -35,8 +37,8 @@ def _tree_reduce(
     else:
         raise ValueError("split_every must be a int or a dict")
 
-    numblocks = tuple(len(c) for c in chunks)
-    out_chunks = chunks
+    numblocks = tuple(len(c) for c in x.chunks)
+    out_chunks = x.chunks
 
     # Reduce across intermediates
     depth = 1
@@ -45,12 +47,12 @@ def _tree_reduce(
             depth = int(builtins.max(depth, math.ceil(math.log(n, split_every[i]))))
     func = partial(combine or aggregate, axis=axis)
 
-    agg_dep_name = dep_name
+    agg_dep_name = x.name
     for level in range(depth - 1):
         newname = name + f"-{block_index}-partial-{level}"
-        dsk, out_chunks = partial_reduce(
+        out_dsk, out_chunks = partial_reduce(
             func,
-            dsk,
+            out_dsk,
             chunks=out_chunks,
             split_every=split_every,
             name=newname,
@@ -61,7 +63,7 @@ def _tree_reduce(
     func = partial(aggregate, axis=axis)
     return partial_reduce(
         func,
-        dsk,
+        out_dsk,
         chunks=out_chunks,
         split_every=split_every,
         name=name,
