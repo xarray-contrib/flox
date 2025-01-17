@@ -1130,7 +1130,7 @@ def test_cohorts_map_reduce_consistent_dtypes(method, dtype, labels_dtype):
 @requires_dask
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("axis", (-1, None))
-@pytest.mark.parametrize("method", ["cohorts"])
+@pytest.mark.parametrize("method", ["blockwise", "cohorts", "map-reduce"])
 def test_cohorts_nd_by(func, method, axis, engine):
     if (
         ("arg" in func and (axis is None or engine in ["flox", "numbagg"]))
