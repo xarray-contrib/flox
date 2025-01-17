@@ -6,7 +6,7 @@ from numbers import Integral
 
 from dask import config
 from dask.blockwise import lol_tuples
-from tlz import partition_all
+from toolz import partition_all
 
 from .lib import ArrayLayer
 from .types import Graph
@@ -18,7 +18,7 @@ def _tree_reduce(
     name: str,
     out_dsk: Graph,
     aggregate,
-    axis,
+    axis: tuple[int, ...],
     block_index: int,
     split_every=None,
     combine=None,
@@ -73,7 +73,17 @@ def _tree_reduce(
     )
 
 
-def partial_reduce(func, dsk, *, chunks, name, dep_name, split_every, axis, block_index=None):
+def partial_reduce(
+    func,
+    dsk,
+    *,
+    chunks: tuple[tuple[int, ...], ...],
+    name: str,
+    dep_name: str,
+    split_every: dict[int, int],
+    axis: tuple[int, ...],
+    block_index: int | None = None,
+):
     """Partial reduction across multiple axes.
 
     Parameters
@@ -104,8 +114,6 @@ def partial_reduce(func, dsk, *, chunks, name, dep_name, split_every, axis, bloc
         g = lol_tuples((dep_name,), range(ndim), free, dummy)
         assert dep_name != name
         if block_index is not None:
-            k = list(k)
-            k[axis[-1]] = block_index
-            k = tuple(k)
+            k = (*k[:-1], block_index)
         dsk[(name,) + k] = (func, g)
     return dsk, out_chunks

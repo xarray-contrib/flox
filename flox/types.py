@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, TypeAlias
 
 try:
     import cubed.Array as CubedArray
@@ -10,4 +10,4 @@ try:
     from dask.typing import Graph
 except ImportError:
     DaskArray = Any
-    Graph = Any
+    Graph: TypeAlias = Any  # type: ignore[no-redef,misc]

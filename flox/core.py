@@ -1507,7 +1507,7 @@ def subset_to_blocks(
     array: DaskArray,
     flatblocks: Sequence[int],
     blkshape: tuple[int, ...] | None = None,
-    reindexer: Callable = identity,
+    reindexer=identity,
     chunks_as_array: tuple[np.ndarray, ...] | None = None,
 ) -> ArrayLayer:
     """
@@ -1747,7 +1747,7 @@ def dask_groupby_agg(
                     else identity
                 )
                 subset = subset_to_blocks(intermediate, blks, block_shape, reindexer, chunks_as_array)
-                dsk |= subset.layer
+                dsk |= subset.layer  # type: ignore[operator]
                 # now that we have reindexed, we can set reindex=True explicitlly
                 _tree_reduce(
                     subset,
