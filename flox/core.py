@@ -1509,7 +1509,7 @@ def subset_to_blocks(
     array: DaskArray,
     flatblocks: Sequence[int],
     blkshape: tuple[int, ...] | None = None,
-    reindexer=None,
+    reindexer: Callable = identity,
     chunks_as_array: tuple[np.ndarray, ...] | None = None,
 ) -> Graph:
     """
@@ -1551,10 +1551,7 @@ def subset_to_blocks(
     chunks = tuple(tuple(c[i].tolist()) for c, i in zip(chunks_as_array, squeezed))
 
     keys = itertools.product(*(range(len(c)) for c in chunks))
-    if reindexer is None:
-        layer: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
-    else:
-        layer: Graph = {(name,) + key: (reindexer, tuple(new_keys[key].tolist())) for key in keys}
+    layer: Graph = {(name,) + key: (reindexer, tuple(new_keys[key].tolist())) for key in keys}
     return layer, chunks, name
 
 
