@@ -30,6 +30,7 @@ jobs:
             asv
             mamba
             libmambapy
+            conda-build
           init-shell: bash
           cache-environment: true
 
