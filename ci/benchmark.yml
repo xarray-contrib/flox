@@ -1,0 +1,19 @@
+name: flox-bench
+channels:
+  - conda-forge
+dependencies:
+  - asv
+  - build
+  - cachey
+  - dask-core
+  - numpy<2
+  - mamba
+  - libmambapy
+  - conda-build
+  - pip
+  - python=3.10
+  - xarray
+  - numpy_groupies>=0.9.19
+  - numbagg>=0.3
+  - wheel
+  - scipy
