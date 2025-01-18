@@ -29,6 +29,7 @@ jobs:
             python=3.12
             asv
             mamba
+            libmambapy
           init-shell: bash
           cache-environment: true
 
