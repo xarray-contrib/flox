@@ -9,6 +9,7 @@ dependencies:
   - numpy<2
   - mamba
   - libmambapy
+  - conda-build
   - pip
   - python=3.10
   - xarray
