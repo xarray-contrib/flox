@@ -1574,7 +1574,7 @@ def test_subset_blocks():
     assert subset.blocks.shape == (len(blockid),)
 
 
-@pytest.mark.xfail("temporarily removed this optimization")
+@pytest.mark.skip("temporarily removed this optimization")
 @requires_dask
 def test_subset_block_passthrough():
     from flox.core import identity
