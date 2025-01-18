@@ -6,7 +6,7 @@ dependencies:
   - build
   - cachey
   - dask-core
-  - numpy
+  - numpy<2.1
   - mamba
   - pip
   - xarray
