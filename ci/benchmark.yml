@@ -8,6 +8,7 @@ dependencies:
   - dask-core
   - numpy<2
   - mamba
+  - libmambapy
   - pip
   - python=3.10
   - xarray
