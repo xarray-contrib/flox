@@ -6,10 +6,9 @@ dependencies:
   - build
   - cachey
   - dask-core
-  - numpy<2
+  - numpy<2.1
   - mamba
   - pip
-  - python=3.10
   - xarray
   - numpy_groupies>=0.9.19
   - numbagg>=0.3

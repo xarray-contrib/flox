@@ -133,7 +133,7 @@ module=[
     "pandas",
     "setuptools",
     "scipy.*",
-    "toolz",
+    "toolz.*",
 ]
 ignore_missing_imports = true
 
