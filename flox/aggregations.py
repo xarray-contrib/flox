@@ -900,6 +900,7 @@ def _initialize_aggregation(
             # TODO: bah, we need to pass `k` to the combine topk function
             # this is ugly.
             if agg.name == "topk" and not isinstance(combine, str):
+                assert combine is not None
                 combine = partial(combine, **agg.finalize_kwargs)
             simple_combine.append(combine)
 
