@@ -329,18 +329,16 @@ def test_agg_dtype_specified(func, array_dtype, dtype, engine):
     assert actual.dtype == expected.dtype
 
 
-from hypothesis import settings
-
-
-# TODO: do all_arrays instead of numeric_arrays
-@settings(report_multiple_bugs=False)
 @given(data=st.data(), array=chunked_arrays())
 def test_topk_max_min(data, array):
     "top 1 == nanmax; top -1 == nanmin"
 
-    if array.dtype.kind in "Mm":
+    if array.dtype.kind == "i":
         # we cast to float and back, so this is the effective limit
+        assume((np.abs(array) < 2**53).all())
+    elif array.dtype.kind in "Mm":
         assume((np.abs(array.view(np.int64)) < 2**53).all())
+        # we cast to float and back, so this is the effective limit
     elif _contains_cftime_datetimes(array):
         asint = datetime_to_numeric(array, datetime_unit="us")
         assume((np.abs(asint.view(np.int64)) < 2**53).all())
