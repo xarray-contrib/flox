@@ -113,6 +113,22 @@ class ERA5Dataset:
         )
 
 
+class ERA5Resampling(Cohorts):
+    def setup(self, *args, **kwargs):
+        super().__init__()
+        # nyears is number of years, adjust to make bigger,
+        # full dataset is 60-ish years.
+        nyears = 5
+        shape = (37, 721, 1440, nyears * 365 * 24)
+        chunks = (-1, -1, -1, 1)
+        time = pd.date_range("2001-01-01", periods=shape[-1], freq="h")
+
+        self.array = dask.array.random.random(shape, chunks=chunks)
+        self.by = codes_for_resampling(time, "D")
+        self.axis = (-1,)
+        self.expected = np.unique(self.by)
+
+
 class ERA5DayOfYear(ERA5Dataset, Cohorts):
     def setup(self, *args, **kwargs):
         super().__init__()

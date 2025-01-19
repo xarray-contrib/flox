@@ -26,9 +26,11 @@ jobs:
         with:
           environment-name: flox-bench
           create-args: >-
-            python=3.10
+            python=3.12
             asv
             mamba
+            libmambapy<2.0
+            conda-build
           init-shell: bash
           cache-environment: true
 

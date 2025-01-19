@@ -1284,7 +1284,6 @@ def test_group_by_datetime(engine, method):
     assert_equal(expected, actual)
 
 
-@pytest.mark.xfail
 @requires_cubed
 @pytest.mark.parametrize("method", ["blockwise", "map-reduce"])
 def test_group_by_datetime_cubed(engine, method):
@@ -1526,15 +1525,6 @@ def test_dtype(func, dtype, engine):
 
 
 @requires_dask
-def test_subset_blocks():
-    array = dask.array.random.random((120,), chunks=(4,))
-
-    blockid = (0, 3, 6, 9, 12, 15, 18, 21, 24, 27)
-    subset = subset_to_blocks(array, blockid)
-    assert subset.blocks.shape == (len(blockid),)
-
-
-@requires_dask
 @pytest.mark.parametrize(
     "flatblocks, expected",
     (
@@ -1575,18 +1565,28 @@ def test_normalize_block_indexing_2d(flatblocks, expected):
 
 
 @requires_dask
+def test_subset_blocks():
+    array = dask.array.random.random((120,), chunks=(4,))
+
+    blockid = (0, 3, 6, 9, 12, 15, 18, 21, 24, 27)
+    subset = subset_to_blocks(array, blockid).to_array(array)
+    assert subset.blocks.shape == (len(blockid),)
+
+
+@pytest.mark.skip("temporarily removed this optimization")
+@requires_dask
 def test_subset_block_passthrough():
     from flox.core import identity
 
     # full slice pass through
     array = dask.array.ones((5,), chunks=(1,))
     expected = dask.array.map_blocks(identity, array)
-    subset = subset_to_blocks(array, np.arange(5))
+    subset = subset_to_blocks(array, np.arange(5)).to_array(array)
     assert subset.name == expected.name
 
     array = dask.array.ones((5, 5), chunks=1)
     expected = dask.array.map_blocks(identity, array)
-    subset = subset_to_blocks(array, np.arange(25))
+    subset = subset_to_blocks(array, np.arange(25)).to_array(array)
     assert subset.name == expected.name
 
 
@@ -1605,7 +1605,7 @@ def test_subset_block_passthrough():
 )
 def test_subset_block_2d(flatblocks, expectidx):
     array = dask.array.from_array(np.arange(25).reshape((5, 5)), chunks=1)
-    subset = subset_to_blocks(array, flatblocks)
+    subset = subset_to_blocks(array, flatblocks).to_array(array)
     assert len(subset.dask.layers) == 2
     assert_equal(subset, array.compute()[expectidx])
 
