@@ -346,13 +346,11 @@ def test_topk_max_min(data, array):
         assume((np.abs(asint.view(np.int64)) < 2**53).all())
 
     size = array.shape[-1]
-    note(array.compute())  # FIXME
     by = data.draw(by_arrays(shape=(size,)))
     k, npfunc = data.draw(st.sampled_from([(1, "nanmax"), (-1, "nanmin")]))
 
     for a in (array, array.compute()):
         actual, _ = groupby_reduce(a, by, func="topk", finalize_kwargs={"k": k})
         # TODO: do numbagg, flox
-        # FIXME: this is wrong, remove this compute, add a property test checking dask vs numpy
         expected, _ = groupby_reduce(a, by, func=npfunc, engine="numpy")
         assert_equal(actual, expected[np.newaxis, :])
