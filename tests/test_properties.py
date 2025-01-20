@@ -333,7 +333,7 @@ def test_agg_dtype_specified(func, array_dtype, dtype, engine):
 def test_topk_max_min(data, array):
     "top 1 == nanmax; top -1 == nanmin"
 
-    if array.dtype.kind == "i":
+    if array.dtype.kind in "iu":
         # we cast to float and back, so this is the effective limit
         assume((np.abs(array) < 2**53).all())
     elif array.dtype.kind in "Mm":
