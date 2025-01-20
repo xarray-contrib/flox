@@ -181,6 +181,11 @@ def xarray_reduce(
     DataArray or Dataset
         Reduced object
 
+    Notes
+    -----
+    ``topk`` and ``quantile`` are implemented by converting to a complex number and so are limited to values between +-``2**53-1``
+    i.e. the limit of a ``float64`` dtype. Offset your data appropriately if you need the larger range.
+
     See Also
     --------
     flox.core.groupby_reduce

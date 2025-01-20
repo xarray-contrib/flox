@@ -2374,6 +2374,11 @@ def groupby_reduce(
     finalize_kwargs : dict, optional
         Kwargs passed to finalize the reduction such as ``ddof`` for var, std or ``q`` for quantile.
 
+    Notes
+    -----
+    ``topk`` and ``quantile`` are implemented by converting to a complex number and so are limited to values between +-``2**53-1``
+    i.e. the limit of a ``float64`` dtype. Offset your data appropriately if you need the larger range.
+
     Returns
     -------
     result
