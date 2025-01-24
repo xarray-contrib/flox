@@ -54,7 +54,7 @@ jobs:
           echo "Baseline:  $LAST_HEAD_SHA ($BASE_LABEL)"
           echo "Contender: ${GITHUB_SHA} ($HEAD_LABEL)"
           # Run benchmarks for current commit against base
-          ASV_OPTIONS="-v --split --show-stderr --factor $ASV_FACTOR"
+          ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
           asv continuous $ASV_OPTIONS $BASE_SHA ${GITHUB_SHA} \
               | sed "/Traceback \|failed$\|PERFORMANCE DECREASED/ s/^/::error::/" \
               | tee benchmarks.log
