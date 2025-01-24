@@ -7,6 +7,8 @@ import flox
 import flox.aggregations
 import flox.xarray
 
+from .helpers import codes_for_resampling
+
 N = 3000
 funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "count"]
 engines = [
@@ -153,7 +155,7 @@ class Quantile:
             dims=("time", "lat", "lon", "lab"),
             coords={"time": time},
         )
-        self.rs = self.da.resample(time="YE")
+        self.codes = xr.DataArray(dims="time", data=codes_for_resampling(time, "YE"), name="time")
 
     def time_quantile(self):
-        flox.xarray.xarray_reduce(self.da, self.rs.encoded.codes, engine="flox", func="quantile", q=0.9)
+        flox.xarray.xarray_reduce(self.da, self.codes, engine="flox", func="quantile", q=0.9)
