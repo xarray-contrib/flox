@@ -6,6 +6,8 @@ import pandas as pd
 
 import flox
 
+from .helpers import codes_for_resampling
+
 
 class Cohorts:
     """Time the core reduction function."""
@@ -198,15 +200,6 @@ class ERA5Google(Cohorts):
         self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 1))
         self.by = self.time.dt.day.values - 1
         self.expected = pd.RangeIndex(self.by.max() + 1)
-
-
-def codes_for_resampling(group_as_index, freq):
-    s = pd.Series(np.arange(group_as_index.size), group_as_index)
-    grouped = s.groupby(pd.Grouper(freq=freq))
-    first_items = grouped.first()
-    counts = grouped.count()
-    codes = np.repeat(np.arange(len(first_items)), counts)
-    return codes
 
 
 class PerfectBlockwiseResampling(Cohorts):
