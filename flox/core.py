@@ -1071,8 +1071,16 @@ def chunk_reduce(
     # optimize that out.
     previous_reduction: T_Func = ""
     for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
+        # TODO: Figure out how to generalize this
+        if reduction in ("quantile", "nanquantile"):
+            new_dims_shape = tuple(dim.size for dim in quantile_new_dims_func(**kw) if not dim.is_scalar)
+        elif reduction == "topk":
+            new_dims_shape = tuple(dim.size for dim in topk_new_dims_func(**kw) if not dim.is_scalar)
+        else:
+            new_dims_shape = tuple()
+
         if empty:
-            result = np.full(shape=final_array_shape, fill_value=fv)
+            result = np.full(shape=new_dims_shape + final_array_shape, fill_value=fv)
         elif is_nanlen(reduction) and is_nanlen(previous_reduction):
             result = results["intermediates"][-1]
         else:
@@ -1101,13 +1109,6 @@ def chunk_reduce(
             if hasnan:
                 # remove NaN group label which should be last
                 result = result[..., :-1]
-            # TODO: Figure out how to generalize this
-            if reduction in ("quantile", "nanquantile"):
-                new_dims_shape = tuple(dim.size for dim in quantile_new_dims_func(**kw) if not dim.is_scalar)
-            elif reduction == "topk":
-                new_dims_shape = tuple(dim.size for dim in topk_new_dims_func(**kw) if not dim.is_scalar)
-            else:
-                new_dims_shape = tuple()
             result = result.reshape(new_dims_shape + final_array_shape[:-1] + found_groups_shape)
         results["intermediates"].append(result)
         previous_reduction = reduction
