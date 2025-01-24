@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from numpy.lib.array_utils import normalize_axis_tuple
 from packaging.version import Version
 
 
@@ -398,7 +399,7 @@ def nanlast(values, axis, keepdims=False):
         return result
 
 
-def topk(a, k, axis, keepdims):
+def topk(a: np.ndarray, k: int, axis, keepdims: bool = True) -> np.ndarray:
     """Chunk and combine function of topk
 
     Extract the k largest elements from a on the given axis.
@@ -410,8 +411,7 @@ def topk(a, k, axis, keepdims):
     of their LICENSE.
     """
     assert keepdims is True
-    (axis,) = axis
-    axis = normalize_axis_index(axis, a.ndim)
+    (axis,) = normalize_axis_tuple(axis, a.ndim)
     if abs(k) >= a.shape[axis]:
         return a
 

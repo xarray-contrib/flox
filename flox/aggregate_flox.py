@@ -92,7 +92,7 @@ def quantile_or_topk(
     # but not any more now that I use partition and avoid replacing NaNs
     if k is not None:
         is_scalar_param = False
-        param = np.arange(abs(k))
+        param = np.sort(np.arange(abs(k)) * np.sign(k))
     else:
         is_scalar_param = is_scalar(q)
         param = np.atleast_1d(q)

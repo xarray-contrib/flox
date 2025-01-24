@@ -83,7 +83,7 @@ def _get_array_func(func: str) -> Callable:
             x = np.asarray(x)
             return (~xrutils.isnull(x)).sum(**kwargs)
 
-    elif func in ["nanfirst", "nanlast"]:
+    elif func in ["nanfirst", "nanlast", "topk"]:
         npfunc = getattr(xrutils, func)
 
     elif func in SCIPY_STATS_FUNCS:
@@ -252,6 +252,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         ]
         fill_value = None
         tolerance = None
+    elif func == "topk":
+        finalize_kwargs = [{"k": 3}, {"k": -3}]
+        fill_value = None
+        tolerance = None
     else:
         fill_value = None
         tolerance = None
@@ -281,6 +285,8 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                     expected = getattr(np, func_)(array_, axis=-1, **kwargs)
                 else:
                     expected = array_func(array_[..., ~nanmask], axis=-1, **kwargs)
+                if func == "topk":
+                    expected = np.sort(np.swapaxes(expected, array.ndim - 1, 0), axis=0)
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
 
@@ -288,7 +294,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert chunks == -1
 
         actual, *groups = groupby_reduce(array, *by, **flox_kwargs)
-        if "quantile" in func and isinstance(kwargs["q"], list):
+        if ("quantile" in func and isinstance(kwargs["q"], list)) or func == "topk":
             assert actual.ndim == expected.ndim == (array.ndim + nby)
         else:
             assert actual.ndim == expected.ndim == (array.ndim + nby - 1)
@@ -298,9 +304,12 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
+        if func == "topk":
+            actual = np.sort(actual, axis=0)
         assert_equal(expected, actual, tolerance)
 
-        if "nan" not in func and "arg" not in func:
+        # FIXME: topk vs nantopk
+        if "nan" not in func and "arg" not in func and "topk" not in func:
             # test non-NaN skipping behaviour when NaNs are present
             nanned = array_.copy()
             # remove nans in by to reduce complexity
@@ -310,6 +319,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             nanned.reshape(-1)[0] = np.nan
             actual, *_ = groupby_reduce(nanned, *by_, **flox_kwargs)
             expected_0 = array_func(nanned, axis=-1, **kwargs)
+            if func == "topk":
+                expected_0 = np.sort(np.swapaxes(expected_0, array.ndim - 1, 0), axis=-1)
+                actual = np.sort(actual, axis=-1)
+
             for _ in range(nby):
                 expected_0 = np.expand_dims(expected_0, -1)
             assert_equal(expected_0, actual, tolerance)
