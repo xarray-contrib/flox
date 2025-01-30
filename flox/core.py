@@ -1465,7 +1465,7 @@ def _reduce_blockwise(
     return result
 
 
-def _normalize_indexes(ndim: int, flatblocks, blkshape) -> tuple:
+def _normalize_indexes(ndim: int, flatblocks: Sequence[int], blkshape: tuple[int, ...]) -> tuple:
     """
     .blocks accessor can only accept one iterable at a time,
     but can handle multiple slices.
@@ -1499,7 +1499,7 @@ def _normalize_indexes(ndim: int, flatblocks, blkshape) -> tuple:
     # has all iterables
     alliter = {ax: i for ax, i in enumerate(full_normalized) if hasattr(i, "__len__")}
 
-    mesh = dict(zip(alliter.keys(), np.ix_(*alliter.values())))
+    mesh = dict(zip(alliter.keys(), np.ix_(*alliter.values())))  # type: ignore[arg-type, var-annotated]
 
     full_tuple = tuple(i if ax not in mesh else mesh[ax] for ax, i in enumerate(noiter))
 
