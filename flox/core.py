@@ -1465,7 +1465,7 @@ def _reduce_blockwise(
     return result
 
 
-def _normalize_indexes(array: DaskArray, flatblocks, blkshape) -> tuple:
+def _normalize_indexes(ndim: int, flatblocks, blkshape) -> tuple:
     """
     .blocks accessor can only accept one iterable at a time,
     but can handle multiple slices.
@@ -1483,13 +1483,16 @@ def _normalize_indexes(array: DaskArray, flatblocks, blkshape) -> tuple:
         if i.ndim == 0:
             normalized.append(i.item())
         else:
-            if np.array_equal(i, np.arange(blkshape[ax])):
+            if len(i) == blkshape[ax] and np.array_equal(i, np.arange(blkshape[ax])):
                 normalized.append(slice(None))
-            elif np.array_equal(i, np.arange(i[0], i[-1] + 1)):
-                normalized.append(slice(i[0], i[-1] + 1))
+            elif _issorted(i) and np.array_equal(i, np.arange(i[0], i[-1] + 1)):
+                start = None if i[0] == 0 else i[0]
+                stop = i[-1] + 1
+                stop = None if stop == blkshape[ax] else stop
+                normalized.append(slice(start, stop))
             else:
                 normalized.append(list(i))
-    full_normalized = (slice(None),) * (array.ndim - len(normalized)) + tuple(normalized)
+    full_normalized = (slice(None),) * (ndim - len(normalized)) + tuple(normalized)
 
     # has no iterables
     noiter = list(i if not hasattr(i, "__len__") else slice(None) for i in full_normalized)
@@ -1523,7 +1526,6 @@ def subset_to_blocks(
     -------
     dask.array
     """
-    from dask.array.slicing import normalize_index
     from dask.base import tokenize
 
     if blkshape is None:
@@ -1532,10 +1534,9 @@ def subset_to_blocks(
     if chunks_as_array is None:
         chunks_as_array = tuple(np.array(c) for c in array.chunks)
 
-    index = _normalize_indexes(array, flatblocks, blkshape)
+    index = _normalize_indexes(array.ndim, flatblocks, blkshape)
 
     # These rest is copied from dask.array.core.py with slight modifications
-    index = normalize_index(index, array.numblocks)
     index = tuple(slice(k, k + 1) if isinstance(k, Integral) else k for k in index)
 
     name = "groupby-cohort-" + tokenize(array, index)
