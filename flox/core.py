@@ -1539,7 +1539,7 @@ def subset_to_blocks(
     # These rest is copied from dask.array.core.py with slight modifications
     index = tuple(slice(k, k + 1) if isinstance(k, Integral) else k for k in index)
 
-    name = "groupby-cohort-" + tokenize(array, str(index))
+    name = "groupby-cohort-" + tokenize(array, index)
     new_keys = array._key_array[index]
 
     squeezed = tuple(np.squeeze(i) if isinstance(i, np.ndarray) else i for i in index)
