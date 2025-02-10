@@ -5,6 +5,7 @@ dependencies:
   - cachey
   - codecov
   - pooch
+  - hypothesis
   - toolz
   # - numpy
   # - pandas
