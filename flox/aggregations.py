@@ -580,6 +580,7 @@ topk = Aggregation(
     name="topk",
     fill_value=(dtypes.NINF, 0),
     final_fill_value=dtypes.NA,
+    # FIXME: set numpy
     chunk=("topk", "nanlen"),
     combine=(xrutils.topk, "sum"),
     new_dims_func=topk_new_dims_func,

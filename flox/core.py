@@ -2257,7 +2257,7 @@ def _choose_method(
         return method
 
 
-def _choose_engine(by, agg: Aggregation):
+def _choose_engine(by, agg: Aggregation) -> T_Engine:
     dtype = agg.dtype["user"]
 
     not_arg_reduce = not _is_arg_reduction(agg)

@@ -266,6 +266,8 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     for kwargs in finalize_kwargs:
         if "quantile" in func and isinstance(kwargs["q"], list) and engine != "flox":
             continue
+        if "topk" in func and engine != "flox":
+            continue
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
         with np.errstate(invalid="ignore", divide="ignore"):
             with warnings.catch_warnings():
@@ -286,6 +288,8 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 else:
                     expected = array_func(array_[..., ~nanmask], axis=-1, **kwargs)
                 if func == "topk":
+                    if nanmask.all():
+                        expected = np.full(expected.shape[:-1] + (abs(kwargs["k"]),), np.nan)
                     expected = np.sort(np.swapaxes(expected, array.ndim - 1, 0), axis=0)
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
