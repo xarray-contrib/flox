@@ -126,8 +126,12 @@ def quantile_or_topk(
         virtual_index[..., 1:] += offset[..., :-1]
         kth = np.unique(virtual_index)
         kth = kth[kth >= 0]
+        kth[kth >= array.shape[axis]] = array.shape[axis] - 1
         k_offset = param.reshape((abs(k),) + (1,) * virtual_index.ndim)
         lo_ = k_offset + virtual_index[np.newaxis, ...]
+        not_enough_elems = actual_sizes < np.abs(k)
+        lo_[..., not_enough_elems] = 0
+        badmask = np.broadcast_to(not_enough_elems, idxshape) | nanmask
 
     # partition the complex array in-place
     labels_broadcast = np.broadcast_to(group_idx, array.shape)
@@ -157,8 +161,6 @@ def quantile_or_topk(
             result[..., nanmask] = fill_value
     else:
         result = loval
-        # The first clause is True if numel in group < abs(k)
-        badmask = np.broadcast_to(lo_ < 0, idxshape) | nanmask
         if badmask.any():
             result[badmask] = fill_value
 
