@@ -113,7 +113,7 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 # This dummy axis is inserted using np.expand_dims
 # and then reduced over during the combine stage by
 # _simple_combine.
-DUMMY_AXIS = -2
+DUMMY_AXIS = 0
 
 logger = logging.getLogger("flox")
 
@@ -1203,8 +1203,15 @@ def _aggregate(
     return _finalize_results(results, agg, axis, expected_groups, reindex)
 
 
-def _expand_dims(results: IntermediateDict) -> IntermediateDict:
-    results["intermediates"] = tuple(np.expand_dims(array, DUMMY_AXIS) for array in results["intermediates"])
+def _expand_dims(results: IntermediateDict, agg: Aggregation) -> IntermediateDict:
+    if agg.name == "topk":
+        results["intermediates"] = tuple(results["intermediates"][:1]) + tuple(
+            np.expand_dims(array, DUMMY_AXIS) for array in results["intermediates"][1:]
+        )
+    else:
+        results["intermediates"] = tuple(
+            np.expand_dims(array, DUMMY_AXIS) for array in results["intermediates"]
+        )
     return results
 
 
@@ -1254,7 +1261,7 @@ def _simple_combine(
 
     results: IntermediateDict = {"groups": unique_groups}
     results["intermediates"] = []
-    axis_ = axis[:-1] + (DUMMY_AXIS,)
+    axis_ = (DUMMY_AXIS,) + tuple(a + 1 for a in axis[:-1])
     for idx, combine in enumerate(agg.simple_combine):
         array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis_)
         assert array.ndim >= 2
@@ -1262,7 +1269,9 @@ def _simple_combine(
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
             assert callable(combine)
             result = combine(array, axis=axis_, keepdims=True)
-        if is_aggregate:
+        # FIXME: The `idx > 0` clause assumes that DUMMY_AXIS = 0
+        #        and is inserted by the first elem of simple_combine.
+        if is_aggregate and (agg.new_dims_func is None or idx > 0):
             # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
             result = result.squeeze(axis=DUMMY_AXIS)
         results["intermediates"].append(result)
@@ -1677,7 +1686,7 @@ def dask_groupby_agg(
         )
         if do_simple_combine:
             # Add a dummy dimension that then gets reduced over
-            blockwise_method = tlz.compose(_expand_dims, blockwise_method)
+            blockwise_method = tlz.compose(partial(_expand_dims, agg=agg), blockwise_method)
 
     # apply reduction on chunk
     intermediate = dask.array.blockwise(
