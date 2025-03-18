@@ -1,6 +1,6 @@
 import builtins
 import math
-from functools import partial
+from functools import lru_cache, partial
 from itertools import product
 from numbers import Integral
 
@@ -84,14 +84,8 @@ def partial_reduce(
     axis: tuple[int, ...],
     block_index: int | None = None,
 ):
-    numblocks = tuple(len(c) for c in chunks)
-    ndim = len(numblocks)
-    parts = [list(partition_all(split_every.get(i, 1), range(n))) for (i, n) in enumerate(numblocks)]
-    keys = product(*map(range, map(len, parts)))
-    out_chunks = [
-        tuple(1 for p in partition_all(split_every[i], c)) if i in split_every else c
-        for (i, c) in enumerate(chunks)
-    ]
+    ndim = len(chunks)
+    keys, parts, out_chunks = get_parts(tuple(split_every.items()), chunks)
     for k, p in zip(keys, product(*parts)):
         free = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1 and i not in split_every}
         dummy = dict(i for i in enumerate(p) if i[0] in split_every)
@@ -101,3 +95,17 @@ def partial_reduce(
             k = (*k[:-1], block_index)
         dsk[(name,) + k] = (func, g)
     return dsk, out_chunks
+
+
+@lru_cache
+def get_parts(split_every_items, chunks):
+    numblocks = tuple(len(c) for c in chunks)
+    split_every = dict(split_every_items)
+
+    parts = [list(partition_all(split_every.get(i, 1), range(n))) for (i, n) in enumerate(numblocks)]
+    keys = tuple(product(*map(range, map(len, parts))))
+    out_chunks = tuple(
+        tuple(1 for p in partition_all(split_every[i], c)) if i in split_every else c
+        for (i, c) in enumerate(chunks)
+    )
+    return keys, parts, out_chunks

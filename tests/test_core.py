@@ -5,7 +5,7 @@ import logging
 import warnings
 from collections.abc import Callable
 from functools import partial, reduce
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -1551,7 +1551,7 @@ def test_normalize_block_indexing_1d(flatblocks, expected):
     nblocks = 5
     array = dask.array.ones((nblocks,), chunks=(1,))
     expected = tuple(np.array(i) if isinstance(i, list) else i for i in expected)
-    actual = _normalize_indexes(array, flatblocks, array.blocks.shape)
+    actual = _normalize_indexes(array.ndim, flatblocks, array.blocks.shape)
     assert_equal_tuple(expected, actual)
 
 
@@ -1563,17 +1563,17 @@ def test_normalize_block_indexing_1d(flatblocks, expected):
         ((1, 2, 3), (0, slice(1, 4))),
         ((1, 3), (0, [1, 3])),
         ((0, 1, 3), (0, [0, 1, 3])),
-        (tuple(range(10)), (slice(0, 2), slice(None))),
-        ((0, 1, 3, 5, 6, 8), (slice(0, 2), [0, 1, 3])),
+        (tuple(range(10)), (slice(None, 2), slice(None))),
+        ((0, 1, 3, 5, 6, 8), (slice(None, 2), [0, 1, 3])),
         ((0, 3, 4, 5, 6, 8, 24), np.ix_([0, 1, 4], [0, 1, 3, 4])),
     ),
 )
-def test_normalize_block_indexing_2d(flatblocks, expected):
+def test_normalize_block_indexing_2d(flatblocks: tuple[int, ...], expected: tuple[Any, ...]) -> None:
     nblocks = 5
     ndim = 2
     array = dask.array.ones((nblocks,) * ndim, chunks=(1,) * ndim)
     expected = tuple(np.array(i) if isinstance(i, list) else i for i in expected)
-    actual = _normalize_indexes(array, flatblocks, array.blocks.shape)
+    actual = _normalize_indexes(array.ndim, flatblocks, array.blocks.shape)
     assert_equal_tuple(expected, actual)
 
 
