@@ -26,7 +26,7 @@ jobs:
         with:
           environment-name: flox-bench
           create-args: >-
-            python=3.12
+            python=3.13
             asv
             mamba
             libmambapy<2.0
