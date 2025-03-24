@@ -2027,12 +2027,30 @@ def test_datetime_timedelta_first_last(engine, func):
     import flox
 
     idx = 0 if "first" in func else -1
+    idx1 = 2 if "first" in func else -1
 
+    ## datetime
     dt = pd.date_range("2001-01-01", freq="d", periods=5).values
     by = np.ones(dt.shape, dtype=int)
     actual, _ = flox.groupby_reduce(dt, by, func=func, engine=engine)
     assert_equal(actual, dt[[idx]])
 
+    # missing group
+    by = np.array([0, 2, 3, 3, 3])
+    actual, _ = flox.groupby_reduce(
+        dt, by, expected_groups=([0, 1, 2, 3],), func=func, engine=engine, fill_value=dtypes.NA
+    )
+    assert_equal(actual, [dt[0], np.datetime64("NaT"), dt[1], dt[idx1]])
+
+    ## timedelta
     dt = dt - dt[0]
+    by = np.ones(dt.shape, dtype=int)
     actual, _ = flox.groupby_reduce(dt, by, func=func, engine=engine)
     assert_equal(actual, dt[[idx]])
+
+    # missing group
+    by = np.array([0, 2, 3, 3, 3])
+    actual, _ = flox.groupby_reduce(
+        dt, by, expected_groups=([0, 1, 2, 3],), func=func, engine=engine, fill_value=dtypes.NA
+    )
+    assert_equal(actual, [dt[0], np.timedelta64("NaT"), dt[1], dt[idx1]])
