@@ -831,12 +831,11 @@ def _initialize_aggregation(
     )
     agg.fill_value[func] = dtypes._get_fill_value(agg.dtype["final"], agg.fill_value[func])
 
-    fv = fill_value if fill_value is not None else agg.fill_value[agg.name]
     if _is_arg_reduction(agg):
         # this allows us to unravel_index easily. we have to do that nearly every time.
         agg.fill_value["numpy"] = (0,)
     else:
-        agg.fill_value["numpy"] = (fv,)
+        agg.fill_value["numpy"] = (agg.fill_value[func],)
 
     if finalize_kwargs is not None:
         assert isinstance(finalize_kwargs, dict)
