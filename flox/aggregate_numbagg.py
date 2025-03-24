@@ -32,6 +32,7 @@ CAST_TO = {
     "nanstd": {np.int_: np.float64},
     "nanfirst": {np.datetime64: np.int64, np.timedelta64: np.int64},
     "nanlast": {np.datetime64: np.int64, np.timedelta64: np.int64},
+    "nancount": {np.datetime64: np.int64, np.timedelta64: np.int64},
 }
 
 

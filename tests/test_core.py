@@ -1749,15 +1749,15 @@ def test_validate_reindex() -> None:
 
 
 @requires_dask
-def test_1d_blockwise_sort_optimization():
+def test_1d_blockwise_sort_optimization() -> None:
     # Make sure for resampling problems sorting isn't done.
     time = pd.Series(pd.date_range("2020-09-01", "2020-12-31 23:59", freq="3h"))
     array = dask.array.ones((len(time),), chunks=(224,))
 
-    actual, _ = groupby_reduce(array, time.dt.dayofyear.values, method="blockwise", func="count")
+    actual, *_ = groupby_reduce(array, time.dt.dayofyear.values, method="blockwise", func="count")
     assert all("getitem" not in k for k in actual.dask)
 
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         array,
         time.dt.dayofyear.values[::-1],
         sort=True,
@@ -1766,7 +1766,7 @@ def test_1d_blockwise_sort_optimization():
     )
     assert any("getitem" in k for k in actual.dask.layers)
 
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         array,
         time.dt.dayofyear.values[::-1],
         sort=False,
@@ -1777,7 +1777,7 @@ def test_1d_blockwise_sort_optimization():
 
 
 @requires_dask
-def test_negative_index_factorize_race_condition():
+def test_negative_index_factorize_race_condition() -> None:
     # shape = (10, 2000)
     # chunks = ((shape[0]-1,1), 10)
     shape = (101, 174000)
@@ -1804,17 +1804,17 @@ def test_negative_index_factorize_race_condition():
 
 
 @pytest.mark.parametrize("sort", [True, False])
-def test_expected_index_conversion_passthrough_range_index(sort):
+def test_expected_index_conversion_passthrough_range_index(sort) -> None:
     index = pd.RangeIndex(100)
-    actual = _convert_expected_groups_to_index(expected_groups=(index,), isbin=(False,), sort=(sort,))
+    actual = _convert_expected_groups_to_index(expected_groups=(index,), isbin=(False,), sort=(sort,))  # type: ignore[call-overload]
     assert actual[0] is index
 
 
-def test_method_check_numpy():
+def test_method_check_numpy() -> None:
     bins = [-2, -1, 0, 1, 2]
     field = np.ones((5, 3))
     by = np.array([[-1.5, -1.5, 0.5, 1.5, 1.5] * 3]).reshape(5, 3)
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         field,
         by,
         expected_groups=pd.IntervalIndex.from_breaks(bins),
@@ -1825,7 +1825,7 @@ def test_method_check_numpy():
     expected = np.array([6, np.nan, 3, 6])
     assert_equal(actual, expected)
 
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         field,
         by,
         expected_groups=pd.IntervalIndex.from_breaks(bins),
@@ -1845,7 +1845,7 @@ def test_method_check_numpy():
 
 
 @pytest.mark.parametrize("dtype", [None, np.float64])
-def test_choose_engine(dtype):
+def test_choose_engine(dtype) -> None:
     numbagg_possible = HAS_NUMBAGG and dtype is None
     default = "numbagg" if numbagg_possible else "numpy"
     mean = _initialize_aggregation(
@@ -1887,10 +1887,10 @@ def test_choose_engine(dtype):
     assert _choose_engine(np.array([1, 1, 2, 2]), agg=argmax) == "numpy"
 
 
-def test_xarray_fill_value_behaviour():
+def test_xarray_fill_value_behaviour() -> None:
     bar = np.array([1, 2, 3, np.nan, np.nan, np.nan, 4, 5, np.nan, np.nan])
     times = np.arange(0, 20, 2)
-    actual, _ = groupby_reduce(bar, times, func="nansum", expected_groups=(np.arange(19),))
+    actual, *_ = groupby_reduce(bar, times, func="nansum", expected_groups=(np.arange(19),))
     nan = np.nan
     # fmt: off
     expected = np.array(
@@ -1905,7 +1905,7 @@ def test_xarray_fill_value_behaviour():
 @pytest.mark.parametrize("func", ["nanquantile", "quantile"])
 @pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
 @pytest.mark.parametrize("by_ndim", [1, 2])
-def test_multiple_quantiles(q, chunk, func, by_ndim):
+def test_multiple_quantiles(q, chunk, func, by_ndim) -> None:
     array = np.array([[1, -1, np.nan, 3, 4, 10, 5], [1, np.nan, np.nan, 3, 4, np.nan, np.nan]])
     labels = np.array([0, 0, 0, 1, 0, 1, 1])
     if by_ndim == 2:
@@ -1916,11 +1916,11 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
     if chunk:
         array = dask.array.from_array(array, chunks=(1,) + (-1,) * by_ndim)
 
-    actual, _ = groupby_reduce(array, labels, func=func, finalize_kwargs=dict(q=q), axis=axis)
+    actual, *_ = groupby_reduce(array, labels, func=func, finalize_kwargs=dict(q=q), axis=axis)
     sorted_array = array[..., [0, 1, 2, 4, 3, 5, 6]]
     f = partial(getattr(np, func), q=q, axis=axis, keepdims=True)
     if chunk:
-        sorted_array = sorted_array.compute()
+        sorted_array = sorted_array.compute()  # type: ignore[attr-defined]
     expected = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=-1)
     if by_ndim == 2:
         expected = expected.squeeze(axis=-2)
@@ -1928,7 +1928,7 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
 
 
 @pytest.mark.parametrize("dtype", ["U3", "S3"])
-def test_nanlen_string(dtype, engine):
+def test_nanlen_string(dtype, engine) -> None:
     array = np.array(["ABC", "DEF", "GHI", "JKL", "MNO", "PQR"], dtype=dtype)
     by = np.array([0, 0, 1, 2, 1, 0])
     expected = np.array([3, 2, 1], dtype=np.intp)
@@ -1936,18 +1936,17 @@ def test_nanlen_string(dtype, engine):
     assert_equal(expected, actual)
 
 
-def test_cumusm():
+def test_cumusm() -> None:
     array = np.array([1, 1, 1], dtype=np.uint64)
     by = np.array([0] * array.shape[-1])
-    kwargs = {"func": "nancumsum", "axis": -1}
     expected = np.nancumsum(array, axis=-1)
 
-    actual = groupby_scan(array, by, **kwargs)
+    actual = groupby_scan(array, by, func="nancumsum", axis=-1)
     assert_equal(expected, actual)
 
     if has_dask:
         da = dask.array.from_array(array, chunks=2)
-        actual = groupby_scan(da, by, **kwargs)
+        actual = groupby_scan(da, by, func="nancumsum", axis=-1)
         assert_equal(expected, actual)
 
 
@@ -1962,7 +1961,7 @@ def test_cumusm():
 @pytest.mark.parametrize("size", ((1, 12), (12,), (12, 9)))
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ["ffill", "bfill"])
-def test_ffill_bfill(chunks, size, add_nan_by, func):
+def test_ffill_bfill(chunks, size, add_nan_by, func) -> None:
     array, by = gen_array_by(size, func)
     if chunks:
         array = dask.array.from_array(array, chunks=chunks)
@@ -1976,11 +1975,11 @@ def test_ffill_bfill(chunks, size, add_nan_by, func):
 
 
 @requires_dask
-def test_blockwise_nans():
+def test_blockwise_nans() -> None:
     array = dask.array.ones((1, 10), chunks=2)
     by = np.array([-1, 0, -1, 1, -1, 2, -1, 3, 4, 4])
-    actual, actual_groups = flox.groupby_reduce(array, by, func="sum", expected_groups=pd.RangeIndex(0, 5))
-    expected, expected_groups = flox.groupby_reduce(
+    actual, *actual_groups = flox.groupby_reduce(array, by, func="sum", expected_groups=pd.RangeIndex(0, 5))
+    expected, *expected_groups = flox.groupby_reduce(
         array.compute(), by, func="sum", expected_groups=pd.RangeIndex(0, 5)
     )
     assert_equal(expected_groups, actual_groups)
@@ -1989,11 +1988,11 @@ def test_blockwise_nans():
 
 @pytest.mark.parametrize("func", ["sum", "prod", "count", "nansum"])
 @pytest.mark.parametrize("engine", ["flox", "numpy"])
-def test_agg_dtypes(func, engine):
+def test_agg_dtypes(func, engine) -> None:
     # regression test for GH388
     counts = np.array([0, 2, 1, 0, 1])
     group = np.array([1, 1, 1, 2, 2])
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         counts, group, expected_groups=(np.array([1, 2]),), func=func, dtype="uint8", engine=engine
     )
     expected = _get_array_func(func)(counts, dtype="uint8")
@@ -2001,38 +2000,56 @@ def test_agg_dtypes(func, engine):
 
 
 @requires_dask
-def test_blockwise_avoid_rechunk():
+def test_blockwise_avoid_rechunk() -> None:
     array = dask.array.zeros((6,), chunks=(2, 4), dtype=np.int64)
     by = np.array(["1", "1", "0", "", "0", ""], dtype="<U1")
-    actual, groups = groupby_reduce(array, by, func="first")
-    assert_equal(groups, ["", "0", "1"])
+    actual, *groups = groupby_reduce(array, by, func="first")
+    assert_equal(groups, [["", "0", "1"]])
     assert_equal(actual, np.array([0, 0, 0], dtype=np.int64))
 
 
-def test_datetime_minmax(engine):
+def test_datetime_minmax(engine) -> None:
     # GH403
     array = np.array([np.datetime64("2000-01-01"), np.datetime64("2000-01-02"), np.datetime64("2000-01-03")])
     by = np.array([0, 0, 1])
-    actual, _ = flox.groupby_reduce(array, by, func="nanmin", engine=engine)
+    actual, *_ = flox.groupby_reduce(array, by, func="nanmin", engine=engine)
     expected = array[[0, 2]]
     assert_equal(expected, actual)
 
     expected = array[[1, 2]]
-    actual, _ = flox.groupby_reduce(array, by, func="nanmax", engine=engine)
+    actual, *_ = flox.groupby_reduce(array, by, func="nanmax", engine=engine)
     assert_equal(expected, actual)
 
 
 @pytest.mark.parametrize("func", ["first", "last", "nanfirst", "nanlast"])
-def test_datetime_timedelta_first_last(engine, func):
+def test_datetime_timedelta_first_last(engine, func) -> None:
     import flox
 
     idx = 0 if "first" in func else -1
+    idx1 = 2 if "first" in func else -1
 
+    ## datetime
     dt = pd.date_range("2001-01-01", freq="d", periods=5).values
     by = np.ones(dt.shape, dtype=int)
-    actual, _ = flox.groupby_reduce(dt, by, func=func, engine=engine)
+    actual, *_ = flox.groupby_reduce(dt, by, func=func, engine=engine)
     assert_equal(actual, dt[[idx]])
 
+    # missing group
+    by = np.array([0, 2, 3, 3, 3])
+    actual, *_ = flox.groupby_reduce(
+        dt, by, expected_groups=([0, 1, 2, 3],), func=func, engine=engine, fill_value=dtypes.NA
+    )
+    assert_equal(actual, [dt[0], np.datetime64("NaT"), dt[1], dt[idx1]])
+
+    ## timedelta
     dt = dt - dt[0]
-    actual, _ = flox.groupby_reduce(dt, by, func=func, engine=engine)
+    by = np.ones(dt.shape, dtype=int)
+    actual, *_ = flox.groupby_reduce(dt, by, func=func, engine=engine)
     assert_equal(actual, dt[[idx]])
+
+    # missing group
+    by = np.array([0, 2, 3, 3, 3])
+    actual, *_ = flox.groupby_reduce(
+        dt, by, expected_groups=([0, 1, 2, 3],), func=func, engine=engine, fill_value=dtypes.NA
+    )
+    assert_equal(actual, [dt[0], np.timedelta64("NaT"), dt[1], dt[idx1]])

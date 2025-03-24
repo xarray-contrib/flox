@@ -468,9 +468,9 @@ def xarray_reduce(
         ):
             levelnames = ds_broad.indexes[name].names
             if isinstance(expect3, np.ndarray):
-                # TODO: workaoround for IntervalIndex issue.
+                # TODO: workaround for IntervalIndex issue.
                 raise NotImplementedError
-            expect3 = pd.MultiIndex.from_tuples(expect3.values, names=levelnames)
+            expect3 = pd.MultiIndex.from_tuples(expect3.values.tolist(), names=levelnames)
             actual[name] = expect3
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)
