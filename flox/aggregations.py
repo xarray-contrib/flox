@@ -590,6 +590,7 @@ class Scan:
     identity: Any
     # dtype of result
     dtype: Any = None
+    preserves_dtype: bool = False
     # "Mode" of applying binary op.
     # for np.add we apply the op directly to the `state` array and the `current` array.
     # for ffill, bfill we concat `state` to `current` and then run the scan again.
@@ -719,8 +720,9 @@ ffill = Scan(
     reduction="nanlast",
     scan="ffill",
     # Important: this must be NaN otherwise, ffill does not work.
-    identity=np.nan,
+    identity=dtypes.NA,
     mode="concat_then_scan",
+    preserves_dtype=True,
 )
 bfill = Scan(
     "bfill",
@@ -728,7 +730,8 @@ bfill = Scan(
     reduction="nanlast",
     scan="ffill",
     # Important: this must be NaN otherwise, bfill does not work.
-    identity=np.nan,
+    identity=dtypes.NA,
+    preserves_dtype=True,
     mode="concat_then_scan",
     preprocess=reverse,
     finalize=reverse,
