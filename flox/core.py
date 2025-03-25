@@ -2823,9 +2823,6 @@ def groupby_scan(
         # nothing to do, no NaNs!
         return array
 
-    is_bool_array = np.issubdtype(array.dtype, bool)
-    array = array.astype(np.int_) if is_bool_array else array
-
     if expected_groups is not None:
         raise NotImplementedError("Setting `expected_groups` and binning is not supported yet.")
     expected_groups = _validate_expected_groups(nby, expected_groups)
@@ -2855,6 +2852,11 @@ def groupby_scan(
     if array.dtype.kind in "Mm":
         cast_to = array.dtype
         array = array.view(np.int64)
+    elif array.dtype.kind == "b":
+        array = array.view(np.int8)
+        cast_to = None
+        if agg.preserves_dtype:
+            cast_to = bool
     else:
         cast_to = None
 
@@ -2869,6 +2871,7 @@ def groupby_scan(
             agg.dtype = np.result_type(array.dtype, np.uint)
     else:
         agg.dtype = array.dtype if dtype is None else dtype
+    agg.identity = xrdtypes._get_fill_value(agg.dtype, agg.identity)
 
     (single_axis,) = axis_  # type: ignore[misc]
     # avoid some roundoff error when we can.
@@ -2887,7 +2890,7 @@ def groupby_scan(
 
     if not has_dask:
         final_state = chunk_scan(inp, axis=single_axis, agg=agg, dtype=agg.dtype)
-        result = _finalize_scan(final_state)
+        result = _finalize_scan(final_state, dtype=agg.dtype)
     else:
         result = dask_groupby_scan(inp.array, inp.group_idx, axes=axis_, agg=agg)
 
@@ -2940,9 +2943,9 @@ def _zip(group_idx: np.ndarray, array: np.ndarray) -> AlignedArrays:
     return AlignedArrays(group_idx=group_idx, array=array)
 
 
-def _finalize_scan(block: ScanState) -> np.ndarray:
+def _finalize_scan(block: ScanState, dtype) -> np.ndarray:
     assert block.result is not None
-    return block.result.array
+    return block.result.array.astype(dtype, copy=False)
 
 
 def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
@@ -2985,7 +2988,7 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
     )
 
     # 3. Unzip and extract the final result array, discard groups
-    result = map_blocks(_finalize_scan, accumulated, dtype=agg.dtype)
+    result = map_blocks(partial(_finalize_scan, dtype=agg.dtype), accumulated, dtype=agg.dtype)
 
     assert result.chunks == array.chunks
 
