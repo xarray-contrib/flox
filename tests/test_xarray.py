@@ -6,6 +6,7 @@ import pytest
 xr = pytest.importorskip("xarray")
 # isort: on
 
+from flox import xrdtypes as dtypes
 from flox.xarray import rechunk_for_blockwise, xarray_reduce
 
 from . import (
@@ -193,13 +194,25 @@ def test_validate_expected_groups(expected_groups):
 
 
 @requires_cftime
+@pytest.mark.parametrize("indexer", [slice(None), pytest.param(slice(12), id="missing-group")])
+@pytest.mark.parametrize("expected_groups", [None, [0, 1, 2, 3]])
 @pytest.mark.parametrize("func", ["first", "last", "min", "max", "count"])
-def test_xarray_reduce_cftime_var(engine, func):
+def test_xarray_reduce_cftime_var(engine, indexer, expected_groups, func):
     times = xr.date_range("1980-09-01 00:00", "1982-09-18 00:00", freq="ME", calendar="noleap")
     ds = xr.Dataset({"var": ("time", times)}, coords={"time": np.repeat(np.arange(4), 6)})
+    ds = ds.isel(time=indexer)
 
-    actual = xarray_reduce(ds, ds.time, func=func)
+    actual = xarray_reduce(
+        ds,
+        ds.time,
+        func=func,
+        fill_value=dtypes.NA if func in ["first", "last"] else np.nan,
+        engine=engine,
+        expected_groups=expected_groups,
+    )
     expected = getattr(ds.groupby("time"), func)()
+    if expected_groups is not None:
+        expected = expected.reindex(time=expected_groups)
     xr.testing.assert_identical(actual, expected)
 
 

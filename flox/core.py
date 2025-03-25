@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import datetime
 import itertools
 import logging
 import math
@@ -2509,6 +2510,7 @@ def groupby_reduce(
         (func not in ["count", "any", "all"] and not is_first_last)
         # Flox's count works with non-numeric and its faster than converting.
         or (func == "count" and engine != "flox")
+        # TODO: needed for npg, move to aggregate_npg
         or (is_first_last and is_cftime)
     )
     if requires_numeric:
@@ -2710,7 +2712,11 @@ def groupby_reduce(
         if is_npdatetime:
             result = result.astype(datetime_dtype)
         elif is_cftime:
-            result = _to_pytimedelta(result, unit="us") + offset
+            asdelta = _to_pytimedelta(result, unit="us")
+            nanmask = np.isnan(result)
+            asdelta[nanmask] = datetime.timedelta(microseconds=0)
+            result = asdelta + offset
+            result[nanmask] = np.timedelta64("NaT")
 
     return (result, *groups)
 
