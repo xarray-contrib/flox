@@ -1602,7 +1602,7 @@ def dask_groupby_agg(
     engine: T_Engine = "numpy",
     sort: bool = True,
     chunks_cohorts=None,
-) -> tuple[DaskArray, tuple[np.ndarray | DaskArray]]:
+) -> tuple[DaskArray, tuple[pd.Index | np.ndarray | DaskArray]]:
     import dask.array
     from dask.array.core import slices_from_chunks
     from dask.highlevelgraph import HighLevelGraph
@@ -1730,7 +1730,7 @@ def dask_groupby_agg(
                 group_chunks = ((np.nan,),)
             else:
                 assert expected_groups is not None
-                groups = (expected_groups.to_numpy(),)
+                groups = (expected_groups,)
                 group_chunks = ((len(expected_groups),),)
 
         elif method == "cohorts":
@@ -1846,7 +1846,7 @@ def cubed_groupby_agg(
     engine: T_Engine = "numpy",
     sort: bool = True,
     chunks_cohorts=None,
-) -> tuple[CubedArray, tuple[np.ndarray | CubedArray]]:
+) -> tuple[CubedArray, tuple[pd.Index | np.ndarray | CubedArray]]:
     import cubed
     import cubed.core.groupby
 
@@ -1882,7 +1882,7 @@ def cubed_groupby_agg(
         result = cubed.core.groupby.groupby_blockwise(
             array, by, axis=axis, func=_reduction_func, num_groups=num_groups
         )
-        groups = (expected_groups.to_numpy(),)
+        groups = (expected_groups,)
         return (result, groups)
 
     else:
@@ -1964,7 +1964,7 @@ def cubed_groupby_agg(
             num_groups=num_groups,
         )
 
-        groups = (expected_groups.to_numpy(),)
+        groups = (expected_groups,)
 
         return (result, groups)
 
