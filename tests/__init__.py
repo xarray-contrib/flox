@@ -16,6 +16,13 @@ try:
 except ImportError:
     dask_array_type = ()  # type: ignore[assignment, misc]
 
+try:
+    import sparse
+
+    sparse_array_type = sparse.COO
+except ImportError:
+    sparse_array_type = ()
+
 
 try:
     import xarray as xr
@@ -48,6 +55,7 @@ def LooseVersion(vstring):
 has_cftime, requires_cftime = _importorskip("cftime")
 has_cubed, requires_cubed = _importorskip("cubed")
 has_dask, requires_dask = _importorskip("dask")
+has_sparse, requires_sparse = _importorskip("sparse")
 has_numba, requires_numba = _importorskip("numba")
 has_numbagg, requires_numbagg = _importorskip("numbagg")
 has_scipy, requires_scipy = _importorskip("scipy")
@@ -111,6 +119,13 @@ def assert_equal(a, b, tolerance=None):
     else:
         a_eager, b_eager = a, b
 
+    if has_sparse:
+        one_is_sparse = isinstance(a_eager, sparse_array_type) or isinstance(b_eager, sparse_array_type)
+        a_eager = a_eager.todense() if isinstance(a_eager, sparse_array_type) else a_eager
+        b_eager = b_eager.todense() if isinstance(b_eager, sparse_array_type) else b_eager
+    else:
+        one_is_sparse = False
+
     if a.dtype.kind in "SUMmO":
         np.testing.assert_equal(a_eager, b_eager)
     else:
@@ -118,7 +133,7 @@ def assert_equal(a, b, tolerance=None):
 
     if has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
         # does some validation of the dask graph
-        dask_assert_eq(a, b, equal_nan=True)
+        dask_assert_eq(a, b, equal_nan=True, check_type=not one_is_sparse)
 
 
 def assert_equal_tuple(a, b):

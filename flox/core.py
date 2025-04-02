@@ -11,6 +11,8 @@ import warnings
 from collections import namedtuple
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from enum import Enum, auto
 from functools import partial, reduce
 from itertools import product
 from numbers import Integral
@@ -116,6 +118,75 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 DUMMY_AXIS = -2
 
 logger = logging.getLogger("flox")
+
+
+class ReindexArrayType(Enum):
+    """
+    Enum describing which array type to reindex to.
+
+    These are enumerated, rather than accepting a constructor,
+    because we might want to optimize for specific array types,
+    and because they don't necessarily have the same signature.
+
+    For example, scipy.sparse.COO only supports a fill_value of 0.
+    """
+
+    AUTO = auto()
+    NUMPY = auto()
+    SPARSE_COO = auto()
+    # Sadly, scipy.sparse.coo_array only supports fill_value = 0
+    # SCIPY_SPARSE_COO = auto()
+    # SPARSE_GCXS = auto()
+
+    def is_same_type(self, other) -> bool:
+        match self:
+            case ReindexArrayType.AUTO:
+                return True
+            case ReindexArrayType.NUMPY:
+                return isinstance(other, np.ndarray)
+            case ReindexArrayType.SPARSE_COO:
+                import sparse
+
+                return isinstance(other, sparse.COO)
+
+
+@dataclass
+class ReindexStrategy:
+    """
+    Strategy for reindexing.
+
+    Attributes
+    ----------
+    blockwise: bool, optional
+        Whether to reindex at the blockwise step. Must be False for method="cohorts"
+    array_type: ReindexArrayType, optional
+        Whether to reindex to a different array type than array being reduced.
+    """
+
+    # whether to reindex at the blockwise step
+    blockwise: bool | None
+    array_type: ReindexArrayType = ReindexArrayType.AUTO
+
+    def __post_init__(self):
+        if self.blockwise is True:
+            if self.array_type not in (ReindexArrayType.AUTO, ReindexArrayType.NUMPY):
+                raise ValueError("Setting reindex.blockwise=True not allowed for non-numpy array type.")
+
+    def set_blockwise_for_numpy(self):
+        self.blockwise = True if self.blockwise is None else self.blockwise
+
+    def get_dask_meta(self, other, *, fill_value, dtype) -> Any:
+        import dask
+
+        if self.array_type is ReindexArrayType.AUTO:
+            other_type = type(other._meta) if isinstance(other, dask.array.Array) else type(other)
+            return other_type([], dtype=dtype)
+        elif self.array_type is ReindexArrayType.NUMPY:
+            return np.ndarray([], dtype=dtype)
+        elif self.array_type is ReindexArrayType.SPARSE_COO:
+            import sparse
+
+            return sparse.COO.from_numpy(np.ones(shape=(0,) * other.ndim, dtype=dtype), fill_value=fill_value)
 
 
 class FactorizeKwargs(TypedDict, total=False):
@@ -665,10 +736,50 @@ def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray) ->
         return array.rechunk({axis: newchunks})
 
 
+def reindex_numpy(array, from_, to, fill_value, dtype, axis):
+    idx = from_.get_indexer(to)
+    indexer = [slice(None, None)] * array.ndim
+    indexer[axis] = idx
+    reindexed = array[tuple(indexer)]
+    if any(idx == -1):
+        if fill_value is None:
+            raise ValueError("Filling is required. fill_value cannot be None.")
+        indexer[axis] = idx == -1
+        reindexed = reindexed.astype(dtype, copy=False)
+        reindexed[tuple(indexer)] = fill_value
+    return reindexed
+
+
+def reindex_pydata_sparse_coo(array, from_, to, fill_value, dtype, axis):
+    import sparse
+
+    assert axis == -1
+
+    if fill_value is None:
+        raise ValueError("Filling is required. fill_value cannot be None.")
+    idx = to.get_indexer(from_)
+    assert (idx != -1).all()  # FIXME
+    shape = array.shape
+    ranges = np.broadcast_arrays(*np.ix_(*(tuple(np.arange(size) for size in shape[:axis]) + (idx,))))
+    coords = np.stack(ranges, axis=0).reshape(array.ndim, -1)
+
+    data = array.data if isinstance(array, sparse.COO) else array.reshape(-1)
+
+    reindexed = sparse.COO(
+        coords=coords,
+        data=data.astype(dtype, copy=False),
+        shape=(*array.shape[:axis], to.size),
+    )
+
+    return reindexed
+
+
 def reindex_(
     array: np.ndarray,
     from_,
     to,
+    *,
+    array_type: ReindexArrayType = ReindexArrayType.AUTO,
     fill_value: Any = None,
     axis: T_Axis = -1,
     promote: bool = False,
@@ -689,7 +800,7 @@ def reindex_(
 
     from_ = pd.Index(from_)
     # short-circuit for trivial case
-    if from_.equals(to):
+    if from_.equals(to) and array_type.is_same_type(array):
         return array
 
     if from_.dtype.kind == "O" and isinstance(from_[0], tuple):
@@ -697,19 +808,21 @@ def reindex_(
             "Currently does not support reindexing with object arrays of tuples. "
             "These occur when grouping by multi-indexed variables in xarray."
         )
-    idx = from_.get_indexer(to)
-    indexer = [slice(None, None)] * array.ndim
-    indexer[axis] = idx
-    reindexed = array[tuple(indexer)]
-    if any(idx == -1):
-        if fill_value is None:
-            raise ValueError("Filling is required. fill_value cannot be None.")
-        indexer[axis] = idx == -1
-        # This allows us to match xarray's type promotion rules
-        if fill_value is xrdtypes.NA or isnull(fill_value):
-            new_dtype, fill_value = xrdtypes.maybe_promote(reindexed.dtype)
-            reindexed = reindexed.astype(new_dtype, copy=False)
-        reindexed[tuple(indexer)] = fill_value
+    if fill_value is xrdtypes.NA or isnull(fill_value):
+        new_dtype, fill_value = xrdtypes.maybe_promote(array.dtype)
+    else:
+        new_dtype = array.dtype
+
+    if array_type is ReindexArrayType.AUTO:
+        # TODO: generalize here
+        # Right now, we effectively assume NEP-18 I think
+        # assert isinstance(array, np.ndarray)
+        array_type = ReindexArrayType.NUMPY
+
+    if array_type is ReindexArrayType.NUMPY:
+        reindexed = reindex_numpy(array, from_, to, fill_value, new_dtype, axis)
+    elif array_type is ReindexArrayType.SPARSE_COO:
+        reindexed = reindex_pydata_sparse_coo(array, from_, to, fill_value, new_dtype, axis)
     return reindexed
 
 
@@ -1011,7 +1124,7 @@ def chunk_reduce(
     # indices=[0,0,0]. This is necessary when combining block results
     # factorize can handle strings etc unlike digitize
     group_idx, grps, found_groups_shape, _, size, props = factorize_(
-        (by,), axes, expected_groups=(expected_groups,), reindex=reindex, sort=sort
+        (by,), axes, expected_groups=(expected_groups,), reindex=bool(reindex), sort=sort
     )
     (groups,) = grps
 
@@ -1132,7 +1245,7 @@ def _finalize_results(
     agg: Aggregation,
     axis: T_Axes,
     expected_groups: pd.Index | None,
-    reindex: bool,
+    reindex: ReindexStrategy,
 ) -> FinalResultsDict:
     """Finalize results by
     1. Squeezing out dummy dimensions
@@ -1169,12 +1282,13 @@ def _finalize_results(
             finalized[agg.name] = np.where(count_mask, fill_value, finalized[agg.name])
 
     # Final reindexing has to be here to be lazy
-    if not reindex and expected_groups is not None:
+    if not reindex.blockwise and expected_groups is not None:
         finalized[agg.name] = reindex_(
             finalized[agg.name],
             squeezed["groups"],
             expected_groups,
             fill_value=fill_value,
+            array_type=reindex.array_type,
         )
         finalized["groups"] = expected_groups.to_numpy()
     else:
@@ -1192,11 +1306,11 @@ def _aggregate(
     axis: T_Axes,
     keepdims: bool,
     fill_value: Any,
-    reindex: bool,
+    reindex: ReindexStrategy,
 ) -> FinalResultsDict:
     """Final aggregation step of tree reduction"""
     results = combine(x_chunk, agg, axis, keepdims, is_aggregate=True)
-    return _finalize_results(results, agg, axis, expected_groups, reindex)
+    return _finalize_results(results, agg, axis, expected_groups, reindex=reindex)
 
 
 def _expand_dims(results: IntermediateDict) -> IntermediateDict:
@@ -1221,7 +1335,7 @@ def _simple_combine(
     agg: Aggregation,
     axis: T_Axes,
     keepdims: bool,
-    reindex: bool,
+    reindex: ReindexStrategy,
     is_aggregate: bool = False,
 ) -> IntermediateDict:
     """
@@ -1237,12 +1351,17 @@ def _simple_combine(
     from dask.array.core import deepfirst
     from dask.utils import deepmap
 
-    if not reindex:
+    if not reindex.blockwise:
         # We didn't reindex at the blockwise step
         # So now reindex before combining by reducing along DUMMY_AXIS
         unique_groups = _find_unique_groups(x_chunk)
         x_chunk = deepmap(
-            partial(reindex_intermediates, agg=agg, unique_groups=unique_groups),
+            partial(
+                reindex_intermediates,
+                agg=agg,
+                unique_groups=unique_groups,
+                array_type=reindex.array_type,
+            ),
             x_chunk,
         )
     else:
@@ -1260,7 +1379,8 @@ def _simple_combine(
             result = combine(array, axis=axis_, keepdims=True)
         if is_aggregate:
             # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
-            result = result.squeeze(axis=DUMMY_AXIS)
+            # can't just pass DUMMY_AXIS, because of sparse.COO
+            result = result.squeeze(range(result.ndim)[DUMMY_AXIS])
         results["intermediates"].append(result)
     return results
 
@@ -1280,7 +1400,9 @@ def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axes | None = None) -> np.nd
     # return concatenate3(mapped)
 
 
-def reindex_intermediates(x: IntermediateDict, agg: Aggregation, unique_groups) -> IntermediateDict:
+def reindex_intermediates(
+    x: IntermediateDict, agg: Aggregation, unique_groups, array_type
+) -> IntermediateDict:
     new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
     newx: IntermediateDict = {"groups": np.broadcast_to(unique_groups, new_shape)}
     newx["intermediates"] = tuple(
@@ -1289,6 +1411,7 @@ def reindex_intermediates(x: IntermediateDict, agg: Aggregation, unique_groups) 
             from_=np.atleast_1d(x["groups"].squeeze()),
             to=pd.Index(unique_groups),
             fill_value=f,
+            array_type=array_type,
         )
         for v, f in zip(x["intermediates"], agg.fill_value["intermediate"])
     )
@@ -1323,7 +1446,9 @@ def _grouped_combine(
         # I bet we can minimize the amount of reindexing for mD reductions too, but it's complicated
         unique_groups = _find_unique_groups(x_chunk)
         x_chunk = deepmap(
-            partial(reindex_intermediates, agg=agg, unique_groups=unique_groups),
+            partial(
+                reindex_intermediates, agg=agg, unique_groups=unique_groups, array_type=ReindexArrayType.AUTO
+            ),
             x_chunk,
         )
 
@@ -1427,7 +1552,7 @@ def _reduce_blockwise(
     fill_value: Any,
     engine: T_Engine,
     sort: bool,
-    reindex: bool,
+    reindex: ReindexStrategy,
 ) -> FinalResultsDict:
     """
     Blockwise groupby reduction that produces the final result. This code path is
@@ -1455,7 +1580,7 @@ def _reduce_blockwise(
         kwargs=finalize_kwargs_,
         engine=engine,
         sort=sort,
-        reindex=reindex,
+        reindex=bool(reindex.blockwise),
         user_dtype=agg.dtype["user"],
     )
 
@@ -1593,12 +1718,13 @@ def _unify_chunks(array, by):
 def dask_groupby_agg(
     array: DaskArray,
     by: T_By,
+    *,
     agg: Aggregation,
     expected_groups: pd.RangeIndex | None,
+    reindex: ReindexStrategy,
     axis: T_Axes = (),
     fill_value: Any = None,
     method: T_Method = "map-reduce",
-    reindex: bool = False,
     engine: T_Engine = "numpy",
     sort: bool = True,
     chunks_cohorts=None,
@@ -1616,10 +1742,10 @@ def dask_groupby_agg(
     inds = tuple(range(array.ndim))
     name = f"groupby_{agg.name}"
 
-    if expected_groups is None and reindex:
-        raise ValueError
-    if method == "cohorts":
-        assert reindex is False
+    if expected_groups is None and reindex.blockwise:
+        raise ValueError("reindex.blockwise must be False-y if expected_groups is not provided.")
+    if method == "cohorts" and reindex.blockwise:
+        raise ValueError("reindex.blockwise must be False-y if method is 'cohorts'.")
 
     by_input = by
 
@@ -1642,7 +1768,7 @@ def dask_groupby_agg(
     #    a. "_simple_combine": Where it makes sense, we tree-reduce the reduction,
     #        NOT the groupby-reduction for a speed boost. This is what xhistogram does (effectively),
     #        It requires that all blocks contain all groups after the initial blockwise step (1) i.e.
-    #        reindex=True, and we must know expected_groups
+    #        reindex.blockwise=True, and we must know expected_groups
     #    b. "_grouped_combine": A more general solution where we tree-reduce the groupby reduction.
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
@@ -1662,9 +1788,9 @@ def dask_groupby_agg(
         blockwise_method = partial(
             _get_chunk_reduction(agg.reduction_type),
             func=agg.chunk,
+            reindex=reindex.blockwise,
             fill_value=agg.fill_value["intermediate"],
             dtype=agg.dtype["intermediate"],
-            reindex=reindex,
             user_dtype=agg.dtype["user"],
         )
         if do_simple_combine:
@@ -1676,7 +1802,7 @@ def dask_groupby_agg(
         partial(
             blockwise_method,
             axis=axis,
-            expected_groups=expected_groups if reindex else None,
+            expected_groups=expected_groups if reindex.blockwise else None,
             engine=engine,
             sort=sort,
         ),
@@ -1712,7 +1838,7 @@ def dask_groupby_agg(
             keepdims=True,
             concatenate=False,
         )
-        aggregate = partial(_aggregate, combine=combine, agg=agg, fill_value=fill_value)
+        aggregate = partial(_aggregate, combine=combine, agg=agg, fill_value=fill_value, reindex=reindex)
 
         # Each chunk of `reduced`` is really a dict mapping
         # 1. reduction name to array
@@ -1723,7 +1849,7 @@ def dask_groupby_agg(
             reduced = tree_reduce(
                 intermediate,
                 combine=partial(combine, agg=agg),
-                aggregate=partial(aggregate, expected_groups=expected_groups, reindex=reindex),
+                aggregate=partial(aggregate, expected_groups=expected_groups),
             )
             if labels_are_unknown:
                 groups = _extract_unknown_groups(reduced, dtype=by.dtype)
@@ -1744,22 +1870,28 @@ def dask_groupby_agg(
             for icohort, (blks, cohort) in enumerate(chunks_cohorts.items()):
                 cohort_index = pd.Index(cohort)
                 reindexer = (
-                    partial(reindex_intermediates, agg=agg, unique_groups=cohort_index)
+                    partial(
+                        reindex_intermediates,
+                        agg=agg,
+                        unique_groups=cohort_index,
+                        array_type=reindex.array_type,
+                    )
                     if do_simple_combine
                     else identity
                 )
                 subset = subset_to_blocks(intermediate, blks, block_shape, reindexer, chunks_as_array)
                 dsk |= subset.layer  # type: ignore[operator]
                 # now that we have reindexed, we can set reindex=True explicitlly
+                new_reindex = ReindexStrategy(blockwise=do_simple_combine, array_type=reindex.array_type)
                 _tree_reduce(
                     subset,
                     out_dsk=dsk,
                     name=out_name,
                     block_index=icohort,
                     axis=axis,
-                    combine=partial(combine, agg=agg, reindex=do_simple_combine, keepdims=True),
+                    combine=partial(combine, agg=agg, reindex=new_reindex, keepdims=True),
                     aggregate=partial(
-                        aggregate, expected_groups=cohort_index, reindex=do_simple_combine, keepdims=True
+                        aggregate, expected_groups=cohort_index, reindex=new_reindex, keepdims=True
                     ),
                 )
                 # This is done because pandas promotes to 64-bit types when an Index is created
@@ -1780,7 +1912,7 @@ def dask_groupby_agg(
 
     elif method == "blockwise":
         reduced = intermediate
-        if reindex:
+        if reindex.blockwise:
             if TYPE_CHECKING:
                 assert expected_groups is not None
             # TODO: we could have `expected_groups` be a dask array with appropriate chunks
@@ -1824,11 +1956,11 @@ def dask_groupby_agg(
         reduced,
         inds,
         adjust_chunks=dict(zip(out_inds, output_chunks)),
-        dtype=agg.dtype["final"],
         key=agg.name,
         name=f"{name}-{token}",
         concatenate=False,
         new_axes=new_axes,
+        meta=reindex.get_dask_meta(array, dtype=agg.dtype["final"], fill_value=agg.fill_value[agg.name]),
     )
 
     return (result, groups)
@@ -1839,10 +1971,10 @@ def cubed_groupby_agg(
     by: T_By,
     agg: Aggregation,
     expected_groups: pd.Index | None,
+    reindex: ReindexStrategy,
     axis: T_Axes = (),
     fill_value: Any = None,
     method: T_Method = "map-reduce",
-    reindex: bool = False,
     engine: T_Engine = "numpy",
     sort: bool = True,
     chunks_cohorts=None,
@@ -1910,7 +2042,7 @@ def cubed_groupby_agg(
         assert do_simple_combine
         assert method == "map-reduce"
         assert expected_groups is not None
-        assert reindex is True
+        assert reindex.blockwise is True
         assert len(axis) == 1  # one axis/grouping
 
         def _groupby_func(a, by, axis, intermediate_dtype, num_groups):
@@ -2002,20 +2134,20 @@ def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
 
 
 def _validate_reindex(
-    reindex: bool | None,
+    reindex: ReindexStrategy | bool | None,
     func,
     method: T_MethodOpt,
     expected_groups,
     any_by_dask: bool,
     is_dask_array: bool,
     array_dtype: Any,
-) -> bool | None:
+) -> ReindexStrategy:
     # logger.debug("Entering _validate_reindex: reindex is {}".format(reindex))  # noqa
     def first_or_last():
         return func in ["first", "last"] or (_is_first_last_reduction(func) and array_dtype.kind != "f")
 
-    all_numpy = not is_dask_array and not any_by_dask
-    if reindex is True and not all_numpy:
+    all_eager = not is_dask_array and not any_by_dask
+    if reindex is True and not all_eager:
         if _is_arg_reduction(func):
             raise NotImplementedError
         if method == "cohorts" or (method == "blockwise" and not any_by_dask):
@@ -2023,39 +2155,44 @@ def _validate_reindex(
         if first_or_last():
             raise ValueError("reindex must be None or False when func is 'first' or 'last.")
 
-    if reindex is None:
+    if isinstance(reindex, ReindexStrategy):
+        return reindex
+
+    reindex_ = ReindexStrategy(blockwise=reindex)
+
+    if reindex_.blockwise is None:
         if method is None:
             # logger.debug("Leaving _validate_reindex: method = None, returning None")
-            return None
+            return ReindexStrategy(blockwise=None)
 
-        if all_numpy:
-            return True
+        if all_eager:
+            return ReindexStrategy(blockwise=True)
 
         if first_or_last():
             # have to do the grouped_combine since there's no good fill_value
             # Also needed for nanfirst, nanlast with no-NaN dtypes
-            return False
+            return ReindexStrategy(blockwise=False)
 
         if method == "blockwise":
             # for grouping by dask arrays, we set reindex=True
-            reindex = any_by_dask
+            reindex_ = ReindexStrategy(blockwise=any_by_dask)
 
         elif _is_arg_reduction(func):
-            reindex = False
+            reindex_ = ReindexStrategy(blockwise=False)
 
         elif method == "cohorts":
-            reindex = False
+            reindex_ = ReindexStrategy(blockwise=False)
 
         elif method == "map-reduce":
             if expected_groups is None and any_by_dask:
-                reindex = False
+                reindex_ = ReindexStrategy(blockwise=False)
             else:
-                reindex = True
+                reindex_ = ReindexStrategy(blockwise=True)
 
-    assert isinstance(reindex, bool)
+    assert isinstance(reindex_, ReindexStrategy)
     # logger.debug("Leaving _validate_reindex: reindex is {}".format(reindex))  # noqa
 
-    return reindex
+    return reindex_
 
 
 def _assert_by_is_aligned(shape: tuple[int, ...], by: T_Bys) -> None:
@@ -2280,7 +2417,7 @@ def groupby_reduce(
     min_count: int | None = None,
     method: T_MethodOpt = None,
     engine: T_EngineOpt = None,
-    reindex: bool | None = None,
+    reindex: ReindexStrategy | bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
 ) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:
     """
@@ -2360,12 +2497,15 @@ def groupby_reduce(
           * ``"numbagg"``:
             Use the reductions supported by ``numbagg.grouped``. This will fall back to ``numpy_groupies.aggregate_numpy``
             for a reduction that is not yet implemented.
-    reindex : bool, optional
-        Whether to "reindex" the blockwise results to ``expected_groups`` (possibly automatically detected).
+    reindex : ReindexStrategy | bool, optional
+        Whether to "reindex" the blockwise reduced results to ``expected_groups`` (possibly automatically detected).
         If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
         and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using ``method="cohorts"``. By default, it is turned off for argreductions.
+        By default, the type of ``array`` is preserved. You may optionally reindex to a sparse array type to further control memory
+        in the case of ``expected_groups`` being very large. Pass a ``ReindexStrategy`` instance with the appropriate ``array_type``,
+        for example (``reindex=ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)``).
     finalize_kwargs : dict, optional
         Kwargs passed to finalize the reduction such as ``ddof`` for var, std or ``q`` for quantile.
 
@@ -2451,7 +2591,7 @@ def groupby_reduce(
     expected_groups = _validate_expected_groups(nby, expected_groups)
 
     for idx, (expect, is_dask) in enumerate(zip(expected_groups, by_is_dask)):
-        if is_dask and (reindex or nby > 1) and expect is None:
+        if is_dask and (reindex.blockwise or nby > 1) and expect is None:
             raise ValueError(
                 f"`expected_groups` for array {idx} in `by` cannot be None since it is a dask.array."
             )
@@ -2584,7 +2724,7 @@ def groupby_reduce(
             by=by_,
             expected_groups=expected_,
             agg=agg,
-            reindex=bool(reindex),
+            reindex=reindex,
             method=method,
             sort=sort,
         )
@@ -2592,12 +2732,13 @@ def groupby_reduce(
         return (result, groups)
 
     elif not has_dask:
+        reindex.set_blockwise_for_numpy()
         results = _reduce_blockwise(
             array,
             by_,
             agg,
             expected_groups=expected_,
-            reindex=bool(reindex),
+            reindex=reindex,
             sort=sort,
             **kwargs,
         )
@@ -2656,6 +2797,7 @@ def groupby_reduce(
         )
 
         if TYPE_CHECKING:
+            assert isinstance(reindex, ReindexStrategy)
             assert method is not None
 
         # TODO: just do this in dask_groupby_agg
@@ -2674,7 +2816,7 @@ def groupby_reduce(
             by=by_,
             expected_groups=expected_,
             agg=agg,
-            reindex=bool(reindex),
+            reindex=reindex,
             method=method,
             chunks_cohorts=chunks_cohorts,
             sort=sort,
@@ -2700,9 +2842,13 @@ def groupby_reduce(
             groups_ = groups_[..., ~mask]
 
         # This reindex also handles bins with no data
-        result = reindex_(result, from_=groups_, to=expected_, fill_value=fill_value).reshape(
-            result.shape[:-1] + grp_shape
-        )
+        result = reindex_(
+            result,
+            from_=groups_,
+            to=expected_,
+            fill_value=fill_value,
+            array_type=ReindexArrayType.AUTO,  # just reindex the received array
+        ).reshape(result.shape[:-1] + grp_shape)
         groups = final_groups
 
     if is_bool_array and (_is_minmax_reduction(func) or _is_first_last_reduction(func)):
