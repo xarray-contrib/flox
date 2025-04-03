@@ -152,7 +152,7 @@ def notnull(data):
     scalar_type = data.dtype.type
     if issubclass(scalar_type, np.bool_ | np.integer | np.character | np.void):
         # these types cannot represent missing values
-        return np.ones_like(data, dtype=bool)
+        return np.broadcast_to(np.array(True), data.shape)
     else:
         out = isnull(data)
         np.logical_not(out, out=out)
@@ -173,7 +173,7 @@ def isnull(data):
         return np.isnan(data)
     elif issubclass(scalar_type, np.bool_ | np.integer | np.character | np.void):
         # these types cannot represent missing values
-        return np.zeros_like(data, dtype=bool)
+        return np.broadcast_to(np.array(False), data.shape)
     else:
         # at this point, array should have dtype=object
         if isinstance(data, (np.ndarray, dask_array_type)):  # noqa

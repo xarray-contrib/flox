@@ -261,7 +261,8 @@ def ffill(group_idx, array, *, axis, **kwargs):
     (group_starts,) = flag.nonzero()
 
     # https://stackoverflow.com/questions/41190852/most-efficient-way-to-forward-fill-nan-values-in-numpy-array
-    mask = isnull(array)
+    mask = isnull(array).copy()
+    # copy needed since we might have a broadcast-trick array
     # modified from the SO answer, just reset the index at the start of every group!
     mask[..., np.asarray(group_starts)] = False
 
