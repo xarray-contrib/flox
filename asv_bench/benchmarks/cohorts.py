@@ -6,6 +6,8 @@ import pandas as pd
 
 import flox
 
+from .helpers import codes_for_resampling
+
 
 class Cohorts:
     """Time the core reduction function."""
@@ -14,14 +16,13 @@ class Cohorts:
         raise NotImplementedError
 
     @cached_property
-    def dask(self):
-        return flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis)[0].dask
+    def result(self):
+        return flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis)[0]
 
     def containment(self):
         asfloat = self.bitmask().astype(float)
         chunks_per_label = asfloat.sum(axis=0)
         containment = (asfloat.T @ asfloat) / chunks_per_label
-        print(containment.nnz / np.prod(containment.shape))
         return containment.todense()
 
     def chunks_cohorts(self):
@@ -48,23 +49,32 @@ class Cohorts:
         except AttributeError:
             pass
 
+    def track_num_cohorts(self):
+        return len(self.chunks_cohorts())
+
     def time_graph_construct(self):
         flox.groupby_reduce(self.array, self.by, func="sum", axis=self.axis)
 
     def track_num_tasks(self):
-        return len(self.dask.to_dict())
+        return len(self.result.dask.to_dict())
 
     def track_num_tasks_optimized(self):
-        (opt,) = dask.optimize(self.dask)
-        return len(opt.to_dict())
+        (opt,) = dask.optimize(self.result)
+        return len(opt.dask.to_dict())
 
     def track_num_layers(self):
-        return len(self.dask.layers)
+        return len(self.result.dask.layers)
 
+    track_num_cohorts.unit = "cohorts"  # type: ignore[attr-defined] # Lazy
     track_num_tasks.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_tasks_optimized.unit = "tasks"  # type: ignore[attr-defined] # Lazy
     track_num_layers.unit = "layers"  # type: ignore[attr-defined] # Lazy
-    for f in [track_num_tasks, track_num_tasks_optimized, track_num_layers]:
+    for f in [
+        track_num_tasks,
+        track_num_tasks_optimized,
+        track_num_layers,
+        track_num_cohorts,
+    ]:
         f.repeat = 1  # type: ignore[attr-defined] # Lazy
         f.rounds = 1  # type: ignore[attr-defined] # Lazy
         f.number = 1  # type: ignore[attr-defined] # Lazy
@@ -79,9 +89,7 @@ class NWMMidwest(Cohorts):
         y = np.repeat(np.arange(30), 60)
         by = x[np.newaxis, :] * y[:, np.newaxis]
 
-        self.by = flox.core._factorize_multiple((by,), expected_groups=(None,), any_by_dask=False)[
-            0
-        ][0]
+        self.by = flox.core._factorize_multiple((by,), expected_groups=(None,), any_by_dask=False)[0][0]
 
         self.array = dask.array.ones(self.by.shape, chunks=(350, 350))
         self.axis = (-2, -1)
@@ -98,8 +106,29 @@ class ERA5Dataset:
 
     def rechunk(self):
         self.array = flox.core.rechunk_for_cohorts(
-            self.array, -1, self.by, force_new_chunk_at=[1], chunksize=48, ignore_old_chunks=True
+            self.array,
+            -1,
+            self.by,
+            force_new_chunk_at=[1],
+            chunksize=48,
+            ignore_old_chunks=True,
         )
+
+
+class ERA5Resampling(Cohorts):
+    def setup(self, *args, **kwargs):
+        super().__init__()
+        # nyears is number of years, adjust to make bigger,
+        # full dataset is 60-ish years.
+        nyears = 5
+        shape = (37, 721, 1440, nyears * 365 * 24)
+        chunks = (-1, -1, -1, 1)
+        time = pd.date_range("2001-01-01", periods=shape[-1], freq="h")
+
+        self.array = dask.array.random.random(shape, chunks=chunks)
+        self.by = codes_for_resampling(time, "D")
+        self.axis = (-1,)
+        self.expected = np.unique(self.by)
 
 
 class ERA5DayOfYear(ERA5Dataset, Cohorts):
@@ -148,7 +177,12 @@ class PerfectMonthly(Cohorts):
 
     def rechunk(self):
         self.array = flox.core.rechunk_for_cohorts(
-            self.array, -1, self.by, force_new_chunk_at=[1], chunksize=4, ignore_old_chunks=True
+            self.array,
+            -1,
+            self.by,
+            force_new_chunk_at=[1],
+            chunksize=4,
+            ignore_old_chunks=True,
         )
 
 
@@ -166,15 +200,6 @@ class ERA5Google(Cohorts):
         self.array = dask.array.ones((721, 1440, TIME), chunks=(-1, -1, 1))
         self.by = self.time.dt.day.values - 1
         self.expected = pd.RangeIndex(self.by.max() + 1)
-
-
-def codes_for_resampling(group_as_index, freq):
-    s = pd.Series(np.arange(group_as_index.size), group_as_index)
-    grouped = s.groupby(pd.Grouper(freq=freq))
-    first_items = grouped.first()
-    counts = grouped.count()
-    codes = np.repeat(np.arange(len(first_items)), counts)
-    return codes
 
 
 class PerfectBlockwiseResampling(Cohorts):

@@ -2,15 +2,18 @@ name: flox-tests
 channels:
   - conda-forge
 dependencies:
+  - asv_runner # for test_asv
   - cachey
   - codecov
   - pooch
+  - hypothesis
   - toolz
   # - numpy
   # - pandas
   # - scipy
   - pytest-pretty
   - pytest-xdist
+  - syrupy
   - pip
   # for cftime
   - cython>=0.29.20

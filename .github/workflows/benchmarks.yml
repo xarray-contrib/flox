@@ -22,13 +22,15 @@ jobs:
           fetch-depth: 0
 
       - name: Set up conda environment
-        uses: mamba-org/setup-micromamba@v1
+        uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: flox-bench
           create-args: >-
-            python=3.10
+            python=3.12
             asv
             mamba
+            libmambapy<2.0
+            conda-build
           init-shell: bash
           cache-environment: true
 

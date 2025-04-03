@@ -2,21 +2,28 @@ name: flox-tests
 channels:
   - conda-forge
 dependencies:
+  - asv
+  - cachey
+  - cftime
   - codecov
-  - syrupy
+  - cubed>=0.20.0
+  - dask-core
   - pandas
-  - numpy>=1.22
+  - numpy<2
   - scipy
+  - lxml # for mypy coverage report
+  - matplotlib
   - pip
   - pytest
   - pytest-cov
   - pytest-pretty
   - pytest-xdist
   - syrupy
-  - dask-core
-  - numpydoc
   - pre-commit
   - numpy_groupies>=0.9.19
   - pooch
   - toolz
   - numba
+  - numbagg>=0.3
+  - hypothesis
+  - xarray

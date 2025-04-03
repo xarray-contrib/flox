@@ -2,6 +2,7 @@ from functools import partial
 
 import numpy as np
 
+from . import xrdtypes as dtypes
 from .xrutils import is_scalar, isnull, notnull
 
 
@@ -14,11 +15,12 @@ def _prepare_for_flox(group_idx, array):
     issorted = (group_idx[:-1] <= group_idx[1:]).all()
     if issorted:
         ordered_array = array
+        perm = slice(None)
     else:
         perm = group_idx.argsort(kind="stable")
         group_idx = group_idx[..., perm]
         ordered_array = array[..., perm]
-    return group_idx, ordered_array
+    return group_idx, ordered_array, perm
 
 
 def _lerp(a, b, *, t, dtype, out=None):
@@ -48,8 +50,8 @@ def _lerp(a, b, *, t, dtype, out=None):
 def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=None):
     inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
 
-    array_nanmask = isnull(array)
-    actual_sizes = np.add.reduceat(~array_nanmask, inv_idx[:-1], axis=axis)
+    array_validmask = notnull(array)
+    actual_sizes = np.add.reduceat(array_validmask, inv_idx[:-1], axis=axis)
     newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
     full_sizes = np.reshape(np.diff(inv_idx), newshape)
     nanmask = full_sizes != actual_sizes
@@ -57,27 +59,30 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
     # The approach here is to use (complex_array.partition) because
     # 1. The full np.lexsort((array, labels), axis=-1) is slow and unnecessary
     # 2. Using record_array.partition(..., order=["labels", "array"]) is incredibly slow.
-    # partition will first sort by real part, then by imaginary part, so it is a two element lex-partition.
-    # So we set
+    # 3. For complex arrays, partition will first sort by real part, then by imaginary part, so it is a two element
+    #     lex-partition.
+    # Therefore we use approach (3) and set
     #     complex_array = group_idx + 1j * array
-    # group_idx is an integer (guaranteed), but array can have NaNs. Now,
-    #     1 + 1j*NaN = NaN + 1j * NaN
-    # so we must replace all NaNs with the maximum array value in the group so these NaNs
-    # get sorted to the end.
-    # Partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
-    # TODO: Don't know if this array has been copied in _prepare_for_flox. This is potentially wasteful
-    array = np.where(array_nanmask, -np.inf, array)
-    maxes = np.maximum.reduceat(array, inv_idx[:-1], axis=axis)
-    replacement = np.repeat(maxes, np.diff(inv_idx), axis=axis)
-    array[array_nanmask] = replacement[array_nanmask]
-
+    # group_idx is an integer (guaranteed), but array can have NaNs.
+    # Now the sort order of np.nan is bigger than np.inf
+    #     >>> c = (np.array([0, 1, 2, np.nan]) + np.array([np.nan, 2, 3, 4]) * 1j)
+    #     >>> c.partition(2)
+    #     >>> c
+    #     array([ 1. +2.j,  2. +3.j, nan +4.j, nan+nanj])
+    # So we determine which indices we need using the fact that NaNs get sorted to the end.
+    # This *was* partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
+    # but not any more now that I use partition and avoid replacing NaNs
     qin = q
     q = np.atleast_1d(qin)
     q = np.reshape(q, (len(q),) + (1,) * array.ndim)
 
     # This is numpy's method="linear"
     # TODO: could support all the interpolations here
-    virtual_index = q * (actual_sizes - 1) + inv_idx[:-1]
+    offset = actual_sizes.cumsum(axis=-1)
+    actual_sizes -= 1
+    virtual_index = q * actual_sizes
+    # virtual_index is relative to group starts, so now offset that
+    virtual_index[..., 1:] += offset[..., :-1]
 
     is_scalar_q = is_scalar(qin)
     if is_scalar_q:
@@ -87,17 +92,24 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
         idxshape = (q.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
 
     lo_ = np.floor(
-        virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
+        virtual_index,
+        casting="unsafe",
+        out=np.empty(virtual_index.shape, dtype=np.int64),
     )
     hi_ = np.ceil(
-        virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64)
+        virtual_index,
+        casting="unsafe",
+        out=np.empty(virtual_index.shape, dtype=np.int64),
     )
     kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
 
     # partition the complex array in-place
     labels_broadcast = np.broadcast_to(group_idx, array.shape)
     with np.errstate(invalid="ignore"):
-        cmplx = labels_broadcast + 1j * array
+        cmplx = 1j * (array.view(int) if array.dtype.kind in "Mm" else array)
+        # This is a very intentional way of handling `array` with -inf/+inf values :/
+        # a simple (labels + 1j * array) will yield `nan+inf * 1j` instead of `0 + inf * j`
+        cmplx.real = labels_broadcast
     cmplx.partition(kth=kth, axis=-1)
     if is_scalar_q:
         a_ = cmplx.imag
@@ -117,7 +129,15 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
 
 
 def _np_grouped_op(
-    group_idx, array, op, axis=-1, size=None, fill_value=None, dtype=None, out=None, **kwargs
+    group_idx,
+    array,
+    op,
+    axis=-1,
+    size=None,
+    fill_value=None,
+    dtype=None,
+    out=None,
+    **kwargs,
 ):
     """
     most of this code is from shoyer's gist
@@ -131,7 +151,8 @@ def _np_grouped_op(
     (inv_idx,) = flag.nonzero()
 
     if size is None:
-        size = np.max(uniques) + 1
+        # This is sorted, so the last value is the largest label
+        size = uniques[-1] + 1
     if dtype is None:
         dtype = array.dtype
 
@@ -157,6 +178,8 @@ def _np_grouped_op(
 
 
 def _nan_grouped_op(group_idx, array, func, fillna, *args, **kwargs):
+    if fillna in [dtypes.INF, dtypes.NINF]:
+        fillna = dtypes._get_fill_value(kwargs.get("dtype", None) or array.dtype, fillna)
     result = func(group_idx, np.where(isnull(array), fillna, array), *args, **kwargs)
     # np.nanmax([np.nan, np.nan]) = np.nan
     # To recover this behaviour, we need to search for the fillna value
@@ -174,9 +197,9 @@ nansum = partial(_nan_grouped_op, func=sum, fillna=0)
 prod = partial(_np_grouped_op, op=np.multiply.reduceat)
 nanprod = partial(_nan_grouped_op, func=prod, fillna=1)
 max = partial(_np_grouped_op, op=np.maximum.reduceat)
-nanmax = partial(_nan_grouped_op, func=max, fillna=-np.inf)
+nanmax = partial(_nan_grouped_op, func=max, fillna=dtypes.NINF)
 min = partial(_np_grouped_op, op=np.minimum.reduceat)
-nanmin = partial(_nan_grouped_op, func=min, fillna=np.inf)
+nanmin = partial(_nan_grouped_op, func=min, fillna=dtypes.INF)
 quantile = partial(_np_grouped_op, op=partial(quantile_, skipna=False))
 nanquantile = partial(_np_grouped_op, op=partial(quantile_, skipna=True))
 median = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=False))
@@ -226,3 +249,29 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     with np.errstate(invalid="ignore", divide="ignore"):
         out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
+
+
+def ffill(group_idx, array, *, axis, **kwargs):
+    group_idx, array, perm = _prepare_for_flox(group_idx, array)
+    shape = array.shape
+    ndim = array.ndim
+    assert axis == (ndim - 1), (axis, ndim - 1)
+
+    flag = np.concatenate((np.array([True], like=array), group_idx[1:] != group_idx[:-1]))
+    (group_starts,) = flag.nonzero()
+
+    # https://stackoverflow.com/questions/41190852/most-efficient-way-to-forward-fill-nan-values-in-numpy-array
+    mask = isnull(array)
+    # modified from the SO answer, just reset the index at the start of every group!
+    mask[..., np.asarray(group_starts)] = False
+
+    idx = np.where(mask, 0, np.arange(shape[axis]))
+    np.maximum.accumulate(idx, axis=axis, out=idx)
+    slc = [
+        np.arange(k)[tuple([slice(None) if dim == i else np.newaxis for dim in range(ndim)])]
+        for i, k in enumerate(shape)
+    ]
+    slc[axis] = idx
+
+    invert_perm = slice(None) if isinstance(perm, slice) else np.argsort(perm, kind="stable")
+    return array[tuple(slc)][..., invert_perm]

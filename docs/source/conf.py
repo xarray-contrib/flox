@@ -40,6 +40,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "myst_nb",
     "sphinx_codeautolink",
+    "sphinx_remove_toctrees",
 ]
 
 codeautolink_concat_default = True
@@ -53,6 +54,8 @@ templates_path = ["_templates"]
 source_suffix = [".rst"]
 master_doc = "index"
 language = "en"
+
+remove_from_toctrees = ["generated/*"]
 
 # General information about the project.
 project = "flox"

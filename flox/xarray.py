@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 from packaging.version import Version
-from xarray.core.duck_array_ops import _datetime_nanmin
 
 from .aggregations import Aggregation, Dim, _atleast_1d, quantile_new_dims_func
 from .core import (
@@ -18,14 +17,13 @@ from .core import (
 )
 from .core import rechunk_for_blockwise as rechunk_array_for_blockwise
 from .core import rechunk_for_cohorts as rechunk_array_for_cohorts
-from .xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric
 
 if TYPE_CHECKING:
     from xarray.core.types import T_DataArray, T_Dataset
 
     from .core import T_ExpectedGroupsOpt, T_ExpectIndex, T_ExpectOpt
 
-    Dims = Union[str, Iterable[Hashable], None]
+    Dims = str | Iterable[Hashable] | None
 
 
 def _restore_dim_order(result, obj, by, no_groupby_reorder=False):
@@ -286,9 +284,7 @@ def xarray_reduce(
     try:
         xr.align(ds, *by_da, join="exact", copy=False)
     except ValueError as e:
-        raise ValueError(
-            "Object being grouped must be exactly aligned with every array in `by`."
-        ) from e
+        raise ValueError("Object being grouped must be exactly aligned with every array in `by`.") from e
 
     needs_broadcast = any(
         not set(grouper_dims).issubset(set(variable.dims)) for variable in ds.data_vars.values()
@@ -329,15 +325,11 @@ def xarray_reduce(
     group_names: tuple[Any, ...] = ()
     group_sizes: dict[Any, int] = {}
     for idx, (b_, expect, isbin_) in enumerate(zip(by_da, expected_groups_valid, isbins)):
-        group_name = (
-            f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
-        )
+        group_name = f"{b_.name}_bins" if isbin_ or isinstance(expect, pd.IntervalIndex) else b_.name
         group_names += (group_name,)
 
         if isbin_ and isinstance(expect, int):
-            raise NotImplementedError(
-                "flox does not support binning into an integer number of bins yet."
-            )
+            raise NotImplementedError("flox does not support binning into an integer number of bins yet.")
 
         expect1: T_ExpectOpt
         if expect is None:
@@ -372,22 +364,6 @@ def xarray_reduce(
             if "nan" not in func and func not in ["all", "any", "count"]:
                 func = f"nan{func}"
 
-        # Flox's count works with non-numeric and its faster than converting.
-        requires_numeric = func not in ["count", "any", "all"] or (
-            func == "count" and kwargs["engine"] != "flox"
-        )
-        if requires_numeric:
-            is_npdatetime = array.dtype.kind in "Mm"
-            is_cftime = _contains_cftime_datetimes(array)
-            if is_npdatetime:
-                offset = _datetime_nanmin(array)
-                # xarray always uses np.datetime64[ns] for np.datetime64 data
-                dtype = "timedelta64[ns]"
-                array = datetime_to_numeric(array, offset)
-            elif is_cftime:
-                offset = array.min()
-                array = datetime_to_numeric(array, offset, datetime_unit="us")
-
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
 
         # Transpose the new quantile dimension to the end. This is ugly.
@@ -400,13 +376,6 @@ def xarray_reduce(
                 # This transpose is simply makes it easy to specify output_core_dims
                 # output dim order: (*broadcast_dims, *group_dims, quantile_dim)
                 result = np.moveaxis(result, 0, -1)
-
-        # Output of count has an int dtype.
-        if requires_numeric and func != "count":
-            if is_npdatetime:
-                return result.astype(dtype) + offset
-            elif is_cftime:
-                return _to_pytimedelta(result, unit="us") + offset
 
         return result
 
@@ -448,7 +417,8 @@ def xarray_reduce(
         output_core_dims=[output_core_dims],
         dask="allowed",
         dask_gufunc_kwargs=dict(
-            output_sizes=output_sizes, output_dtypes=[dtype] if dtype is not None else None
+            output_sizes=output_sizes,
+            output_dtypes=[dtype] if dtype is not None else None,
         ),
         keep_attrs=keep_attrs,
         kwargs={
@@ -498,9 +468,9 @@ def xarray_reduce(
         ):
             levelnames = ds_broad.indexes[name].names
             if isinstance(expect3, np.ndarray):
-                # TODO: workaoround for IntervalIndex issue.
+                # TODO: workaround for IntervalIndex issue.
                 raise NotImplementedError
-            expect3 = pd.MultiIndex.from_tuples(expect3.values, names=levelnames)
+            expect3 = pd.MultiIndex.from_tuples(expect3.values.tolist(), names=levelnames)
             actual[name] = expect3
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)
@@ -520,11 +490,12 @@ def xarray_reduce(
                 template = obj
 
             if actual[var].ndim > 1 + len(vector_dims):
-                no_groupby_reorder = isinstance(
-                    obj, xr.Dataset
-                )  # do not re-order dataarrays inside datasets
+                no_groupby_reorder = isinstance(obj, xr.Dataset)  # do not re-order dataarrays inside datasets
                 actual[var] = _restore_dim_order(
-                    actual[var], template, by_da[0], no_groupby_reorder=no_groupby_reorder
+                    actual[var].variable,
+                    template,
+                    by_da[0],
+                    no_groupby_reorder=no_groupby_reorder,
                 )
 
     if missing_dim:
@@ -625,13 +596,14 @@ def _rechunk(func, obj, dim, labels, **kwargs):
             if obj[var].chunks is not None:
                 obj[var] = obj[var].copy(
                     data=func(
-                        obj[var].data, axis=obj[var].get_axis_num(dim), labels=labels.data, **kwargs
+                        obj[var].data,
+                        axis=obj[var].get_axis_num(dim),
+                        labels=labels.data,
+                        **kwargs,
                     )
                 )
     else:
         if obj.chunks is not None:
-            obj = obj.copy(
-                data=func(obj.data, axis=obj.get_axis_num(dim), labels=labels.data, **kwargs)
-            )
+            obj = obj.copy(data=func(obj.data, axis=obj.get_axis_num(dim), labels=labels.data, **kwargs))
 
     return obj

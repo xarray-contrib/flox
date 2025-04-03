@@ -14033,7 +14033,7 @@
                       "result = _execute_task(task, cache)\n",
                       "return func(*(_execute_task(a, cache) for a in args))\n",
                       "ret = self.first(*args, **kwargs)\n",
-                      "group_idx, array = _prepare_for_flox(group_idx, array)\n",
+                      "group_idx, array, _ = _prepare_for_flox(group_idx, array)\n",
                       "return group_idx, found_groups, grp_shape, ngroups, size, props\n",
                       "",
                       "return _wrapfunc(a, 'searchsorted', v, side=side, sorter=sorter)\n",

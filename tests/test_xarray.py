@@ -6,6 +6,7 @@ import pytest
 xr = pytest.importorskip("xarray")
 # isort: on
 
+from flox import xrdtypes as dtypes
 from flox.xarray import rechunk_for_blockwise, xarray_reduce
 
 from . import (
@@ -22,13 +23,9 @@ if has_dask:
 
     dask.config.set(scheduler="sync")
 
-try:
-    # test against legacy xarray implementation
-    xr.set_options(use_flox=False)
-except ValueError:
-    pass
-
-
+# test against legacy xarray implementation
+# avoid some compilation overhead
+xr.set_options(use_flox=False, use_numbagg=False, use_bottleneck=False)
 tolerance64 = {"rtol": 1e-15, "atol": 1e-18}
 np.random.seed(123)
 
@@ -37,7 +34,8 @@ np.random.seed(123)
 @pytest.mark.parametrize("min_count", [None, 1, 3])
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("skipna", [True, False])
-def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
+def test_xarray_reduce(skipna, add_nan, min_count, engine_no_numba, reindex):
+    engine = engine_no_numba
     if skipna is False and min_count is not None:
         pytest.skip()
 
@@ -52,12 +50,20 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
     labels2 = np.array([1, 2, 2, 1])
 
     da = xr.DataArray(
-        arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels": ("y", labels)}
+        arr,
+        dims=("x", "y"),
+        coords={"labels2": ("x", labels2), "labels": ("y", labels)},
     ).expand_dims(z=4)
 
     expected = da.groupby("labels").sum(skipna=skipna, min_count=min_count)
     actual = xarray_reduce(
-        da, "labels", func="sum", skipna=skipna, min_count=min_count, engine=engine, reindex=reindex
+        da,
+        "labels",
+        func="sum",
+        skipna=skipna,
+        min_count=min_count,
+        engine=engine,
+        reindex=reindex,
     )
     assert_equal(expected, actual)
 
@@ -85,16 +91,19 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
 # TODO: sort
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
 @pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
-def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
+def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine_no_numba):
     if chunk and pass_expected_groups is False:
         pytest.skip()
+    engine = engine_no_numba
 
     arr = np.ones((4, 12))
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
     labels2 = np.array([1, 2, 2, 1])
 
     da = xr.DataArray(
-        arr, dims=("x", "y"), coords={"labels2": ("x", labels2), "labels": ("y", labels)}
+        arr,
+        dims=("x", "y"),
+        coords={"labels2": ("x", labels2), "labels": ("y", labels)},
     ).expand_dims(z=4)
 
     if chunk:
@@ -131,9 +140,10 @@ def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
 
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
 @pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
-def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
+def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine_no_numba):
     if chunk and pass_expected_groups is False:
         pytest.skip()
+    engine = engine_no_numba
 
     arr = np.ones((2, 12))
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
@@ -172,9 +182,7 @@ def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
     (None, (None, None), [[1, 2], [1, 2]]),
 )
 def test_validate_expected_groups(expected_groups):
-    da = xr.DataArray(
-        [1.0, 2.0], dims="x", coords={"labels": ("x", [1, 2]), "labels2": ("x", [1, 2])}
-    )
+    da = xr.DataArray([1.0, 2.0], dims="x", coords={"labels": ("x", [1, 2]), "labels2": ("x", [1, 2])})
     with pytest.raises(ValueError):
         xarray_reduce(
             da.chunk({"x": 1}),
@@ -186,16 +194,41 @@ def test_validate_expected_groups(expected_groups):
 
 
 @requires_cftime
+@pytest.mark.parametrize("indexer", [slice(None), pytest.param(slice(12), id="missing-group")])
+@pytest.mark.parametrize("expected_groups", [None, [0, 1, 2, 3]])
+@pytest.mark.parametrize("func", ["first", "last", "min", "max", "count"])
+def test_xarray_reduce_cftime_var(engine, indexer, expected_groups, func):
+    times = xr.date_range("1980-09-01 00:00", "1982-09-18 00:00", freq="ME", calendar="noleap")
+    ds = xr.Dataset({"var": ("time", times)}, coords={"time": np.repeat(np.arange(4), 6)})
+    ds = ds.isel(time=indexer)
+
+    actual = xarray_reduce(
+        ds,
+        ds.time,
+        func=func,
+        fill_value=dtypes.NA if func in ["first", "last"] else np.nan,
+        engine=engine,
+        expected_groups=expected_groups,
+    )
+    expected = getattr(ds.groupby("time"), func)()
+    if expected_groups is not None:
+        expected = expected.reindex(time=expected_groups)
+    xr.testing.assert_identical(actual, expected)
+
+
+@requires_cftime
 @requires_dask
-def test_xarray_reduce_single_grouper(engine):
+def test_xarray_reduce_single_grouper(engine_no_numba):
+    engine = engine_no_numba
     # DataArray
     ds = xr.Dataset(
-        {"Tair": (("time", "x", "y"), dask.array.ones((36, 205, 275), chunks=(9, -1, -1)))},
-        coords={
-            "time": xr.date_range(
-                "1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap"
+        {
+            "Tair": (
+                ("time", "x", "y"),
+                dask.array.ones((36, 205, 275), chunks=(9, -1, -1)),
             )
         },
+        coords={"time": xr.date_range("1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap")},
     )
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean", engine=engine)
     expected = ds.Tair.groupby("time.month").mean()
@@ -293,7 +326,8 @@ def test_rechunk_for_blockwise(inchunks, expected):
 # TODO: dim=None, dim=Ellipsis, groupby unindexed dim
 
 
-def test_groupby_duplicate_coordinate_labels(engine):
+def test_groupby_duplicate_coordinate_labels(engine_no_numba):
+    engine = engine_no_numba
     # fix for http://stackoverflow.com/questions/38065129
     array = xr.DataArray([1, 2, 3], [("x", [1, 1, 2])])
     expected = xr.DataArray([3, 3], [("x", [1, 2])])
@@ -301,7 +335,8 @@ def test_groupby_duplicate_coordinate_labels(engine):
     assert_equal(expected, actual)
 
 
-def test_multi_index_groupby_sum(engine):
+def test_multi_index_groupby_sum(engine_no_numba):
+    engine = engine_no_numba
     # regression test for xarray GH873
     ds = xr.Dataset(
         {"foo": (("x", "y", "z"), np.ones((3, 4, 2)))},
@@ -327,7 +362,8 @@ def test_multi_index_groupby_sum(engine):
 
 
 @pytest.mark.parametrize("chunks", (None, pytest.param(2, marks=requires_dask)))
-def test_xarray_groupby_bins(chunks, engine):
+def test_xarray_groupby_bins(chunks, engine_no_numba):
+    engine = engine_no_numba
     array = xr.DataArray([1, 1, 1, 1, 1], dims="x")
     labels = xr.DataArray([1, 1.5, 1.9, 2, 3], dims="x", name="labels")
 
@@ -371,12 +407,13 @@ def test_func_is_aggregation():
     from flox.aggregations import mean
 
     ds = xr.Dataset(
-        {"Tair": (("time", "x", "y"), dask.array.ones((36, 205, 275), chunks=(9, -1, -1)))},
-        coords={
-            "time": xr.date_range(
-                "1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap"
+        {
+            "Tair": (
+                ("time", "x", "y"),
+                dask.array.ones((36, 205, 275), chunks=(9, -1, -1)),
             )
         },
+        coords={"time": xr.date_range("1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap")},
     )
     expected = xarray_reduce(ds.Tair, ds.time.dt.month, func="mean")
     actual = xarray_reduce(ds.Tair, ds.time.dt.month, func=mean)
@@ -495,11 +532,11 @@ def test_alignment_error():
 @pytest.mark.parametrize("dtype_out", [np.float64, "float64", np.dtype("float64")])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
-def test_dtype(add_nan, chunk, dtype, dtype_out, engine):
-    if engine == "numbagg":
+def test_dtype(add_nan, chunk, dtype, dtype_out, engine_no_numba):
+    if engine_no_numba == "numbagg":
         # https://github.com/numbagg/numbagg/issues/121
         pytest.skip()
-
+    engine = engine_no_numba
     xp = dask.array if chunk else np
     data = xp.linspace(0, 1, 48, dtype=dtype).reshape((4, 12))
 
@@ -511,7 +548,10 @@ def test_dtype(add_nan, chunk, dtype, dtype_out, engine):
         data,
         dims=("x", "t"),
         coords={
-            "labels": ("t", np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"]))
+            "labels": (
+                "t",
+                np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"]),
+            )
         },
         name="arr",
     )
@@ -633,7 +673,11 @@ def test_fill_value_xarray_binning():
 def test_groupby_2d_dataset():
     d = {
         "coords": {
-            "bit_index": {"dims": ("bit_index",), "attrs": {"name": "bit_index"}, "data": [0, 1]},
+            "bit_index": {
+                "dims": ("bit_index",),
+                "attrs": {"name": "bit_index"},
+                "data": [0, 1],
+            },
             "index": {"dims": ("index",), "data": [0, 6, 8, 10, 14]},
             "clifford": {"dims": ("index",), "attrs": {}, "data": [1, 1, 4, 10, 4]},
         },
@@ -655,18 +699,14 @@ def test_groupby_2d_dataset():
         expected = ds.groupby("clifford").mean()
     with xr.set_options(use_flox=True):
         actual = ds.groupby("clifford").mean()
-    assert (
-        expected.counts.dims == actual.counts.dims
-    )  # https://github.com/pydata/xarray/issues/8292
+    assert expected.counts.dims == actual.counts.dims  # https://github.com/pydata/xarray/issues/8292
     xr.testing.assert_identical(expected, actual)
 
 
 @pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
 def test_resampling_missing_groups(chunk):
     # Regression test for https://github.com/pydata/xarray/issues/8592
-    time_coords = pd.to_datetime(
-        ["2018-06-13T03:40:36", "2018-06-13T05:50:37", "2018-06-15T03:02:34"]
-    )
+    time_coords = pd.to_datetime(["2018-06-13T03:40:36", "2018-06-13T05:50:37", "2018-06-15T03:02:34"])
 
     latitude_coords = [0.0]
     longitude_coords = [0.0]
@@ -675,7 +715,11 @@ def test_resampling_missing_groups(chunk):
 
     da = xr.DataArray(
         data,
-        coords={"time": time_coords, "latitude": latitude_coords, "longitude": longitude_coords},
+        coords={
+            "time": time_coords,
+            "latitude": latitude_coords,
+            "longitude": longitude_coords,
+        },
         dims=["time", "latitude", "longitude"],
     )
     if chunk:
@@ -707,7 +751,7 @@ def test_multiple_quantiles(q, chunk, by_ndim, skipna):
     da = xr.DataArray(array, dims=("x", *dims))
     by = xr.DataArray(labels, dims=dims, name="by")
 
-    actual = xarray_reduce(da, by, func="quantile", skipna=skipna, q=q)
+    actual = xarray_reduce(da, by, func="quantile", skipna=skipna, q=q, engine="flox")
     with xr.set_options(use_flox=False):
         expected = da.groupby(by).quantile(q, skipna=skipna)
     xr.testing.assert_allclose(expected, actual)
@@ -740,3 +784,26 @@ def test_direct_reduction(func):
     with xr.set_options(use_flox=False):
         expected = getattr(data.groupby("x", squeeze=False), func)(**kwargs)
     xr.testing.assert_identical(expected, actual)
+
+
+@pytest.mark.parametrize("reduction", ["max", "min", "nanmax", "nanmin", "sum", "nansum", "prod", "nanprod"])
+def test_groupby_preserve_dtype(reduction):
+    # all groups are present, we should follow numpy exactly
+    ds = xr.Dataset(
+        {
+            "test": (
+                ["x", "y"],
+                np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype="int16"),
+            )
+        },
+        coords={"idx": ("x", [1, 2, 1])},
+    )
+
+    kwargs = {"engine": "numpy"}
+    if "nan" in reduction:
+        kwargs["skipna"] = True
+    with xr.set_options(use_flox=True):
+        actual = getattr(ds.groupby("idx"), reduction.removeprefix("nan"))(**kwargs).test.dtype
+    expected = getattr(np, reduction)(ds.test.data, axis=0).dtype
+
+    assert actual == expected

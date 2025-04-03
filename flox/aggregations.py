@@ -3,11 +3,13 @@ from __future__ import annotations
 import copy
 import logging
 import warnings
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import cached_property, partial
-from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import numpy as np
+import pandas as pd
 from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger("flox")
+T_ScanBinaryOpMode = Literal["apply_binary_op", "concat_then_scan"]
 
 
 def _is_arg_reduction(func: str | Aggregation) -> bool:
@@ -63,11 +66,17 @@ def generic_aggregate(
     dtype=None,
     **kwargs,
 ):
+    if func == "identity":
+        return array
+
+    if func in ["nanfirst", "nanlast"] and array.dtype.kind in "US":
+        func = func[3:]
+
     if engine == "flox":
         try:
             method = getattr(aggregate_flox, func)
         except AttributeError:
-            logger.debug(f"Couldn't find {func} for engine='flox'. Falling back to numpy")
+            # logger.debug(f"Couldn't find {func} for engine='flox'. Falling back to numpy")
             method = get_npg_aggregation(func, engine="numpy")
 
     elif engine == "numbagg":
@@ -85,7 +94,7 @@ def generic_aggregate(
                 method = getattr(aggregate_numbagg, func)
 
         except AttributeError:
-            logger.debug(f"Couldn't find {func} for engine='numbagg'. Falling back to numpy")
+            # logger.debug(f"Couldn't find {func} for engine='numbagg'. Falling back to numpy")
             method = get_npg_aggregation(func, engine="numpy")
 
     elif engine in ["numpy", "numba"]:
@@ -101,44 +110,15 @@ def generic_aggregate(
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
         result = method(
-            group_idx, array, axis=axis, size=size, fill_value=fill_value, dtype=dtype, **kwargs
+            group_idx,
+            array,
+            axis=axis,
+            size=size,
+            fill_value=fill_value,
+            dtype=dtype,
+            **kwargs,
         )
     return result
-
-
-def _normalize_dtype(dtype: DTypeLike, array_dtype: np.dtype, fill_value=None) -> np.dtype:
-    if dtype is None:
-        dtype = array_dtype
-    if dtype is np.floating:
-        # mean, std, var always result in floating
-        # but we preserve the array's dtype if it is floating
-        if array_dtype.kind in "fcmM":
-            dtype = array_dtype
-        else:
-            dtype = np.dtype("float64")
-    elif not isinstance(dtype, np.dtype):
-        dtype = np.dtype(dtype)
-    if fill_value not in [None, dtypes.INF, dtypes.NINF, dtypes.NA]:
-        dtype = np.result_type(dtype, fill_value)
-    return dtype
-
-
-def _get_fill_value(dtype, fill_value):
-    """Returns dtype appropriate infinity. Returns +Inf equivalent for None."""
-    if fill_value == dtypes.INF or fill_value is None:
-        return dtypes.get_pos_infinity(dtype, max_for_int=True)
-    if fill_value == dtypes.NINF:
-        return dtypes.get_neg_infinity(dtype, min_for_int=True)
-    if fill_value == dtypes.NA:
-        if np.issubdtype(dtype, np.floating):
-            return np.nan
-        # This is madness, but npg checks that fill_value is compatible
-        # with array dtype even if the fill_value is never used.
-        elif np.issubdtype(dtype, np.integer):
-            return dtypes.get_neg_infinity(dtype, min_for_int=True)
-        else:
-            return None
-    return fill_value
 
 
 def _atleast_1d(inp, min_length: int = 1):
@@ -169,9 +149,9 @@ class Dim:
 class Aggregation:
     def __init__(
         self,
-        name,
+        name: str,
         *,
-        numpy: str | FuncTuple | None = None,
+        numpy: str | None = None,
         chunk: str | FuncTuple | None,
         combine: str | FuncTuple | None,
         preprocess: Callable | None = None,
@@ -182,6 +162,7 @@ class Aggregation:
         final_dtype: DTypeLike | None = None,
         reduction_type: Literal["reduce", "argreduce"] = "reduce",
         new_dims_func: Callable | None = None,
+        preserves_dtype: bool = False,
     ):
         """
         Blueprint for computing grouped aggregations.
@@ -228,13 +209,15 @@ class Aggregation:
             Function that receives finalize_kwargs and returns a tupleof sizes of any new dimensions
             added by the reduction. For e.g. quantile for q=(0.5, 0.85) adds a new dimension of size 2,
             so returns (2,)
+        preserves_dtype: bool,
+           Whether a function preserves the dtype on return E.g. min, max, first, last, mode
         """
         self.name = name
         # preprocess before blockwise
         self.preprocess = preprocess
         # Use "chunk_reduce" or "chunk_argreduce"
         self.reduction_type = reduction_type
-        self.numpy: FuncTuple = (numpy,) if numpy else (self.name,)
+        self.numpy: FuncTuple = (numpy,) if numpy is not None else (self.name,)
         # initialize blockwise reduction
         self.chunk: OptionalFuncTuple = _atleast_1d(chunk)
         # how to aggregate results after first round of reduction
@@ -261,9 +244,8 @@ class Aggregation:
         # The following are set by _initialize_aggregation
         self.finalize_kwargs: dict[Any, Any] = {}
         self.min_count: int = 0
-        self.new_dims_func: Callable = (
-            returns_empty_tuple if new_dims_func is None else new_dims_func
-        )
+        self.new_dims_func: Callable = returns_empty_tuple if new_dims_func is None else new_dims_func
+        self.preserves_dtype = preserves_dtype
 
     @cached_property
     def new_dims(self) -> tuple[Dim]:
@@ -406,10 +388,24 @@ nanstd = Aggregation(
 )
 
 
-min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF)
-nanmin = Aggregation("nanmin", chunk="nanmin", combine="nanmin", fill_value=np.nan)
-max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF)
-nanmax = Aggregation("nanmax", chunk="nanmax", combine="nanmax", fill_value=np.nan)
+min_ = Aggregation("min", chunk="min", combine="min", fill_value=dtypes.INF, preserves_dtype=True)
+nanmin = Aggregation(
+    "nanmin",
+    chunk="nanmin",
+    combine="nanmin",
+    fill_value=dtypes.INF,
+    final_fill_value=dtypes.NA,
+    preserves_dtype=True,
+)
+max_ = Aggregation("max", chunk="max", combine="max", fill_value=dtypes.NINF, preserves_dtype=True)
+nanmax = Aggregation(
+    "nanmax",
+    chunk="nanmax",
+    combine="nanmax",
+    fill_value=dtypes.NINF,
+    final_fill_value=dtypes.NA,
+    preserves_dtype=True,
+)
 
 
 def argreduce_preprocess(array, axis):
@@ -497,10 +493,22 @@ nanargmin = Aggregation(
     final_dtype=np.intp,
 )
 
-first = Aggregation("first", chunk=None, combine=None, fill_value=0)
-last = Aggregation("last", chunk=None, combine=None, fill_value=0)
-nanfirst = Aggregation("nanfirst", chunk="nanfirst", combine="nanfirst", fill_value=np.nan)
-nanlast = Aggregation("nanlast", chunk="nanlast", combine="nanlast", fill_value=np.nan)
+first = Aggregation("first", chunk=None, combine=None, fill_value=None, preserves_dtype=True)
+last = Aggregation("last", chunk=None, combine=None, fill_value=None, preserves_dtype=True)
+nanfirst = Aggregation(
+    "nanfirst",
+    chunk="nanfirst",
+    combine="nanfirst",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
+)
+nanlast = Aggregation(
+    "nanlast",
+    chunk="nanlast",
+    combine="nanlast",
+    fill_value=dtypes.NA,
+    preserves_dtype=True,
+)
 
 all_ = Aggregation(
     "all",
@@ -524,10 +532,18 @@ any_ = Aggregation(
 # Support statistical quantities only blockwise
 # The parallel versions will be approximate and are hard to implement!
 median = Aggregation(
-    name="median", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+    name="median",
+    fill_value=dtypes.NA,
+    chunk=None,
+    combine=None,
+    final_dtype=np.floating,
 )
 nanmedian = Aggregation(
-    name="nanmedian", fill_value=dtypes.NA, chunk=None, combine=None, final_dtype=np.float64
+    name="nanmedian",
+    fill_value=dtypes.NA,
+    chunk=None,
+    combine=None,
+    final_dtype=np.floating,
 )
 
 
@@ -535,6 +551,9 @@ def quantile_new_dims_func(q) -> tuple[Dim]:
     return (Dim(name="quantile", values=q),)
 
 
+# if the input contains integers or floats smaller than float64,
+# the output data-type is float64. Otherwise, the output data-type is the same as that
+# of the input.
 quantile = Aggregation(
     name="quantile",
     fill_value=dtypes.NA,
@@ -551,10 +570,177 @@ nanquantile = Aggregation(
     final_dtype=np.float64,
     new_dims_func=quantile_new_dims_func,
 )
-mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None)
-nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None)
+mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
+nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
 
-aggregations = {
+
+@dataclass
+class Scan:
+    # This dataclass is separate from Aggregations since there's not much in common
+    # between reductions and scans
+    name: str
+    # binary operation (e.g. np.add)
+    # Must be None for mode="concat_then_scan"
+    binary_op: Callable | None
+    # in-memory grouped scan function (e.g. cumsum)
+    scan: str
+    # Grouped reduction that yields the last result of the scan (e.g. sum)
+    reduction: str
+    # Identity element
+    identity: Any
+    # dtype of result
+    dtype: Any = None
+    preserves_dtype: bool = False
+    # "Mode" of applying binary op.
+    # for np.add we apply the op directly to the `state` array and the `current` array.
+    # for ffill, bfill we concat `state` to `current` and then run the scan again.
+    mode: T_ScanBinaryOpMode = "apply_binary_op"
+    preprocess: Callable | None = None
+    finalize: Callable | None = None
+
+
+def concatenate(arrays: Sequence[AlignedArrays], axis=-1, out=None) -> AlignedArrays:
+    group_idx = np.concatenate([a.group_idx for a in arrays], axis=axis)
+    array = np.concatenate([a.array for a in arrays], axis=axis)
+    return AlignedArrays(array=array, group_idx=group_idx)
+
+
+@dataclass
+class AlignedArrays:
+    """Simple Xarray DataArray type data class with two aligned arrays."""
+
+    array: np.ndarray
+    group_idx: np.ndarray
+
+    def __post_init__(self):
+        assert self.array.shape[-1] == self.group_idx.size
+
+    def last(self) -> AlignedArrays:
+        from flox.core import chunk_reduce
+
+        reduced = chunk_reduce(
+            self.array,
+            self.group_idx,
+            func=("nanlast",),
+            axis=-1,
+            # TODO: automate?
+            engine="flox",
+            dtype=self.array.dtype,
+            fill_value=dtypes._get_fill_value(self.array.dtype, dtypes.NA),
+            expected_groups=None,
+        )
+        return AlignedArrays(array=reduced["intermediates"][0], group_idx=reduced["groups"])
+
+
+@dataclass
+class ScanState:
+    """Dataclass representing intermediates for scan."""
+
+    # last value of each group seen so far
+    state: AlignedArrays | None
+    # intermediate result
+    result: AlignedArrays | None
+
+    def __post_init__(self):
+        assert (self.state is not None) or (self.result is not None)
+
+
+def reverse(a: AlignedArrays) -> AlignedArrays:
+    a.group_idx = a.group_idx[..., ::-1]
+    a.array = a.array[..., ::-1]
+    return a
+
+
+def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) -> ScanState:
+    from .core import reindex_
+
+    assert left_state.state is not None
+    left = left_state.state
+    right = right_state.result if right_state.result is not None else right_state.state
+    assert right is not None
+
+    if agg.mode == "apply_binary_op":
+        assert agg.binary_op is not None
+        # Implements groupby binary operation.
+        reindexed = reindex_(
+            left.array,
+            from_=pd.Index(left.group_idx),
+            # can't use right.group_idx since we need to do the indexing later
+            to=pd.RangeIndex(right.group_idx.max() + 1),
+            fill_value=agg.identity,
+            axis=-1,
+        )
+        result = AlignedArrays(
+            array=agg.binary_op(reindexed[..., right.group_idx], right.array),
+            group_idx=right.group_idx,
+        )
+
+    elif agg.mode == "concat_then_scan":
+        # Implements the binary op portion of the scan as a concatenate-then-scan.
+        # This is useful for `ffill`, and presumably more generalized scans.
+        assert agg.binary_op is None
+        concat = concatenate([left, right], axis=-1)
+        final_value = generic_aggregate(
+            concat.group_idx,
+            concat.array,
+            func=agg.scan,
+            axis=concat.array.ndim - 1,
+            engine="flox",
+            fill_value=agg.identity,
+        )
+        result = AlignedArrays(array=final_value[..., left.group_idx.size :], group_idx=right.group_idx)
+    else:
+        raise ValueError(f"Unknown binary op application mode: {agg.mode!r}")
+
+    # This is quite important. We need to update the state seen so far and propagate that.
+    # So we must account for what we know when entering this function: i.e. `left`
+    # TODO: this is a bit wasteful since it will sort again, but for now let's focus on
+    # correctness and DRY
+    lasts = concatenate([left, result]).last()
+
+    return ScanState(
+        state=lasts,
+        # The binary op is called on the results of the reduction too when building up the tree.
+        # We need to be careful and assign those results only to `state` and not the final result.
+        # Up above, `result` is privileged when it exists.
+        result=None if right_state.result is None else result,
+    )
+
+
+# TODO: numpy_groupies cumsum is a broken when NaNs are present.
+# cumsum = Scan("cumsum", binary_op=np.add, reduction="sum", scan="cumsum", identity=0)
+nancumsum = Scan("nancumsum", binary_op=np.add, reduction="nansum", scan="nancumsum", identity=0)
+# ffill uses the identity for scan, and then at the binary-op state,
+# we concatenate the blockwise-reduced values with the original block,
+# and then execute the scan
+# TODO: consider adding chunk="identity" here, like with reductions as an optimization
+ffill = Scan(
+    "ffill",
+    binary_op=None,
+    reduction="nanlast",
+    scan="ffill",
+    # Important: this must be NaN otherwise, ffill does not work.
+    identity=dtypes.NA,
+    mode="concat_then_scan",
+    preserves_dtype=True,
+)
+bfill = Scan(
+    "bfill",
+    binary_op=None,
+    reduction="nanlast",
+    scan="ffill",
+    # Important: this must be NaN otherwise, bfill does not work.
+    identity=dtypes.NA,
+    preserves_dtype=True,
+    mode="concat_then_scan",
+    preprocess=reverse,
+    finalize=reverse,
+)
+# TODO: not implemented in numpy_groupies
+# cumprod = Scan("cumprod", binary_op=np.multiply, preop="prod", scan="cumprod")
+
+
+AGGREGATIONS: dict[str, Aggregation | Scan] = {
     "any": any_,
     "all": all_,
     "count": count,
@@ -586,6 +772,10 @@ aggregations = {
     "nanquantile": nanquantile,
     "mode": mode,
     "nanmode": nanmode,
+    # "cumsum": cumsum,
+    "nancumsum": nancumsum,
+    "ffill": ffill,
+    "bfill": bfill,
 }
 
 
@@ -597,11 +787,14 @@ def _initialize_aggregation(
     min_count: int,
     finalize_kwargs: dict[Any, Any] | None,
 ) -> Aggregation:
+    agg: Aggregation
     if not isinstance(func, Aggregation):
         try:
             # TODO: need better interface
             # we set dtype, fillvalue on reduction later. so deepcopy now
-            agg = copy.deepcopy(aggregations[func])
+            agg_ = copy.deepcopy(AGGREGATIONS[func])
+            assert isinstance(agg_, Aggregation)
+            agg = agg_
         except KeyError:
             raise NotImplementedError(f"Reduction {func!r} not implemented yet")
     elif isinstance(func, Aggregation):
@@ -616,38 +809,36 @@ def _initialize_aggregation(
     dtype_: np.dtype | None = (
         np.dtype(dtype) if dtype is not None and not isinstance(dtype, np.dtype) else dtype
     )
-
-    final_dtype = _normalize_dtype(dtype_ or agg.dtype_init["final"], array_dtype, fill_value)
+    final_dtype = dtypes._normalize_dtype(
+        dtype_ or agg.dtype_init["final"], array_dtype, agg.preserves_dtype, fill_value
+    )
     agg.dtype = {
         "user": dtype,  # Save to automatically choose an engine
         "final": final_dtype,
         "numpy": (final_dtype,),
         "intermediate": tuple(
             (
-                _normalize_dtype(int_dtype, np.result_type(array_dtype, final_dtype), int_fv)
+                dtypes._normalize_dtype(int_dtype, np.result_type(array_dtype, final_dtype), int_fv)
                 if int_dtype is None
                 else np.dtype(int_dtype)
             )
-            for int_dtype, int_fv in zip(
-                agg.dtype_init["intermediate"], agg.fill_value["intermediate"]
-            )
+            for int_dtype, int_fv in zip(agg.dtype_init["intermediate"], agg.fill_value["intermediate"])
         ),
     }
 
     # Replace sentinel fill values according to dtype
     agg.fill_value["user"] = fill_value
     agg.fill_value["intermediate"] = tuple(
-        _get_fill_value(dt, fv)
+        dtypes._get_fill_value(dt, fv)
         for dt, fv in zip(agg.dtype["intermediate"], agg.fill_value["intermediate"])
     )
-    agg.fill_value[func] = _get_fill_value(agg.dtype["final"], agg.fill_value[func])
+    agg.fill_value[func] = dtypes._get_fill_value(agg.dtype["final"], agg.fill_value[func])
 
-    fv = fill_value if fill_value is not None else agg.fill_value[agg.name]
     if _is_arg_reduction(agg):
         # this allows us to unravel_index easily. we have to do that nearly every time.
         agg.fill_value["numpy"] = (0,)
     else:
-        agg.fill_value["numpy"] = (fv,)
+        agg.fill_value["numpy"] = (agg.fill_value[func],)
 
     if finalize_kwargs is not None:
         assert isinstance(finalize_kwargs, dict)
@@ -658,6 +849,16 @@ def _initialize_aggregation(
     # absent in one block, but present in another block
     # We set it for numpy to get nansum, nanprod tests to pass
     # where the identity element is 0, 1
+    # Also needed for nanmin, nanmax where intermediate fill_value is +-np.inf,
+    # but final_fill_value is dtypes.NA
+    if (
+        # TODO: this is a total hack, setting a default fill_value
+        # even though numpy doesn't define identity for nanmin, nanmax
+        agg.name in ["nanmin", "nanmax"] and min_count == 0
+    ):
+        min_count = 1
+        agg.fill_value["user"] = agg.fill_value["user"] or agg.fill_value[agg.name]
+
     if min_count > 0:
         agg.min_count = min_count
         agg.numpy += ("nanlen",)

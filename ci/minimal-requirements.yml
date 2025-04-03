@@ -3,11 +3,13 @@ channels:
   - conda-forge
 dependencies:
   - codecov
+  - hypothesis
   - pip
   - pytest
   - pytest-cov
   - pytest-pretty
   - pytest-xdist
+  - syrupy
   - numpy==1.22
   - scipy==1.9.0
   - numpy_groupies==0.9.19

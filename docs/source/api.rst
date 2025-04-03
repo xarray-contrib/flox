@@ -10,6 +10,7 @@ Functions
     :toctree: generated/
 
     groupby_reduce
+    groupby_scan
     xarray.xarray_reduce
 
 Rechunking
@@ -40,5 +41,7 @@ Aggregation Objects
     :toctree: generated/
 
     Aggregation
+    Scan
+
     aggregations.sum_
     aggregations.nansum

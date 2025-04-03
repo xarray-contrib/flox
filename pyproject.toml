@@ -3,7 +3,7 @@ name = "flox"
 description = "GroupBy operations for dask.array"
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["xarray", "dask", "groupby"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -11,10 +11,10 @@ classifiers = [
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "pandas>=1.5",
@@ -60,17 +60,16 @@ fallback_version = "999"
 write_to = "flox/_version.py"
 write_to_template= '__version__ = "{version}"'
 
-[tool.black]
-line-length = 100
-target-version = ["py39"]
-
 [tool.ruff]
-target-version = "py39"
+line-length = 110
+target-version = "py310"
 builtins = ["ellipsis"]
 exclude = [
     ".eggs",
     "doc",
 ]
+
+[tool.ruff.lint]
 # E402: module level import not at top of file
 # E501: line too long - let black worry about that
 # E731: do not assign a lambda expression, use a def
@@ -93,7 +92,7 @@ select = [
     "UP",
 ]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["flox"]
 known-third-party = [
     "dask",
@@ -106,6 +105,10 @@ known-third-party = [
     "scipy",
     "xarray"
 ]
+
+[tool.ruff.format]
+# Enable reformatting of code snippets in docstrings.
+docstring-code-format = true
 
 [tool.mypy]
 allow_redefinition = true
@@ -131,7 +134,7 @@ module=[
     "pandas",
     "setuptools",
     "scipy.*",
-    "toolz",
+    "toolz.*",
 ]
 ignore_missing_imports = true
 

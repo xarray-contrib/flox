@@ -4,6 +4,7 @@ channels:
 dependencies:
   - codecov
   - pandas
+  - hypothesis
   - cftime
   - numpy>=1.22
   - scipy
@@ -12,7 +13,7 @@ dependencies:
   - pytest-cov
   - pytest-pretty
   - pytest-xdist
-  - xarray
+  - syrupy
   - numpydoc
   - pre-commit
   - numpy_groupies>=0.9.19
@@ -20,3 +21,4 @@ dependencies:
   - toolz
   - numba
   - numbagg>=0.3
+  - xarray

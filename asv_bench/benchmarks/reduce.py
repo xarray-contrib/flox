@@ -1,13 +1,21 @@
 import numpy as np
 import pandas as pd
+import xarray as xr
 from asv_runner.benchmarks.mark import parameterize, skip_for_params
 
 import flox
 import flox.aggregations
+import flox.xarray
+
+from .helpers import codes_for_resampling
 
 N = 3000
 funcs = ["sum", "nansum", "mean", "nanmean", "max", "nanmax", "count"]
-engines = [None, "flox", "numpy"]  # numbagg is disabled for now since it takes ages in CI
+engines = [
+    None,
+    "flox",
+    "numpy",
+]  # numbagg is disabled for now since it takes ages in CI
 expected_groups = {
     "None": None,
     "bins": pd.IntervalIndex.from_breaks([1, 2, 4]),
@@ -17,9 +25,7 @@ expected_names = tuple(expected_groups)
 NUMBAGG_FUNCS = ["nansum", "nanmean", "nanmax", "count", "all"]
 numbagg_skip = []
 for name in expected_names:
-    numbagg_skip.extend(
-        list((func, name, "numbagg") for func in funcs if func not in NUMBAGG_FUNCS)
-    )
+    numbagg_skip.extend(list((func, name, "numbagg") for func in funcs if func not in NUMBAGG_FUNCS))
 
 
 def setup_jit():
@@ -136,3 +142,20 @@ class ChunkReduce2DAllAxes(ChunkReduce):
 #         self.labels = np.random.permutation(np.repeat(np.arange(N // 5), repeats=5))
 #         self.axis = None
 #         setup_jit()
+
+
+class Quantile:
+    def setup(self, *args, **kwargs):
+        shape = (31411, 25, 25, 1)
+
+        time = pd.date_range("2014-01-01", "2099-12-31", freq="D")
+        self.da = xr.DataArray(
+            np.random.randn(*shape),
+            name="pr",
+            dims=("time", "lat", "lon", "lab"),
+            coords={"time": time},
+        )
+        self.codes = xr.DataArray(dims="time", data=codes_for_resampling(time, "YE"), name="time")
+
+    def time_quantile(self):
+        flox.xarray.xarray_reduce(self.da, self.codes, engine="flox", func="quantile", q=0.9)
