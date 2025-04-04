@@ -951,10 +951,18 @@ def factorize_(
     if expected_groups is None:
         expected_groups = (None,) * len(by)
 
-    results = [
-        _factorize_single(groupvar, expect, sort=sort, reindex=reindex)
-        for groupvar, expect in zip(by, expected_groups)
-    ]
+    if len(by) > 2:
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(partial(_factorize_single, sort=sort, reindex=reindex), groupvar, expect)
+                for groupvar, expect in zip(by, expected_groups)
+            ]
+            results = tuple(f.result() for f in futures)
+    else:
+        results = [
+            _factorize_single(groupvar, expect, sort=sort, reindex=reindex)
+            for groupvar, expect in zip(by, expected_groups)
+        ]
     found_groups = [r[0] for r in results]
     factorized = [r[1] for r in results]
 
