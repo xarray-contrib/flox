@@ -14,7 +14,7 @@ def _get_combine(combine):
     if combine == "grouped":
         return partial(flox.core._grouped_combine, engine="numpy")
     else:
-        return partial(flox.core._simple_combine, reindex=False)
+        return partial(flox.core._simple_combine, reindex=flox.ReindexStrategy(blockwise=False))
 
 
 class Combine:
