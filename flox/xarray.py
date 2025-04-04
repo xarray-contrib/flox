@@ -80,7 +80,7 @@ def xarray_reduce(
     reindex: bool | None = None,
     **finalize_kwargs,
 ):
-    """GroupBy reduce operations on xarray objects using numpy-groupies
+    """GroupBy reduce operations on xarray objects using numpy-groupies.
 
     Parameters
     ----------
@@ -105,26 +105,27 @@ def xarray_reduce(
     dim : hashable
         dimension name along which to reduce. If None, reduces across all
         dimensions of `by`
-    fill_value
+    fill_value : Any
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
     dtype : data-type, optional
-        DType for the output. Can be anything accepted by ``np.dtype``.
+        DType for the output. Can be anything that is accepted by ``np.dtype``.
     method : {"map-reduce", "blockwise", "cohorts"}, optional
+        Note that this arg is chosen by default using heuristics.
         Strategy for reduction of dask arrays only:
           * ``"map-reduce"``:
             First apply the reduction blockwise on ``array``, then
             combine a few newighbouring blocks, apply the reduction.
             Continue until finalizing. Usually, ``func`` will need
-            to be an Aggregation instance for this method to work.
+            to be an ``Aggregation`` instance for this method to work.
             Common aggregations are implemented.
           * ``"blockwise"``:
             Only reduce using blockwise and avoid aggregating blocks
             together. Useful for resampling-style reductions where group
-            members are always together. If  `by` is 1D,  `array` is automatically
+            members are always together. If  ``by`` is 1D,  ``array`` is automatically
             rechunked so that chunk boundaries line up with group boundaries
             i.e. each block contains all members of any group present
-            in that block. For nD `by`, you must make sure that all members of a group
+            in that block. For nD ``by``, you must make sure that all members of a group
             are present in a single block.
           * ``"cohorts"``:
             Finds group labels that tend to occur together ("cohorts"),
@@ -134,11 +135,11 @@ def xarray_reduce(
             'month', dayofyear' etc. Optimize chunking ``array`` for this
             method by first rechunking using ``rechunk_for_cohorts``
             (for 1D ``by`` only).
-    engine : {"flox", "numpy", "numba"}, optional
+    engine : {"flox", "numpy", "numba", "numbagg"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
             Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
-            This is the default choice because it works for other array types.
+            This is the default choice because it works for most array types.
           * ``"flox"``:
             Use an internal implementation where the data is sorted so that
             all members of a group occur sequentially, and then numpy.ufunc.reduceat
@@ -162,13 +163,13 @@ def xarray_reduce(
         NA. Only used if skipna is set to True or defaults to True for the
         array's dtype.
     reindex : bool, optional
-        Whether to "reindex" the blockwise results to `expected_groups` (possibly automatically detected).
+        Whether to "reindex" the blockwise results to ``expected_groups`` (possibly automatically detected).
         If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
         and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
-        original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
-    **finalize_kwargs
-        kwargs passed to the finalize function, like ``ddof`` for var, std or ``q`` for quantile.
+        original block size. Avoid that by using ``method="cohorts"``. By default, it is turned off for argreductions.
+    **finalize_kwargs : dict, optional
+        Kwargs passed to finalize the reduction such as ``ddof`` for var, std or ``q`` for quantile.
 
     Returns
     -------

@@ -2293,7 +2293,7 @@ def groupby_reduce(
     *by : ndarray or DaskArray
         Array of labels to group over. Must be aligned with ``array`` so that
         ``array.shape[-by.ndim :] == by.shape`` or any disagreements in that
-        equality check are for dimensions of size 1 in `by`.
+        equality check are for dimensions of size 1 in ``by``.
     func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
             "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
             "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
@@ -2308,33 +2308,34 @@ def groupby_reduce(
         reductions when ``method`` is not ``"map-reduce"``. For ``"map-reduce"``, the groups
         are always sorted.
     axis : None or int or Sequence[int], optional
-        If None, reduce across all dimensions of by
-        Else, reduce across corresponding axes of array
-        Negative integers are normalized using array.ndim
+        If None, reduce across all dimensions of ``by``,
+        else reduce across corresponding axes of array.
+        Negative integers are normalized using ``array.ndim``.
     fill_value : Any
         Value to assign when a label in ``expected_groups`` is not present.
     dtype : data-type , optional
         DType for the output. Can be anything that is accepted by ``np.dtype``.
     min_count : int, default: None
         The required number of valid values to perform the operation. If
-        fewer than min_count non-NA values are present the result will be
-        NA. Only used if skipna is set to True or defaults to True for the
+        fewer than ``min_count`` non-NA values are present the result will be
+        NA. Only used if ``skipna`` is set to True or defaults to True for the
         array's dtype.
     method : {"map-reduce", "blockwise", "cohorts"}, optional
+        Note that this arg is chosen by default using heuristics.
         Strategy for reduction of dask arrays only:
           * ``"map-reduce"``:
             First apply the reduction blockwise on ``array``, then
             combine a few newighbouring blocks, apply the reduction.
             Continue until finalizing. Usually, ``func`` will need
-            to be an Aggregation instance for this method to work.
+            to be an ``Aggregation`` instance for this method to work.
             Common aggregations are implemented.
           * ``"blockwise"``:
             Only reduce using blockwise and avoid aggregating blocks
             together. Useful for resampling-style reductions where group
-            members are always together. If  `by` is 1D,  `array` is automatically
+            members are always together. If  ``by`` is 1D,  ``array`` is automatically
             rechunked so that chunk boundaries line up with group boundaries
             i.e. each block contains all members of any group present
-            in that block. For nD `by`, you must make sure that all members of a group
+            in that block. For nD ``by``, you must make sure that all members of a group
             are present in a single block.
           * ``"cohorts"``:
             Finds group labels that tend to occur together ("cohorts"),
