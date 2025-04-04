@@ -134,6 +134,7 @@ module=[
     "pandas",
     "setuptools",
     "scipy.*",
+    "sparse.*",
     "toolz.*",
 ]
 ignore_missing_imports = true
@@ -145,5 +146,5 @@ testpaths = ["tests"]
 
 
 [tool.codespell]
-ignore-words-list = "nd,nax"
+ignore-words-list = "nd,nax,coo"
 skip = "*.html"

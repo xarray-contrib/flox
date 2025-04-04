@@ -19,6 +19,8 @@ from flox import xrutils
 from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.core import (
     HAS_NUMBAGG,
+    ReindexArrayType,
+    ReindexStrategy,
     _choose_engine,
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
@@ -44,6 +46,7 @@ from . import (
     raise_if_dask_computes,
     requires_cubed,
     requires_dask,
+    requires_sparse,
 )
 
 logger = logging.getLogger("flox")
@@ -1637,7 +1640,7 @@ def test_validate_reindex_map_reduce(dask_expected, reindex, func, expected_grou
         is_dask_array=True,
         array_dtype=np.dtype("int32"),
     )
-    assert actual is dask_expected
+    assert actual == ReindexStrategy(blockwise=dask_expected)
 
     # always reindex with all numpy inputs
     actual = _validate_reindex(
@@ -1649,7 +1652,7 @@ def test_validate_reindex_map_reduce(dask_expected, reindex, func, expected_grou
         is_dask_array=False,
         array_dtype=np.dtype("int32"),
     )
-    assert actual
+    assert actual.blockwise
 
     actual = _validate_reindex(
         True,
@@ -1660,7 +1663,7 @@ def test_validate_reindex_map_reduce(dask_expected, reindex, func, expected_grou
         is_dask_array=False,
         array_dtype=np.dtype("int32"),
     )
-    assert actual
+    assert actual.blockwise
 
 
 def test_validate_reindex() -> None:
@@ -1699,7 +1702,7 @@ def test_validate_reindex() -> None:
                 any_by_dask=False,
                 is_dask_array=True,
                 array_dtype=np.dtype("int32"),
-            )
+            ).blockwise
             assert actual is False
 
     with pytest.raises(ValueError):
@@ -1721,7 +1724,7 @@ def test_validate_reindex() -> None:
         any_by_dask=True,
         is_dask_array=True,
         array_dtype=np.dtype("int32"),
-    )
+    ).blockwise
     assert _validate_reindex(
         None,
         "sum",
@@ -1730,7 +1733,7 @@ def test_validate_reindex() -> None:
         any_by_dask=True,
         is_dask_array=True,
         array_dtype=np.dtype("int32"),
-    )
+    ).blockwise
 
     kwargs = dict(
         method="blockwise",
@@ -1740,12 +1743,12 @@ def test_validate_reindex() -> None:
     )
 
     for func in ["nanfirst", "nanlast"]:
-        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs)  # type: ignore[arg-type]
-        assert _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs)  # type: ignore[arg-type]
+        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs).blockwise  # type: ignore[arg-type]
+        assert _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs).blockwise  # type: ignore[arg-type]
 
     for func in ["first", "last"]:
-        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs)  # type: ignore[arg-type]
-        assert not _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs)  # type: ignore[arg-type]
+        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs).blockwise  # type: ignore[arg-type]
+        assert not _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs).blockwise  # type: ignore[arg-type]
 
 
 @requires_dask
@@ -2023,20 +2026,18 @@ def test_datetime_minmax(engine) -> None:
 
 @pytest.mark.parametrize("func", ["first", "last", "nanfirst", "nanlast"])
 def test_datetime_timedelta_first_last(engine, func) -> None:
-    import flox
-
     idx = 0 if "first" in func else -1
     idx1 = 2 if "first" in func else -1
 
     ## datetime
     dt = pd.date_range("2001-01-01", freq="d", periods=5).values
     by = np.ones(dt.shape, dtype=int)
-    actual, *_ = flox.groupby_reduce(dt, by, func=func, engine=engine)
+    actual, *_ = groupby_reduce(dt, by, func=func, engine=engine)
     assert_equal(actual, dt[[idx]])
 
     # missing group
     by = np.array([0, 2, 3, 3, 3])
-    actual, *_ = flox.groupby_reduce(
+    actual, *_ = groupby_reduce(
         dt, by, expected_groups=([0, 1, 2, 3],), func=func, engine=engine, fill_value=dtypes.NA
     )
     assert_equal(actual, [dt[0], np.datetime64("NaT"), dt[1], dt[idx1]])
@@ -2044,12 +2045,47 @@ def test_datetime_timedelta_first_last(engine, func) -> None:
     ## timedelta
     dt = dt - dt[0]
     by = np.ones(dt.shape, dtype=int)
-    actual, *_ = flox.groupby_reduce(dt, by, func=func, engine=engine)
+    actual, *_ = groupby_reduce(dt, by, func=func, engine=engine)
     assert_equal(actual, dt[[idx]])
 
     # missing group
     by = np.array([0, 2, 3, 3, 3])
-    actual, *_ = flox.groupby_reduce(
+    actual, *_ = groupby_reduce(
         dt, by, expected_groups=([0, 1, 2, 3],), func=func, engine=engine, fill_value=dtypes.NA
     )
     assert_equal(actual, [dt[0], np.timedelta64("NaT"), dt[1], dt[idx1]])
+
+
+@requires_dask
+@requires_sparse
+def test_reindex_sparse():
+    import sparse
+
+    array = dask.array.ones((2, 12), chunks=(-1, 3))
+    func = "sum"
+    expected_groups = pd.Index(np.arange(11))
+    by = dask.array.from_array(np.repeat(np.arange(6) * 2, 2), chunks=(3,))
+    dense = np.zeros((2, 11))
+    dense[..., np.arange(6) * 2] = 2
+    expected = sparse.COO.from_numpy(dense)
+
+    with pytest.raises(ValueError):
+        ReindexStrategy(blockwise=True, array_type=ReindexArrayType.SPARSE_COO)
+    reindex = ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)
+
+    original_reindex = flox.core.reindex_
+
+    def mocked_reindex(*args, **kwargs):
+        res = original_reindex(*args, **kwargs)
+        if isinstance(res, dask.array.Array):
+            assert isinstance(res._meta, sparse.COO)
+        else:
+            assert isinstance(res, sparse.COO)
+        return res
+
+    with patch("flox.core.reindex_") as mocked_func:
+        mocked_func.side_effect = mocked_reindex
+        actual, *_ = groupby_reduce(array, by, func=func, reindex=reindex, expected_groups=expected_groups)
+        assert_equal(actual, expected)
+        # once during graph construction, 10 times afterward
+        assert mocked_func.call_count > 1

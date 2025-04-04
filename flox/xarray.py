@@ -10,6 +10,7 @@ from packaging.version import Version
 
 from .aggregations import Aggregation, Dim, _atleast_1d, quantile_new_dims_func
 from .core import (
+    ReindexStrategy,
     _convert_expected_groups_to_index,
     _get_expected_groups,
     _validate_expected_groups,
@@ -77,7 +78,7 @@ def xarray_reduce(
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
-    reindex: bool | None = None,
+    reindex: ReindexStrategy | bool | None = None,
     **finalize_kwargs,
 ):
     """GroupBy reduce operations on xarray objects using numpy-groupies.
@@ -162,14 +163,17 @@ def xarray_reduce(
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
         array's dtype.
-    reindex : bool, optional
-        Whether to "reindex" the blockwise results to ``expected_groups`` (possibly automatically detected).
+    reindex : ReindexStrategy | bool, optional
+        Whether to "reindex" the blockwise reduced results to ``expected_groups`` (possibly automatically detected).
         If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
         and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
         original block size. Avoid that by using ``method="cohorts"``. By default, it is turned off for argreductions.
-    **finalize_kwargs : dict, optional
-        Kwargs passed to finalize the reduction such as ``ddof`` for var, std or ``q`` for quantile.
+        By default, the type of ``array`` is preserved. You may optionally reindex to a sparse array type to further control memory
+        in the case of ``expected_groups`` being very large. Pass a ``ReindexStrategy`` instance with the appropriate ``array_type``,
+        for example (``reindex=ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)``).
+    **finalize_kwargs: dict, optional
+        kwargs passed to the finalize function, like ``ddof`` for var, std or ``q`` for quantile.
 
     Returns
     -------
