@@ -14,7 +14,11 @@ def _get_combine(combine):
     if combine == "grouped":
         return partial(flox.core._grouped_combine, engine="numpy")
     else:
-        return partial(flox.core._simple_combine, reindex=flox.ReindexStrategy(blockwise=False))
+        try:
+            reindex = flox.ReindexStrategy(blockwise=False)
+        except AttributeError:
+            reindex = False
+        return partial(flox.core._simple_combine, reindex=reindex)
 
 
 class Combine:
