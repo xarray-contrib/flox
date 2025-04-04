@@ -2156,9 +2156,9 @@ def _validate_reindex(
             raise ValueError("reindex must be None or False when func is 'first' or 'last.")
 
     if isinstance(reindex, ReindexStrategy):
-        return reindex
-
-    reindex_ = ReindexStrategy(blockwise=reindex)
+        reindex_ = reindex
+    else:
+        reindex_ = ReindexStrategy(blockwise=reindex)
 
     if reindex_.blockwise is None:
         if method is None:
