@@ -880,6 +880,58 @@ def factorize_(
 ) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]: ...
 
 
+def _factorize_single(by, expect, *, sort: bool, reindex: bool):
+    flat = by.reshape(-1)
+    if isinstance(expect, pd.RangeIndex):
+        # idx is a view of the original `by` array
+        # copy here so we don't have a race condition with the
+        # group_idx[nanmask] = nan_sentinel assignment later
+        # this is important in shared-memory parallelism with dask
+        # TODO: figure out how to avoid this
+        idx = flat.copy()
+        found_groups = np.array(expect)
+        # TODO: fix by using masked integers
+        idx[idx > expect[-1]] = -1
+
+    elif isinstance(expect, pd.IntervalIndex):
+        if expect.closed == "both":
+            raise NotImplementedError
+        bins = np.concatenate([expect.left.to_numpy(), expect.right.to_numpy()[[-1]]])
+
+        # digitize is 0 or idx.max() for values outside the bounds of all intervals
+        # make it behave like pd.cut which uses -1:
+        if len(bins) > 1:
+            right = expect.closed_right
+            idx = np.digitize(
+                flat,
+                bins=bins.view(np.int64) if bins.dtype.kind == "M" else bins,
+                right=right,
+            )
+            idx -= 1
+            within_bins = flat <= bins.max() if right else flat < bins.max()
+            idx[~within_bins] = -1
+        else:
+            idx = np.zeros_like(flat, dtype=np.intp) - 1
+        found_groups = np.array(expect)
+    else:
+        if expect is not None and reindex:
+            sorter = np.argsort(expect)
+            groups = expect[(sorter,)] if sort else expect
+            idx = np.searchsorted(expect, flat, sorter=sorter)
+            mask = ~np.isin(flat, expect) | isnull(flat) | (idx == len(expect))
+            if not sort:
+                # idx is the index in to the sorted array.
+                # if we didn't want sorting, unsort it back
+                idx[(idx == len(expect),)] = -1
+                idx = sorter[(idx,)]
+            idx[mask] = -1
+        else:
+            idx, groups = pd.factorize(flat, sort=sort)
+        found_groups = np.array(groups)
+
+    return (found_groups, idx.reshape(by.shape))
+
+
 def factorize_(
     by: T_Bys,
     axes: T_Axes,
@@ -899,59 +951,12 @@ def factorize_(
     if expected_groups is None:
         expected_groups = (None,) * len(by)
 
-    factorized = []
-    found_groups = []
-    for groupvar, expect in zip(by, expected_groups):
-        flat = groupvar.reshape(-1)
-        if isinstance(expect, pd.RangeIndex):
-            # idx is a view of the original `by` array
-            # copy here so we don't have a race condition with the
-            # group_idx[nanmask] = nan_sentinel assignment later
-            # this is important in shared-memory parallelism with dask
-            # TODO: figure out how to avoid this
-            idx = flat.copy()
-            found_groups.append(np.array(expect))
-            # TODO: fix by using masked integers
-            idx[idx > expect[-1]] = -1
-
-        elif isinstance(expect, pd.IntervalIndex):
-            if expect.closed == "both":
-                raise NotImplementedError
-            bins = np.concatenate([expect.left.to_numpy(), expect.right.to_numpy()[[-1]]])
-
-            # digitize is 0 or idx.max() for values outside the bounds of all intervals
-            # make it behave like pd.cut which uses -1:
-            if len(bins) > 1:
-                right = expect.closed_right
-                idx = np.digitize(
-                    flat,
-                    bins=bins.view(np.int64) if bins.dtype.kind == "M" else bins,
-                    right=right,
-                )
-                idx -= 1
-                within_bins = flat <= bins.max() if right else flat < bins.max()
-                idx[~within_bins] = -1
-            else:
-                idx = np.zeros_like(flat, dtype=np.intp) - 1
-
-            found_groups.append(np.array(expect))
-        else:
-            if expect is not None and reindex:
-                sorter = np.argsort(expect)
-                groups = expect[(sorter,)] if sort else expect
-                idx = np.searchsorted(expect, flat, sorter=sorter)
-                mask = ~np.isin(flat, expect) | isnull(flat) | (idx == len(expect))
-                if not sort:
-                    # idx is the index in to the sorted array.
-                    # if we didn't want sorting, unsort it back
-                    idx[(idx == len(expect),)] = -1
-                    idx = sorter[(idx,)]
-                idx[mask] = -1
-            else:
-                idx, groups = pd.factorize(flat, sort=sort)
-
-            found_groups.append(np.array(groups))
-        factorized.append(idx.reshape(groupvar.shape))
+    results = [
+        _factorize_single(groupvar, expect, sort=sort, reindex=reindex)
+        for groupvar, expect in zip(by, expected_groups)
+    ]
+    found_groups = [r[0] for r in results]
+    factorized = [r[1] for r in results]
 
     grp_shape = tuple(len(grp) for grp in found_groups)
     ngroups = math.prod(grp_shape)
@@ -967,7 +972,7 @@ def factorize_(
     if fastpath:
         return group_idx, tuple(found_groups), grp_shape, ngroups, ngroups, None
 
-    if len(axes) == 1 and groupvar.ndim > 1:
+    if len(axes) == 1 and by[0].ndim > 1:
         # Not reducing along all dimensions of by
         # this is OK because for 3D by and axis=(1,2),
         # we collapse to a 2D by and axis=-1
