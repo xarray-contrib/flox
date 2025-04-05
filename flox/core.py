@@ -195,7 +195,6 @@ class FactorizeKwargs(TypedDict, total=False):
     by: T_Bys
     axes: T_Axes
     fastpath: bool
-    expected_groups: T_ExpectIndexOptTuple | None
     reindex: bool
     sort: bool
 
@@ -2276,7 +2275,6 @@ def _factorize_multiple(
 ) -> tuple[tuple[np.ndarray], tuple[np.ndarray, ...], tuple[int, ...]]:
     kwargs: FactorizeKwargs = dict(
         axes=(),  # always (), we offset later if necessary.
-        expected_groups=expected_groups,
         fastpath=True,
         # This is the only way it makes sense I think.
         # reindex controls what's actually allocated in chunk_reduce
@@ -2290,16 +2288,6 @@ def _factorize_multiple(
         # unifying chunks will make sure all arrays in `by` are dask arrays
         # with compatible chunks, even if there was originally a numpy array
         inds = tuple(range(by[0].ndim))
-        chunks, by_ = dask.array.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
-
-        group_idx = dask.array.map_blocks(
-            _lazy_factorize_wrapper,
-            *by_,
-            chunks=tuple(chunks.values()),
-            meta=np.array((), dtype=np.int64),
-            **kwargs,
-        )
-
         fg, gs = [], []
         for by_, expect in zip(by, expected_groups):
             if expect is None:
@@ -2315,9 +2303,25 @@ def _factorize_multiple(
 
         found_groups = tuple(fg)
         grp_shape = tuple(gs)
+
+        chunks, by_chunked = dask.array.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
+        group_idxs = [
+            dask.array.map_blocks(
+                _lazy_factorize_wrapper,
+                by_,
+                expected_groups=(expect_,),
+                meta=np.array((), dtype=np.int64),
+                **kwargs,
+            )
+            for by_, expect_ in zip(by_chunked, expected_groups)
+        ]
+        group_idx = dask.array.map_blocks(
+            _ravel_factorized, *group_idxs, grp_shape=grp_shape, chunks=tuple(chunks.values()), dtype=np.int64
+        )
+
     else:
         kwargs["by"] = by
-        group_idx, found_groups, grp_shape, *_ = factorize_(**kwargs)
+        group_idx, found_groups, grp_shape, *_ = factorize_(**kwargs, expected_groups=expected_groups)
 
     return (group_idx,), found_groups, grp_shape
 
