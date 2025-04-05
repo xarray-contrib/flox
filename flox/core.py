@@ -24,6 +24,7 @@ from typing import (
     TypedDict,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 
@@ -843,7 +844,7 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     return offset, size
 
 
-def _factorize_single(by, expect, *, sort: bool, reindex: bool):
+def _factorize_single(by, expect, *, sort: bool, reindex: bool) -> tuple[pd.Index, np.ndarray]:
     flat = by.reshape(-1)
     if isinstance(expect, pd.RangeIndex):
         # idx is a view of the original `by` array
@@ -852,7 +853,7 @@ def _factorize_single(by, expect, *, sort: bool, reindex: bool):
         # this is important in shared-memory parallelism with dask
         # TODO: figure out how to avoid this
         idx = flat.copy()
-        found_groups = np.array(expect)
+        found_groups = cast(pd.Index, expect)
         # TODO: fix by using masked integers
         idx[idx > expect[-1]] = -1
 
@@ -875,7 +876,7 @@ def _factorize_single(by, expect, *, sort: bool, reindex: bool):
             idx[~within_bins] = -1
         else:
             idx = np.zeros_like(flat, dtype=np.intp) - 1
-        found_groups = np.array(expect)
+        found_groups = cast(pd.Index, expect)
     else:
         if expect is not None and reindex:
             sorter = np.argsort(expect)
@@ -890,7 +891,7 @@ def _factorize_single(by, expect, *, sort: bool, reindex: bool):
             idx[mask] = -1
         else:
             idx, groups = pd.factorize(flat, sort=sort)
-        found_groups = np.array(groups)
+        found_groups = cast(pd.Index, groups)
 
     return (found_groups, idx.reshape(by.shape))
 
@@ -913,7 +914,7 @@ def factorize_(
     expected_groups: T_ExpectIndexOptTuple | None = None,
     reindex: bool = False,
     sort: bool = True,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, None]: ...
+) -> tuple[np.ndarray, tuple[pd.Index, ...], tuple[int, ...], int, int, None]: ...
 
 
 @overload
@@ -925,7 +926,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: Literal[False] = False,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps]: ...
+) -> tuple[np.ndarray, tuple[pd.Index, ...], tuple[int, ...], int, int, FactorProps]: ...
 
 
 @overload
@@ -937,7 +938,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]: ...
+) -> tuple[np.ndarray, tuple[pd.Index, ...], tuple[int, ...], int, int, FactorProps | None]: ...
 
 
 def factorize_(
@@ -948,7 +949,7 @@ def factorize_(
     reindex: bool = False,
     sort: bool = True,
     fastpath: bool = False,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]:
+) -> tuple[np.ndarray, tuple[pd.Index, ...], tuple[int, ...], int, int, FactorProps | None]:
     """
     Returns an array of integer codes for groups (and associated data)
     by wrapping pd.cut and pd.factorize (depending on isbin).
@@ -971,7 +972,7 @@ def factorize_(
             _factorize_single(groupvar, expect, sort=sort, reindex=reindex)
             for groupvar, expect in zip(by, expected_groups)
         )
-    found_groups = [r[0] for r in results]
+    found_groups = tuple(r[0] for r in results)
     factorized = [r[1] for r in results]
 
     grp_shape = tuple(len(grp) for grp in found_groups)
@@ -982,7 +983,7 @@ def factorize_(
         (group_idx,) = factorized
 
     if fastpath:
-        return group_idx, tuple(found_groups), grp_shape, ngroups, ngroups, None
+        return group_idx, found_groups, grp_shape, ngroups, ngroups, None
 
     if len(axes) == 1 and by[0].ndim > 1:
         # Not reducing along all dimensions of by
@@ -1178,7 +1179,7 @@ def chunk_reduce(
     results: IntermediateDict = {"groups": [], "intermediates": []}
     if reindex and expected_groups is not None:
         # TODO: what happens with binning here?
-        results["groups"] = expected_groups.to_numpy()
+        results["groups"] = expected_groups
     else:
         if empty:
             results["groups"] = np.array([np.nan])
@@ -1307,7 +1308,7 @@ def _finalize_results(
             fill_value=fill_value,
             array_type=reindex.array_type,
         )
-        finalized["groups"] = expected_groups.to_numpy()
+        finalized["groups"] = expected_groups
     else:
         finalized["groups"] = squeezed["groups"]
 
@@ -2272,7 +2273,7 @@ def _factorize_multiple(
     expected_groups: T_ExpectIndexOptTuple,
     any_by_dask: bool,
     sort: bool = True,
-) -> tuple[tuple[np.ndarray], tuple[np.ndarray, ...], tuple[int, ...]]:
+) -> tuple[tuple[np.ndarray], tuple[pd.Index, ...], tuple[int, ...]]:
     kwargs: FactorizeKwargs = dict(
         axes=(),  # always (), we offset later if necessary.
         fastpath=True,
@@ -2293,7 +2294,7 @@ def _factorize_multiple(
                 raise ValueError("Please provide expected_groups when grouping by a dask array.")
 
         found_groups = tuple(
-            pd.unique(by_.reshape(-1)) if expect is None else expect.to_numpy()
+            pd.Index(pd.unique(by_.reshape(-1))) if expect is None else expect
             for by_, expect in zip(by, expected_groups)
         )
         grp_shape = tuple(map(len, found_groups))
@@ -2883,6 +2884,9 @@ def groupby_reduce(
             result = asdelta + offset
             result[nanmask] = np.timedelta64("NaT")
 
+    groups = map(
+        lambda g: g.to_numpy() if isinstance(g, pd.Index) and not isinstance(g, pd.RangeIndex) else g, groups
+    )
     return (result, *groups)
 
 
