@@ -932,6 +932,15 @@ def _factorize_single(by, expect, *, sort: bool, reindex: bool):
     return (found_groups, idx.reshape(by.shape))
 
 
+def _ravel_factorized(*factorized: np.ndarray, grp_shape: tuple[int, ...]) -> np.ndarray:
+    group_idx = np.ravel_multi_index(factorized, grp_shape, mode="wrap")
+    # NaNs; as well as values outside the bins are coded by -1
+    # Restore these after the raveling
+    nan_by_mask = reduce(np.logical_or, [(f == -1) for f in factorized])
+    group_idx[nan_by_mask] = -1
+    return group_idx
+
+
 def factorize_(
     by: T_Bys,
     axes: T_Axes,
@@ -942,7 +951,7 @@ def factorize_(
     fastpath: bool = False,
 ) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]:
     """
-    Returns an array of integer  codes  for groups (and associated data)
+    Returns an array of integer codes for groups (and associated data)
     by wrapping pd.cut and pd.factorize (depending on isbin).
     This method handles reindex and sort so that we don't spend time reindexing / sorting
     a possibly large results array. Instead we set up the appropriate integer codes (group_idx)
@@ -969,13 +978,9 @@ def factorize_(
     grp_shape = tuple(len(grp) for grp in found_groups)
     ngroups = math.prod(grp_shape)
     if len(by) > 1:
-        group_idx = np.ravel_multi_index(factorized, grp_shape, mode="wrap")
-        # NaNs; as well as values outside the bins are coded by -1
-        # Restore these after the raveling
-        nan_by_mask = reduce(np.logical_or, [(f == -1) for f in factorized])
-        group_idx[nan_by_mask] = -1
+        group_idx = _ravel_factorized(*factorized, grp_shape=grp_shape)
     else:
-        group_idx = factorized[0]
+        (group_idx,) = factorized
 
     if fastpath:
         return group_idx, tuple(found_groups), grp_shape, ngroups, ngroups, None
