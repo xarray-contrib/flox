@@ -4,20 +4,22 @@ from functools import lru_cache, partial
 from itertools import product
 from numbers import Integral
 
+import dask
 import pandas as pd
 from dask import config
 from dask.base import normalize_token
 from dask.blockwise import lol_tuples
+from packaging.version import Version
 from toolz import partition_all
 
 from .lib import ArrayLayer
 from .types import Graph
 
-
-# workaround for https://github.com/dask/dask/issues/11862
-@normalize_token.register(pd.RangeIndex)
-def normalize_range_index(x):
-    return normalize_token(type(x)), x.start, x.stop, x.step, x.dtype, x.name
+if Version(dask.__version__) <= Version("2025.03.1"):
+    # workaround for https://github.com/dask/dask/issues/11862
+    @normalize_token.register(pd.RangeIndex)
+    def normalize_range_index(x):
+        return normalize_token(type(x)), x.start, x.stop, x.step, x.dtype, x.name
 
 
 # _tree_reduce and partial_reduce are copied from dask.array.reductions

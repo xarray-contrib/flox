@@ -195,7 +195,6 @@ class FactorizeKwargs(TypedDict, total=False):
     by: T_Bys
     axes: T_Axes
     fastpath: bool
-    expected_groups: T_ExpectIndexOptTuple | None
     reindex: bool
     sort: bool
 
@@ -844,6 +843,67 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     return offset, size
 
 
+def _factorize_single(by, expect, *, sort: bool, reindex: bool):
+    flat = by.reshape(-1)
+    if isinstance(expect, pd.RangeIndex):
+        # idx is a view of the original `by` array
+        # copy here so we don't have a race condition with the
+        # group_idx[nanmask] = nan_sentinel assignment later
+        # this is important in shared-memory parallelism with dask
+        # TODO: figure out how to avoid this
+        idx = flat.copy()
+        found_groups = np.array(expect)
+        # TODO: fix by using masked integers
+        idx[idx > expect[-1]] = -1
+
+    elif isinstance(expect, pd.IntervalIndex):
+        if expect.closed == "both":
+            raise NotImplementedError
+        bins = np.concatenate([expect.left.to_numpy(), expect.right.to_numpy()[[-1]]])
+
+        # digitize is 0 or idx.max() for values outside the bounds of all intervals
+        # make it behave like pd.cut which uses -1:
+        if len(bins) > 1:
+            right = expect.closed_right
+            idx = np.digitize(
+                flat,
+                bins=bins.view(np.int64) if bins.dtype.kind == "M" else bins,
+                right=right,
+            )
+            idx -= 1
+            within_bins = flat <= bins.max() if right else flat < bins.max()
+            idx[~within_bins] = -1
+        else:
+            idx = np.zeros_like(flat, dtype=np.intp) - 1
+        found_groups = np.array(expect)
+    else:
+        if expect is not None and reindex:
+            sorter = np.argsort(expect)
+            groups = expect[(sorter,)] if sort else expect
+            idx = np.searchsorted(expect, flat, sorter=sorter)
+            mask = ~np.isin(flat, expect) | isnull(flat) | (idx == len(expect))
+            if not sort:
+                # idx is the index in to the sorted array.
+                # if we didn't want sorting, unsort it back
+                idx[(idx == len(expect),)] = -1
+                idx = sorter[(idx,)]
+            idx[mask] = -1
+        else:
+            idx, groups = pd.factorize(flat, sort=sort)
+        found_groups = np.array(groups)
+
+    return (found_groups, idx.reshape(by.shape))
+
+
+def _ravel_factorized(*factorized: np.ndarray, grp_shape: tuple[int, ...]) -> np.ndarray:
+    group_idx = np.ravel_multi_index(factorized, grp_shape, mode="wrap")
+    # NaNs; as well as values outside the bins are coded by -1
+    # Restore these after the raveling
+    nan_by_mask = reduce(np.logical_or, [(f == -1) for f in factorized])
+    group_idx[nan_by_mask] = -1
+    return group_idx
+
+
 @overload
 def factorize_(
     by: T_Bys,
@@ -890,7 +950,7 @@ def factorize_(
     fastpath: bool = False,
 ) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]:
     """
-    Returns an array of integer  codes  for groups (and associated data)
+    Returns an array of integer codes for groups (and associated data)
     by wrapping pd.cut and pd.factorize (depending on isbin).
     This method handles reindex and sort so that we don't spend time reindexing / sorting
     a possibly large results array. Instead we set up the appropriate integer codes (group_idx)
@@ -899,75 +959,32 @@ def factorize_(
     if expected_groups is None:
         expected_groups = (None,) * len(by)
 
-    factorized = []
-    found_groups = []
-    for groupvar, expect in zip(by, expected_groups):
-        flat = groupvar.reshape(-1)
-        if isinstance(expect, pd.RangeIndex):
-            # idx is a view of the original `by` array
-            # copy here so we don't have a race condition with the
-            # group_idx[nanmask] = nan_sentinel assignment later
-            # this is important in shared-memory parallelism with dask
-            # TODO: figure out how to avoid this
-            idx = flat.copy()
-            found_groups.append(np.array(expect))
-            # TODO: fix by using masked integers
-            idx[idx > expect[-1]] = -1
-
-        elif isinstance(expect, pd.IntervalIndex):
-            if expect.closed == "both":
-                raise NotImplementedError
-            bins = np.concatenate([expect.left.to_numpy(), expect.right.to_numpy()[[-1]]])
-
-            # digitize is 0 or idx.max() for values outside the bounds of all intervals
-            # make it behave like pd.cut which uses -1:
-            if len(bins) > 1:
-                right = expect.closed_right
-                idx = np.digitize(
-                    flat,
-                    bins=bins.view(np.int64) if bins.dtype.kind == "M" else bins,
-                    right=right,
-                )
-                idx -= 1
-                within_bins = flat <= bins.max() if right else flat < bins.max()
-                idx[~within_bins] = -1
-            else:
-                idx = np.zeros_like(flat, dtype=np.intp) - 1
-
-            found_groups.append(np.array(expect))
-        else:
-            if expect is not None and reindex:
-                sorter = np.argsort(expect)
-                groups = expect[(sorter,)] if sort else expect
-                idx = np.searchsorted(expect, flat, sorter=sorter)
-                mask = ~np.isin(flat, expect) | isnull(flat) | (idx == len(expect))
-                if not sort:
-                    # idx is the index in to the sorted array.
-                    # if we didn't want sorting, unsort it back
-                    idx[(idx == len(expect),)] = -1
-                    idx = sorter[(idx,)]
-                idx[mask] = -1
-            else:
-                idx, groups = pd.factorize(flat, sort=sort)
-
-            found_groups.append(np.array(groups))
-        factorized.append(idx.reshape(groupvar.shape))
+    if len(by) > 2:
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(partial(_factorize_single, sort=sort, reindex=reindex), groupvar, expect)
+                for groupvar, expect in zip(by, expected_groups)
+            ]
+            results = tuple(f.result() for f in futures)
+    else:
+        results = tuple(
+            _factorize_single(groupvar, expect, sort=sort, reindex=reindex)
+            for groupvar, expect in zip(by, expected_groups)
+        )
+    found_groups = [r[0] for r in results]
+    factorized = [r[1] for r in results]
 
     grp_shape = tuple(len(grp) for grp in found_groups)
     ngroups = math.prod(grp_shape)
     if len(by) > 1:
-        group_idx = np.ravel_multi_index(factorized, grp_shape, mode="wrap")
-        # NaNs; as well as values outside the bins are coded by -1
-        # Restore these after the raveling
-        nan_by_mask = reduce(np.logical_or, [(f == -1) for f in factorized])
-        group_idx[nan_by_mask] = -1
+        group_idx = _ravel_factorized(*factorized, grp_shape=grp_shape)
     else:
-        group_idx = factorized[0]
+        (group_idx,) = factorized
 
     if fastpath:
         return group_idx, tuple(found_groups), grp_shape, ngroups, ngroups, None
 
-    if len(axes) == 1 and groupvar.ndim > 1:
+    if len(axes) == 1 and by[0].ndim > 1:
         # Not reducing along all dimensions of by
         # this is OK because for 3D by and axis=(1,2),
         # we collapse to a 2D by and axis=-1
@@ -2258,7 +2275,6 @@ def _factorize_multiple(
 ) -> tuple[tuple[np.ndarray], tuple[np.ndarray, ...], tuple[int, ...]]:
     kwargs: FactorizeKwargs = dict(
         axes=(),  # always (), we offset later if necessary.
-        expected_groups=expected_groups,
         fastpath=True,
         # This is the only way it makes sense I think.
         # reindex controls what's actually allocated in chunk_reduce
@@ -2272,34 +2288,36 @@ def _factorize_multiple(
         # unifying chunks will make sure all arrays in `by` are dask arrays
         # with compatible chunks, even if there was originally a numpy array
         inds = tuple(range(by[0].ndim))
-        chunks, by_ = dask.array.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
+        for by_, expect in zip(by, expected_groups):
+            if expect is None and is_duck_dask_array(by_):
+                raise ValueError("Please provide expected_groups when grouping by a dask array.")
 
+        found_groups = tuple(
+            pd.unique(by_.reshape(-1)) if expect is None else expect.to_numpy()
+            for by_, expect in zip(by, expected_groups)
+        )
+        grp_shape = tuple(map(len, found_groups))
+
+        chunks, by_chunked = dask.array.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
+        group_idxs = [
+            dask.array.map_blocks(
+                _lazy_factorize_wrapper,
+                by_,
+                expected_groups=(expect_,),
+                meta=np.array((), dtype=np.int64),
+                **kwargs,
+            )
+            for by_, expect_ in zip(by_chunked, expected_groups)
+        ]
+        # This could be avoied but we'd use `np.where`
+        # instead `_ravel_factorized` instead i.e. a copy.
         group_idx = dask.array.map_blocks(
-            _lazy_factorize_wrapper,
-            *by_,
-            chunks=tuple(chunks.values()),
-            meta=np.array((), dtype=np.int64),
-            **kwargs,
+            _ravel_factorized, *group_idxs, grp_shape=grp_shape, chunks=tuple(chunks.values()), dtype=np.int64
         )
 
-        fg, gs = [], []
-        for by_, expect in zip(by, expected_groups):
-            if expect is None:
-                if is_duck_dask_array(by_):
-                    raise ValueError("Please provide expected_groups when grouping by a dask array.")
-
-                found_group = pd.unique(by_.reshape(-1))
-            else:
-                found_group = expect.to_numpy()
-
-            fg.append(found_group)
-            gs.append(len(found_group))
-
-        found_groups = tuple(fg)
-        grp_shape = tuple(gs)
     else:
         kwargs["by"] = by
-        group_idx, found_groups, grp_shape, *_ = factorize_(**kwargs)
+        group_idx, found_groups, grp_shape, *_ = factorize_(**kwargs, expected_groups=expected_groups)
 
     return (group_idx,), found_groups, grp_shape
 
