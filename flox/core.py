@@ -843,42 +843,6 @@ def offset_labels(labels: np.ndarray, ngroups: int) -> tuple[np.ndarray, int]:
     return offset, size
 
 
-@overload
-def factorize_(
-    by: T_Bys,
-    axes: T_Axes,
-    *,
-    fastpath: Literal[True],
-    expected_groups: T_ExpectIndexOptTuple | None = None,
-    reindex: bool = False,
-    sort: bool = True,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, None]: ...
-
-
-@overload
-def factorize_(
-    by: T_Bys,
-    axes: T_Axes,
-    *,
-    expected_groups: T_ExpectIndexOptTuple | None = None,
-    reindex: bool = False,
-    sort: bool = True,
-    fastpath: Literal[False] = False,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps]: ...
-
-
-@overload
-def factorize_(
-    by: T_Bys,
-    axes: T_Axes,
-    *,
-    expected_groups: T_ExpectIndexOptTuple | None = None,
-    reindex: bool = False,
-    sort: bool = True,
-    fastpath: bool = False,
-) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]: ...
-
-
 def _factorize_single(by, expect, *, sort: bool, reindex: bool):
     flat = by.reshape(-1)
     if isinstance(expect, pd.RangeIndex):
@@ -940,6 +904,42 @@ def _ravel_factorized(*factorized: np.ndarray, grp_shape: tuple[int, ...]) -> np
     return group_idx
 
 
+@overload
+def factorize_(
+    by: T_Bys,
+    axes: T_Axes,
+    *,
+    fastpath: Literal[True],
+    expected_groups: T_ExpectIndexOptTuple | None = None,
+    reindex: bool = False,
+    sort: bool = True,
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, None]: ...
+
+
+@overload
+def factorize_(
+    by: T_Bys,
+    axes: T_Axes,
+    *,
+    expected_groups: T_ExpectIndexOptTuple | None = None,
+    reindex: bool = False,
+    sort: bool = True,
+    fastpath: Literal[False] = False,
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps]: ...
+
+
+@overload
+def factorize_(
+    by: T_Bys,
+    axes: T_Axes,
+    *,
+    expected_groups: T_ExpectIndexOptTuple | None = None,
+    reindex: bool = False,
+    sort: bool = True,
+    fastpath: bool = False,
+) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, ...], int, int, FactorProps | None]: ...
+
+
 def factorize_(
     by: T_Bys,
     axes: T_Axes,
@@ -967,10 +967,10 @@ def factorize_(
             ]
             results = tuple(f.result() for f in futures)
     else:
-        results = [
+        results = tuple(
             _factorize_single(groupvar, expect, sort=sort, reindex=reindex)
             for groupvar, expect in zip(by, expected_groups)
-        ]
+        )
     found_groups = [r[0] for r in results]
     factorized = [r[1] for r in results]
 
