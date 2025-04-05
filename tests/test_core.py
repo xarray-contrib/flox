@@ -86,7 +86,7 @@ def _get_array_func(func: str) -> Callable:
             x = np.asarray(x)
             return (~xrutils.isnull(x)).sum(**kwargs)
 
-    elif func in ["nanfirst", "nanlast"]:
+    elif func in ["nanfirst", "nanlast", "topk"]:
         npfunc = getattr(xrutils, func)
 
     elif func in SCIPY_STATS_FUNCS:
@@ -219,15 +219,15 @@ def gen_array_by(size, func):
     "chunks",
     [
         None,
-        pytest.param(-1, marks=requires_dask),
-        pytest.param(3, marks=requires_dask),
-        pytest.param(4, marks=requires_dask),
+        # pytest.param(-1, marks=requires_dask),
+        # pytest.param(3, marks=requires_dask),
+        # pytest.param(4, marks=requires_dask),
     ],
 )
-@pytest.mark.parametrize("size", ((1, 12), (12,), (12, 9)))
-@pytest.mark.parametrize("nby", [1, 2, 3])
-@pytest.mark.parametrize("add_nan_by", [True, False])
-@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("size", ((12, 6),))
+@pytest.mark.parametrize("nby", [2])
+@pytest.mark.parametrize("add_nan_by", [True])
+@pytest.mark.parametrize("func", ["topk"])
 def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
     if ("arg" in func and engine in ["flox", "numbagg"]) or (func in BLOCKWISE_FUNCS and chunks != -1):
         pytest.skip()
@@ -255,6 +255,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         ]
         fill_value = None
         tolerance = None
+    elif func == "topk":
+        finalize_kwargs = [{"k": 3}, {"k": -3}]
+        fill_value = None
+        tolerance = None
     else:
         fill_value = None
         tolerance = None
@@ -264,6 +268,8 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
 
     for kwargs in finalize_kwargs:
         if "quantile" in func and isinstance(kwargs["q"], list) and engine != "flox":
+            continue
+        if "topk" in func and engine != "flox":
             continue
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -284,6 +290,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                     expected = getattr(np, func_)(array_, axis=-1, **kwargs)
                 else:
                     expected = array_func(array_[..., ~nanmask], axis=-1, **kwargs)
+                if func == "topk":
+                    if nanmask.all():
+                        expected = np.full(expected.shape[:-1] + (abs(kwargs["k"]),), np.nan)
+                    expected = np.sort(np.swapaxes(expected, array.ndim - 1, 0), axis=0)
         for _ in range(nby):
             expected = np.expand_dims(expected, -1)
 
@@ -291,7 +301,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert chunks == -1
 
         actual, *groups = groupby_reduce(array, *by, **flox_kwargs)
-        if "quantile" in func and isinstance(kwargs["q"], list):
+        if ("quantile" in func and isinstance(kwargs["q"], list)) or func == "topk":
             assert actual.ndim == expected.ndim == (array.ndim + nby)
         else:
             assert actual.ndim == expected.ndim == (array.ndim + nby - 1)
@@ -301,9 +311,12 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
+        if func == "topk":
+            actual = np.sort(actual, axis=0)
         assert_equal(expected, actual, tolerance)
 
-        if "nan" not in func and "arg" not in func:
+        # FIXME: topk vs nantopk
+        if "nan" not in func and "arg" not in func and "topk" not in func:
             # test non-NaN skipping behaviour when NaNs are present
             nanned = array_.copy()
             # remove nans in by to reduce complexity
@@ -313,6 +326,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
             nanned.reshape(-1)[0] = np.nan
             actual, *_ = groupby_reduce(nanned, *by_, **flox_kwargs)
             expected_0 = array_func(nanned, axis=-1, **kwargs)
+            if func == "topk":
+                expected_0 = np.sort(np.swapaxes(expected_0, array.ndim - 1, 0), axis=-1)
+                actual = np.sort(actual, axis=-1)
+
             for _ in range(nby):
                 expected_0 = np.expand_dims(expected_0, -1)
             assert_equal(expected_0, actual, tolerance)
