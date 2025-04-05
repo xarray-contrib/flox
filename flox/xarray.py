@@ -113,7 +113,7 @@ def xarray_reduce(
         DType for the output. Can be anything that is accepted by ``np.dtype``.
     method : {"map-reduce", "blockwise", "cohorts"}, optional
         Note that this arg is chosen by default using heuristics.
-        Strategy for reduction of dask arrays only:
+        Strategy for reduction of dask arrays only.
           * ``"map-reduce"``:
             First apply the reduction blockwise on ``array``, then
             combine a few newighbouring blocks, apply the reduction.
