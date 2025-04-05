@@ -2288,21 +2288,15 @@ def _factorize_multiple(
         # unifying chunks will make sure all arrays in `by` are dask arrays
         # with compatible chunks, even if there was originally a numpy array
         inds = tuple(range(by[0].ndim))
-        fg, gs = [], []
         for by_, expect in zip(by, expected_groups):
-            if expect is None:
-                if is_duck_dask_array(by_):
-                    raise ValueError("Please provide expected_groups when grouping by a dask array.")
+            if expect is None and is_duck_dask_array(by_):
+                raise ValueError("Please provide expected_groups when grouping by a dask array.")
 
-                found_group = pd.unique(by_.reshape(-1))
-            else:
-                found_group = expect.to_numpy()
-
-            fg.append(found_group)
-            gs.append(len(found_group))
-
-        found_groups = tuple(fg)
-        grp_shape = tuple(gs)
+        found_groups = tuple(
+            pd.unique(by_.reshape(-1)) if expect is None else expect.to_numpy()
+            for by_, expect in zip(by, expected_groups)
+        )
+        grp_shape = tuple(map(len, found_groups))
 
         chunks, by_chunked = dask.array.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
         group_idxs = [
@@ -2315,6 +2309,8 @@ def _factorize_multiple(
             )
             for by_, expect_ in zip(by_chunked, expected_groups)
         ]
+        # This could be avoied but we'd use `np.where`
+        # instead `_ravel_factorized` instead i.e. a copy.
         group_idx = dask.array.map_blocks(
             _ravel_factorized, *group_idxs, grp_shape=grp_shape, chunks=tuple(chunks.values()), dtype=np.int64
         )
