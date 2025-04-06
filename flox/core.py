@@ -756,14 +756,14 @@ def reindex_pydata_sparse_coo(array, from_, to, fill_value, dtype, axis):
     assert axis == -1
 
     if fill_value is None:
-        raise ValueError("Filling is required. fill_value cannot be None.")
+        raise ValueError("Filling is required for sparse arrays. fill_value cannot be None.")
     idx = to.get_indexer(from_)
-    assert (idx != -1).all()  # FIXME
+    mask = idx != -1
     shape = array.shape
-    ranges = np.broadcast_arrays(*np.ix_(*(tuple(np.arange(size) for size in shape[:axis]) + (idx,))))
+    ranges = np.broadcast_arrays(*np.ix_(*(tuple(np.arange(size) for size in shape[:axis]) + (idx[mask],))))
     coords = np.stack(ranges, axis=0).reshape(array.ndim, -1)
 
-    data = array.data if isinstance(array, sparse.COO) else array.reshape(-1)
+    data = array[..., mask].data if isinstance(array, sparse.COO) else array[..., mask].reshape(-1)
 
     reindexed = sparse.COO(
         coords=coords,
