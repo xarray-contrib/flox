@@ -24,6 +24,7 @@ from flox.core import (
     _choose_engine,
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
+    _is_sparse_supported_reduction,
     _normalize_indexes,
     _validate_reindex,
     factorize_,
@@ -43,6 +44,7 @@ from . import (
     assert_equal_tuple,
     has_cubed,
     has_dask,
+    has_sparse,
     raise_if_dask_computes,
     requires_cubed,
     requires_dask,
@@ -74,6 +76,10 @@ if has_cubed:
 
 
 DEFAULT_QUANTILE = 0.9
+REINDEX_SPARSE_STRAT = ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)
+REINDEX_SPARSE_PARAM = pytest.param(
+    REINDEX_SPARSE_STRAT, marks=(requires_dask, pytest.mark.skipif(not has_sparse, reason="no sparse"))
+)
 
 if TYPE_CHECKING:
     from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt, T_Method
@@ -320,13 +326,20 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         if not has_dask or chunks is None or func in BLOCKWISE_FUNCS:
             continue
 
-        params = list(itertools.product(["map-reduce"], [True, False, None]))
+        params = list(
+            itertools.product(
+                ["map-reduce"],
+                [True, False, None, REINDEX_SPARSE_STRAT],
+            )
+        )
         params.extend(itertools.product(["cohorts"], [False, None]))
         if chunks == -1:
             params.extend([("blockwise", None)])
 
         combine_error = RuntimeError("This combine should not have been called.")
         for method, reindex in params:
+            if isinstance(reindex, ReindexStrategy) and not _is_sparse_supported_reduction(func):
+                continue
             call = partial(
                 groupby_reduce,
                 array,
@@ -360,6 +373,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
+            if isinstance(reindex, ReindexStrategy):
+                import sparse
+
+                expected = sparse.COO.from_numpy(expected)
             assert_equal(actual, expected, tolerance)
 
 
@@ -447,7 +464,7 @@ def test_numpy_reduce_nd_md():
 
 
 @requires_dask
-@pytest.mark.parametrize("reindex", [None, False, True])
+@pytest.mark.parametrize("reindex", [None, False, True, REINDEX_SPARSE_PARAM])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("add_nan", [False, True])
 @pytest.mark.parametrize("dtype", (float,))
@@ -468,6 +485,9 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
         pytest.skip()
 
     if "arg" in func and (engine in ["flox", "numbagg"] or reindex):
+        pytest.skip()
+
+    if isinstance(reindex, ReindexStrategy) and not _is_sparse_supported_reduction(func):
         pytest.skip()
 
     rng = np.random.default_rng(12345)
@@ -775,6 +795,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         (None, None),
         pytest.param(False, (2, 2, 3), marks=requires_dask),
         pytest.param(True, (2, 2, 3), marks=requires_dask),
+        pytest.param(REINDEX_SPARSE_PARAM, (2, 2, 3), marks=requires_dask),
     ],
 )
 @pytest.mark.parametrize(
@@ -821,7 +842,13 @@ def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engi
 @requires_dask
 @pytest.mark.parametrize(
     "expected_groups, reindex",
-    [(None, None), (None, False), ([0, 1, 2], True), ([0, 1, 2], False)],
+    [
+        (None, None),
+        (None, False),
+        ([0, 1, 2], True),
+        ([0, 1, 2], False),
+        pytest.param([0, 1, 2], REINDEX_SPARSE_PARAM),
+    ],
 )
 def test_groupby_all_nan_blocks_dask(expected_groups, reindex, engine):
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
@@ -2085,7 +2112,28 @@ def test_reindex_sparse():
 
     with patch("flox.core.reindex_") as mocked_func:
         mocked_func.side_effect = mocked_reindex
-        actual, *_ = groupby_reduce(array, by, func=func, reindex=reindex, expected_groups=expected_groups)
+        actual, *_ = groupby_reduce(
+            array, by, func=func, reindex=reindex, expected_groups=expected_groups, fill_value=0
+        )
         assert_equal(actual, expected)
         # once during graph construction, 10 times afterward
         assert mocked_func.call_count > 1
+
+
+def test_sparse_errors():
+    call = partial(
+        groupby_reduce,
+        [1, 2, 3],
+        [0, 1, 1],
+        reindex=REINDEX_SPARSE_STRAT,
+        fill_value=0,
+        expected_groups=[0, 1, 2],
+    )
+
+    if not has_sparse:
+        with pytest.raises(ImportError):
+            call(func="sum")
+
+    else:
+        with pytest.raises(ValueError):
+            call(func="first")
