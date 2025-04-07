@@ -2118,3 +2118,22 @@ def test_reindex_sparse():
         assert_equal(actual, expected)
         # once during graph construction, 10 times afterward
         assert mocked_func.call_count > 1
+
+
+def test_sparse_errors():
+    call = partial(
+        groupby_reduce,
+        [1, 2, 3],
+        [0, 1, 1],
+        reindex=REINDEX_SPARSE_STRAT,
+        fill_value=0,
+        expected_groups=[0, 1, 2],
+    )
+
+    if not has_sparse:
+        with pytest.raises(ImportError):
+            call(func="sum")
+
+    else:
+        with pytest.raises(ValueError):
+            call(func="first")
