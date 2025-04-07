@@ -68,6 +68,7 @@ else:
     from numpy.core.numeric import normalize_axis_tuple  # type: ignore[no-redef]
 
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
+HAS_SPARSE = module_available("sparse")
 
 if TYPE_CHECKING:
     try:
@@ -253,6 +254,12 @@ def _is_bool_supported_reduction(func: T_Agg) -> bool:
         # or _is_first_last_reduction(func)
         # or _is_minmax_reduction(func)
     )
+
+
+def _is_sparse_supported_reduction(func: T_Agg) -> bool:
+    if isinstance(func, Aggregation):
+        func = func.name
+    return not HAS_SPARSE or all(f not in func for f in ["first", "last", "prod", "var", "std"])
 
 
 def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
@@ -736,12 +743,12 @@ def rechunk_for_blockwise(array: DaskArray, axis: T_Axis, labels: np.ndarray) ->
         return array.rechunk({axis: newchunks})
 
 
-def reindex_numpy(array, from_, to, fill_value, dtype, axis):
+def reindex_numpy(array, from_: pd.Index, to: pd.Index, fill_value, dtype, axis: int):
     idx = from_.get_indexer(to)
     indexer = [slice(None, None)] * array.ndim
     indexer[axis] = idx
     reindexed = array[tuple(indexer)]
-    if any(idx == -1):
+    if (idx == -1).any():
         if fill_value is None:
             raise ValueError("Filling is required. fill_value cannot be None.")
         indexer[axis] = idx == -1
@@ -750,25 +757,43 @@ def reindex_numpy(array, from_, to, fill_value, dtype, axis):
     return reindexed
 
 
-def reindex_pydata_sparse_coo(array, from_, to, fill_value, dtype, axis):
+def reindex_pydata_sparse_coo(array, from_: pd.Index, to: pd.Index, fill_value, dtype, axis: int):
     import sparse
 
     assert axis == -1
 
-    if fill_value is None:
-        raise ValueError("Filling is required for sparse arrays. fill_value cannot be None.")
-    idx = to.get_indexer(from_)
-    mask = idx != -1
-    shape = array.shape
-    ranges = np.broadcast_arrays(*np.ix_(*(tuple(np.arange(size) for size in shape[:axis]) + (idx[mask],))))
-    coords = np.stack(ranges, axis=0).reshape(array.ndim, -1)
+    needs_reindex = (from_.difference(to)).size > 0
+    if needs_reindex and fill_value is None:
+        raise ValueError("Filling is required. fill_value cannot be None.")
 
-    data = array[..., mask].data if isinstance(array, sparse.COO) else array[..., mask].reshape(-1)
+    idx = to.get_indexer(from_)
+    mask = idx != -1  # indices along last axis to keep
+    if mask.all():
+        mask = slice(None)
+    shape = array.shape
+
+    if isinstance(array, sparse.COO):
+        subset = array[..., mask]
+        data = subset.data
+        coords = subset.coords
+        if subset.nnz > 0:
+            coords[-1, :] = idx[mask][coords[-1, :]]
+        if fill_value is None:
+            # no reindexing is actually needed (dense case)
+            # preserve the fill_value
+            fill_value = array.fill_value
+    else:
+        ranges = np.broadcast_arrays(
+            *np.ix_(*(tuple(np.arange(size) for size in shape[:axis]) + (idx[mask],)))
+        )
+        coords = np.stack(ranges, axis=0).reshape(array.ndim, -1)
+        data = array[..., mask].reshape(-1)
 
     reindexed = sparse.COO(
         coords=coords,
         data=data.astype(dtype, copy=False),
         shape=(*array.shape[:axis], to.size),
+        fill_value=fill_value,
     )
 
     return reindexed
@@ -795,7 +820,11 @@ def reindex_(
 
     if array.shape[axis] == 0:
         # all groups were NaN
-        reindexed = np.full(array.shape[:-1] + (len(to),), fill_value, dtype=array.dtype)
+        shape = array.shape[:-1] + (len(to),)
+        if array_type in (ReindexArrayType.AUTO, ReindexArrayType.NUMPY):
+            reindexed = np.full(shape, fill_value, dtype=array.dtype)
+        else:
+            raise NotImplementedError
         return reindexed
 
     from_ = pd.Index(from_)
@@ -1044,7 +1073,7 @@ def chunk_argreduce(
         sort=sort,
         user_dtype=user_dtype,
     )
-    if not isnull(results["groups"]).all():
+    if not all(isnull(results["groups"])):
         idx = np.broadcast_to(idx, array.shape)
 
         # array, by get flattened to 1D before passing to npg
@@ -1288,7 +1317,7 @@ def _finalize_results(
     fill_value = agg.fill_value["user"]
     if min_count > 0:
         count_mask = counts < min_count
-        if count_mask.any():
+        if count_mask.any() or reindex.array_type is ReindexArrayType.SPARSE_COO:
             # For one count_mask.any() prevents promoting bool to dtype(fill_value) unless
             # necessary
             if fill_value is None:
@@ -2814,6 +2843,12 @@ def groupby_reduce(
             is_duck_dask_array(array),
             array.dtype,
         )
+
+        if reindex.array_type is ReindexArrayType.SPARSE_COO and not _is_sparse_supported_reduction(func):
+            raise NotImplementedError(
+                f"Aggregation {func=!r} is not supported when reindexing to a sparse array. "
+                "Please raise an issue"
+            )
 
         if TYPE_CHECKING:
             assert isinstance(reindex, ReindexStrategy)

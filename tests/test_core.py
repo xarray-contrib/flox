@@ -24,6 +24,7 @@ from flox.core import (
     _choose_engine,
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
+    _is_sparse_supported_reduction,
     _normalize_indexes,
     _validate_reindex,
     factorize_,
@@ -320,13 +321,20 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         if not has_dask or chunks is None or func in BLOCKWISE_FUNCS:
             continue
 
-        params = list(itertools.product(["map-reduce"], [True, False, None]))
+        params = list(
+            itertools.product(
+                ["map-reduce"],
+                [True, False, None, ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)],
+            )
+        )
         params.extend(itertools.product(["cohorts"], [False, None]))
         if chunks == -1:
             params.extend([("blockwise", None)])
 
         combine_error = RuntimeError("This combine should not have been called.")
         for method, reindex in params:
+            if isinstance(reindex, ReindexStrategy) and not _is_sparse_supported_reduction(func):
+                continue
             call = partial(
                 groupby_reduce,
                 array,
@@ -360,6 +368,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
+            if isinstance(reindex, ReindexStrategy):
+                import sparse
+
+                expected = sparse.COO.from_numpy(expected)
             assert_equal(actual, expected, tolerance)
 
 
@@ -2085,7 +2097,9 @@ def test_reindex_sparse():
 
     with patch("flox.core.reindex_") as mocked_func:
         mocked_func.side_effect = mocked_reindex
-        actual, *_ = groupby_reduce(array, by, func=func, reindex=reindex, expected_groups=expected_groups)
+        actual, *_ = groupby_reduce(
+            array, by, func=func, reindex=reindex, expected_groups=expected_groups, fill_value=0
+        )
         assert_equal(actual, expected)
         # once during graph construction, 10 times afterward
         assert mocked_func.call_count > 1
