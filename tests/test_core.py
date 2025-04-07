@@ -76,6 +76,10 @@ if has_cubed:
 
 
 DEFAULT_QUANTILE = 0.9
+REINDEX_SPARSE_STRAT = ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)
+REINDEX_SPARSE_PARAM = pytest.param(
+    REINDEX_SPARSE_STRAT, marks=(requires_dask, pytest.mark.skipif(not has_sparse, reason="no sparse"))
+)
 
 if TYPE_CHECKING:
     from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt, T_Method
@@ -325,7 +329,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         params = list(
             itertools.product(
                 ["map-reduce"],
-                [True, False, None, ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)],
+                [True, False, None, REINDEX_SPARSE_STRAT],
             )
         )
         params.extend(itertools.product(["cohorts"], [False, None]))
@@ -460,18 +464,7 @@ def test_numpy_reduce_nd_md():
 
 
 @requires_dask
-@pytest.mark.parametrize(
-    "reindex",
-    [
-        None,
-        False,
-        True,
-        pytest.param(
-            ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO),
-            marks=pytest.mark.skipif(not has_sparse, reason="no sparse"),
-        ),
-    ],
-)
+@pytest.mark.parametrize("reindex", [None, False, True, REINDEX_SPARSE_PARAM])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("add_nan", [False, True])
 @pytest.mark.parametrize("dtype", (float,))
@@ -802,11 +795,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         (None, None),
         pytest.param(False, (2, 2, 3), marks=requires_dask),
         pytest.param(True, (2, 2, 3), marks=requires_dask),
-        pytest.param(
-            ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO),
-            (2, 2, 3),
-            marks=(requires_dask, pytest.mark.skipif(not has_sparse, reason="no sparse")),
-        ),
+        pytest.param(REINDEX_SPARSE_PARAM, (2, 2, 3), marks=requires_dask),
     ],
 )
 @pytest.mark.parametrize(
@@ -858,11 +847,7 @@ def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engi
         (None, False),
         ([0, 1, 2], True),
         ([0, 1, 2], False),
-        pytest.param(
-            [0, 1, 2],
-            ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO),
-            marks=pytest.mark.skipif(not has_sparse, reason="no sparse"),
-        ),
+        pytest.param([0, 1, 2], REINDEX_SPARSE_PARAM),
     ],
 )
 def test_groupby_all_nan_blocks_dask(expected_groups, reindex, engine):

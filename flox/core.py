@@ -259,7 +259,7 @@ def _is_bool_supported_reduction(func: T_Agg) -> bool:
 def _is_sparse_supported_reduction(func: T_Agg) -> bool:
     if isinstance(func, Aggregation):
         func = func.name
-    return not HAS_SPARSE or all(f not in func for f in ["first", "last", "prod", "var", "std"])
+    return HAS_SPARSE and all(f not in func for f in ["first", "last", "prod", "var", "std"])
 
 
 def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
