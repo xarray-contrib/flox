@@ -44,6 +44,7 @@ from . import (
     assert_equal_tuple,
     has_cubed,
     has_dask,
+    has_sparse,
     raise_if_dask_computes,
     requires_cubed,
     requires_dask,
@@ -459,7 +460,18 @@ def test_numpy_reduce_nd_md():
 
 
 @requires_dask
-@pytest.mark.parametrize("reindex", [None, False, True])
+@pytest.mark.parametrize(
+    "reindex",
+    [
+        None,
+        False,
+        True,
+        pytest.param(
+            ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO),
+            marks=pytest.mark.skipif(not has_sparse, reason="no sparse"),
+        ),
+    ],
+)
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("add_nan", [False, True])
 @pytest.mark.parametrize("dtype", (float,))
@@ -480,6 +492,9 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
         pytest.skip()
 
     if "arg" in func and (engine in ["flox", "numbagg"] or reindex):
+        pytest.skip()
+
+    if isinstance(reindex, ReindexStrategy) and not _is_sparse_supported_reduction(func):
         pytest.skip()
 
     rng = np.random.default_rng(12345)
@@ -787,6 +802,11 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         (None, None),
         pytest.param(False, (2, 2, 3), marks=requires_dask),
         pytest.param(True, (2, 2, 3), marks=requires_dask),
+        pytest.param(
+            ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO),
+            (2, 2, 3),
+            marks=(requires_dask, pytest.mark.skipif(not has_sparse, reason="no sparse")),
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -833,7 +853,17 @@ def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engi
 @requires_dask
 @pytest.mark.parametrize(
     "expected_groups, reindex",
-    [(None, None), (None, False), ([0, 1, 2], True), ([0, 1, 2], False)],
+    [
+        (None, None),
+        (None, False),
+        ([0, 1, 2], True),
+        ([0, 1, 2], False),
+        pytest.param(
+            [0, 1, 2],
+            ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO),
+            marks=pytest.mark.skipif(not has_sparse, reason="no sparse"),
+        ),
+    ],
 )
 def test_groupby_all_nan_blocks_dask(expected_groups, reindex, engine):
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])

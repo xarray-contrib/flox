@@ -762,7 +762,7 @@ def reindex_pydata_sparse_coo(array, from_: pd.Index, to: pd.Index, fill_value, 
 
     assert axis == -1
 
-    needs_reindex = (from_.difference(to)).size > 0
+    needs_reindex = (from_.get_indexer(to) == -1).any()
     if needs_reindex and fill_value is None:
         raise ValueError("Filling is required. fill_value cannot be None.")
 
