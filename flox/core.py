@@ -2844,11 +2844,14 @@ def groupby_reduce(
             array.dtype,
         )
 
-        if reindex.array_type is ReindexArrayType.SPARSE_COO and not _is_sparse_supported_reduction(func):
-            raise NotImplementedError(
-                f"Aggregation {func=!r} is not supported when reindexing to a sparse array. "
-                "Please raise an issue"
-            )
+        if reindex.array_type is ReindexArrayType.SPARSE_COO:
+            if not HAS_SPARSE:
+                raise ImportError("Package 'sparse' must be installed to reindex to a sparse.COO array.")
+            if not _is_sparse_supported_reduction(func):
+                raise NotImplementedError(
+                    f"Aggregation {func=!r} is not supported when reindexing to a sparse array. "
+                    "Please raise an issue"
+                )
 
         if TYPE_CHECKING:
             assert isinstance(reindex, ReindexStrategy)
