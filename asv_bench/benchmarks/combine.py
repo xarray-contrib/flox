@@ -45,7 +45,7 @@ class Combine:
 class Combine1d(Combine):
     """
     Time the combine step for dask reductions,
-    this is for reducting along a single dimension
+    this is for reducing along a single dimension
     """
 
     def setup(self, *args, **kwargs) -> None:
