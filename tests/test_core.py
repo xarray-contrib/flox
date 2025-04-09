@@ -2085,12 +2085,14 @@ def test_datetime_timedelta_first_last(engine, func) -> None:
 
 @requires_dask
 @requires_sparse
-def test_reindex_sparse():
+@pytest.mark.xdist_group(name="sparse-group")
+@pytest.mark.parametrize("size", [2**62 - 1, 11])
+def test_reindex_sparse(size):
     import sparse
 
     array = dask.array.ones((2, 12), chunks=(-1, 3))
     func = "sum"
-    expected_groups = pd.Index(np.arange(11))
+    expected_groups = pd.RangeIndex(size)
     by = dask.array.from_array(np.repeat(np.arange(6) * 2, 2), chunks=(3,))
     dense = np.zeros((2, 11))
     dense[..., np.arange(6) * 2] = 2
@@ -2110,14 +2112,23 @@ def test_reindex_sparse():
             assert isinstance(res, sparse.COO)
         return res
 
-    with patch("flox.core.reindex_") as mocked_func:
-        mocked_func.side_effect = mocked_reindex
-        actual, *_ = groupby_reduce(
-            array, by, func=func, reindex=reindex, expected_groups=expected_groups, fill_value=0
-        )
-        assert_equal(actual, expected)
-        # once during graph construction, 10 times afterward
-        assert mocked_func.call_count > 1
+    # Define the error-raising property
+    def raise_error(self):
+        raise AttributeError("Access to '_data' is not allowed.")
+
+    with patch("flox.core.reindex_") as mocked_reindex_func:
+        with patch.object(pd.RangeIndex, "_data", property(raise_error)):
+            mocked_reindex_func.side_effect = mocked_reindex
+            actual, *_ = groupby_reduce(
+                array, by, func=func, reindex=reindex, expected_groups=expected_groups, fill_value=0
+            )
+            if size == 11:
+                assert_equal(actual, expected)
+            else:
+                actual.compute()  # just compute
+
+            # once during graph construction, 10 times afterward
+            assert mocked_reindex_func.call_count > 1
 
 
 def test_sparse_errors():

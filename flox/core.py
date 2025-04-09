@@ -762,7 +762,19 @@ def reindex_pydata_sparse_coo(array, from_: pd.Index, to: pd.Index, fill_value, 
 
     assert axis == -1
 
-    needs_reindex = (from_.get_indexer(to) == -1).any()
+    # Are there any elements in `to` that are not in `from_`.
+    if isinstance(to, pd.RangeIndex) and len(to) > len(from_):
+        # 1. pandas optimizes set difference between two RangeIndexes only
+        # 2. We want to avoid realizing a very large numpy array in to memory.
+        #    This happens in the `else` clause.
+        #    There are potentially other tricks we can play, but this is a simple
+        #    and effective one. If a user is reindexing to sparse, then len(to) is
+        #    almost guaranteed to be > len(from_). If len(to) <= len(from_), then realizing
+        #    another array of the same shape should be fine.
+        needs_reindex = True
+    else:
+        needs_reindex = (from_.get_indexer(to) == -1).any()
+
     if needs_reindex and fill_value is None:
         raise ValueError("Filling is required. fill_value cannot be None.")
 
@@ -2314,6 +2326,8 @@ def _factorize_multiple(
     )
     if any_by_dask:
         import dask.array
+
+        from . import dask_array_ops  # noqa
 
         # unifying chunks will make sure all arrays in `by` are dask arrays
         # with compatible chunks, even if there was originally a numpy array
