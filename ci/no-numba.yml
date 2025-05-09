@@ -11,6 +11,7 @@ dependencies:
   - pandas
   - numpy>=1.22
   - scipy
+  - sparse
   - lxml # for mypy coverage report
   - matplotlib
   - pip

@@ -2131,10 +2131,11 @@ def test_reindex_sparse(size):
             assert mocked_reindex_func.call_count > 1
 
 
+@requires_dask
 def test_sparse_errors():
     call = partial(
         groupby_reduce,
-        [1, 2, 3],
+        dask.array.from_array([1, 2, 3], chunks=(1,)),
         [0, 1, 1],
         reindex=REINDEX_SPARSE_STRAT,
         fill_value=0,

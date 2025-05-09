@@ -8,6 +8,8 @@ import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
+import sparse
+from hypothesis import assume
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS
 
@@ -166,3 +168,21 @@ def chunked_arrays(
     array = draw(arrays)
     chunks = draw(chunks(shape=array.shape))
     return from_array(array, chunks=chunks)
+
+
+@st.composite
+def sparse_arrays(
+    draw: st.DrawFn,
+    *,
+    elements={"allow_subnormal": False},
+    shapes=npst.array_shapes(),
+    dtypes=numeric_like_dtypes,
+    sparse_class: Callable = sparse.COO,
+) -> sparse.COO:
+    dtype = draw(dtypes)
+    fill_value = draw(npst.from_dtype(dtype=dtype, **elements))
+    assume(dtype.kind not in "mM")  # sparse doesn't support .view
+    array = draw(npst.arrays(elements=elements, shape=shapes, dtype=st.just(dtype), fill=st.just(fill_value)))
+    sparse_array = sparse_class.from_numpy(array, fill_value=fill_value)
+    assume(sparse_array.nnz > 0)
+    return sparse_array

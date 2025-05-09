@@ -78,7 +78,8 @@ jobs:
             git+https://github.com/Unidata/cftime
           python -m pip install \
             git+https://github.com/dask/dask \
-            git+https://github.com/ml31415/numpy-groupies
+            git+https://github.com/ml31415/numpy-groupies \
+            git+https://github.com/pydata/sparse
 
       - name: Install flox
         run: |

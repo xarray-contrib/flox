@@ -259,6 +259,15 @@ def _is_bool_supported_reduction(func: T_Agg) -> bool:
 def _is_sparse_supported_reduction(func: T_Agg) -> bool:
     if isinstance(func, Aggregation):
         func = func.name
+    return any(f in func for f in ["len", "sum", "max", "min", "mean"])
+    # if "prod" in func or "median" in func or "quantile" in func or "any" in func or "all" in func:
+    #     return False
+    # return True
+
+
+def _is_reindex_sparse_supported_reduction(func: T_Agg) -> bool:
+    if isinstance(func, Aggregation):
+        func = func.name
     return HAS_SPARSE and all(f not in func for f in ["first", "last", "prod", "var", "std"])
 
 
@@ -2861,7 +2870,7 @@ def groupby_reduce(
         if reindex.array_type is ReindexArrayType.SPARSE_COO:
             if not HAS_SPARSE:
                 raise ImportError("Package 'sparse' must be installed to reindex to a sparse.COO array.")
-            if not _is_sparse_supported_reduction(func):
+            if not _is_reindex_sparse_supported_reduction(func):
                 raise NotImplementedError(
                     f"Aggregation {func=!r} is not supported when reindexing to a sparse array. "
                     "Please raise an issue"
