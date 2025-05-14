@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import importlib
 import logging
 import warnings
 from collections.abc import Callable, Sequence
@@ -15,9 +14,7 @@ from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
-
-has_sparse = importlib.util.find_spec("sparse")
-
+from .lib import sparse_array_type
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
@@ -76,8 +73,7 @@ def generic_aggregate(
     if func in ["nanfirst", "nanlast"] and array.dtype.kind in "US":
         func = func[3:]
 
-    is_sparse = has_sparse and "sparse" in str(type(array))
-    if is_sparse:
+    if is_sparse := isinstance(array, sparse_array_type):
         # this is not an infinite loop because aggregate_sparse will call
         # generic_aggregate with dense data
         from flox import aggregate_sparse

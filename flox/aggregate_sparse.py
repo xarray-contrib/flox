@@ -88,11 +88,11 @@ def _sparse_agg(
     count = sparse.COO(coords=result_coords, data=dense_counts, shape=full_shape, fill_value=0)
 
     assert axis in (-1, array.ndim - 1)
-    grouped_count = partial(
-        generic_aggregate, engine=engine, func="nanlen", dtype=np.int64, size=shape[axis], fill_value=0
+    grouped_count = generic_aggregate(
+        group_idx, group_idx, engine=engine, func="nanlen", dtype=np.int64, size=size, fill_value=0
     )
     total_count = sparse.COO.from_numpy(
-        np.expand_dims(grouped_count(group_idx, group_idx), tuple(range(array.ndim - 1))), fill_value=0
+        np.expand_dims(grouped_count, tuple(range(array.ndim - 1))), fill_value=0
     )
 
     assert func in BINARY_OPS
@@ -101,10 +101,7 @@ def _sparse_agg(
 
     if (hyper_op := HYPER_OPS.get(func, None)) is not None:
         diff_count = total_count - count
-        if diff_count.nnz > 0:
-            fill = hyper_op(diff_count, array.fill_value)
-        else:
-            fill = 0
+        fill = hyper_op(diff_count, array.fill_value) if diff_count.nnz > 0 else ident
     else:
         if "max" in func or "min" in func:
             fill = np.where((total_count - count) > 0, array.fill_value, ident)

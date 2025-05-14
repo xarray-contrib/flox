@@ -260,9 +260,6 @@ def _is_sparse_supported_reduction(func: T_Agg) -> bool:
     if isinstance(func, Aggregation):
         func = func.name
     return any(f in func for f in ["len", "sum", "max", "min", "mean"])
-    # if "prod" in func or "median" in func or "quantile" in func or "any" in func or "all" in func:
-    #     return False
-    # return True
 
 
 def _is_reindex_sparse_supported_reduction(func: T_Agg) -> bool:
