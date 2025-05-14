@@ -48,7 +48,7 @@ from .aggregations import (
     quantile_new_dims_func,
 )
 from .cache import memoize
-from .lib import ArrayLayer
+from .lib import ArrayLayer, dask_array_type, sparse_array_type
 from .xrutils import (
     _contains_cftime_datetimes,
     _to_pytimedelta,
@@ -178,11 +178,11 @@ class ReindexStrategy:
         self.blockwise = True if self.blockwise is None else self.blockwise
 
     def get_dask_meta(self, other, *, fill_value, dtype) -> Any:
-        import dask
-
         if self.array_type is ReindexArrayType.AUTO:
-            other_type = type(other._meta) if isinstance(other, dask.array.Array) else type(other)
-            return other_type([], dtype=dtype)
+            other = other._meta if isinstance(other, dask_array_type) else other
+            if isinstance(other, sparse_array_type):
+                return type(other).from_numpy(np.array([], dtype=dtype))
+            return type(other)([], dtype=dtype)
         elif self.array_type is ReindexArrayType.NUMPY:
             return np.ndarray([], dtype=dtype)
         elif self.array_type is ReindexArrayType.SPARSE_COO:
@@ -866,8 +866,12 @@ def reindex_(
     if array_type is ReindexArrayType.AUTO:
         # TODO: generalize here
         # Right now, we effectively assume NEP-18 I think
-        # assert isinstance(array, np.ndarray)
-        array_type = ReindexArrayType.NUMPY
+        if isinstance(array, np.ndarray):
+            array_type = ReindexArrayType.NUMPY
+        elif isinstance(array, sparse_array_type):
+            array_type = ReindexArrayType.SPARSE_COO
+        else:
+            raise NotImplementedError
 
     if array_type is ReindexArrayType.NUMPY:
         reindexed = reindex_numpy(array, from_, to, fill_value, new_dtype, axis)
@@ -1382,7 +1386,9 @@ def _aggregate(
 
 
 def _expand_dims(results: IntermediateDict) -> IntermediateDict:
-    results["intermediates"] = tuple(np.expand_dims(array, DUMMY_AXIS) for array in results["intermediates"])
+    results["intermediates"] = tuple(
+        np.expand_dims(array, axis=DUMMY_AXIS) for array in results["intermediates"]
+    )
     return results
 
 

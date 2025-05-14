@@ -49,9 +49,6 @@ def _sparse_agg(
     if not isinstance(array, sparse.COO):
         raise ValueError("Sparse aggregations only supported for sparse.COO arrays")
 
-    if array.nnz == 0:
-        raise NotImplementedError("Don't know how to handle empty sparse arrays.")
-
     if not _is_sparse_supported_reduction(func):
         raise ValueError(f"{func} is unsupported for sparse arrays.")
 

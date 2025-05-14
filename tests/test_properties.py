@@ -14,14 +14,21 @@ import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
-import sparse
 from hypothesis import assume, given, note, settings
 
 import flox
 from flox.core import _is_sparse_supported_reduction, groupby_reduce, groupby_scan
-from flox.xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric, isnull, notnull
+from flox.lib import sparse_array_type
+from flox.xrutils import (
+    _contains_cftime_datetimes,
+    _to_pytimedelta,
+    datetime_to_numeric,
+    is_duck_dask_array,
+    isnull,
+    notnull,
+)
 
-from . import BLOCKWISE_FUNCS, assert_equal
+from . import BLOCKWISE_FUNCS, assert_equal, to_numpy
 from .strategies import (
     all_arrays,
     by_arrays,
@@ -160,13 +167,17 @@ def test_groupby_reduce(data, array, func: str) -> None:
 @settings(report_multiple_bugs=False, deadline=None)
 @given(
     data=st.data(),
-    array=chunked_arrays(arrays=numeric_like_arrays) | sparse_arrays(),
+    array=chunked_arrays(arrays=numeric_like_arrays | sparse_arrays()) | sparse_arrays(),
     func=func_st,
 )
 def test_groupby_reduce_numpy_vs_other(data, array, func: str) -> None:
-    numpy_array = array.todense() if isinstance(array, sparse.COO) else np.asarray(array)
-    if isinstance(array, sparse.COO) and not _is_sparse_supported_reduction(func):
+    if (
+        isinstance(array, sparse_array_type)
+        or (is_duck_dask_array(array) and isinstance(array._meta, sparse_array_type))
+        and not _is_sparse_supported_reduction(func)
+    ):
         assume(False)
+    numpy_array = to_numpy(array)
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(numpy_array))
     # TODO: fix var for complex numbers upstream
@@ -190,6 +201,7 @@ def test_groupby_reduce_numpy_vs_other(data, array, func: str) -> None:
     )
     result_other, *_ = groupby_reduce(array, by, **kwargs)
     result_numpy, *_ = groupby_reduce(numpy_array, by, **kwargs)
+    assert isinstance(result_other, type(array))
     assert_equal(result_numpy, result_other)
 
 

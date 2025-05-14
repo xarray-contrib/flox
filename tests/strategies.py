@@ -183,6 +183,6 @@ def sparse_arrays(
     fill_value = draw(npst.from_dtype(dtype=dtype, **elements))
     assume(dtype.kind not in "mM")  # sparse doesn't support .view
     array = draw(npst.arrays(elements=elements, shape=shapes, dtype=st.just(dtype), fill=st.just(fill_value)))
+    array = insert_nans(draw, array)
     sparse_array = sparse_class.from_numpy(array, fill_value=fill_value)  # type: ignore[attr-defined]
-    assume(sparse_array.nnz > 0)
     return sparse_array
