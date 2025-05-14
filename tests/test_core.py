@@ -49,6 +49,7 @@ from . import (
     requires_cubed,
     requires_dask,
     requires_sparse,
+    to_numpy,
 )
 
 logger = logging.getLogger("flox")
@@ -221,6 +222,7 @@ def gen_array_by(size, func):
     return array, by
 
 
+@pytest.mark.parametrize("to_sparse", [pytest.param(True, marks=requires_sparse), False])
 @pytest.mark.parametrize(
     "chunks",
     [
@@ -230,15 +232,21 @@ def gen_array_by(size, func):
         pytest.param(4, marks=requires_dask),
     ],
 )
-@pytest.mark.parametrize("size", ((1, 12), (12,), (12, 9)))
+@pytest.mark.parametrize("size", [(1, 12), (12,), (12, 9)])
 @pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
-def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
+def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engine):
     if ("arg" in func and engine in ["flox", "numbagg"]) or (func in BLOCKWISE_FUNCS and chunks != -1):
         pytest.skip()
 
     array, by = gen_array_by(size, func)
+    if to_sparse:
+        import sparse
+
+        array = sparse.COO.from_numpy(array)
+        if not _is_sparse_supported_reduction(func):
+            pytest.skip()
     if chunks:
         array = dask.array.from_array(array, chunks=chunks)
     by = (by,) * nby
@@ -279,7 +287,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 warnings.filterwarnings("ignore", r"Mean of empty slice")
 
                 # computing silences a bunch of dask warnings
-                array_ = array.compute() if chunks is not None else array
+                array_ = to_numpy(array)
                 if "arg" in func and add_nan_by:
                     # NaNs are in by, but we can't call np.argmax([..., NaN, .. ])
                     # That would return index of the NaN
@@ -291,7 +299,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 else:
                     expected = array_func(array_[..., ~nanmask], axis=-1, **kwargs)
         for _ in range(nby):
-            expected = np.expand_dims(expected, -1)
+            expected = np.expand_dims(expected, axis=-1)
 
         if func in BLOCKWISE_FUNCS:
             assert chunks == -1
@@ -1966,7 +1974,7 @@ def test_nanlen_string(dtype, engine) -> None:
     assert_equal(expected, actual)
 
 
-def test_cumusm() -> None:
+def test_cumsum() -> None:
     array = np.array([1, 1, 1], dtype=np.uint64)
     by = np.array([0] * array.shape[-1])
     expected = np.nancumsum(array, axis=-1)

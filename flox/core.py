@@ -259,7 +259,7 @@ def _is_bool_supported_reduction(func: T_Agg) -> bool:
 def _is_sparse_supported_reduction(func: T_Agg) -> bool:
     if isinstance(func, Aggregation):
         func = func.name
-    return any(f in func for f in ["len", "sum", "max", "min", "mean"])
+    return not _is_arg_reduction(func) and any(f in func for f in ["len", "sum", "max", "min", "mean"])
 
 
 def _is_reindex_sparse_supported_reduction(func: T_Agg) -> bool:
@@ -1252,7 +1252,7 @@ def chunk_reduce(
     previous_reduction: T_Func = ""
     for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
         if empty:
-            result = np.full(shape=final_array_shape, fill_value=fv)
+            result = np.full(shape=final_array_shape, fill_value=fv, like=array)
         elif is_nanlen(reduction) and is_nanlen(previous_reduction):
             result = results["intermediates"][-1]
         else:
@@ -1346,6 +1346,15 @@ def _finalize_results(
             if fill_value is xrdtypes.NA:
                 new_dtype, fill_value = xrdtypes.maybe_promote(finalized[agg.name].dtype)
                 finalized[agg.name] = finalized[agg.name].astype(new_dtype)
+
+            if isinstance(count_mask, sparse_array_type):
+                # This is guaranteed because for `counts`, we use `fill_value=0`
+                # and we are in the counts < (min_count > 0) branch.
+                # We need to flip the fill_value so that the `np.where` call preserves
+                # the fill_value of finalized[agg.name], this is needed when dask concatenates results.
+                assert count_mask.fill_value is np.True_, "Logic bug. I expected fill_value to be True"
+                count_mask = type(count_mask).from_numpy(count_mask.todense(), fill_value=False)
+
             finalized[agg.name] = np.where(count_mask, fill_value, finalized[agg.name])
 
     # Final reindexing has to be here to be lazy

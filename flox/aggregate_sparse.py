@@ -14,9 +14,9 @@ BINARY_OPS = {
     "sum": np.add,
     "nansum": np.add,
     "max": np.maximum,
-    "nanmax": np.maximum,
+    "nanmax": np.fmax,
     "min": np.minimum,
-    "nanmin": np.minimum,
+    "nanmin": np.fmin,
 }
 HYPER_OPS = {"sum": np.multiply, "nansum": np.multiply}
 IDENTITY = {
@@ -75,7 +75,9 @@ def _sparse_agg(
     dense_counts = generic_aggregate(
         sparse_codes,
         array.data,
-        func="nanlen",
+        # This counts is used to handle fill_value, so we need a count
+        # of data, regardless of NaN value
+        func="len",
         engine=engine,
         dtype=int,
         size=sparse_size,
@@ -89,7 +91,7 @@ def _sparse_agg(
 
     assert axis in (-1, array.ndim - 1)
     grouped_count = generic_aggregate(
-        group_idx, group_idx, engine=engine, func="nanlen", dtype=np.int64, size=size, fill_value=0
+        group_idx, group_idx, engine=engine, func="len", dtype=np.int64, size=size, fill_value=0
     )
     total_count = sparse.COO.from_numpy(
         np.expand_dims(grouped_count, tuple(range(array.ndim - 1))), fill_value=0
@@ -98,13 +100,14 @@ def _sparse_agg(
     assert func in BINARY_OPS
     binop = BINARY_OPS[func]
     ident = _get_fill_value(array.dtype, IDENTITY[func])
-
+    diff_count = total_count - count
     if (hyper_op := HYPER_OPS.get(func, None)) is not None:
-        diff_count = total_count - count
         fill = hyper_op(diff_count, array.fill_value) if diff_count.nnz > 0 else ident
     else:
         if "max" in func or "min" in func:
-            fill = np.where((total_count - count) > 0, array.fill_value, ident)
+            # Note that fill_value for total_count, and count is 0.
+            # So the fill_value for the `fill` result is the False branch i.e. `ident`
+            fill = np.where(diff_count > 0, array.fill_value, ident)
         else:
             raise NotImplementedError
 
