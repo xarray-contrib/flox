@@ -861,14 +861,12 @@ def reindex_(
         new_dtype = array.dtype
 
     if array_type is ReindexArrayType.AUTO:
-        # TODO: generalize here
-        # Right now, we effectively assume NEP-18 I think
-        if isinstance(array, np.ndarray):
-            array_type = ReindexArrayType.NUMPY
-        elif isinstance(array, sparse_array_type):
+        if isinstance(array, sparse_array_type):
             array_type = ReindexArrayType.SPARSE_COO
         else:
-            raise NotImplementedError
+            # TODO: generalize here
+            # Right now, we effectively assume NEP-18 I think
+            array_type = ReindexArrayType.NUMPY
 
     if array_type is ReindexArrayType.NUMPY:
         reindexed = reindex_numpy(array, from_, to, fill_value, new_dtype, axis)

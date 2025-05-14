@@ -2,7 +2,6 @@ import importlib
 from contextlib import nullcontext
 from typing import Any
 
-import dask
 import numpy as np
 import packaging.version
 import pandas as pd
@@ -61,6 +60,8 @@ class CountingScheduler:
         self.max_computes = max_computes
 
     def __call__(self, dsk, keys, **kwargs):
+        import dask
+
         self.total_computes += 1
         if self.total_computes > self.max_computes:
             raise RuntimeError(f"Too many computes. Total: {self.total_computes} > max: {self.max_computes}.")
@@ -71,6 +72,8 @@ def raise_if_dask_computes(max_computes=0):
     # return a dummy context manager so that this can be used for non-dask objects
     if not has_dask:
         return nullcontext()
+    import dask
+
     scheduler = CountingScheduler(max_computes)
     return dask.config.set(scheduler=scheduler)
 
