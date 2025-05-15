@@ -76,7 +76,7 @@ def _sparse_agg(
         sparse_codes,
         array.data,
         # This counts is used to handle fill_value, so we need a count
-        # of data, regardless of NaN value
+        # of populated data, regardless of NaN value
         func="len",
         engine=engine,
         dtype=int,
