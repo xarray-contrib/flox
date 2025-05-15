@@ -164,7 +164,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
     assert_equal(expected, actual, tolerance)
 
 
-@settings(report_multiple_bugs=False, deadline=None)
+@settings(deadline=None)
 @given(
     data=st.data(),
     array=chunked_arrays(arrays=numeric_like_arrays | sparse_arrays()) | sparse_arrays(),
