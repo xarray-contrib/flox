@@ -262,8 +262,7 @@ def dask_assert_eq(
 
 def to_numpy(data) -> np.ndarray[Any, np.dtype[Any]]:
     try:
-        # for tests only at the moment
-        return data.to_numpy()  # type: ignore[no-any-return,union-attr]
+        return data.to_numpy()
     except AttributeError:
         pass
 
