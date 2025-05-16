@@ -10,9 +10,20 @@ from flox.core import _factorize_multiple, _is_sparse_supported_reduction, facto
 from flox.xrdtypes import INF, NINF, _get_fill_value
 from flox.xrutils import notnull
 
+
+def nanadd(a, b):
+    """
+    Annoyingly, there is no numpy ufunc for nan-skipping elementwise addition
+    unlike np.fmin, np.fmax :(
+
+    From https://stackoverflow.com/a/50642947/1707127
+    """
+    return np.where(np.isnan(a + b), np.where(np.isnan(a), b, a), a + b)
+
+
 BINARY_OPS = {
     "sum": np.add,
-    "nansum": np.add,
+    "nansum": nanadd,
     "max": np.maximum,
     "nanmax": np.fmax,
     "min": np.minimum,

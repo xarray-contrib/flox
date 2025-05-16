@@ -2157,3 +2157,34 @@ def test_sparse_errors():
     else:
         with pytest.raises(ValueError):
             call(func="first")
+
+
+@requires_sparse
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        None,
+        pytest.param(-1, marks=requires_dask),
+        pytest.param(3, marks=requires_dask),
+        pytest.param(4, marks=requires_dask),
+    ],
+)
+@pytest.mark.parametrize("shape", [(1, 12), (12,), (12, 9)])
+@pytest.mark.parametrize("fill_value", [0, np.nan])
+@pytest.mark.parametrize("func", ["nansum", "nanmean", "nanmin", "nanmax"])
+def test_sparse_nan_fill_value_reductions(chunks, fill_value, shape, func):
+    import sparse
+
+    numpy_array, by = gen_array_by(shape, func)
+    array = sparse.COO.from_numpy(numpy_array, fill_value=fill_value)
+    if chunks:
+        array = dask.array.from_array(array, chunks=chunks)
+
+    npfunc = _get_array_func(func)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", r"Mean of empty slice")
+        warnings.filterwarnings("ignore", r"All-NaN slice encountered")
+        # warnings.filterwarnings("ignore", r"encountered in divide")
+        expected = np.expand_dims(npfunc(numpy_array, axis=-1), axis=-1)
+        actual, *_ = groupby_reduce(array, by, func=func, axis=-1)
+    assert_equal(actual, expected)
