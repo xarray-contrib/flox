@@ -1,5 +1,13 @@
 # Duck Array Support
 
+## Sparse Arrays
+
+`sparse.COO` arrays from the `pydata/sparse` project are supported using algorithms that work on the underlying dense data.
+See `aggregate_sparse.py` for details.
+At the moment the following reductions are supported: `sum`, `nansum`, `min`, `nanmin`, `max`, `nanmax`, `count`.
+
+## Other array types
+
 Aggregating over other array types will work if the array types supports the following methods, [ufunc.reduceat](https://numpy.org/doc/stable/reference/generated/numpy.ufunc.reduceat.html) or [ufunc.at](https://numpy.org/doc/stable/reference/generated/numpy.ufunc.at.html)
 
 | Reduction                      | `method="numpy"` | `method="flox"`   |

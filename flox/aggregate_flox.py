@@ -146,7 +146,7 @@ def _np_grouped_op(
     # assumes input is sorted, which I do in core._prepare_for_flox
     aux = group_idx
 
-    flag = np.concatenate((np.array([True], like=array), aux[1:] != aux[:-1]))
+    flag = np.concatenate((np.asarray([True], like=aux), aux[1:] != aux[:-1]))
     uniques = aux[flag]
     (inv_idx,) = flag.nonzero()
 
@@ -165,7 +165,7 @@ def _np_grouped_op(
             out = np.full((nq,) + array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
             kwargs["group_idx"] = group_idx
 
-    if (len(uniques) == size) and (uniques == np.arange(size, like=array)).all():
+    if (len(uniques) == size) and (uniques == np.arange(size, like=aux)).all():
         # The previous version of this if condition
         #     ((uniques[1:] - uniques[:-1]) == 1).all():
         # does not work when group_idx is [1, 2] for e.g.
@@ -257,7 +257,7 @@ def ffill(group_idx, array, *, axis, **kwargs):
     ndim = array.ndim
     assert axis == (ndim - 1), (axis, ndim - 1)
 
-    flag = np.concatenate((np.array([True], like=array), group_idx[1:] != group_idx[:-1]))
+    flag = np.concatenate((np.asarray([True], like=group_idx), group_idx[1:] != group_idx[:-1]))
     (group_starts,) = flag.nonzero()
 
     # https://stackoverflow.com/questions/41190852/most-efficient-way-to-forward-fill-nan-values-in-numpy-array

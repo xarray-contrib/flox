@@ -155,8 +155,11 @@ def notnull(data):
         return np.broadcast_to(np.array(True), data.shape)
     else:
         out = isnull(data)
-        np.logical_not(out, out=out)
-        return out
+        if np.isscalar(out):
+            return ~out
+        else:
+            np.logical_not(out, out=out)
+            return out
 
 
 def isnull(data: Any):

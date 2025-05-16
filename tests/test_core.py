@@ -49,6 +49,7 @@ from . import (
     requires_cubed,
     requires_dask,
     requires_sparse,
+    to_numpy,
 )
 
 logger = logging.getLogger("flox")
@@ -221,6 +222,7 @@ def gen_array_by(size, func):
     return array, by
 
 
+@pytest.mark.parametrize("to_sparse", [pytest.param(True, marks=requires_sparse), False])
 @pytest.mark.parametrize(
     "chunks",
     [
@@ -230,15 +232,21 @@ def gen_array_by(size, func):
         pytest.param(4, marks=requires_dask),
     ],
 )
-@pytest.mark.parametrize("size", ((1, 12), (12,), (12, 9)))
+@pytest.mark.parametrize("size", [(1, 12), (12,), (12, 9)])
 @pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ALL_FUNCS)
-def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
+def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engine):
     if ("arg" in func and engine in ["flox", "numbagg"]) or (func in BLOCKWISE_FUNCS and chunks != -1):
         pytest.skip()
 
     array, by = gen_array_by(size, func)
+    if to_sparse:
+        import sparse
+
+        array = sparse.COO.from_numpy(array)
+        if not _is_sparse_supported_reduction(func):
+            pytest.skip()
     if chunks:
         array = dask.array.from_array(array, chunks=chunks)
     by = (by,) * nby
@@ -279,7 +287,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 warnings.filterwarnings("ignore", r"Mean of empty slice")
 
                 # computing silences a bunch of dask warnings
-                array_ = array.compute() if chunks is not None else array
+                array_ = to_numpy(array)
                 if "arg" in func and add_nan_by:
                     # NaNs are in by, but we can't call np.argmax([..., NaN, .. ])
                     # That would return index of the NaN
@@ -291,7 +299,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 else:
                     expected = array_func(array_[..., ~nanmask], axis=-1, **kwargs)
         for _ in range(nby):
-            expected = np.expand_dims(expected, -1)
+            expected = np.expand_dims(expected, axis=-1)
 
         if func in BLOCKWISE_FUNCS:
             assert chunks == -1
@@ -1966,7 +1974,7 @@ def test_nanlen_string(dtype, engine) -> None:
     assert_equal(expected, actual)
 
 
-def test_cumusm() -> None:
+def test_cumsum() -> None:
     array = np.array([1, 1, 1], dtype=np.uint64)
     by = np.array([0] * array.shape[-1])
     expected = np.nancumsum(array, axis=-1)
@@ -2131,10 +2139,11 @@ def test_reindex_sparse(size):
             assert mocked_reindex_func.call_count > 1
 
 
+@requires_dask
 def test_sparse_errors():
     call = partial(
         groupby_reduce,
-        [1, 2, 3],
+        dask.array.from_array([1, 2, 3], chunks=(1,)),
         [0, 1, 1],
         reindex=REINDEX_SPARSE_STRAT,
         fill_value=0,
@@ -2148,3 +2157,34 @@ def test_sparse_errors():
     else:
         with pytest.raises(ValueError):
             call(func="first")
+
+
+@requires_sparse
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        None,
+        pytest.param(-1, marks=requires_dask),
+        pytest.param(3, marks=requires_dask),
+        pytest.param(4, marks=requires_dask),
+    ],
+)
+@pytest.mark.parametrize("shape", [(1, 12), (12,), (12, 9)])
+@pytest.mark.parametrize("fill_value", [np.nan, 0])
+@pytest.mark.parametrize("func", ["sum", "mean", "min", "max", "nansum", "nanmean", "nanmin", "nanmax"])
+def test_sparse_nan_fill_value_reductions(chunks, fill_value, shape, func):
+    import sparse
+
+    numpy_array, by = gen_array_by(shape, func)
+    array = sparse.COO.from_numpy(numpy_array, fill_value=fill_value)
+    if chunks:
+        array = dask.array.from_array(array, chunks=chunks)
+
+    npfunc = _get_array_func(func)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", r"Mean of empty slice")
+        warnings.filterwarnings("ignore", r"All-NaN slice encountered")
+        # warnings.filterwarnings("ignore", r"encountered in divide")
+        expected = np.expand_dims(npfunc(numpy_array, axis=-1), axis=-1)
+        actual, *_ = groupby_reduce(array, by, func=func, axis=-1)
+    assert_equal(actual, expected)

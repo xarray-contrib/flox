@@ -14,6 +14,7 @@ from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
+from .lib import sparse_array_type
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
@@ -72,7 +73,14 @@ def generic_aggregate(
     if func in ["nanfirst", "nanlast"] and array.dtype.kind in "US":
         func = func[3:]
 
-    if engine == "flox":
+    if is_sparse := isinstance(array, sparse_array_type):
+        # this is not an infinite loop because aggregate_sparse will call
+        # generic_aggregate with dense data
+        from flox import aggregate_sparse
+
+        method = partial(getattr(aggregate_sparse, func), engine=engine)
+
+    elif engine == "flox":
         try:
             method = getattr(aggregate_flox, func)
         except AttributeError:
@@ -105,7 +113,9 @@ def generic_aggregate(
             f"Expected engine to be one of ['flox', 'numpy', 'numba', 'numbagg']. Received {engine} instead."
         )
 
-    group_idx = np.asarray(group_idx, like=array)
+    # UGLY! but this avoids auto-densification errors
+    if not is_sparse:
+        group_idx = np.asarray(group_idx, like=array)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")

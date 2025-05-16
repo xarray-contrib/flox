@@ -48,7 +48,7 @@ from .aggregations import (
     quantile_new_dims_func,
 )
 from .cache import memoize
-from .lib import ArrayLayer
+from .lib import ArrayLayer, dask_array_type, sparse_array_type
 from .xrutils import (
     _contains_cftime_datetimes,
     _to_pytimedelta,
@@ -178,11 +178,11 @@ class ReindexStrategy:
         self.blockwise = True if self.blockwise is None else self.blockwise
 
     def get_dask_meta(self, other, *, fill_value, dtype) -> Any:
-        import dask
-
         if self.array_type is ReindexArrayType.AUTO:
-            other_type = type(other._meta) if isinstance(other, dask.array.Array) else type(other)
-            return other_type([], dtype=dtype)
+            other = other._meta if isinstance(other, dask_array_type) else other
+            if isinstance(other, sparse_array_type):
+                return type(other).from_numpy(np.array([], dtype=dtype))
+            return type(other)([], dtype=dtype)
         elif self.array_type is ReindexArrayType.NUMPY:
             return np.ndarray([], dtype=dtype)
         elif self.array_type is ReindexArrayType.SPARSE_COO:
@@ -257,6 +257,12 @@ def _is_bool_supported_reduction(func: T_Agg) -> bool:
 
 
 def _is_sparse_supported_reduction(func: T_Agg) -> bool:
+    if isinstance(func, Aggregation):
+        func = func.name
+    return not _is_arg_reduction(func) and any(f in func for f in ["len", "sum", "max", "min", "mean"])
+
+
+def _is_reindex_sparse_supported_reduction(func: T_Agg) -> bool:
     if isinstance(func, Aggregation):
         func = func.name
     return HAS_SPARSE and all(f not in func for f in ["first", "last", "prod", "var", "std"])
@@ -855,10 +861,12 @@ def reindex_(
         new_dtype = array.dtype
 
     if array_type is ReindexArrayType.AUTO:
-        # TODO: generalize here
-        # Right now, we effectively assume NEP-18 I think
-        # assert isinstance(array, np.ndarray)
-        array_type = ReindexArrayType.NUMPY
+        if isinstance(array, sparse_array_type):
+            array_type = ReindexArrayType.SPARSE_COO
+        else:
+            # TODO: generalize here
+            # Right now, we effectively assume NEP-18 I think
+            array_type = ReindexArrayType.NUMPY
 
     if array_type is ReindexArrayType.NUMPY:
         reindexed = reindex_numpy(array, from_, to, fill_value, new_dtype, axis)
@@ -1244,7 +1252,7 @@ def chunk_reduce(
     previous_reduction: T_Func = ""
     for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
         if empty:
-            result = np.full(shape=final_array_shape, fill_value=fv)
+            result = np.full(shape=final_array_shape, fill_value=fv, like=array)
         elif is_nanlen(reduction) and is_nanlen(previous_reduction):
             result = results["intermediates"][-1]
         else:
@@ -1338,6 +1346,15 @@ def _finalize_results(
             if fill_value is xrdtypes.NA:
                 new_dtype, fill_value = xrdtypes.maybe_promote(finalized[agg.name].dtype)
                 finalized[agg.name] = finalized[agg.name].astype(new_dtype)
+
+            if isinstance(count_mask, sparse_array_type):
+                # This is guaranteed because for `counts`, we use `fill_value=0`
+                # and we are in the counts < (min_count > 0) branch.
+                # We need to flip the fill_value so that the `np.where` call preserves
+                # the fill_value of finalized[agg.name], this is needed when dask concatenates results.
+                assert count_mask.fill_value is np.True_, "Logic bug. I expected fill_value to be True"
+                count_mask = type(count_mask).from_numpy(count_mask.todense(), fill_value=False)
+
             finalized[agg.name] = np.where(count_mask, fill_value, finalized[agg.name])
 
     # Final reindexing has to be here to be lazy
@@ -1373,7 +1390,9 @@ def _aggregate(
 
 
 def _expand_dims(results: IntermediateDict) -> IntermediateDict:
-    results["intermediates"] = tuple(np.expand_dims(array, DUMMY_AXIS) for array in results["intermediates"])
+    results["intermediates"] = tuple(
+        np.expand_dims(array, axis=DUMMY_AXIS) for array in results["intermediates"]
+    )
     return results
 
 
@@ -2861,7 +2880,7 @@ def groupby_reduce(
         if reindex.array_type is ReindexArrayType.SPARSE_COO:
             if not HAS_SPARSE:
                 raise ImportError("Package 'sparse' must be installed to reindex to a sparse.COO array.")
-            if not _is_sparse_supported_reduction(func):
+            if not _is_reindex_sparse_supported_reduction(func):
                 raise NotImplementedError(
                     f"Aggregation {func=!r} is not supported when reindexing to a sparse array. "
                     "Please raise an issue"

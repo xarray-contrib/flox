@@ -1,28 +1,16 @@
 import importlib
 from contextlib import nullcontext
+from typing import Any
 
 import numpy as np
 import packaging.version
 import pandas as pd
 import pytest
 
+from flox.lib import dask_array_type, sparse_array_type
+from flox.xrutils import is_duck_dask_array
+
 pd_types = (pd.Index,)
-
-try:
-    import dask
-    import dask.array as da
-
-    dask_array_type = da.Array
-except ImportError:
-    dask_array_type = ()  # type: ignore[assignment, misc]
-
-try:
-    import sparse
-
-    sparse_array_type = sparse.COO
-except ImportError:
-    sparse_array_type = ()
-
 
 try:
     import xarray as xr
@@ -72,6 +60,8 @@ class CountingScheduler:
         self.max_computes = max_computes
 
     def __call__(self, dsk, keys, **kwargs):
+        import dask
+
         self.total_computes += 1
         if self.total_computes > self.max_computes:
             raise RuntimeError(f"Too many computes. Total: {self.total_computes} > max: {self.max_computes}.")
@@ -82,6 +72,8 @@ def raise_if_dask_computes(max_computes=0):
     # return a dummy context manager so that this can be used for non-dask objects
     if not has_dask:
         return nullcontext()
+    import dask
+
     scheduler = CountingScheduler(max_computes)
     return dask.config.set(scheduler=scheduler)
 
@@ -266,3 +258,24 @@ def dask_assert_eq(
                         f"(meta: {type(b_meta)}, computed: {type(b_computed)})"
                     )
                     assert type(b_meta) is type(b_computed), msg
+
+
+def to_numpy(data) -> np.ndarray[Any, np.dtype[Any]]:
+    try:
+        return data.to_numpy()
+    except AttributeError:
+        pass
+
+    # TODO first attempt to call .to_numpy() once some libraries implement it
+    if is_duck_dask_array(data):
+        data = data.compute()
+    # if isinstance(data, array_type("cupy")):
+    #     data = data.get()
+    # # pint has to be imported dynamically as pint imports xarray
+    # if isinstance(data, array_type("pint")):
+    #     data = data.magnitude
+    if isinstance(data, sparse_array_type):
+        data = data.todense()
+    data = np.asarray(data)
+
+    return data
