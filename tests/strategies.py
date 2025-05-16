@@ -9,7 +9,6 @@ import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
 import sparse
-from hypothesis import assume
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS
 
@@ -176,13 +175,17 @@ def sparse_arrays(
     *,
     elements={"allow_subnormal": False},
     shapes=npst.array_shapes(),
-    dtypes=numeric_like_dtypes,
-    sparse_class: Callable = sparse.COO,
+    dtypes=npst.boolean_dtypes() | numeric_dtypes,
+    sparse_class=sparse.COO,
 ) -> sparse.COO:
     dtype = draw(dtypes)
     fill_value = draw(npst.from_dtype(dtype=dtype, **elements))
-    assume(dtype.kind not in "mM")  # sparse doesn't support .view
+    # assume(dtype.kind not in "mM")  # sparse doesn't support .view
     array = draw(npst.arrays(elements=elements, shape=shapes, dtype=st.just(dtype), fill=st.just(fill_value)))
-    array = insert_nans(draw, array)
-    sparse_array = sparse_class.from_numpy(array, fill_value=fill_value)  # type: ignore[attr-defined]
+    if draw(st.booleans()) and dtype.kind == "f":
+        array = insert_nans(draw, array)
+    if draw(st.booleans()) and dtype.kind == "f":
+        # need to increase probability of NaN fill_value
+        fill_value = np.nan
+    sparse_array = sparse_class.from_numpy(array, fill_value=fill_value)
     return sparse_array

@@ -113,7 +113,7 @@ def _sparse_agg(
     ident = _get_fill_value(array.dtype, IDENTITY[func])
     diff_count = total_count - count
     if (hyper_op := HYPER_OPS.get(func, None)) is not None:
-        fill = hyper_op(diff_count, array.fill_value) if diff_count.nnz > 0 else ident
+        fill = hyper_op(diff_count, array.fill_value)
     else:
         if "max" in func or "min" in func:
             # Note that fill_value for total_count, and count is 0.
