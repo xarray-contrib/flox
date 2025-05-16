@@ -2170,8 +2170,8 @@ def test_sparse_errors():
     ],
 )
 @pytest.mark.parametrize("shape", [(1, 12), (12,), (12, 9)])
-@pytest.mark.parametrize("fill_value", [0, np.nan])
-@pytest.mark.parametrize("func", ["nansum", "nanmean", "nanmin", "nanmax"])
+@pytest.mark.parametrize("fill_value", [np.nan, 0])
+@pytest.mark.parametrize("func", ["sum", "mean", "min", "max", "nansum", "nanmean", "nanmin", "nanmax"])
 def test_sparse_nan_fill_value_reductions(chunks, fill_value, shape, func):
     import sparse
 
