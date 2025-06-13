@@ -1,7 +1,9 @@
 # Unlike the other aggregate_* submodules, this one simply defines a wrapper function
 # because we run the groupby on the underlying dense data.
 
+from collections.abc import Callable
 from functools import partial
+from typing import Any, TypeAlias
 
 import numpy as np
 import sparse
@@ -18,10 +20,12 @@ def nanadd(a, b):
 
     From https://stackoverflow.com/a/50642947/1707127
     """
-    return np.where(np.isnan(a + b), np.where(np.isnan(a), b, a), a + b)
+    ab = a + b
+    return np.where(np.isnan(ab), np.where(np.isnan(a), b, a), ab)
 
 
-BINARY_OPS = {
+CallableMap: TypeAlias = dict[str, Callable[[np.ndarray, np.ndarray], np.ndarray]]
+BINARY_OPS: CallableMap = {
     "sum": np.add,
     "nansum": nanadd,
     "max": np.maximum,
@@ -29,8 +33,8 @@ BINARY_OPS = {
     "min": np.minimum,
     "nanmin": np.fmin,
 }
-HYPER_OPS = {"sum": np.multiply, "nansum": np.multiply}
-IDENTITY = {
+HYPER_OPS: CallableMap = {"sum": np.multiply, "nansum": np.multiply}
+IDENTITY: dict[str, Any] = {
     "sum": 0,
     "nansum": 0,
     "prod": 1,
