@@ -777,7 +777,7 @@ def rechunk_for_blockwise(
     labels = factorize_((labels,), axes=())[0]
     newchunks = _get_optimal_chunks_for_groups(new_input_chunks, labels)
     if newchunks == chunks:
-        return array
+        return "blockwise", array
 
     Δn = abs(len(newchunks) - len(new_input_chunks))
     if force or (
