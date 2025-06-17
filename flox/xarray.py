@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
+import toolz
 import xarray as xr
 from packaging.version import Version
 
@@ -589,7 +590,7 @@ def rechunk_for_blockwise(obj: T_DataArray | T_Dataset, dim: str, labels: T_Data
     DataArray or Dataset
         Xarray object with rechunked arrays.
     """
-    return _rechunk(rechunk_array_for_blockwise, obj, dim, labels)
+    return _rechunk(toolz.compose(toolz.last, rechunk_array_for_blockwise), obj, dim, labels)
 
 
 def _rechunk(func, obj, dim, labels, **kwargs):
