@@ -631,7 +631,7 @@ class AlignedArrays:
         reduced = chunk_reduce(
             self.array,
             self.group_idx,
-            func=("nanlast",),
+            func=("last",),
             axis=-1,
             # TODO: automate?
             engine="flox",
@@ -699,6 +699,7 @@ def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) 
             fill_value=agg.identity,
         )
         result = AlignedArrays(array=final_value[..., left.group_idx.size :], group_idx=right.group_idx)
+
     else:
         raise ValueError(f"Unknown binary op application mode: {agg.mode!r}")
 
@@ -717,8 +718,7 @@ def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) 
     )
 
 
-# TODO: numpy_groupies cumsum is a broken when NaNs are present.
-# cumsum = Scan("cumsum", binary_op=np.add, reduction="sum", scan="cumsum", identity=0)
+cumsum = Scan("cumsum", binary_op=np.add, reduction="sum", scan="cumsum", identity=0)
 nancumsum = Scan("nancumsum", binary_op=np.add, reduction="nansum", scan="nancumsum", identity=0)
 # ffill uses the identity for scan, and then at the binary-op state,
 # we concatenate the blockwise-reduced values with the original block,
@@ -782,7 +782,7 @@ AGGREGATIONS: dict[str, Aggregation | Scan] = {
     "nanquantile": nanquantile,
     "mode": mode,
     "nanmode": nanmode,
-    # "cumsum": cumsum,
+    "cumsum": cumsum,
     "nancumsum": nancumsum,
     "ffill": ffill,
     "bfill": bfill,
