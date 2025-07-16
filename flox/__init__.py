@@ -33,6 +33,7 @@ __all__ = [
     "groupby_scan",
     "rechunk_for_blockwise",
     "rechunk_for_cohorts",
+    "set_options",
     "ReindexStrategy",
     "ReindexArrayType",
 ]
