@@ -136,6 +136,23 @@ nanmin = partial(_numbagg_wrapper, func="nanmin")
 any = partial(_numbagg_wrapper, func="nanany")
 all = partial(_numbagg_wrapper, func="nanall")
 
+
+def _postprocess_numbagg(result, *, func, fill_value, size, seen_groups):
+    """Account for numbagg not providing a fill_value kwarg."""
+    if not isinstance(func, str) or func not in DEFAULT_FILL_VALUE:
+        return result
+    # The condition needs to be
+    # len(found_groups) < size; if so we mask with fill_value (?)
+    default_fv = DEFAULT_FILL_VALUE[func]
+    needs_masking = fill_value is not None and not np.array_equal(fill_value, default_fv, equal_nan=True)
+    groups = np.arange(size)
+    if needs_masking:
+        mask = np.isin(groups, seen_groups, assume_unique=True, invert=True)
+        if mask.any():
+            result[..., groups[mask]] = fill_value
+    return result
+
+
 # sum = nansum
 # mean = nanmean
 # sum_of_squares = nansum_of_squares

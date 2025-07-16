@@ -143,24 +143,6 @@ class ReindexStrategy:
             return sparse.COO.from_numpy(np.ones(shape=(0,) * other.ndim, dtype=dtype), fill_value=fill_value)
 
 
-def _postprocess_numbagg(result, *, func, fill_value, size, seen_groups):
-    """Account for numbagg not providing a fill_value kwarg."""
-    from .aggregate_numbagg import DEFAULT_FILL_VALUE
-
-    if not isinstance(func, str) or func not in DEFAULT_FILL_VALUE:
-        return result
-    # The condition needs to be
-    # len(found_groups) < size; if so we mask with fill_value (?)
-    default_fv = DEFAULT_FILL_VALUE[func]
-    needs_masking = fill_value is not None and not np.array_equal(fill_value, default_fv, equal_nan=True)
-    groups = np.arange(size)
-    if needs_masking:
-        mask = np.isin(groups, seen_groups, assume_unique=True, invert=True)
-        if mask.any():
-            result[..., groups[mask]] = fill_value
-    return result
-
-
 def identity(x: T) -> T:
     return x
 
@@ -901,6 +883,8 @@ def chunk_reduce(
                     group_idx, array, axis=-1, engine=engine, func=reduction, **kw_func
                 ).astype(dt, copy=False)
             if engine == "numbagg":
+                from .aggregate_numbagg import _postprocess_numbagg
+
                 result = _postprocess_numbagg(
                     result,
                     func=reduction,
