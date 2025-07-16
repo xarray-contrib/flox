@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -249,7 +249,7 @@ def xarray_reduce(
                 grouper_dims.append(d)
 
     if isinstance(obj, xr.Dataset):
-        ds = obj
+        ds = cast(xr.Dataset, obj)
     else:
         ds = obj._to_temp_dataset()
 
@@ -295,7 +295,7 @@ def xarray_reduce(
         not set(grouper_dims).issubset(set(variable.dims)) for variable in ds.data_vars.values()
     )
     if needs_broadcast:
-        ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
+        ds_broad = cast(xr.Dataset, xr.broadcast(ds, *by_da, exclude=exclude_dims)[0])
     else:
         ds_broad = ds
 

@@ -1974,18 +1974,56 @@ def test_nanlen_string(dtype, engine) -> None:
     assert_equal(expected, actual)
 
 
-def test_cumsum() -> None:
-    array = np.array([1, 1, 1], dtype=np.uint64)
+@pytest.mark.parametrize(
+    "array",
+    [
+        np.array([1, 1, 1, 2, 3, 4, 5], dtype=np.uint64),
+        np.array([1, 1, 1, 2, np.nan, 4, 5], dtype=np.float64),
+    ],
+)
+@pytest.mark.parametrize("func", ["cumsum", "nancumsum"])
+def test_cumsum_simple(array, func) -> None:
     by = np.array([0] * array.shape[-1])
-    expected = np.nancumsum(array, axis=-1)
+    expected = getattr(np, func)(array, axis=-1)
 
-    actual = groupby_scan(array, by, func="nancumsum", axis=-1)
-    assert_equal(expected, actual)
+    actual = groupby_scan(array, by, func=func, axis=-1)
+    assert_equal(actual, expected)
 
     if has_dask:
         da = dask.array.from_array(array, chunks=2)
+        actual = groupby_scan(da, by, func=func, axis=-1)
+        assert_equal(actual, expected)
+
+
+def test_cumsum() -> None:
+    array = np.array(
+        [
+            [1, 2, np.nan, 4, 5],
+            [3, np.nan, 4, 6, 6],
+        ]
+    )
+    by = [0, 1, 1, 0, 1]
+
+    expected = np.array(
+        [
+            [1, 2, np.nan, 5, np.nan],
+            [3, np.nan, np.nan, 9, np.nan],
+        ]
+    )
+    actual = groupby_scan(array, by, func="cumsum", axis=-1)
+    assert_equal(actual, expected)
+    if has_dask:
+        da = dask.array.from_array(array, chunks=2)
+        actual = groupby_scan(da, by, func="cumsum", axis=-1)
+        assert_equal(actual, expected)
+
+    expected = np.array([[1, 2, 2, 5, 7], [3, 0, 4, 9, 10]], dtype=np.float64)
+    actual = groupby_scan(array, by, func="nancumsum", axis=-1)
+    assert_equal(actual, expected)
+    if has_dask:
+        da = dask.array.from_array(array, chunks=2)
         actual = groupby_scan(da, by, func="nancumsum", axis=-1)
-        assert_equal(expected, actual)
+        assert_equal(actual, expected)
 
 
 @pytest.mark.parametrize(

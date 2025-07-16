@@ -276,3 +276,39 @@ def ffill(group_idx, array, *, axis, **kwargs):
 
     invert_perm = slice(None) if isinstance(perm, slice) else np.argsort(perm, kind="stable")
     return array[tuple(slc)][..., invert_perm]
+
+
+def _np_grouped_scan(group_idx, array, *, axis: int, skipna: bool, **kwargs):
+    handle_nans = not skipna and array.dtype.kind in "cfO"
+
+    group_idx, array, perm = _prepare_for_flox(group_idx, array)
+    ndim = array.ndim
+    assert axis == (ndim - 1), (axis, ndim - 1)
+
+    flag = np.concatenate((np.asarray([True], like=group_idx), group_idx[1:] != group_idx[:-1]))
+    (inv_idx,) = flag.nonzero()
+    segment_lengths = np.add.reduceat(np.ones(group_idx.shape), inv_idx, dtype=np.int64)
+
+    # TODO: set dtype to float properly for handle_nans?
+    accum = np.nancumsum(array, axis=axis)
+
+    if len(inv_idx) > 1:
+        first_group_idx = inv_idx[1]
+        # extract cumulative sum _before_ start of group
+        prev_group_cumsum = accum[..., inv_idx[1:] - 1]
+        accum[..., first_group_idx:] -= np.repeat(prev_group_cumsum, segment_lengths[1:], axis=axis)
+
+    if handle_nans:
+        mask = isnull(array)
+        accummask = np.cumsum(mask, axis=-1, dtype=np.uint64)
+        if len(inv_idx) > 1:
+            prev_group_cumsum = accummask[..., inv_idx[1:] - 1]
+            accummask[..., first_group_idx:] -= np.repeat(prev_group_cumsum, segment_lengths[1:], axis=axis)
+        accum[accummask > 0] = np.nan
+
+    invert_perm = slice(None) if isinstance(perm, slice) else np.argsort(perm, kind="stable")
+    return accum[..., invert_perm]
+
+
+cumsum = partial(_np_grouped_scan, skipna=False)
+nancumsum = partial(_np_grouped_scan, skipna=True)
