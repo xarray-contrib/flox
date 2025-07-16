@@ -123,10 +123,10 @@ DUMMY_AXIS = -2
 # 1. Fractional change in number of chunks after rechunking
 BLOCKWISE_RECHUNK_NUM_CHUNKS_THRESHOLD = 0.25
 # 2. Fractional change in max chunk size after rechunking
-BLOCKWISE_RECHUNK_CHUNK_SIZE_THRESHOLD = 0.25
+BLOCKWISE_RECHUNK_CHUNK_SIZE_THRESHOLD = 1.5
 # 3. If input arrays have chunk size smaller than `dask.array.chunk-size`,
 #    then adjust chunks to meet that size first.
-BLOCKWISE_DEFAULT_ARRAY_CHUNK_SIZE_FACTOR = 1.25
+# BLOCKWISE_DEFAULT_ARRAY_CHUNK_SIZE_FACTOR = 1.25
 
 logger = logging.getLogger("flox")
 
@@ -756,22 +756,21 @@ def rechunk_for_blockwise(
         Rechunked array
     """
 
-    import dask
-    from dask.utils import parse_bytes
-
     chunks = array.chunks[axis]
     if len(chunks) == 1:
         return "blockwise", array
 
-    factor = parse_bytes(dask.config.get("array.chunk-size")) / (
-        math.prod(array.chunksize) * array.dtype.itemsize
-    )
-    if factor > BLOCKWISE_DEFAULT_ARRAY_CHUNK_SIZE_FACTOR:
-        new_constant_chunks = math.ceil(factor) * max(chunks)
-        q, r = divmod(array.shape[axis], new_constant_chunks)
-        new_input_chunks = (new_constant_chunks,) * q + (r,)
-    else:
-        new_input_chunks = chunks
+    # import dask
+    # from dask.utils import parse_bytes
+    # factor = parse_bytes(dask.config.get("array.chunk-size")) / (
+    #     math.prod(array.chunksize) * array.dtype.itemsize
+    # )
+    # if factor > BLOCKWISE_DEFAULT_ARRAY_CHUNK_SIZE_FACTOR:
+    #     new_constant_chunks = math.ceil(factor) * max(chunks)
+    #     q, r = divmod(array.shape[axis], new_constant_chunks)
+    #     new_input_chunks = (new_constant_chunks,) * q + (r,)
+    # else:
+    new_input_chunks = chunks
 
     # FIXME: this should be unnecessary?
     labels = factorize_((labels,), axes=())[0]
