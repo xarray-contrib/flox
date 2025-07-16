@@ -10,4 +10,5 @@
    user-stories/climatology-hourly-cubed.ipynb
    user-stories/custom-aggregations.ipynb
    user-stories/nD-bins.ipynb
+   user-stories/large-zonal-stats.ipynb
 ```

@@ -14,7 +14,11 @@ def _get_combine(combine):
     if combine == "grouped":
         return partial(flox.core._grouped_combine, engine="numpy")
     else:
-        return partial(flox.core._simple_combine, reindex=False)
+        try:
+            reindex = flox.ReindexStrategy(blockwise=False)
+        except AttributeError:
+            reindex = False
+        return partial(flox.core._simple_combine, reindex=reindex)
 
 
 class Combine:
@@ -41,7 +45,7 @@ class Combine:
 class Combine1d(Combine):
     """
     Time the combine step for dask reductions,
-    this is for reducting along a single dimension
+    this is for reducing along a single dimension
     """
 
     def setup(self, *args, **kwargs) -> None:

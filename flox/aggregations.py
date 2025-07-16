@@ -14,6 +14,7 @@ from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
+from .lib import sparse_array_type
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
@@ -72,7 +73,14 @@ def generic_aggregate(
     if func in ["nanfirst", "nanlast"] and array.dtype.kind in "US":
         func = func[3:]
 
-    if engine == "flox":
+    if is_sparse := isinstance(array, sparse_array_type):
+        # this is not an infinite loop because aggregate_sparse will call
+        # generic_aggregate with dense data
+        from flox import aggregate_sparse
+
+        method = partial(getattr(aggregate_sparse, func), engine=engine)
+
+    elif engine == "flox":
         try:
             method = getattr(aggregate_flox, func)
         except AttributeError:
@@ -105,7 +113,9 @@ def generic_aggregate(
             f"Expected engine to be one of ['flox', 'numpy', 'numba', 'numbagg']. Received {engine} instead."
         )
 
-    group_idx = np.asarray(group_idx, like=array)
+    # UGLY! but this avoids auto-densification errors
+    if not is_sparse:
+        group_idx = np.asarray(group_idx, like=array)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
@@ -604,6 +614,7 @@ class Scan:
     identity: Any
     # dtype of result
     dtype: Any = None
+    preserves_dtype: bool = False
     # "Mode" of applying binary op.
     # for np.add we apply the op directly to the `state` array and the `current` array.
     # for ffill, bfill we concat `state` to `current` and then run the scan again.
@@ -634,7 +645,7 @@ class AlignedArrays:
         reduced = chunk_reduce(
             self.array,
             self.group_idx,
-            func=("nanlast",),
+            func=("last",),
             axis=-1,
             # TODO: automate?
             engine="flox",
@@ -702,6 +713,7 @@ def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) 
             fill_value=agg.identity,
         )
         result = AlignedArrays(array=final_value[..., left.group_idx.size :], group_idx=right.group_idx)
+
     else:
         raise ValueError(f"Unknown binary op application mode: {agg.mode!r}")
 
@@ -720,8 +732,7 @@ def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) 
     )
 
 
-# TODO: numpy_groupies cumsum is a broken when NaNs are present.
-# cumsum = Scan("cumsum", binary_op=np.add, reduction="sum", scan="cumsum", identity=0)
+cumsum = Scan("cumsum", binary_op=np.add, reduction="sum", scan="cumsum", identity=0)
 nancumsum = Scan("nancumsum", binary_op=np.add, reduction="nansum", scan="nancumsum", identity=0)
 # ffill uses the identity for scan, and then at the binary-op state,
 # we concatenate the blockwise-reduced values with the original block,
@@ -733,8 +744,9 @@ ffill = Scan(
     reduction="nanlast",
     scan="ffill",
     # Important: this must be NaN otherwise, ffill does not work.
-    identity=np.nan,
+    identity=dtypes.NA,
     mode="concat_then_scan",
+    preserves_dtype=True,
 )
 bfill = Scan(
     "bfill",
@@ -742,7 +754,8 @@ bfill = Scan(
     reduction="nanlast",
     scan="ffill",
     # Important: this must be NaN otherwise, bfill does not work.
-    identity=np.nan,
+    identity=dtypes.NA,
+    preserves_dtype=True,
     mode="concat_then_scan",
     preprocess=reverse,
     finalize=reverse,
@@ -784,7 +797,7 @@ AGGREGATIONS: dict[str, Aggregation | Scan] = {
     "mode": mode,
     "nanmode": nanmode,
     "topk": topk,
-    # "cumsum": cumsum,
+    "cumsum": cumsum,
     "nancumsum": nancumsum,
     "ffill": ffill,
     "bfill": bfill,
@@ -852,12 +865,11 @@ def _initialize_aggregation(
     )
     agg.fill_value[func] = dtypes._get_fill_value(agg.dtype["final"], agg.fill_value[func])
 
-    fv = fill_value if fill_value is not None else agg.fill_value[agg.name]
     if _is_arg_reduction(agg):
         # this allows us to unravel_index easily. we have to do that nearly every time.
         agg.fill_value["numpy"] = (0,)
     else:
-        agg.fill_value["numpy"] = (fv,)
+        agg.fill_value["numpy"] = (agg.fill_value[func],)
 
     if agg.name == "topk":
         min_count = max(min_count or 0, abs(agg.finalize_kwargs["k"]))

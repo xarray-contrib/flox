@@ -41,6 +41,7 @@ extensions = [
     "myst_nb",
     "sphinx_codeautolink",
     "sphinx_remove_toctrees",
+    "sphinx_copybutton",
 ]
 
 codeautolink_concat_default = True

@@ -2,6 +2,20 @@ from dataclasses import dataclass
 
 from .types import DaskArray, Graph
 
+try:
+    import dask.array as da
+
+    dask_array_type = da.Array
+except ImportError:
+    dask_array_type = ()  # type: ignore[assignment, misc]
+
+try:
+    import sparse
+
+    sparse_array_type = sparse.COO
+except ImportError:
+    sparse_array_type = ()
+
 
 @dataclass
 class ArrayLayer:

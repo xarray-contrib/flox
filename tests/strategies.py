@@ -8,6 +8,7 @@ import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
+import sparse
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS
 
@@ -65,6 +66,20 @@ def cftime_arrays(
     return cftime.num2date(values, units=unit, calendar=cal)
 
 
+def insert_nans(draw: st.DrawFn, array: np.ndarray) -> np.ndarray:
+    if array.dtype.kind in "cf":
+        nan_idx = draw(
+            st.lists(
+                st.integers(min_value=0, max_value=array.shape[-1] - 1),
+                max_size=array.shape[-1] - 1,
+                unique=True,
+            )
+        )
+        if nan_idx:
+            array[..., nan_idx] = np.nan
+    return array
+
+
 numeric_dtypes = (
     npst.integer_dtypes(endianness="=")
     | npst.unsigned_integer_dtypes(endianness="=")
@@ -96,20 +111,18 @@ NON_NUMPY_FUNCS = [
 SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
 
 func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS and f not in SKIPPED_FUNCS])
-numeric_arrays = npst.arrays(
-    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=numeric_dtypes
-)
-numeric_like_arrays = npst.arrays(
-    elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=numeric_like_dtypes
-)
-all_arrays = (
-    npst.arrays(
-        elements={"allow_subnormal": False},
-        shape=npst.array_shapes(),
-        dtype=numeric_like_dtypes,
-    )
-    | cftime_arrays()
-)
+
+
+@st.composite
+def numpy_arrays(draw: st.DrawFn, *, dtype) -> np.ndarray:
+    array = draw(npst.arrays(elements={"allow_subnormal": False}, shape=npst.array_shapes(), dtype=dtype))
+    array = insert_nans(draw, array)
+    return array
+
+
+numeric_arrays = numpy_arrays(dtype=numeric_dtypes)
+numeric_like_arrays = numpy_arrays(dtype=numeric_like_dtypes)
+all_arrays = numeric_like_arrays | cftime_arrays()
 
 
 def by_arrays(
@@ -153,16 +166,26 @@ def chunked_arrays(
 ) -> dask.array.Array:
     array = draw(arrays)
     chunks = draw(chunks(shape=array.shape))
-
-    if array.dtype.kind in "cf":
-        nan_idx = draw(
-            st.lists(
-                st.integers(min_value=0, max_value=array.shape[-1] - 1),
-                max_size=array.shape[-1] - 1,
-                unique=True,
-            )
-        )
-        if nan_idx:
-            array[..., nan_idx] = np.nan
-
     return from_array(array, chunks=chunks)
+
+
+@st.composite
+def sparse_arrays(
+    draw: st.DrawFn,
+    *,
+    elements={"allow_subnormal": False},
+    shapes=npst.array_shapes(),
+    dtypes=npst.boolean_dtypes() | numeric_dtypes,
+    sparse_class=sparse.COO,
+) -> sparse.COO:
+    dtype = draw(dtypes)
+    fill_value = draw(npst.from_dtype(dtype=dtype, **elements))
+    # assume(dtype.kind not in "mM")  # sparse doesn't support .view
+    array = draw(npst.arrays(elements=elements, shape=shapes, dtype=st.just(dtype), fill=st.just(fill_value)))
+    if draw(st.booleans()) and dtype.kind == "f":
+        array = insert_nans(draw, array)
+    if draw(st.booleans()) and dtype.kind == "f":
+        # need to increase probability of NaN fill_value
+        fill_value = np.nan
+    sparse_array = sparse_class.from_numpy(array, fill_value=fill_value)
+    return sparse_array

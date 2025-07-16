@@ -110,6 +110,26 @@ width: 100%
 
 This approach allows grouping by a dask array so group labels can be discovered at compute time, similar to `dask.dataframe.groupby`.
 
+### reindexing to a sparse array
+
+For large numbers of groups, we might be reducing to a very sparse array (e.g. [this issue](https://github.com/xarray-contrib/flox/issues/428)).
+
+To control memory, we can instruct flox to reindex the intermediate results to a `sparse.COO` array using:
+
+```python
+from flox import ReindexArrayType, ReindexStrategy
+
+ReindexStrategy(
+    # do not reindex to the full output grid at the blockwise aggregation stage
+    blockwise=False,
+    # when combining intermediate results after blockwise aggregation, reindex to the
+    # common grid using a sparse.COO array type
+    array_type=ReindexArrayType.SPARSE_COO,
+)
+```
+
+See [this user story](user-stories/large-zonal-stats) for more discussion.
+
 ### Example
 
 For example, consider `groupby("time.month")` with monthly frequency data and chunksize of 4 along `time`.

@@ -7,7 +7,7 @@ dependencies:
   - dask-core
   - pip
   - xarray
-  - numpy>=1.22
+  - numpy>=1.26
   - scipy
   - numpydoc
   - numpy_groupies>=0.9.19
@@ -15,11 +15,13 @@ dependencies:
   - matplotlib-base
   - myst-parser
   - myst-nb
+  - sparse
   - sphinx
   - sphinx-remove-toctrees
   - furo>=2024.08
   - ipykernel
   - jupyter
   - sphinx-codeautolink
+  - sphinx-copybutton
   - pip:
       - -e ..

@@ -9,6 +9,8 @@ from .core import (
     groupby_scan,
     rechunk_for_blockwise,
     rechunk_for_cohorts,
+    ReindexStrategy,
+    ReindexArrayType,
 )  # noqa
 
 

@@ -189,7 +189,7 @@ def _np_grouped_op(
     # assumes input is sorted, which I do in core._prepare_for_flox
     aux = group_idx
 
-    flag = np.concatenate((np.array([True], like=array), aux[1:] != aux[:-1]))
+    flag = np.concatenate((np.asarray([True], like=aux), aux[1:] != aux[:-1]))
     uniques = aux[flag]
     (inv_idx,) = flag.nonzero()
 
@@ -210,7 +210,7 @@ def _np_grouped_op(
             kwargs["group_idx"] = group_idx
             kwargs["fill_value"] = fill_value
 
-    if (len(uniques) == size) and (uniques == np.arange(size, like=array)).all():
+    if (len(uniques) == size) and (uniques == np.arange(size, like=aux)).all():
         # The previous version of this if condition
         #     ((uniques[1:] - uniques[:-1]) == 1).all():
         # does not work when group_idx is [1, 2] for e.g.
@@ -303,11 +303,12 @@ def ffill(group_idx, array, *, axis, **kwargs):
     ndim = array.ndim
     assert axis == (ndim - 1), (axis, ndim - 1)
 
-    flag = np.concatenate((np.array([True], like=array), group_idx[1:] != group_idx[:-1]))
+    flag = np.concatenate((np.asarray([True], like=group_idx), group_idx[1:] != group_idx[:-1]))
     (group_starts,) = flag.nonzero()
 
     # https://stackoverflow.com/questions/41190852/most-efficient-way-to-forward-fill-nan-values-in-numpy-array
-    mask = isnull(array)
+    mask = isnull(array).copy()
+    # copy needed since we might have a broadcast-trick array
     # modified from the SO answer, just reset the index at the start of every group!
     mask[..., np.asarray(group_starts)] = False
 
@@ -321,3 +322,39 @@ def ffill(group_idx, array, *, axis, **kwargs):
 
     invert_perm = slice(None) if isinstance(perm, slice) else np.argsort(perm, kind="stable")
     return array[tuple(slc)][..., invert_perm]
+
+
+def _np_grouped_scan(group_idx, array, *, axis: int, skipna: bool, **kwargs):
+    handle_nans = not skipna and array.dtype.kind in "cfO"
+
+    group_idx, array, perm = _prepare_for_flox(group_idx, array)
+    ndim = array.ndim
+    assert axis == (ndim - 1), (axis, ndim - 1)
+
+    flag = np.concatenate((np.asarray([True], like=group_idx), group_idx[1:] != group_idx[:-1]))
+    (inv_idx,) = flag.nonzero()
+    segment_lengths = np.add.reduceat(np.ones(group_idx.shape), inv_idx, dtype=np.int64)
+
+    # TODO: set dtype to float properly for handle_nans?
+    accum = np.nancumsum(array, axis=axis)
+
+    if len(inv_idx) > 1:
+        first_group_idx = inv_idx[1]
+        # extract cumulative sum _before_ start of group
+        prev_group_cumsum = accum[..., inv_idx[1:] - 1]
+        accum[..., first_group_idx:] -= np.repeat(prev_group_cumsum, segment_lengths[1:], axis=axis)
+
+    if handle_nans:
+        mask = isnull(array)
+        accummask = np.cumsum(mask, axis=-1, dtype=np.uint64)
+        if len(inv_idx) > 1:
+            prev_group_cumsum = accummask[..., inv_idx[1:] - 1]
+            accummask[..., first_group_idx:] -= np.repeat(prev_group_cumsum, segment_lengths[1:], axis=axis)
+        accum[accummask > 0] = np.nan
+
+    invert_perm = slice(None) if isinstance(perm, slice) else np.argsort(perm, kind="stable")
+    return accum[..., invert_perm]
+
+
+cumsum = partial(_np_grouped_scan, skipna=False)
+nancumsum = partial(_np_grouped_scan, skipna=True)

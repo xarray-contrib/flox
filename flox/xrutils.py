@@ -153,14 +153,19 @@ def notnull(data):
     scalar_type = data.dtype.type
     if issubclass(scalar_type, np.bool_ | np.integer | np.character | np.void):
         # these types cannot represent missing values
-        return np.ones_like(data, dtype=bool)
+        return np.broadcast_to(np.array(True), data.shape)
     else:
         out = isnull(data)
-        np.logical_not(out, out=out)
-        return out
+        if np.isscalar(out):
+            return ~out
+        else:
+            np.logical_not(out, out=out)
+            return out
 
 
-def isnull(data):
+def isnull(data: Any):
+    if data is None:
+        return False
     if not is_duck_array(data):
         data = np.asarray(data)
     scalar_type = data.dtype.type
@@ -174,11 +179,11 @@ def isnull(data):
         return np.isnan(data)
     elif issubclass(scalar_type, np.bool_ | np.integer | np.character | np.void):
         # these types cannot represent missing values
-        return np.zeros_like(data, dtype=bool)
+        return np.broadcast_to(np.array(False), data.shape)
     else:
         # at this point, array should have dtype=object
         if isinstance(data, (np.ndarray, dask_array_type)):  # noqa
-            return pd.isnull(data)
+            return pd.isnull(data)  # type: ignore[arg-type]
         else:
             # Not reachable yet, but intended for use with other duck array
             # types. For full consistency with pandas, we should accept None as
@@ -375,9 +380,10 @@ def _select_along_axis(values, idx, axis):
 def nanfirst(values, axis, keepdims=False):
     if isinstance(axis, tuple):
         (axis,) = axis
-    values = np.asarray(values)
+    if not is_duck_array(values):
+        values = np.asarray(values)
     axis = normalize_axis_index(axis, values.ndim)
-    idx_first = np.argmax(~pd.isnull(values), axis=axis)
+    idx_first = np.argmax(~isnull(values), axis=axis)
     result = _select_along_axis(values, idx_first, axis)
     if keepdims:
         return np.expand_dims(result, axis=axis)
@@ -388,10 +394,11 @@ def nanfirst(values, axis, keepdims=False):
 def nanlast(values, axis, keepdims=False):
     if isinstance(axis, tuple):
         (axis,) = axis
-    values = np.asarray(values)
+    if not is_duck_array(values):
+        values = np.asarray(values)
     axis = normalize_axis_index(axis, values.ndim)
     rev = (slice(None),) * axis + (slice(None, None, -1),)
-    idx_last = -1 - np.argmax(~pd.isnull(values)[rev], axis=axis)
+    idx_last = -1 - np.argmax(~isnull(values)[rev], axis=axis)
     result = _select_along_axis(values, idx_last, axis)
     if keepdims:
         return np.expand_dims(result, axis=axis)

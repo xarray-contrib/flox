@@ -6,8 +6,9 @@ dependencies:
   - pandas
   - hypothesis
   - cftime
-  - numpy>=1.22
+  - numpy>=1.26
   - scipy
+  - sparse
   - pip
   - pytest
   - pytest-cov

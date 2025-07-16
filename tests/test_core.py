@@ -19,9 +19,12 @@ from flox import xrutils
 from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.core import (
     HAS_NUMBAGG,
+    ReindexArrayType,
+    ReindexStrategy,
     _choose_engine,
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
+    _is_sparse_supported_reduction,
     _normalize_indexes,
     _validate_reindex,
     factorize_,
@@ -41,9 +44,12 @@ from . import (
     assert_equal_tuple,
     has_cubed,
     has_dask,
+    has_sparse,
     raise_if_dask_computes,
     requires_cubed,
     requires_dask,
+    requires_sparse,
+    to_numpy,
 )
 
 logger = logging.getLogger("flox")
@@ -71,6 +77,10 @@ if has_cubed:
 
 
 DEFAULT_QUANTILE = 0.9
+REINDEX_SPARSE_STRAT = ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)
+REINDEX_SPARSE_PARAM = pytest.param(
+    REINDEX_SPARSE_STRAT, marks=(requires_dask, pytest.mark.skipif(not has_sparse, reason="no sparse"))
+)
 
 if TYPE_CHECKING:
     from flox.core import T_Agg, T_Engine, T_ExpectedGroupsOpt, T_Method
@@ -212,6 +222,7 @@ def gen_array_by(size, func):
     return array, by
 
 
+@pytest.mark.parametrize("to_sparse", [pytest.param(True, marks=requires_sparse), False])
 @pytest.mark.parametrize(
     "chunks",
     [
@@ -230,6 +241,12 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         pytest.skip()
 
     array, by = gen_array_by(size, func)
+    if to_sparse:
+        import sparse
+
+        array = sparse.COO.from_numpy(array)
+        if not _is_sparse_supported_reduction(func):
+            pytest.skip()
     if chunks:
         array = dask.array.from_array(array, chunks=chunks)
     by = (by,) * nby
@@ -276,7 +293,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 warnings.filterwarnings("ignore", r"Mean of empty slice")
 
                 # computing silences a bunch of dask warnings
-                array_ = array.compute() if chunks is not None else array
+                array_ = to_numpy(array)
                 if "arg" in func and add_nan_by:
                     # NaNs are in by, but we can't call np.argmax([..., NaN, .. ])
                     # That would return index of the NaN
@@ -292,7 +309,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                         expected = np.full(expected.shape[:-1] + (abs(kwargs["k"]),), np.nan)
                     expected = np.sort(np.swapaxes(expected, array.ndim - 1, 0), axis=0)
         for _ in range(nby):
-            expected = np.expand_dims(expected, -1)
+            expected = np.expand_dims(expected, axis=-1)
 
         if func in BLOCKWISE_FUNCS:
             assert chunks == -1
@@ -334,13 +351,20 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
         if not has_dask or chunks is None or func in BLOCKWISE_FUNCS:
             continue
 
-        params = list(itertools.product(["map-reduce"], [True, False, None]))
+        params = list(
+            itertools.product(
+                ["map-reduce"],
+                [True, False, None, REINDEX_SPARSE_STRAT],
+            )
+        )
         params.extend(itertools.product(["cohorts"], [False, None]))
         if chunks == -1:
             params.extend([("blockwise", None)])
 
         combine_error = RuntimeError("This combine should not have been called.")
         for method, reindex in params:
+            if isinstance(reindex, ReindexStrategy) and not _is_sparse_supported_reduction(func):
+                continue
             call = partial(
                 groupby_reduce,
                 array,
@@ -374,6 +398,10 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, engine):
                 assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
+            if isinstance(reindex, ReindexStrategy):
+                import sparse
+
+                expected = sparse.COO.from_numpy(expected)
             assert_equal(actual, expected, tolerance)
 
 
@@ -461,7 +489,7 @@ def test_numpy_reduce_nd_md():
 
 
 @requires_dask
-@pytest.mark.parametrize("reindex", [None, False, True])
+@pytest.mark.parametrize("reindex", [None, False, True, REINDEX_SPARSE_PARAM])
 @pytest.mark.parametrize("func", ALL_FUNCS)
 @pytest.mark.parametrize("add_nan", [False, True])
 @pytest.mark.parametrize("dtype", (float,))
@@ -482,6 +510,9 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
         pytest.skip()
 
     if "arg" in func and (engine in ["flox", "numbagg"] or reindex):
+        pytest.skip()
+
+    if isinstance(reindex, ReindexStrategy) and not _is_sparse_supported_reduction(func):
         pytest.skip()
 
     rng = np.random.default_rng(12345)
@@ -789,6 +820,7 @@ def test_groupby_reduce_axis_subset_against_numpy(func, axis, engine):
         (None, None),
         pytest.param(False, (2, 2, 3), marks=requires_dask),
         pytest.param(True, (2, 2, 3), marks=requires_dask),
+        pytest.param(REINDEX_SPARSE_PARAM, (2, 2, 3), marks=requires_dask),
     ],
 )
 @pytest.mark.parametrize(
@@ -835,7 +867,13 @@ def test_groupby_reduce_nans(reindex, chunks, axis, groups, expected_shape, engi
 @requires_dask
 @pytest.mark.parametrize(
     "expected_groups, reindex",
-    [(None, None), (None, False), ([0, 1, 2], True), ([0, 1, 2], False)],
+    [
+        (None, None),
+        (None, False),
+        ([0, 1, 2], True),
+        ([0, 1, 2], False),
+        pytest.param([0, 1, 2], REINDEX_SPARSE_PARAM),
+    ],
 )
 def test_groupby_all_nan_blocks_dask(expected_groups, reindex, engine):
     labels = np.array([0, 0, 2, 2, 2, 1, 1, 2, 2, 1, 1, 0])
@@ -1654,7 +1692,7 @@ def test_validate_reindex_map_reduce(dask_expected, reindex, func, expected_grou
         is_dask_array=True,
         array_dtype=np.dtype("int32"),
     )
-    assert actual is dask_expected
+    assert actual == ReindexStrategy(blockwise=dask_expected)
 
     # always reindex with all numpy inputs
     actual = _validate_reindex(
@@ -1666,7 +1704,7 @@ def test_validate_reindex_map_reduce(dask_expected, reindex, func, expected_grou
         is_dask_array=False,
         array_dtype=np.dtype("int32"),
     )
-    assert actual
+    assert actual.blockwise
 
     actual = _validate_reindex(
         True,
@@ -1677,7 +1715,7 @@ def test_validate_reindex_map_reduce(dask_expected, reindex, func, expected_grou
         is_dask_array=False,
         array_dtype=np.dtype("int32"),
     )
-    assert actual
+    assert actual.blockwise
 
 
 def test_validate_reindex() -> None:
@@ -1716,7 +1754,7 @@ def test_validate_reindex() -> None:
                 any_by_dask=False,
                 is_dask_array=True,
                 array_dtype=np.dtype("int32"),
-            )
+            ).blockwise
             assert actual is False
 
     with pytest.raises(ValueError):
@@ -1738,7 +1776,7 @@ def test_validate_reindex() -> None:
         any_by_dask=True,
         is_dask_array=True,
         array_dtype=np.dtype("int32"),
-    )
+    ).blockwise
     assert _validate_reindex(
         None,
         "sum",
@@ -1747,7 +1785,7 @@ def test_validate_reindex() -> None:
         any_by_dask=True,
         is_dask_array=True,
         array_dtype=np.dtype("int32"),
-    )
+    ).blockwise
 
     kwargs = dict(
         method="blockwise",
@@ -1757,24 +1795,24 @@ def test_validate_reindex() -> None:
     )
 
     for func in ["nanfirst", "nanlast"]:
-        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs)  # type: ignore[arg-type]
-        assert _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs)  # type: ignore[arg-type]
+        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs).blockwise  # type: ignore[arg-type]
+        assert _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs).blockwise  # type: ignore[arg-type]
 
     for func in ["first", "last"]:
-        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs)  # type: ignore[arg-type]
-        assert not _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs)  # type: ignore[arg-type]
+        assert not _validate_reindex(None, func, array_dtype=np.dtype("int32"), **kwargs).blockwise  # type: ignore[arg-type]
+        assert not _validate_reindex(None, func, array_dtype=np.dtype("float32"), **kwargs).blockwise  # type: ignore[arg-type]
 
 
 @requires_dask
-def test_1d_blockwise_sort_optimization():
+def test_1d_blockwise_sort_optimization() -> None:
     # Make sure for resampling problems sorting isn't done.
     time = pd.Series(pd.date_range("2020-09-01", "2020-12-31 23:59", freq="3h"))
     array = dask.array.ones((len(time),), chunks=(224,))
 
-    actual, _ = groupby_reduce(array, time.dt.dayofyear.values, method="blockwise", func="count")
+    actual, *_ = groupby_reduce(array, time.dt.dayofyear.values, method="blockwise", func="count")
     assert all("getitem" not in k for k in actual.dask)
 
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         array,
         time.dt.dayofyear.values[::-1],
         sort=True,
@@ -1783,7 +1821,7 @@ def test_1d_blockwise_sort_optimization():
     )
     assert any("getitem" in k for k in actual.dask.layers)
 
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         array,
         time.dt.dayofyear.values[::-1],
         sort=False,
@@ -1794,7 +1832,7 @@ def test_1d_blockwise_sort_optimization():
 
 
 @requires_dask
-def test_negative_index_factorize_race_condition():
+def test_negative_index_factorize_race_condition() -> None:
     # shape = (10, 2000)
     # chunks = ((shape[0]-1,1), 10)
     shape = (101, 174000)
@@ -1821,17 +1859,17 @@ def test_negative_index_factorize_race_condition():
 
 
 @pytest.mark.parametrize("sort", [True, False])
-def test_expected_index_conversion_passthrough_range_index(sort):
+def test_expected_index_conversion_passthrough_range_index(sort) -> None:
     index = pd.RangeIndex(100)
-    actual = _convert_expected_groups_to_index(expected_groups=(index,), isbin=(False,), sort=(sort,))
+    actual = _convert_expected_groups_to_index(expected_groups=(index,), isbin=(False,), sort=(sort,))  # type: ignore[call-overload]
     assert actual[0] is index
 
 
-def test_method_check_numpy():
+def test_method_check_numpy() -> None:
     bins = [-2, -1, 0, 1, 2]
     field = np.ones((5, 3))
     by = np.array([[-1.5, -1.5, 0.5, 1.5, 1.5] * 3]).reshape(5, 3)
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         field,
         by,
         expected_groups=pd.IntervalIndex.from_breaks(bins),
@@ -1842,7 +1880,7 @@ def test_method_check_numpy():
     expected = np.array([6, np.nan, 3, 6])
     assert_equal(actual, expected)
 
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         field,
         by,
         expected_groups=pd.IntervalIndex.from_breaks(bins),
@@ -1862,7 +1900,7 @@ def test_method_check_numpy():
 
 
 @pytest.mark.parametrize("dtype", [None, np.float64])
-def test_choose_engine(dtype):
+def test_choose_engine(dtype) -> None:
     numbagg_possible = HAS_NUMBAGG and dtype is None
     default = "numbagg" if numbagg_possible else "numpy"
     mean = _initialize_aggregation(
@@ -1904,10 +1942,10 @@ def test_choose_engine(dtype):
     assert _choose_engine(np.array([1, 1, 2, 2]), agg=argmax) == "numpy"
 
 
-def test_xarray_fill_value_behaviour():
+def test_xarray_fill_value_behaviour() -> None:
     bar = np.array([1, 2, 3, np.nan, np.nan, np.nan, 4, 5, np.nan, np.nan])
     times = np.arange(0, 20, 2)
-    actual, _ = groupby_reduce(bar, times, func="nansum", expected_groups=(np.arange(19),))
+    actual, *_ = groupby_reduce(bar, times, func="nansum", expected_groups=(np.arange(19),))
     nan = np.nan
     # fmt: off
     expected = np.array(
@@ -1922,7 +1960,7 @@ def test_xarray_fill_value_behaviour():
 @pytest.mark.parametrize("func", ["nanquantile", "quantile"])
 @pytest.mark.parametrize("chunk", [pytest.param(True, marks=requires_dask), False])
 @pytest.mark.parametrize("by_ndim", [1, 2])
-def test_multiple_quantiles(q, chunk, func, by_ndim):
+def test_multiple_quantiles(q, chunk, func, by_ndim) -> None:
     array = np.array([[1, -1, np.nan, 3, 4, 10, 5], [1, np.nan, np.nan, 3, 4, np.nan, np.nan]])
     labels = np.array([0, 0, 0, 1, 0, 1, 1])
     if by_ndim == 2:
@@ -1933,11 +1971,11 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
     if chunk:
         array = dask.array.from_array(array, chunks=(1,) + (-1,) * by_ndim)
 
-    actual, _ = groupby_reduce(array, labels, func=func, finalize_kwargs=dict(q=q), axis=axis)
+    actual, *_ = groupby_reduce(array, labels, func=func, finalize_kwargs=dict(q=q), axis=axis)
     sorted_array = array[..., [0, 1, 2, 4, 3, 5, 6]]
     f = partial(getattr(np, func), q=q, axis=axis, keepdims=True)
     if chunk:
-        sorted_array = sorted_array.compute()
+        sorted_array = sorted_array.compute()  # type: ignore[attr-defined]
     expected = np.concatenate((f(sorted_array[..., :4]), f(sorted_array[..., 4:])), axis=-1)
     if by_ndim == 2:
         expected = expected.squeeze(axis=-2)
@@ -1945,7 +1983,7 @@ def test_multiple_quantiles(q, chunk, func, by_ndim):
 
 
 @pytest.mark.parametrize("dtype", ["U3", "S3"])
-def test_nanlen_string(dtype, engine):
+def test_nanlen_string(dtype, engine) -> None:
     array = np.array(["ABC", "DEF", "GHI", "JKL", "MNO", "PQR"], dtype=dtype)
     by = np.array([0, 0, 1, 2, 1, 0])
     expected = np.array([3, 2, 1], dtype=np.intp)
@@ -1953,19 +1991,56 @@ def test_nanlen_string(dtype, engine):
     assert_equal(expected, actual)
 
 
-def test_cumusm():
-    array = np.array([1, 1, 1], dtype=np.uint64)
+@pytest.mark.parametrize(
+    "array",
+    [
+        np.array([1, 1, 1, 2, 3, 4, 5], dtype=np.uint64),
+        np.array([1, 1, 1, 2, np.nan, 4, 5], dtype=np.float64),
+    ],
+)
+@pytest.mark.parametrize("func", ["cumsum", "nancumsum"])
+def test_cumsum_simple(array, func) -> None:
     by = np.array([0] * array.shape[-1])
-    kwargs = {"func": "nancumsum", "axis": -1}
-    expected = np.nancumsum(array, axis=-1)
+    expected = getattr(np, func)(array, axis=-1)
 
-    actual = groupby_scan(array, by, **kwargs)
-    assert_equal(expected, actual)
+    actual = groupby_scan(array, by, func=func, axis=-1)
+    assert_equal(actual, expected)
 
     if has_dask:
         da = dask.array.from_array(array, chunks=2)
-        actual = groupby_scan(da, by, **kwargs)
-        assert_equal(expected, actual)
+        actual = groupby_scan(da, by, func=func, axis=-1)
+        assert_equal(actual, expected)
+
+
+def test_cumsum() -> None:
+    array = np.array(
+        [
+            [1, 2, np.nan, 4, 5],
+            [3, np.nan, 4, 6, 6],
+        ]
+    )
+    by = [0, 1, 1, 0, 1]
+
+    expected = np.array(
+        [
+            [1, 2, np.nan, 5, np.nan],
+            [3, np.nan, np.nan, 9, np.nan],
+        ]
+    )
+    actual = groupby_scan(array, by, func="cumsum", axis=-1)
+    assert_equal(actual, expected)
+    if has_dask:
+        da = dask.array.from_array(array, chunks=2)
+        actual = groupby_scan(da, by, func="cumsum", axis=-1)
+        assert_equal(actual, expected)
+
+    expected = np.array([[1, 2, 2, 5, 7], [3, 0, 4, 9, 10]], dtype=np.float64)
+    actual = groupby_scan(array, by, func="nancumsum", axis=-1)
+    assert_equal(actual, expected)
+    if has_dask:
+        da = dask.array.from_array(array, chunks=2)
+        actual = groupby_scan(da, by, func="nancumsum", axis=-1)
+        assert_equal(actual, expected)
 
 
 @pytest.mark.parametrize(
@@ -1979,7 +2054,7 @@ def test_cumusm():
 @pytest.mark.parametrize("size", ((1, 12), (12,), (12, 9)))
 @pytest.mark.parametrize("add_nan_by", [True, False])
 @pytest.mark.parametrize("func", ["ffill", "bfill"])
-def test_ffill_bfill(chunks, size, add_nan_by, func):
+def test_ffill_bfill(chunks, size, add_nan_by, func) -> None:
     array, by = gen_array_by(size, func)
     if chunks:
         array = dask.array.from_array(array, chunks=chunks)
@@ -1993,11 +2068,11 @@ def test_ffill_bfill(chunks, size, add_nan_by, func):
 
 
 @requires_dask
-def test_blockwise_nans():
+def test_blockwise_nans() -> None:
     array = dask.array.ones((1, 10), chunks=2)
     by = np.array([-1, 0, -1, 1, -1, 2, -1, 3, 4, 4])
-    actual, actual_groups = flox.groupby_reduce(array, by, func="sum", expected_groups=pd.RangeIndex(0, 5))
-    expected, expected_groups = flox.groupby_reduce(
+    actual, *actual_groups = flox.groupby_reduce(array, by, func="sum", expected_groups=pd.RangeIndex(0, 5))
+    expected, *expected_groups = flox.groupby_reduce(
         array.compute(), by, func="sum", expected_groups=pd.RangeIndex(0, 5)
     )
     assert_equal(expected_groups, actual_groups)
@@ -2006,11 +2081,11 @@ def test_blockwise_nans():
 
 @pytest.mark.parametrize("func", ["sum", "prod", "count", "nansum"])
 @pytest.mark.parametrize("engine", ["flox", "numpy"])
-def test_agg_dtypes(func, engine):
+def test_agg_dtypes(func, engine) -> None:
     # regression test for GH388
     counts = np.array([0, 2, 1, 0, 1])
     group = np.array([1, 1, 1, 2, 2])
-    actual, _ = groupby_reduce(
+    actual, *_ = groupby_reduce(
         counts, group, expected_groups=(np.array([1, 2]),), func=func, dtype="uint8", engine=engine
     )
     expected = _get_array_func(func)(counts, dtype="uint8")
@@ -2018,38 +2093,153 @@ def test_agg_dtypes(func, engine):
 
 
 @requires_dask
-def test_blockwise_avoid_rechunk():
+def test_blockwise_avoid_rechunk() -> None:
     array = dask.array.zeros((6,), chunks=(2, 4), dtype=np.int64)
     by = np.array(["1", "1", "0", "", "0", ""], dtype="<U1")
-    actual, groups = groupby_reduce(array, by, func="first")
-    assert_equal(groups, ["", "0", "1"])
+    actual, *groups = groupby_reduce(array, by, func="first")
+    assert_equal(groups, [["", "0", "1"]])
     assert_equal(actual, np.array([0, 0, 0], dtype=np.int64))
 
 
-def test_datetime_minmax(engine):
+def test_datetime_minmax(engine) -> None:
     # GH403
     array = np.array([np.datetime64("2000-01-01"), np.datetime64("2000-01-02"), np.datetime64("2000-01-03")])
     by = np.array([0, 0, 1])
-    actual, _ = flox.groupby_reduce(array, by, func="nanmin", engine=engine)
+    actual, *_ = flox.groupby_reduce(array, by, func="nanmin", engine=engine)
     expected = array[[0, 2]]
     assert_equal(expected, actual)
 
     expected = array[[1, 2]]
-    actual, _ = flox.groupby_reduce(array, by, func="nanmax", engine=engine)
+    actual, *_ = flox.groupby_reduce(array, by, func="nanmax", engine=engine)
     assert_equal(expected, actual)
 
 
 @pytest.mark.parametrize("func", ["first", "last", "nanfirst", "nanlast"])
-def test_datetime_timedelta_first_last(engine, func):
-    import flox
-
+def test_datetime_timedelta_first_last(engine, func) -> None:
     idx = 0 if "first" in func else -1
+    idx1 = 2 if "first" in func else -1
 
+    ## datetime
     dt = pd.date_range("2001-01-01", freq="d", periods=5).values
     by = np.ones(dt.shape, dtype=int)
-    actual, _ = flox.groupby_reduce(dt, by, func=func, engine=engine)
+    actual, *_ = groupby_reduce(dt, by, func=func, engine=engine)
     assert_equal(actual, dt[[idx]])
 
+    # missing group
+    by = np.array([0, 2, 3, 3, 3])
+    actual, *_ = groupby_reduce(
+        dt, by, expected_groups=([0, 1, 2, 3],), func=func, engine=engine, fill_value=dtypes.NA
+    )
+    assert_equal(actual, [dt[0], np.datetime64("NaT"), dt[1], dt[idx1]])
+
+    ## timedelta
     dt = dt - dt[0]
-    actual, _ = flox.groupby_reduce(dt, by, func=func, engine=engine)
+    by = np.ones(dt.shape, dtype=int)
+    actual, *_ = groupby_reduce(dt, by, func=func, engine=engine)
     assert_equal(actual, dt[[idx]])
+
+    # missing group
+    by = np.array([0, 2, 3, 3, 3])
+    actual, *_ = groupby_reduce(
+        dt, by, expected_groups=([0, 1, 2, 3],), func=func, engine=engine, fill_value=dtypes.NA
+    )
+    assert_equal(actual, [dt[0], np.timedelta64("NaT"), dt[1], dt[idx1]])
+
+
+@requires_dask
+@requires_sparse
+@pytest.mark.xdist_group(name="sparse-group")
+@pytest.mark.parametrize("size", [2**62 - 1, 11])
+def test_reindex_sparse(size):
+    import sparse
+
+    array = dask.array.ones((2, 12), chunks=(-1, 3))
+    func = "sum"
+    expected_groups = pd.RangeIndex(size)
+    by = dask.array.from_array(np.repeat(np.arange(6) * 2, 2), chunks=(3,))
+    dense = np.zeros((2, 11))
+    dense[..., np.arange(6) * 2] = 2
+    expected = sparse.COO.from_numpy(dense)
+
+    with pytest.raises(ValueError):
+        ReindexStrategy(blockwise=True, array_type=ReindexArrayType.SPARSE_COO)
+    reindex = ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)
+
+    original_reindex = flox.core.reindex_
+
+    def mocked_reindex(*args, **kwargs):
+        res = original_reindex(*args, **kwargs)
+        if isinstance(res, dask.array.Array):
+            assert isinstance(res._meta, sparse.COO)
+        else:
+            assert isinstance(res, sparse.COO)
+        return res
+
+    # Define the error-raising property
+    def raise_error(self):
+        raise AttributeError("Access to '_data' is not allowed.")
+
+    with patch("flox.core.reindex_") as mocked_reindex_func:
+        with patch.object(pd.RangeIndex, "_data", property(raise_error)):
+            mocked_reindex_func.side_effect = mocked_reindex
+            actual, *_ = groupby_reduce(
+                array, by, func=func, reindex=reindex, expected_groups=expected_groups, fill_value=0
+            )
+            if size == 11:
+                assert_equal(actual, expected)
+            else:
+                actual.compute()  # just compute
+
+            # once during graph construction, 10 times afterward
+            assert mocked_reindex_func.call_count > 1
+
+
+@requires_dask
+def test_sparse_errors():
+    call = partial(
+        groupby_reduce,
+        dask.array.from_array([1, 2, 3], chunks=(1,)),
+        [0, 1, 1],
+        reindex=REINDEX_SPARSE_STRAT,
+        fill_value=0,
+        expected_groups=[0, 1, 2],
+    )
+
+    if not has_sparse:
+        with pytest.raises(ImportError):
+            call(func="sum")
+
+    else:
+        with pytest.raises(ValueError):
+            call(func="first")
+
+
+@requires_sparse
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        None,
+        pytest.param(-1, marks=requires_dask),
+        pytest.param(3, marks=requires_dask),
+        pytest.param(4, marks=requires_dask),
+    ],
+)
+@pytest.mark.parametrize("shape", [(1, 12), (12,), (12, 9)])
+@pytest.mark.parametrize("fill_value", [np.nan, 0])
+@pytest.mark.parametrize("func", ["sum", "mean", "min", "max", "nansum", "nanmean", "nanmin", "nanmax"])
+def test_sparse_nan_fill_value_reductions(chunks, fill_value, shape, func):
+    import sparse
+
+    numpy_array, by = gen_array_by(shape, func)
+    array = sparse.COO.from_numpy(numpy_array, fill_value=fill_value)
+    if chunks:
+        array = dask.array.from_array(array, chunks=chunks)
+
+    npfunc = _get_array_func(func)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", r"Mean of empty slice")
+        warnings.filterwarnings("ignore", r"All-NaN slice encountered")
+        # warnings.filterwarnings("ignore", r"encountered in divide")
+        expected = np.expand_dims(npfunc(numpy_array, axis=-1), axis=-1)
+        actual, *_ = groupby_reduce(array, by, func=func, axis=-1)
+    assert_equal(actual, expected)

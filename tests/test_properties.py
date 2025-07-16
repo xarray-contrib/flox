@@ -7,6 +7,7 @@ import pytest
 
 pytest.importorskip("hypothesis")
 pytest.importorskip("dask")
+pytest.importorskip("sparse")
 pytest.importorskip("cftime")
 
 import dask
@@ -16,11 +17,27 @@ import numpy as np
 from hypothesis import assume, given, note, settings
 
 import flox
-from flox.core import groupby_reduce, groupby_scan
-from flox.xrutils import _contains_cftime_datetimes, _to_pytimedelta, datetime_to_numeric, isnull, notnull
+from flox.core import _is_sparse_supported_reduction, groupby_reduce, groupby_scan
+from flox.lib import sparse_array_type
+from flox.xrutils import (
+    _contains_cftime_datetimes,
+    _to_pytimedelta,
+    datetime_to_numeric,
+    is_duck_dask_array,
+    isnull,
+    notnull,
+)
 
-from . import BLOCKWISE_FUNCS, assert_equal
-from .strategies import all_arrays, by_arrays, chunked_arrays, func_st, numeric_dtypes, numeric_like_arrays
+from . import BLOCKWISE_FUNCS, assert_equal, to_numpy
+from .strategies import (
+    all_arrays,
+    by_arrays,
+    chunked_arrays,
+    func_st,
+    numeric_dtypes,
+    numeric_like_arrays,
+    sparse_arrays,
+)
 from .strategies import chunks as chunks_strategy
 
 dask.config.set(scheduler="sync")
@@ -39,10 +56,11 @@ def bfill(array, axis, dtype=None):
 
 
 NUMPY_SCAN_FUNCS: dict[str, Callable] = {
+    "cumsum": np.cumsum,
     "nancumsum": np.nancumsum,
     "ffill": ffill,
     "bfill": bfill,
-}  # "cumsum": np.cumsum,
+}
 
 
 def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
@@ -147,20 +165,27 @@ def test_groupby_reduce(data, array, func: str) -> None:
     assert_equal(expected, actual, tolerance)
 
 
+@settings(deadline=None)
 @given(
     data=st.data(),
-    array=chunked_arrays(arrays=numeric_like_arrays),
+    array=chunked_arrays(arrays=numeric_like_arrays | sparse_arrays()) | sparse_arrays(),
     func=func_st,
 )
-def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
-    numpy_array = array.compute()
+def test_groupby_reduce_numpy_vs_other(data, array, func: str) -> None:
+    if (
+        isinstance(array, sparse_array_type)
+        or (is_duck_dask_array(array) and isinstance(array._meta, sparse_array_type))
+        and not _is_sparse_supported_reduction(func)
+    ):
+        assume(False)
+    numpy_array = to_numpy(array)
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(numpy_array))
     # TODO: fix var for complex numbers upstream
     assume(not (("quantile" in func or "var" in func or "std" in func) and array.dtype.kind == "c"))
     # # arg* with nans in array are weird
     assume("arg" not in func and not np.any(isnull(numpy_array.ravel())))
-    if func in ["nanmedian", "nanquantile", "median", "quantile"]:
+    if hasattr(array, "rechunk") and func in ["nanmedian", "nanquantile", "median", "quantile"]:
         array = array.rechunk({-1: -1})
 
     axis = -1
@@ -175,18 +200,18 @@ def test_groupby_reduce_numpy_vs_dask(data, array, func: str) -> None:
         **flox_kwargs,
         finalize_kwargs=kwargs,
     )
-    result_dask, *_ = groupby_reduce(array, by, **kwargs)
+    result_other, *_ = groupby_reduce(array, by, **kwargs)
     result_numpy, *_ = groupby_reduce(numpy_array, by, **kwargs)
-    assert_equal(result_numpy, result_dask)
+    assert isinstance(result_other, type(array))
+    assert_equal(result_numpy, result_other)
 
 
-@settings(report_multiple_bugs=False)
 @given(
     data=st.data(),
     array=chunked_arrays(arrays=numeric_like_arrays),
     func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
 )
-def test_scans(data, array: dask.array.Array, func: str) -> None:
+def test_scans_against_numpy(data, array: dask.array.Array, func: str) -> None:
     if "cum" in func:
         assume(not_overflowing_array(np.asarray(array)))
 

@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.13"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -78,7 +78,8 @@ jobs:
             git+https://github.com/Unidata/cftime
           python -m pip install \
             git+https://github.com/dask/dask \
-            git+https://github.com/ml31415/numpy-groupies
+            git+https://github.com/ml31415/numpy-groupies \
+            git+https://github.com/pydata/sparse
 
       - name: Install flox
         run: |

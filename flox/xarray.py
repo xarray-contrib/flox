@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,7 @@ from .aggregations import (
     topk_new_dims_func,
 )
 from .core import (
+    ReindexStrategy,
     _convert_expected_groups_to_index,
     _get_expected_groups,
     _validate_expected_groups,
@@ -83,10 +84,10 @@ def xarray_reduce(
     keep_attrs: bool | None = True,
     skipna: bool | None = None,
     min_count: int | None = None,
-    reindex: bool | None = None,
+    reindex: ReindexStrategy | bool | None = None,
     **finalize_kwargs,
 ):
-    """GroupBy reduce operations on xarray objects using numpy-groupies
+    """GroupBy reduce operations on xarray objects using numpy-groupies.
 
     Parameters
     ----------
@@ -111,26 +112,27 @@ def xarray_reduce(
     dim : hashable
         dimension name along which to reduce. If None, reduces across all
         dimensions of `by`
-    fill_value
+    fill_value : Any
         Value used for missing groups in the output i.e. when one of the labels
         in ``expected_groups`` is not actually present in ``by``.
     dtype : data-type, optional
-        DType for the output. Can be anything accepted by ``np.dtype``.
+        DType for the output. Can be anything that is accepted by ``np.dtype``.
     method : {"map-reduce", "blockwise", "cohorts"}, optional
-        Strategy for reduction of dask arrays only:
+        Note that this arg is chosen by default using heuristics.
+        Strategy for reduction of dask arrays only.
           * ``"map-reduce"``:
             First apply the reduction blockwise on ``array``, then
             combine a few newighbouring blocks, apply the reduction.
             Continue until finalizing. Usually, ``func`` will need
-            to be an Aggregation instance for this method to work.
+            to be an ``Aggregation`` instance for this method to work.
             Common aggregations are implemented.
           * ``"blockwise"``:
             Only reduce using blockwise and avoid aggregating blocks
             together. Useful for resampling-style reductions where group
-            members are always together. If  `by` is 1D,  `array` is automatically
+            members are always together. If  ``by`` is 1D,  ``array`` is automatically
             rechunked so that chunk boundaries line up with group boundaries
             i.e. each block contains all members of any group present
-            in that block. For nD `by`, you must make sure that all members of a group
+            in that block. For nD ``by``, you must make sure that all members of a group
             are present in a single block.
           * ``"cohorts"``:
             Finds group labels that tend to occur together ("cohorts"),
@@ -140,11 +142,11 @@ def xarray_reduce(
             'month', dayofyear' etc. Optimize chunking ``array`` for this
             method by first rechunking using ``rechunk_for_cohorts``
             (for 1D ``by`` only).
-    engine : {"flox", "numpy", "numba"}, optional
+    engine : {"flox", "numpy", "numba", "numbagg"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
             Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
-            This is the default choice because it works for other array types.
+            This is the default choice because it works for most array types.
           * ``"flox"``:
             Use an internal implementation where the data is sorted so that
             all members of a group occur sequentially, and then numpy.ufunc.reduceat
@@ -167,13 +169,16 @@ def xarray_reduce(
         fewer than min_count non-NA values are present the result will be
         NA. Only used if skipna is set to True or defaults to True for the
         array's dtype.
-    reindex : bool, optional
-        Whether to "reindex" the blockwise results to `expected_groups` (possibly automatically detected).
+    reindex : ReindexStrategy | bool, optional
+        Whether to "reindex" the blockwise reduced results to ``expected_groups`` (possibly automatically detected).
         If True, the intermediate result of the blockwise groupby-reduction has a value for all expected groups,
         and the final result is a simple reduction of those intermediates. In nearly all cases, this is a significant
         boost in computation speed. For cases like time grouping, this may result in large intermediates relative to the
-        original block size. Avoid that by using method="cohorts". By default, it is turned off for arg reductions.
-    **finalize_kwargs
+        original block size. Avoid that by using ``method="cohorts"``. By default, it is turned off for argreductions.
+        By default, the type of ``array`` is preserved. You may optionally reindex to a sparse array type to further control memory
+        in the case of ``expected_groups`` being very large. Pass a ``ReindexStrategy`` instance with the appropriate ``array_type``,
+        for example (``reindex=ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)``).
+    **finalize_kwargs: dict, optional
         kwargs passed to the finalize function, like ``ddof`` for var, std or ``q`` for quantile.
 
     Returns
@@ -255,7 +260,7 @@ def xarray_reduce(
                 grouper_dims.append(d)
 
     if isinstance(obj, xr.Dataset):
-        ds = obj
+        ds = cast(xr.Dataset, obj)
     else:
         ds = obj._to_temp_dataset()
 
@@ -301,7 +306,7 @@ def xarray_reduce(
         not set(grouper_dims).issubset(set(variable.dims)) for variable in ds.data_vars.values()
     )
     if needs_broadcast:
-        ds_broad = xr.broadcast(ds, *by_da, exclude=exclude_dims)[0]
+        ds_broad = cast(xr.Dataset, xr.broadcast(ds, *by_da, exclude=exclude_dims)[0])
     else:
         ds_broad = ds
 
@@ -483,9 +488,9 @@ def xarray_reduce(
         ):
             levelnames = ds_broad.indexes[name].names
             if isinstance(expect3, np.ndarray):
-                # TODO: workaoround for IntervalIndex issue.
+                # TODO: workaround for IntervalIndex issue.
                 raise NotImplementedError
-            expect3 = pd.MultiIndex.from_tuples(expect3.values, names=levelnames)
+            expect3 = pd.MultiIndex.from_tuples(expect3.values.tolist(), names=levelnames)
             actual[name] = expect3
             if Version(xr.__version__) > Version("2022.03.0"):
                 actual = actual.set_coords(levelnames)

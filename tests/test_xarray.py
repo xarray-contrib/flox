@@ -6,6 +6,7 @@ import pytest
 xr = pytest.importorskip("xarray")
 # isort: on
 
+from flox import xrdtypes as dtypes
 from flox.xarray import rechunk_for_blockwise, xarray_reduce
 
 from . import (
@@ -33,8 +34,7 @@ np.random.seed(123)
 @pytest.mark.parametrize("min_count", [None, 1, 3])
 @pytest.mark.parametrize("add_nan", [True, False])
 @pytest.mark.parametrize("skipna", [True, False])
-def test_xarray_reduce(skipna, add_nan, min_count, engine_no_numba, reindex):
-    engine = engine_no_numba
+def test_xarray_reduce(skipna, add_nan, min_count, engine, reindex):
     if skipna is False and min_count is not None:
         pytest.skip()
 
@@ -90,11 +90,9 @@ def test_xarray_reduce(skipna, add_nan, min_count, engine_no_numba, reindex):
 # TODO: sort
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
 @pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
-def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine_no_numba):
+def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine):
     if chunk and pass_expected_groups is False:
         pytest.skip()
-    engine = engine_no_numba
-
     arr = np.ones((4, 12))
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
     labels2 = np.array([1, 2, 2, 1])
@@ -139,10 +137,9 @@ def test_xarray_reduce_multiple_groupers(pass_expected_groups, chunk, engine_no_
 
 @pytest.mark.parametrize("pass_expected_groups", [True, False])
 @pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
-def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine_no_numba):
+def test_xarray_reduce_multiple_groupers_2(pass_expected_groups, chunk, engine):
     if chunk and pass_expected_groups is False:
         pytest.skip()
-    engine = engine_no_numba
 
     arr = np.ones((2, 12))
     labels = np.array(["a", "a", "c", "c", "c", "b", "b", "c", "c", "b", "b", "f"])
@@ -193,20 +190,31 @@ def test_validate_expected_groups(expected_groups):
 
 
 @requires_cftime
+@pytest.mark.parametrize("indexer", [slice(None), pytest.param(slice(12), id="missing-group")])
+@pytest.mark.parametrize("expected_groups", [None, [0, 1, 2, 3]])
 @pytest.mark.parametrize("func", ["first", "last", "min", "max", "count"])
-def test_xarray_reduce_cftime_var(engine, func):
+def test_xarray_reduce_cftime_var(engine, indexer, expected_groups, func):
     times = xr.date_range("1980-09-01 00:00", "1982-09-18 00:00", freq="ME", calendar="noleap")
     ds = xr.Dataset({"var": ("time", times)}, coords={"time": np.repeat(np.arange(4), 6)})
+    ds = ds.isel(time=indexer)
 
-    actual = xarray_reduce(ds, ds.time, func=func)
+    actual = xarray_reduce(
+        ds,
+        ds.time,
+        func=func,
+        fill_value=dtypes.NA if func in ["first", "last"] else np.nan,
+        engine=engine,
+        expected_groups=expected_groups,
+    )
     expected = getattr(ds.groupby("time"), func)()
+    if expected_groups is not None:
+        expected = expected.reindex(time=expected_groups)
     xr.testing.assert_identical(actual, expected)
 
 
 @requires_cftime
 @requires_dask
-def test_xarray_reduce_single_grouper(engine_no_numba):
-    engine = engine_no_numba
+def test_xarray_reduce_single_grouper(engine):
     # DataArray
     ds = xr.Dataset(
         {
@@ -313,8 +321,7 @@ def test_rechunk_for_blockwise(inchunks, expected):
 # TODO: dim=None, dim=Ellipsis, groupby unindexed dim
 
 
-def test_groupby_duplicate_coordinate_labels(engine_no_numba):
-    engine = engine_no_numba
+def test_groupby_duplicate_coordinate_labels(engine):
     # fix for http://stackoverflow.com/questions/38065129
     array = xr.DataArray([1, 2, 3], [("x", [1, 1, 2])])
     expected = xr.DataArray([3, 3], [("x", [1, 2])])
@@ -322,8 +329,7 @@ def test_groupby_duplicate_coordinate_labels(engine_no_numba):
     assert_equal(expected, actual)
 
 
-def test_multi_index_groupby_sum(engine_no_numba):
-    engine = engine_no_numba
+def test_multi_index_groupby_sum(engine):
     # regression test for xarray GH873
     ds = xr.Dataset(
         {"foo": (("x", "y", "z"), np.ones((3, 4, 2)))},
@@ -349,8 +355,7 @@ def test_multi_index_groupby_sum(engine_no_numba):
 
 
 @pytest.mark.parametrize("chunks", (None, pytest.param(2, marks=requires_dask)))
-def test_xarray_groupby_bins(chunks, engine_no_numba):
-    engine = engine_no_numba
+def test_xarray_groupby_bins(chunks, engine):
     array = xr.DataArray([1, 1, 1, 1, 1], dims="x")
     labels = xr.DataArray([1, 1.5, 1.9, 2, 3], dims="x", name="labels")
 
@@ -519,11 +524,10 @@ def test_alignment_error():
 @pytest.mark.parametrize("dtype_out", [np.float64, "float64", np.dtype("float64")])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("chunk", (pytest.param(True, marks=requires_dask), False))
-def test_dtype(add_nan, chunk, dtype, dtype_out, engine_no_numba):
-    if engine_no_numba == "numbagg":
+def test_dtype(add_nan, chunk, dtype, dtype_out, engine):
+    if engine == "numbagg":
         # https://github.com/numbagg/numbagg/issues/121
         pytest.skip()
-    engine = engine_no_numba
     xp = dask.array if chunk else np
     data = xp.linspace(0, 1, 48, dtype=dtype).reshape((4, 12))
 
