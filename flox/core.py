@@ -6,7 +6,6 @@ import itertools
 import logging
 import math
 import operator
-import sys
 import warnings
 from collections import namedtuple
 from collections.abc import Callable, Sequence
@@ -72,13 +71,6 @@ HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
 HAS_SPARSE = module_available("sparse")
 
 if TYPE_CHECKING:
-    try:
-        if sys.version_info < (3, 11):
-            from typing_extensions import Unpack
-        else:
-            from typing import Unpack
-    except (ModuleNotFoundError, ImportError):
-        Unpack: Any  # type: ignore[no-redef]
     from .types import CubedArray, DaskArray, Graph
 
     T_DuckArray: TypeAlias = np.ndarray | DaskArray | CubedArray  # Any ?
@@ -2542,7 +2534,7 @@ def groupby_reduce(
     engine: T_EngineOpt = None,
     reindex: ReindexStrategy | bool | None = None,
     finalize_kwargs: dict[Any, Any] | None = None,
-) -> tuple[DaskArray, Unpack[tuple[np.ndarray | DaskArray, ...]]]:
+) -> tuple[DaskArray, *tuple[np.ndarray | DaskArray, ...]]:
     """
     GroupBy reductions using tree reductions for dask.array
 
