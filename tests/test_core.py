@@ -25,13 +25,12 @@ from flox.core import (
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
     _is_sparse_supported_reduction,
-    _normalize_indexes,
     _validate_reindex,
     find_group_cohorts,
     groupby_reduce,
     rechunk_for_cohorts,
-    subset_to_blocks,
 )
+from flox.dask import _normalize_indexes, subset_to_blocks
 from flox.factorize import factorize_
 from flox.reindex import reindex_
 from flox.scan import groupby_scan

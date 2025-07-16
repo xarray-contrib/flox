@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -12,7 +11,6 @@ if TYPE_CHECKING:
     from .aggregations import AlignedArrays, Scan, ScanState
     from .types import (
         DaskArray,
-        T_Axes,
         T_By,
         T_Bys,
         T_EngineOpt,
@@ -210,6 +208,8 @@ def groupby_scan(
         final_state = chunk_scan(inp, axis=single_axis, agg=agg, dtype=agg.dtype)
         result = _finalize_scan(final_state, dtype=agg.dtype)
     else:
+        from .dask import dask_groupby_scan
+
         result = dask_groupby_scan(inp.array, inp.group_idx, axes=axis_, agg=agg)
 
     # Made a design choice here to have `postprocess` handle both array and group_idx
@@ -271,55 +271,6 @@ def _zip(group_idx: np.ndarray, array: np.ndarray) -> AlignedArrays:
 def _finalize_scan(block: ScanState, dtype) -> np.ndarray:
     assert block.result is not None
     return block.result.array.astype(dtype, copy=False)
-
-
-def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
-    from dask.array import map_blocks
-    from dask.array.reductions import cumreduction as scan
-
-    from flox.aggregations import scan_binary_op
-
-    from .core import _unify_chunks
-
-    if len(axes) > 1:
-        raise NotImplementedError("Scans are only supported along a single axis.")
-    (axis,) = axes
-
-    array, by = _unify_chunks(array, by)
-
-    # 1. zip together group indices & array
-    zipped = map_blocks(
-        _zip,
-        by,
-        array,
-        dtype=array.dtype,
-        meta=array._meta,
-        name="groupby-scan-preprocess",
-    )
-
-    scan_ = partial(chunk_scan, agg=agg)
-    # dask tokenizing error workaround
-    scan_.__name__ = scan_.func.__name__  # type: ignore[attr-defined]
-
-    # 2. Run the scan
-    accumulated = scan(
-        func=scan_,
-        binop=partial(scan_binary_op, agg=agg),
-        ident=agg.identity,
-        x=zipped,
-        axis=axis,
-        # TODO: support method="sequential" here.
-        method="blelloch",
-        preop=partial(grouped_reduce, agg=agg),
-        dtype=agg.dtype,
-    )
-
-    # 3. Unzip and extract the final result array, discard groups
-    result = map_blocks(partial(_finalize_scan, dtype=agg.dtype), accumulated, dtype=agg.dtype)
-
-    assert result.chunks == array.chunks
-
-    return result
 
 
 __all__ = ["groupby_scan"]
