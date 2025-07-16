@@ -60,7 +60,7 @@ NUMPY_SCAN_FUNCS: dict[str, Callable] = {
     "nancumsum": np.nancumsum,
     "ffill": ffill,
     "bfill": bfill,
-}  # "cumsum": np.cumsum,
+}
 
 
 def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
