@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 import flox
+from flox.factorize import _factorize_multiple
 
 from .helpers import codes_for_resampling
 
@@ -89,7 +90,7 @@ class NWMMidwest(Cohorts):
         y = np.repeat(np.arange(30), 60)
         by = x[np.newaxis, :] * y[:, np.newaxis]
 
-        self.by = flox.core._factorize_multiple((by,), expected_groups=(None,), any_by_dask=False)[0][0]
+        self.by = _factorize_multiple((by,), expected_groups=(None,), any_by_dask=False)[0][0]
 
         self.array = dask.array.ones(self.by.shape, chunks=(350, 350))
         self.axis = (-2, -1)
@@ -149,7 +150,7 @@ class ERA5MonthHour(ERA5Dataset, Cohorts):
     def setup(self, *args, **kwargs):
         super().__init__()
         by = (self.time.dt.month.values, self.time.dt.hour.values)
-        ret = flox.core._factorize_multiple(
+        ret = _factorize_multiple(
             by,
             (pd.Index(np.arange(1, 13)), pd.Index(np.arange(1, 25))),
             any_by_dask=False,
