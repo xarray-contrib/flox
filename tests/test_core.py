@@ -14,8 +14,8 @@ import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
 import flox
+from flox import set_options, xrutils
 from flox import xrdtypes as dtypes
-from flox import xrutils
 from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.core import (
     HAS_NUMBAGG,
@@ -31,6 +31,7 @@ from flox.core import (
     find_group_cohorts,
     groupby_reduce,
     groupby_scan,
+    rechunk_for_blockwise,
     rechunk_for_cohorts,
     reindex_,
     subset_to_blocks,
@@ -979,26 +980,33 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
     assert_equal(actual, expected)
 
 
+@requires_dask
 @pytest.mark.parametrize(
-    "inchunks, expected",
+    "inchunks, expected, expected_method",
     [
-        [(1,) * 10, (3, 2, 2, 3)],
-        [(2,) * 5, (3, 2, 2, 3)],
-        [(3, 3, 3, 1), (3, 2, 5)],
-        [(3, 1, 1, 2, 1, 1, 1), (3, 2, 2, 3)],
-        [(3, 2, 2, 3), (3, 2, 2, 3)],
-        [(4, 4, 2), (3, 4, 3)],
-        [(5, 5), (5, 5)],
-        [(6, 4), (5, 5)],
-        [(7, 3), (7, 3)],
-        [(8, 2), (7, 3)],
-        [(9, 1), (10,)],
-        [(10,), (10,)],
+        [(1,) * 10, (3, 2, 2, 3), None],
+        [(2,) * 5, (3, 2, 2, 3), None],
+        [(3, 3, 3, 1), (3, 2, 5), None],
+        [(3, 1, 1, 2, 1, 1, 1), (3, 2, 2, 3), None],
+        [(3, 2, 2, 3), (3, 2, 2, 3), "blockwise"],
+        [(4, 4, 2), (3, 4, 3), None],
+        [(5, 5), (5, 5), "blockwise"],
+        [(6, 4), (5, 5), None],
+        [(7, 3), (7, 3), "blockwise"],
+        [(8, 2), (7, 3), None],
+        [(9, 1), (10,), None],
+        [(10,), (10,), "blockwise"],
     ],
 )
-def test_rechunk_for_blockwise(inchunks, expected):
+def test_rechunk_for_blockwise(inchunks, expected, expected_method):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
+
+    with set_options(rechunk_blockwise_chunk_size_threshold=-1):
+        array = dask.array.ones(labels.size, chunks=(inchunks,))
+        method, array = rechunk_for_blockwise(array, -1, labels, force=False)
+        assert method == expected_method
+        assert array.chunks == (inchunks,)
 
 
 @requires_dask

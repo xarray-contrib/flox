@@ -3,7 +3,7 @@
 """Top-level module for flox ."""
 
 from . import cache
-from .aggregations import Aggregation, Scan  # noqa
+from .aggregations import Aggregation, Scan
 from .core import (
     groupby_reduce,
     groupby_scan,
@@ -11,7 +11,8 @@ from .core import (
     rechunk_for_cohorts,
     ReindexStrategy,
     ReindexArrayType,
-)  # noqa
+)
+from .options import set_options
 
 
 def _get_version():
@@ -24,3 +25,14 @@ def _get_version():
 
 
 __version__ = _get_version()
+
+__all__ = [
+    "Aggregation",
+    "Scan",
+    "groupby_reduce",
+    "groupby_scan",
+    "rechunk_for_blockwise",
+    "rechunk_for_cohorts",
+    "ReindexStrategy",
+    "ReindexArrayType",
+]

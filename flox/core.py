@@ -49,6 +49,7 @@ from .aggregations import (
 )
 from .cache import memoize
 from .lib import ArrayLayer, dask_array_type, sparse_array_type
+from .options import OPTIONS
 from .xrutils import (
     _contains_cftime_datetimes,
     _to_pytimedelta,
@@ -119,14 +120,6 @@ FactorProps = namedtuple("FactorProps", "offset_group nan_sentinel nanmask")
 # _simple_combine.
 DUMMY_AXIS = -2
 
-# Thresholds below which we will automatically rechunk to blockwise if it makes sense
-# 1. Fractional change in number of chunks after rechunking
-BLOCKWISE_RECHUNK_NUM_CHUNKS_THRESHOLD = 0.25
-# 2. Fractional change in max chunk size after rechunking
-BLOCKWISE_RECHUNK_CHUNK_SIZE_THRESHOLD = 1.5
-# 3. If input arrays have chunk size smaller than `dask.array.chunk-size`,
-#    then adjust chunks to meet that size first.
-# BLOCKWISE_DEFAULT_ARRAY_CHUNK_SIZE_FACTOR = 1.25
 
 logger = logging.getLogger("flox")
 
@@ -779,13 +772,18 @@ def rechunk_for_blockwise(
         return "blockwise", array
 
     Δn = abs(len(newchunks) - len(new_input_chunks))
-    if force or (
-        (Δn / len(new_input_chunks) < BLOCKWISE_RECHUNK_NUM_CHUNKS_THRESHOLD)
-        and (
-            abs(max(newchunks) - max(new_input_chunks)) / max(new_input_chunks)
-            < BLOCKWISE_RECHUNK_CHUNK_SIZE_THRESHOLD
-        )
+    if pass_num_chunks_threshold := (
+        Δn / len(new_input_chunks) < OPTIONS["rechunk_blockwise_num_chunks_threshold"]
     ):
+        logger.debug("blockwise rechunk passes num chunks threshold")
+    if pass_chunk_size_threshold := (
+        # we just pick the max because number of chunks may have changed.
+        (abs(max(newchunks) - max(new_input_chunks)) / max(new_input_chunks))
+        < OPTIONS["rechunk_blockwise_chunk_size_threshold"]
+    ):
+        logger.debug("blockwise rechunk passes chunk size change threshold")
+
+    if force or (pass_num_chunks_threshold and pass_chunk_size_threshold):
         logger.debug("Rechunking to enable blockwise.")
         return "blockwise", array.rechunk({axis: newchunks})
     else:
