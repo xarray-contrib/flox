@@ -9,7 +9,7 @@ dependencies:
   - dask-core
   - hypothesis
   - pandas
-  - numpy>=1.22
+  - numpy>=1.26
   - scipy
   - sparse
   - lxml # for mypy coverage report
