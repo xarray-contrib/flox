@@ -236,7 +236,7 @@ def gen_array_by(size, func):
 @pytest.mark.parametrize("nby", [3])
 @pytest.mark.parametrize("add_nan_by", [True])
 @pytest.mark.parametrize("func", ["topk"])
-def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by):
+def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, to_sparse):
     engine = "flox"
     if ("arg" in func and engine in ["flox", "numbagg"]) or (func in BLOCKWISE_FUNCS and chunks != -1):
         pytest.skip()
