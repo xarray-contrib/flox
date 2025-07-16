@@ -312,7 +312,7 @@ def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
 def _get_optimal_chunks_for_groups(chunks, labels):
     chunkidx = np.cumsum(chunks) - 1
     # what are the groups at chunk boundaries
-    labels_at_chunk_bounds = _unique(labels[chunkidx])
+    labels_at_chunk_bounds = pd.unique(labels[chunkidx])
     # what's the last index of all groups
     last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
     # what's the last index of groups at the chunk boundaries.
@@ -2754,13 +2754,7 @@ def groupby_reduce(
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
     has_cubed = is_duck_cubed_array(array) or is_duck_cubed_array(by_)
 
-    if (
-        method is None
-        and is_duck_dask_array(array)
-        and not any_by_dask
-        and by_.ndim == 1
-        and _issorted(by_, ascending=True)
-    ):
+    if method is None and is_duck_dask_array(array) and not any_by_dask and by_.ndim == 1 and _issorted(by_):
         # Let's try rechunking for sorted 1D by.
         (single_axis,) = axis_
         method, array = rechunk_for_blockwise(array, single_axis, by_, force=False)

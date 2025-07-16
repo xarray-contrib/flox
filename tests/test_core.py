@@ -1001,10 +1001,16 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
 def test_rechunk_for_blockwise(inchunks, expected, expected_method):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
+    # reversed
+    assert _get_optimal_chunks_for_groups(inchunks, labels[::-1]) == expected
 
     with set_options(rechunk_blockwise_chunk_size_threshold=-1):
         array = dask.array.ones(labels.size, chunks=(inchunks,))
         method, array = rechunk_for_blockwise(array, -1, labels, force=False)
+        assert method == expected_method
+        assert array.chunks == (inchunks,)
+
+        method, array = rechunk_for_blockwise(array, -1, labels[::-1], force=False)
         assert method == expected_method
         assert array.chunks == (inchunks,)
 
