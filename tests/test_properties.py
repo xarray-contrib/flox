@@ -17,8 +17,9 @@ import numpy as np
 from hypothesis import assume, given, note, settings
 
 import flox
-from flox.core import _is_sparse_supported_reduction, groupby_reduce, groupby_scan
+from flox.core import _is_sparse_supported_reduction, groupby_reduce
 from flox.lib import sparse_array_type
+from flox.scan import groupby_scan
 from flox.xrutils import (
     _contains_cftime_datetimes,
     _to_pytimedelta,

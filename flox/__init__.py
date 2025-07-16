@@ -6,12 +6,12 @@ from . import cache
 from .aggregations import Aggregation, Scan  # noqa
 from .core import (
     groupby_reduce,
-    groupby_scan,
     rechunk_for_blockwise,
     rechunk_for_cohorts,
     ReindexStrategy,
     ReindexArrayType,
 )  # noqa
+from .scan import groupby_scan  # noqa
 
 
 def _get_version():

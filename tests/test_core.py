@@ -27,14 +27,14 @@ from flox.core import (
     _is_sparse_supported_reduction,
     _normalize_indexes,
     _validate_reindex,
-    factorize_,
     find_group_cohorts,
     groupby_reduce,
-    groupby_scan,
     rechunk_for_cohorts,
-    reindex_,
     subset_to_blocks,
 )
+from flox.factorize import factorize_
+from flox.reindex import reindex_
+from flox.scan import groupby_scan
 
 from . import (
     ALL_FUNCS,
@@ -2148,7 +2148,7 @@ def test_reindex_sparse(size):
         ReindexStrategy(blockwise=True, array_type=ReindexArrayType.SPARSE_COO)
     reindex = ReindexStrategy(blockwise=False, array_type=ReindexArrayType.SPARSE_COO)
 
-    original_reindex = flox.core.reindex_
+    original_reindex = flox.reindex.reindex_
 
     def mocked_reindex(*args, **kwargs):
         res = original_reindex(*args, **kwargs)
@@ -2162,7 +2162,7 @@ def test_reindex_sparse(size):
     def raise_error(self):
         raise AttributeError("Access to '_data' is not allowed.")
 
-    with patch("flox.core.reindex_") as mocked_reindex_func:
+    with patch("flox.reindex.reindex_") as mocked_reindex_func:
         with patch.object(pd.RangeIndex, "_data", property(raise_error)):
             mocked_reindex_func.side_effect = mocked_reindex
             actual, *_ = groupby_reduce(
