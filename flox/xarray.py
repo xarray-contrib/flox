@@ -249,7 +249,7 @@ def xarray_reduce(
                 grouper_dims.append(d)
 
     if isinstance(obj, xr.Dataset):
-        ds = obj
+        ds = cast(xr.Dataset, obj)
     else:
         ds = obj._to_temp_dataset()
 
