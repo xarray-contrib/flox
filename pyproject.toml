@@ -89,6 +89,8 @@ select = [
     "I",
     # Pyupgrade
     "UP",
+    # flake8-tidy-imports
+    "TID",
 ]
 
 [tool.ruff.lint.isort]
