@@ -278,7 +278,7 @@ def ffill(group_idx, array, *, axis, **kwargs):
     return array[tuple(slc)][..., invert_perm]
 
 
-def _np_grouped_scan(group_idx, array, *, op, identity, axis: int, skipna: bool, **kwargs):
+def _np_grouped_scan(group_idx, array, *, axis: int, skipna: bool, **kwargs):
     handle_nans = not skipna and array.dtype.kind in "cfO"
 
     group_idx, array, perm = _prepare_for_flox(group_idx, array)
@@ -310,5 +310,5 @@ def _np_grouped_scan(group_idx, array, *, op, identity, axis: int, skipna: bool,
     return accum[..., invert_perm]
 
 
-cumsum = partial(_np_grouped_scan, op=np.cumsum, identity=0, skipna=False)
-nancumsum = partial(_np_grouped_scan, op=np.nancumsum, identity=0, skipna=True)
+cumsum = partial(_np_grouped_scan, skipna=False)
+nancumsum = partial(_np_grouped_scan, skipna=True)
