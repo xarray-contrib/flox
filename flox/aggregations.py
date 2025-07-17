@@ -14,7 +14,7 @@ from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
-from .lib import sparse_array_type
+from .lib import dask_array_type, sparse_array_type
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
@@ -895,3 +895,20 @@ def _initialize_aggregation(
     agg.simple_combine = tuple(simple_combine)
 
     return agg
+
+
+def is_supported_aggregation(array, func: str) -> bool:
+    if isinstance(array, dask_array_type):
+        array = array._meta
+
+    if isinstance(array, sparse_array_type):
+        from flox.core import _is_sparse_supported_reduction
+
+        return _is_sparse_supported_reduction(func)
+
+    module, *_ = type(array).__module__.split(".")
+
+    if module in ["numpy", "cubed"]:
+        return func in AGGREGATIONS
+    else:
+        return False
