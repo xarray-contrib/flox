@@ -209,7 +209,10 @@ def _postprocess_numbagg(result, *, func, fill_value, size, seen_groups):
     if needs_masking:
         mask = np.isin(groups, seen_groups, assume_unique=True, invert=True)
         if mask.any():
-            result[..., groups[mask]] = fill_value
+            if isinstance(result, sparse_array_type):
+                result.fill_value = fill_value
+            else:
+                result[..., groups[mask]] = fill_value
     return result
 
 

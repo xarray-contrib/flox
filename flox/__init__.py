@@ -3,7 +3,7 @@
 """Top-level module for flox ."""
 
 from . import cache
-from .aggregations import Aggregation, Scan
+from .aggregations import Aggregation, Scan, is_supported_aggregation
 from .core import (
     groupby_reduce,
     groupby_scan,
@@ -36,4 +36,5 @@ __all__ = [
     "set_options",
     "ReindexStrategy",
     "ReindexArrayType",
+    "is_supported_aggregation",
 ]
