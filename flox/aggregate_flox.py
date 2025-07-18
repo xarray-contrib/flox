@@ -5,6 +5,86 @@ import numpy as np
 from . import xrdtypes as dtypes
 from .xrutils import is_scalar, isnull, notnull
 
+MULTIARRAY_HANDLED_FUNCTIONS = {}
+
+class MultiArray:
+    arrays: tuple[np.ndarray, ...]
+
+    def __init__(self, arrays):
+        self.arrays = arrays # something else needed here to be more careful about types (not sure what)
+        # Do we want to co-erce arrays into a tuple and make sure it's immutable? Do we want it to be immutable?
+        assert np.all([arrays[0].shape == a.shape for a in arrays]), 'Expect all arrays to have the same shape'
+        
+    def astype(self,dt,**kwargs):
+        new_arrays = [] # I really don't like doing this as a list
+        for array in self.arrays: # Do we care about trying to avoid for loops here? three separate lines would be faster, but harder to read
+            new_arrays.append(array.astype(dt,**kwargs))
+        return MultiArray(new_arrays)
+    
+    def reshape(self,shape,**kwargs):
+        return MultiArray([array.reshape(shape,**kwargs) for array in self.arrays])
+    
+    def squeeze(self,axis=None):
+        return MultiArray([array.squeeze(axis) for array in self.arrays])    
+    
+    def __array_function__(self, func, types, args, kwargs):
+        if func not in MULTIARRAY_HANDLED_FUNCTIONS:
+            return NotImplemented
+        # Note: this allows subclasses that don't override
+        # __array_function__ to handle MyArray objects
+        #if not all(issubclass(t, MyArray) for t in types): # I can't see this being relevant at all for this code, but maybe it's safer to leave it in?
+            #return NotImplemented
+        return MULTIARRAY_HANDLED_FUNCTIONS[func](*args, **kwargs)    
+
+        
+   # Shape is needed, seems likely that the other two might be
+   # Making some strong assumptions here that all the arrays are the same shape, and I don't really like this
+    @property
+    def dtype(self) -> np.dtype:
+        return self.arrays[0].dtype
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self.arrays[0].shape
+
+    @property
+    def ndim(self) -> int:
+        return self.arrays[0].ndim
+
+def implements(numpy_function):
+    """Register an __array_function__ implementation for MyArray objects."""
+    def decorator(func):
+        MULTIARRAY_HANDLED_FUNCTIONS[numpy_function] = func
+        return func
+    return decorator
+
+@implements(np.expand_dims)
+def expand_dims_MultiArray(multiarray,axis):
+    return MultiArray([np.expand_dims(a,axis) for a in multiarray.arrays]) #This is gonna spit out a list and I'm not sure if I'm okay with that?
+
+@implements(np.concatenate)
+def concatenate_MultiArray(multiarrays,axis):
+    
+    n_arrays = len(multiarrays[0].arrays)
+    for ma in multiarrays[1:]:
+        if not (len(ma.arrays) == n_arrays): # I don't know what trying to concatenate MultiArrays with different numbers of arrays would even mean
+            raise NotImplementedError
+      
+    # There's the potential for problematic different shapes coming in here.  
+    # Probably warrants some defensive programming, but I'm not sure what to check for while still being generic
+    
+    # I don't like using append and lists here, but I can't work out how to do it better
+    new_arrays = []
+    for i in range(multiarrays[0].ndim):
+        new_arrays.append(np.concatenate([ma.arrays[i] for ma in multiarrays],axis))
+    
+    out = MultiArray(new_arrays)
+    return out
+
+@implements(np.transpose)
+def transpose_MultiArray(multiarray,axes):
+    return MultiArray([np.transpose(a,axes) for a in multiarray.arrays]) #This is gonna spit out a list and I'm not sure if I'm okay with that?
+
 
 def _prepare_for_flox(group_idx, array):
     """
@@ -206,7 +286,6 @@ median = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=Fa
 nanmedian = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=True))
 # TODO: all, any
 
-
 def sum_of_squares(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
     return sum(
         group_idx,
@@ -249,6 +328,41 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     with np.errstate(invalid="ignore", divide="ignore"):
         out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
+
+def var_chunk(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
+    # Calculate length and sum - important for the adjustment terms to sum squared deviations
+    array_lens = nanlen(
+        group_idx,
+        array,
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+    
+    array_sums = sum(
+        group_idx,
+        array,
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+    
+    # Calculate sum squared deviations - the main part of variance sum
+    array_means = array_sums/array_lens # Does this risk being run eagerly because it's not wrapped in anything?
+    
+    sum_squared_deviations = sum(
+        group_idx,
+        (array-array_means[..., group_idx])**2,
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    ) 
+
+    return MultiArray((sum_squared_deviations,array_sums,array_lens))
+
 
 
 def ffill(group_idx, array, *, axis, **kwargs):

@@ -13,7 +13,6 @@ from .core import (
     ReindexArrayType,
 )  # noqa
 
-
 def _get_version():
     __version__ = "999"
     try:
@@ -21,6 +20,5 @@ def _get_version():
     except ImportError:
         pass
     return __version__
-
 
 __version__ = _get_version()
