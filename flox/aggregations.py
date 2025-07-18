@@ -342,57 +342,63 @@ nanmean = Aggregation(
     final_dtype=np.floating,
 )
 
+
 def _var_combine(array, axis, keepdims=True):
-    
     def clip_last(array):
-        '''Return array except the last element along axis
+        """Return array except the last element along axis
         Purely included to tidy up the adj_terms line
-        '''
-        not_last = [slice(None,None) for i in range(array.ndim)]
-        not_last[axis[0]] = slice(None,-1)
+        """
+        not_last = [slice(None, None) for i in range(array.ndim)]
+        not_last[axis[0]] = slice(None, -1)
         return array[*not_last]
+
     def clip_first(array):
-        '''Return array except the first element along axis
+        """Return array except the first element along axis
         Purely included to tidy up the adj_terms line
-        '''        
-        not_first = [slice(None,None) for i in range(array.ndim)]
-        not_first[axis[0]] = slice(1,None)        
-        return array[*not_first]    
-    
-    assert len(axis)==1, "Assuming that the combine function is only in one direction at once"
-    
+        """
+        not_first = [slice(None, None) for i in range(array.ndim)]
+        not_first[axis[0]] = slice(1, None)
+        return array[*not_first]
+
+    assert len(axis) == 1, "Assuming that the combine function is only in one direction at once"
+
     # Does this double our memory footprint or are they just views?
     # If there's a huge memory impact, probably better to copy paste array.arrays[1]
     # in and accept the hit to readability
     sum_deviations = array.arrays[0]
     sum_X = array.arrays[1]
-    sum_len = array.arrays[2]    
-    
-    # Calculate parts needed for cascading combination
-    cumsum_X = np.cumsum(sum_X,axis=axis[0]) #Don't need to be able to merge the last element
-    cumsum_len = np.cumsum(sum_len,axis=axis[0])
+    sum_len = array.arrays[2]
 
+    # Calculate parts needed for cascading combination
+    cumsum_X = np.cumsum(sum_X, axis=axis[0])  # Don't need to be able to merge the last element
+    cumsum_len = np.cumsum(sum_len, axis=axis[0])
 
     # Adjustment terms to tweak the sum of squared deviations because not every chunk has the same mean
-    adj_terms = ((clip_last(cumsum_len)*clip_first(sum_X)-clip_first(sum_len)*clip_last(cumsum_X))**2/
-                 (clip_last(cumsum_len)*clip_first(sum_len)*(clip_last(cumsum_len)+clip_first(sum_len))))
-    
+    adj_terms = (
+        clip_last(cumsum_len) * clip_first(sum_X) - clip_first(sum_len) * clip_last(cumsum_X)
+    ) ** 2 / (clip_last(cumsum_len) * clip_first(sum_len) * (clip_last(cumsum_len) + clip_first(sum_len)))
+
+    return aggregate_flox.MultiArray(
+        (
+            np.sum(sum_deviations, axis=axis, keepdims=keepdims)
+            + np.sum(adj_terms, axis=axis, keepdims=keepdims),  # sum of squared deviations
+            np.sum(sum_X, axis=axis, keepdims=keepdims),  # sum of array items
+            np.sum(sum_len, axis=axis, keepdims=keepdims),  # sum of array lengths
+        )
+    )  # I'm not even pretending calling this class from there is a good idea, I think it wants to be somewhere else though
 
 
-    return aggregate_flox.MultiArray((np.sum(sum_deviations,axis=axis,keepdims=keepdims)+np.sum(adj_terms,axis=axis,keepdims=keepdims), # sum of squared deviations
-                                      np.sum(sum_X,axis=axis,keepdims=keepdims),           # sum of array items
-                                      np.sum(sum_len,axis=axis,keepdims=keepdims),           # sum of array lengths
-                                        ))# I'm not even pretending calling this class from there is a good idea, I think it wants to be somewhere else though
-    
 # TODO: fix this for complex numbers
-#def _var_finalize(sumsq, sum_, count, ddof=0):
-    #with np.errstate(invalid="ignore", divide="ignore"):
-        #result = (sumsq - (sum_**2 / count)) / (count - ddof)
-    #result[count <= ddof] = np.nan
-    #return result
+# def _var_finalize(sumsq, sum_, count, ddof=0):
+# with np.errstate(invalid="ignore", divide="ignore"):
+# result = (sumsq - (sum_**2 / count)) / (count - ddof)
+# result[count <= ddof] = np.nan
+# return result
 
-def _var_finalize(multiarray,ddof=0):
-    return multiarray.arrays[0]/(multiarray.arrays[2]-ddof) # Is this how ddof works again???
+
+def _var_finalize(multiarray, ddof=0):
+    return multiarray.arrays[0] / (multiarray.arrays[2] - ddof)  # Is this how ddof works again???
+
 
 def _std_finalize(sumsq, sum_, count, ddof=0):
     return np.sqrt(_var_finalize(sumsq, sum_, count, ddof))
@@ -409,16 +415,16 @@ var = Aggregation(
     dtypes=(None, None, np.intp),
     final_dtype=np.floating,
 )
-#nanvar = Aggregation(
-    #"nanvar",
-    #chunk=("nansum_of_squares", "nansum", "nanlen"),
-    #combine=("sum", "sum", "sum"),
-    #finalize=_var_finalize,
-    #fill_value=0,
-    #final_fill_value=np.nan,
-    #dtypes=(None, None, np.intp),
-    #final_dtype=np.floating,
-#)
+# nanvar = Aggregation(
+# "nanvar",
+# chunk=("nansum_of_squares", "nansum", "nanlen"),
+# combine=("sum", "sum", "sum"),
+# finalize=_var_finalize,
+# fill_value=0,
+# final_fill_value=np.nan,
+# dtypes=(None, None, np.intp),
+# final_dtype=np.floating,
+# )
 nanvar = Aggregation(
     "nanvar",
     chunk=("var_chunk"),
@@ -426,7 +432,7 @@ nanvar = Aggregation(
     finalize=_var_finalize,
     fill_value=0,
     final_fill_value=np.nan,
-    dtypes=(None, ),
+    dtypes=(None,),
     final_dtype=np.floating,
 )
 std = Aggregation(
