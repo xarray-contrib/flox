@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Self
 
 import numpy as np
 
@@ -52,6 +53,9 @@ class MultiArray:
     @property
     def ndim(self) -> int:
         return self.arrays[0].ndim
+
+    def __getitem__(self, key) -> Self:
+        return type(self)([array[key] for array in self.arrays])
 
 
 def implements(numpy_function):
@@ -342,43 +346,6 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
     with np.errstate(invalid="ignore", divide="ignore"):
         out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
-
-
-def var_chunk(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None):
-    # Calculate length and sum - important for the adjustment terms to sum squared deviations
-    array_lens = nanlen(
-        group_idx,
-        array,
-        axis=axis,
-        size=size,
-        fill_value=fill_value,
-        dtype=dtype,
-    )
-
-    array_sums = sum(
-        group_idx,
-        array,
-        axis=axis,
-        size=size,
-        fill_value=fill_value,
-        dtype=dtype,
-    )
-
-    # Calculate sum squared deviations - the main part of variance sum
-    array_means = (
-        array_sums / array_lens
-    )  # Does this risk being run eagerly because it's not wrapped in anything?
-
-    sum_squared_deviations = sum(
-        group_idx,
-        (array - array_means[..., group_idx]) ** 2,
-        axis=axis,
-        size=size,
-        fill_value=fill_value,
-        dtype=dtype,
-    )
-
-    return MultiArray((sum_squared_deviations, array_sums, array_lens))
 
 
 def ffill(group_idx, array, *, axis, **kwargs):

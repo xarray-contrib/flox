@@ -343,6 +343,51 @@ nanmean = Aggregation(
 )
 
 
+def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=None, dtype=None):
+    from .aggregate_flox import MultiArray
+
+    # Calculate length and sum - important for the adjustment terms to sum squared deviations
+    array_lens = generic_aggregate(
+        group_idx,
+        array,
+        func="nanlen",
+        engine=engine,
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+
+    array_sums = generic_aggregate(
+        group_idx,
+        array,
+        func="nansum",
+        engine=engine,
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+
+    # Calculate sum squared deviations - the main part of variance sum
+    array_means = (
+        array_sums / array_lens
+    )  # Does this risk being run eagerly because it's not wrapped in anything?
+
+    sum_squared_deviations = generic_aggregate(
+        group_idx,
+        (array - array_means[..., group_idx]) ** 2,
+        func="nansum",
+        engine=engine,
+        axis=axis,
+        size=size,
+        fill_value=fill_value,
+        dtype=dtype,
+    )
+
+    return MultiArray((sum_squared_deviations, array_sums, array_lens))
+
+
 def _var_combine(array, axis, keepdims=True):
     def clip_last(array):
         """Return array except the last element along axis
@@ -427,7 +472,8 @@ var = Aggregation(
 # )
 nanvar = Aggregation(
     "nanvar",
-    chunk=("var_chunk"),
+    chunk=var_chunk,
+    numpy="nanvar",
     combine=(_var_combine,),
     finalize=_var_finalize,
     fill_value=0,
