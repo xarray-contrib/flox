@@ -350,7 +350,7 @@ def var_chunk(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=No
     )
     
     # Calculate sum squared deviations - the main part of variance sum
-    array_means = array_sums/array_lens # Does this risk being run eagerly because it's not wrapped in anything?
+    array_means = array_sums/array_lens
     
     sum_squared_deviations = sum(
         group_idx,

@@ -361,9 +361,6 @@ def _var_combine(array, axis, keepdims=True):
     
     assert len(axis)==1, "Assuming that the combine function is only in one direction at once"
     
-    # Does this double our memory footprint or are they just views?
-    # If there's a huge memory impact, probably better to copy paste array.arrays[1]
-    # in and accept the hit to readability
     sum_deviations = array.arrays[0]
     sum_X = array.arrays[1]
     sum_len = array.arrays[2]    
