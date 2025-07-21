@@ -410,9 +410,7 @@ def _var_combine(array, axis, keepdims=True):
     # Does this double our memory footprint or are they just views?
     # If there's a huge memory impact, probably better to copy paste array.arrays[1]
     # in and accept the hit to readability
-    sum_deviations = array.arrays[0]
-    sum_X = array.arrays[1]
-    sum_len = array.arrays[2]
+   sum_deviations, sum_X, sum_len = array.arrays
 
     # Calculate parts needed for cascading combination
     cumsum_X = np.cumsum(sum_X, axis=axis[0])  # Don't need to be able to merge the last element
