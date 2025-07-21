@@ -345,6 +345,7 @@ def nanmean(group_idx, array, *, axis=-1, size=None, fill_value=None, dtype=None
         out /= nanlen(group_idx, array, size=size, axis=axis, fill_value=0)
     return out
 
+
 def ffill(group_idx, array, *, axis, **kwargs):
     group_idx, array, perm = _prepare_for_flox(group_idx, array)
     shape = array.shape
