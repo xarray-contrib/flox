@@ -372,7 +372,7 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
     # Calculate sum squared deviations - the main part of variance sum
     array_means = (
         array_sums / array_lens
-    )  # Does this risk being run eagerly because it's not wrapped in anything?
+    )
 
     sum_squared_deviations = generic_aggregate(
         group_idx,
@@ -407,9 +407,6 @@ def _var_combine(array, axis, keepdims=True):
 
     assert len(axis) == 1, "Assuming that the combine function is only in one direction at once"
 
-    # Does this double our memory footprint or are they just views?
-    # If there's a huge memory impact, probably better to copy paste array.arrays[1]
-    # in and accept the hit to readability
     sum_deviations, sum_X, sum_len = array.arrays
 
     # Calculate parts needed for cascading combination
@@ -440,7 +437,7 @@ def _var_combine(array, axis, keepdims=True):
 
 
 def _var_finalize(multiarray, ddof=0):
-    return multiarray.arrays[0] / (multiarray.arrays[2] - ddof)  # Is this how ddof works again???
+    return multiarray.arrays[0] / (multiarray.arrays[2] - ddof)
 
 
 def _std_finalize(sumsq, sum_, count, ddof=0):
