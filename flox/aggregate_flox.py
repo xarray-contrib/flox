@@ -15,7 +15,7 @@ class MultiArray:
     def __init__(self, arrays):
         self.arrays = arrays  # something else needed here to be more careful about types (not sure what)
         # Do we want to co-erce arrays into a tuple and make sure it's immutable? Do we want it to be immutable?
-        assert np.all([arrays[0].shape == a.shape for a in arrays]), (
+        assert all(arrays[0].shape == a.shape for a in arrays), (
             "Expect all arrays to have the same shape"
         )
 
