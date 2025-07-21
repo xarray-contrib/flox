@@ -7,7 +7,7 @@ dependencies:
   - dask-core
   - pip
   - xarray
-  - numpy>=1.22
+  - numpy>=1.26
   - scipy
   - numpydoc
   - numpy_groupies>=0.9.19
@@ -22,5 +22,6 @@ dependencies:
   - ipykernel
   - jupyter
   - sphinx-codeautolink
+  - sphinx-copybutton
   - pip:
       - -e ..

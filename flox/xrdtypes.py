@@ -196,14 +196,14 @@ def _get_fill_value(dtype, fill_value):
     if fill_value == NA:
         if np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.complexfloating):
             return np.nan
-        # This is madness, but npg checks that fill_value is compatible
-        # with array dtype even if the fill_value is never used.
-        elif np.issubdtype(dtype, np.integer):
-            return get_neg_infinity(dtype, min_for_int=True)
         elif np.issubdtype(dtype, np.timedelta64):
             return np.timedelta64("NaT")
         elif np.issubdtype(dtype, np.datetime64):
             return np.datetime64("NaT")
+        # This is madness, but npg checks that fill_value is compatible
+        # with array dtype even if the fill_value is never used.
+        elif np.issubdtype(dtype, np.integer):
+            return get_neg_infinity(dtype, min_for_int=True)
         else:
             return None
     return fill_value
