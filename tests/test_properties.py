@@ -56,10 +56,11 @@ def bfill(array, axis, dtype=None):
 
 
 NUMPY_SCAN_FUNCS: dict[str, Callable] = {
+    "cumsum": np.cumsum,
     "nancumsum": np.nancumsum,
     "ffill": ffill,
     "bfill": bfill,
-}  # "cumsum": np.cumsum,
+}
 
 
 def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
@@ -210,7 +211,7 @@ def test_groupby_reduce_numpy_vs_other(data, array, func: str) -> None:
     array=chunked_arrays(arrays=numeric_like_arrays),
     func=st.sampled_from(tuple(NUMPY_SCAN_FUNCS)),
 )
-def test_scans(data, array: dask.array.Array, func: str) -> None:
+def test_scans_against_numpy(data, array: dask.array.Array, func: str) -> None:
     if "cum" in func:
         assume(not_overflowing_array(np.asarray(array)))
 

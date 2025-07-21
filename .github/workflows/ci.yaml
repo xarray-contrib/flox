@@ -26,7 +26,7 @@ jobs:
       matrix:
         os: ["ubuntu-latest"]
         env: ["environment"]
-        python-version: ["3.10", "3.13"]
+        python-version: ["3.11", "3.13"]
         include:
           - os: "windows-latest"
             env: "environment"
@@ -36,10 +36,10 @@ jobs:
             python-version: "3.13"
           - os: "ubuntu-latest"
             env: "minimal-requirements"
-            python-version: "3.10"
+            python-version: "3.11"
           - os: "windows-latest"
             env: "env-numpy1"
-            python-version: "3.10"
+            python-version: "3.11"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,7 +76,7 @@ jobs:
           python -c "import xarray; xarray.show_versions()"
           pytest --durations=20 --durations-min=0.5 -n auto --cov=./ --cov-report=xml --hypothesis-profile ci
       - name: Upload code coverage to Codecov
-        uses: codecov/codecov-action@v5.4.2
+        uses: codecov/codecov-action@v5.4.3
         with:
           file: ./coverage.xml
           flags: unittests
