@@ -2242,7 +2242,7 @@ def test_sparse_nan_fill_value_reductions(chunks, fill_value, shape, func):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize("func", ("nanvar","var")) # Expect to expand this to other functions once written. Putting var in to begin with bc I know it will fail
+@pytest.mark.parametrize("func", ("nanvar","var")) # Expect to expand this to other functions once written. "nanvar" has updated chunk, combine functions. "var", for the moment, still uses the old algorithm
 @pytest.mark.parametrize("engine",("flox",)) # Expect to expand this to other engines once written
 @pytest.mark.parametrize("offset",(0,10e2,10e4,10e6,10e8,10e10,10e12)) # Should fail at 10e8 for old algorithm, and survive 10e12 for current
 def test_std_var_precision(func,engine,offset):
