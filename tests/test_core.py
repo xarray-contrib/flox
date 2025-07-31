@@ -2242,23 +2242,27 @@ def test_sparse_nan_fill_value_reductions(chunks, fill_value, shape, func):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize("func", ("nanvar","var")) # Expect to expand this to other functions once written. "nanvar" has updated chunk, combine functions. "var", for the moment, still uses the old algorithm
-@pytest.mark.parametrize("engine",("flox",)) # Expect to expand this to other engines once written
-@pytest.mark.parametrize("offset",(0,10e2,10e4,10e6,10e8,10e10,10e12)) # Should fail at 10e8 for old algorithm, and survive 10e12 for current
-def test_std_var_precision(func,engine,offset):
+@pytest.mark.parametrize(
+    "func", ("nanvar", "var")
+)  # Expect to expand this to other functions once written. "nanvar" has updated chunk, combine functions. "var", for the moment, still uses the old algorithm
+@pytest.mark.parametrize("engine", ("flox",))  # Expect to expand this to other engines once written
+@pytest.mark.parametrize(
+    "offset", (0, 10e2, 10e4, 10e6, 10e8, 10e10, 10e12)
+)  # Should fail at 10e8 for old algorithm, and survive 10e12 for current
+def test_std_var_precision(func, engine, offset):
     # Generate a dataset with small variance and big mean
     # Check that func with engine gives you the same answer as numpy
-    
-    l =1000
-    array = np.linspace(-1,1,l) # has zero mean
-    labels = np.arange(l)%2 # Ideally we'd parametrize this too. 
-    
+
+    l = 1000
+    array = np.linspace(-1, 1, l)  # has zero mean
+    labels = np.arange(l) % 2  # Ideally we'd parametrize this too.
+
     # These two need to be the same function, but with the offset added and not added
     no_offset, _ = groupby_reduce(array, labels, engine=engine, func=func)
-    with_offset, _ = groupby_reduce(array+offset, labels, engine=engine, func=func)
-    
-    tol = {"rtol": 1e-8, "atol": 1e-10} # Not sure how stringent to be here
-    
+    with_offset, _ = groupby_reduce(array + offset, labels, engine=engine, func=func)
+
+    tol = {"rtol": 1e-8, "atol": 1e-10}  # Not sure how stringent to be here
+
     # Failure threshold in my external tests is dependent on dask chunksize, maybe needs exploring better?
-    
+
     assert_equal(no_offset, with_offset, tol)
