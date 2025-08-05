@@ -2253,16 +2253,22 @@ def test_std_var_precision(func, engine, offset):
     # Generate a dataset with small variance and big mean
     # Check that func with engine gives you the same answer as numpy
 
-    l = 1000
-    array = np.linspace(-1, 1, l)  # has zero mean
-    labels = np.arange(l) % 2  # Ideally we'd parametrize this too.
+    size = 1000
+    array = np.linspace(-1, 1, size)  # has zero mean
+    labels = np.arange(size) % 2  # Ideally we'd parametrize this too.
 
     # These two need to be the same function, but with the offset added and not added
     no_offset, _ = groupby_reduce(array, labels, engine=engine, func=func)
     with_offset, _ = groupby_reduce(array + offset, labels, engine=engine, func=func)
 
+    expected = np.concatenate([np.nanvar(array[::2], keepdims=True), np.nanvar(array[1::2], keepdims=True)])
+    expected_offset = np.concatenate(
+        [np.nanvar(array[::2] + offset, keepdims=True), np.nanvar(array[1::2] + offset, keepdims=True)]
+    )
+
     tol = {"rtol": 1e-8, "atol": 1e-10}  # Not sure how stringent to be here
 
+    assert_equal(expected, no_offset, tol)
+    assert_equal(expected_offset, with_offset, tol)
     # Failure threshold in my external tests is dependent on dask chunksize, maybe needs exploring better?
-
     assert_equal(no_offset, with_offset, tol)

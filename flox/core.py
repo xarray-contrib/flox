@@ -1300,7 +1300,9 @@ def chunk_reduce(
             kw_func.update(kw)
 
             # UGLY! but this is because the `var` breaks our design assumptions
-            if reduction is var_chunk:
+            if reduction is var_chunk or (
+                isinstance(reduction, tlz.functoolz.Compose) and reduction.first is var_chunk
+            ):
                 kw_func.update(engine=engine)
 
             if callable(reduction):

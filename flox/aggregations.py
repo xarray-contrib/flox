@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import numpy as np
 import pandas as pd
+import toolz as tlz
 from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
@@ -466,7 +467,7 @@ var = Aggregation(
 nanvar = Aggregation(
     "nanvar",
     chunk=var_chunk,
-    numpy="nanvar",
+    numpy=tlz.compose(_var_finalize, var_chunk),
     combine=(_var_combine,),
     finalize=_var_finalize,
     fill_value=0,
