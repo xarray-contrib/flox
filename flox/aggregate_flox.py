@@ -18,10 +18,7 @@ class MultiArray:
         assert all(arrays[0].shape == a.shape for a in arrays), "Expect all arrays to have the same shape"
 
     def astype(self, dt, **kwargs):
-        new_arrays = []  # I really don't like doing this as a list
-        for array in self.arrays:  # Do we care about trying to avoid for loops here? three separate lines would be faster, but harder to read
-            new_arrays.append(array.astype(dt, **kwargs))
-        return MultiArray(new_arrays)
+        return MultiArray(tuple(array.astype(dt, **kwargs) for array in self.arrays))
 
     def reshape(self, shape, **kwargs):
         return MultiArray([array.reshape(shape, **kwargs) for array in self.arrays])
