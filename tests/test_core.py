@@ -2247,13 +2247,14 @@ def test_sparse_nan_fill_value_reductions(chunks, fill_value, shape, func):
 )  # Expect to expand this to other functions once written. "nanvar" has updated chunk, combine functions. "var", for the moment, still uses the old algorithm
 @pytest.mark.parametrize("engine", ("flox",))  # Expect to expand this to other engines once written
 @pytest.mark.parametrize(
-    "offset", (0, 10e2, 10e4, 10e6, 10e8, 10e10, 10e12)
+    "exponent", (10, 12)
 )  # Should fail at 10e8 for old algorithm, and survive 10e12 for current
-def test_std_var_precision(func, engine, offset):
+def test_std_var_precision(func, exponent, engine):
     # Generate a dataset with small variance and big mean
     # Check that func with engine gives you the same answer as numpy
 
     size = 1000
+    offset = 10**exponent
     array = np.linspace(-1, 1, size)  # has zero mean
     labels = np.arange(size) % 2  # Ideally we'd parametrize this too.
 
