@@ -65,9 +65,7 @@ def implements(numpy_function):
 
 @implements(np.expand_dims)
 def expand_dims_MultiArray(multiarray, axis):
-    return MultiArray(
-        tuple(np.expand_dims(a, axis) for a in multiarray.arrays)
-    )
+    return MultiArray(tuple(np.expand_dims(a, axis) for a in multiarray.arrays))
 
 
 @implements(np.concatenate)
@@ -81,8 +79,14 @@ def concatenate_MultiArray(multiarrays, axis):
 
     # There's the potential for problematic different shapes coming in here.
     # Probably warrants some defensive programming, but I'm not sure what to check for while still being generic
-    
-    return MultiArray(tuple(np.concatenate(tuple(ma.arrays[i] for ma in multiarrays), axis) for i in range(multiarrays[0].ndim))) # Is this readable?
+
+    return MultiArray(
+        tuple(
+            np.concatenate(tuple(ma.arrays[i] for ma in multiarrays), axis)
+            for i in range(multiarrays[0].ndim)
+        )
+    )  # Is this readable?
+
 
 @implements(np.transpose)
 def transpose_MultiArray(multiarray, axes):
