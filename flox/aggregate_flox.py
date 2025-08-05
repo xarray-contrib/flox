@@ -21,10 +21,10 @@ class MultiArray:
         return MultiArray(tuple(array.astype(dt, **kwargs) for array in self.arrays))
 
     def reshape(self, shape, **kwargs):
-        return MultiArray([array.reshape(shape, **kwargs) for array in self.arrays])
+        return MultiArray(tuple(array.reshape(shape, **kwargs) for array in self.arrays))
 
     def squeeze(self, axis=None):
-        return MultiArray([array.squeeze(axis) for array in self.arrays])
+        return MultiArray(tuple(array.squeeze(axis) for array in self.arrays))
 
     def __array_function__(self, func, types, args, kwargs):
         if func not in MULTIARRAY_HANDLED_FUNCTIONS:
@@ -66,8 +66,8 @@ def implements(numpy_function):
 @implements(np.expand_dims)
 def expand_dims_MultiArray(multiarray, axis):
     return MultiArray(
-        [np.expand_dims(a, axis) for a in multiarray.arrays]
-    )  # This is gonna spit out a list and I'm not sure if I'm okay with that?
+        tuple(np.expand_dims(a, axis) for a in multiarray.arrays)
+    )
 
 
 @implements(np.concatenate)
@@ -81,15 +81,8 @@ def concatenate_MultiArray(multiarrays, axis):
 
     # There's the potential for problematic different shapes coming in here.
     # Probably warrants some defensive programming, but I'm not sure what to check for while still being generic
-
-    # I don't like using append and lists here, but I can't work out how to do it better
-    new_arrays = []
-    for i in range(multiarrays[0].ndim):
-        new_arrays.append(np.concatenate([ma.arrays[i] for ma in multiarrays], axis))
-
-    out = MultiArray(new_arrays)
-    return out
-
+    
+    return MultiArray(tuple(np.concatenate(tuple(ma.arrays[i] for ma in multiarrays), axis) for i in range(multiarrays[0].ndim))) # Is this readable?
 
 @implements(np.transpose)
 def transpose_MultiArray(multiarray, axes):
