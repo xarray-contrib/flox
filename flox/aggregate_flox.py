@@ -91,8 +91,8 @@ def concatenate_MultiArray(multiarrays, axis):
 @implements(np.transpose)
 def transpose_MultiArray(multiarray, axes):
     return MultiArray(
-        [np.transpose(a, axes) for a in multiarray.arrays]
-    )  # This is gonna spit out a list and I'm not sure if I'm okay with that?
+        tuple(np.transpose(a, axes) for a in multiarray.arrays)
+    )
 
 
 def _prepare_for_flox(group_idx, array):
