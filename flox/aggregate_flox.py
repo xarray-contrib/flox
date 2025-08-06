@@ -90,23 +90,25 @@ def concatenate_MultiArray(multiarrays, axis):
 
 @implements(np.transpose)
 def transpose_MultiArray(multiarray, axes):
-    return MultiArray(
-        tuple(np.transpose(a, axes) for a in multiarray.arrays)
-    )
+    return MultiArray(tuple(np.transpose(a, axes) for a in multiarray.arrays))
+
 
 @implements(np.full)
-def full_MultiArray(shape, fill_values, *args, **kwargs): # I've used *args, **kwargs instead of the full argument list to give us more flexibility if numpy changes stuff https://numpy.org/doc/stable/reference/generated/numpy.full.html
-    ''' All arguments except fill_value are shared by each array
+def full_MultiArray(
+    shape, fill_values, *args, **kwargs
+):  # I've used *args, **kwargs instead of the full argument list to give us more flexibility if numpy changes stuff https://numpy.org/doc/stable/reference/generated/numpy.full.html
+    """All arguments except fill_value are shared by each array
     in the MultiArray.
     Iterate over fill_values to create arrays
-    '''
+    """
     return MultiArray(
         tuple(
-            np.full(shape,fv,*args,**kwargs) # I'm 90% sure I've used *args, **kwargs correctly here -- could you double-check?
+            np.full(
+                shape, fv, *args, **kwargs
+            )  # I'm 90% sure I've used *args, **kwargs correctly here -- could you double-check?
             for fv in fill_values
         )
     )
-
 
 
 def _prepare_for_flox(group_idx, array):
