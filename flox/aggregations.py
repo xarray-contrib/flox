@@ -355,7 +355,7 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
         engine=engine,
         axis=axis,
         size=size,
-        fill_value=fill_value,
+        fill_value=fill_value[2], # Unpack fill value bc it's currently defined for multiarray
         dtype=dtype,
     )
 
@@ -366,7 +366,7 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
         engine=engine,
         axis=axis,
         size=size,
-        fill_value=fill_value,
+        fill_value=fill_value[1], # Unpack fill value bc it's currently defined for multiarray
         dtype=dtype,
     )
 
@@ -380,7 +380,7 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
         engine=engine,
         axis=axis,
         size=size,
-        fill_value=fill_value,
+        fill_value=fill_value[0], # Unpack fill value bc it's currently defined for multiarray
         dtype=dtype,
     )
 
@@ -388,34 +388,43 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
 
 
 def _var_combine(array, axis, keepdims=True):
-    def clip_last(array):
+    def clip_last(array,n=1):
         """Return array except the last element along axis
         Purely included to tidy up the adj_terms line
         """
+        assert n>0, "Clipping nothing off the end isn't implemented"
         not_last = [slice(None, None) for i in range(array.ndim)]
-        not_last[axis[0]] = slice(None, -1)
+        not_last[axis[0]] = slice(None, -n)
         return array[*not_last]
 
-    def clip_first(array):
+    def clip_first(array,n=1):
         """Return array except the first element along axis
         Purely included to tidy up the adj_terms line
         """
         not_first = [slice(None, None) for i in range(array.ndim)]
-        not_first[axis[0]] = slice(1, None)
+        not_first[axis[0]] = slice(n, None)
         return array[*not_first]
 
     assert len(axis) == 1, "Assuming that the combine function is only in one direction at once"
 
     sum_deviations, sum_X, sum_len = array.arrays
 
-    # Calculate parts needed for cascading combination
+    # Calculate parts needed for cascading combination 
     cumsum_X = np.cumsum(sum_X, axis=axis[0])  # Don't need to be able to merge the last element
     cumsum_len = np.cumsum(sum_len, axis=axis[0])
-
+    
+    # There will be instances in which one or both chunks being merged are empty
+    # In which case, the adjustment term should be zero, but will throw a divide-by-zero error
+    # We're going to add a constant to the bottom of the adjustment term equation on those instances
+    # and count on the zeros on the top making our adjustment term still zero
+    zero_denominator = ((clip_last(cumsum_len)==0) | (clip_first(sum_len)==0))
+    
     # Adjustment terms to tweak the sum of squared deviations because not every chunk has the same mean
     adj_terms = (
         clip_last(cumsum_len) * clip_first(sum_X) - clip_first(sum_len) * clip_last(cumsum_X)
-    ) ** 2 / (clip_last(cumsum_len) * clip_first(sum_len) * (clip_last(cumsum_len) + clip_first(sum_len)))
+    ) ** 2 / (clip_last(cumsum_len) * clip_first(sum_len) * (clip_last(cumsum_len) + clip_first(sum_len))+zero_denominator.astype(int))
+    
+    assert np.all((adj_terms*zero_denominator) == 0), "Instances where we add something to the denominator must come out to zero"
 
     return aggregate_flox.MultiArray(
         (
@@ -470,7 +479,7 @@ nanvar = Aggregation(
     numpy=tlz.compose(_var_finalize, var_chunk),
     combine=(_var_combine,),
     finalize=_var_finalize,
-    fill_value=0,
+    fill_value=((0,0,0),), # DIVIDE BY ZERO ERROR! NOOOO!!!
     final_fill_value=np.nan,
     dtypes=(None,),
     final_dtype=np.floating,
