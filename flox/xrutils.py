@@ -46,9 +46,9 @@ except ImportError:
     cftime = None
 
 try:
-     import cubed
+    import cubed
 except ImportError:
-     cubed = None
+    cubed = None
 
 try:
     import dask
