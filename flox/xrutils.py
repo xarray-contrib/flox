@@ -48,21 +48,17 @@ except ImportError:
 
 cubed : ModuleType | None
 try:
-     import cubed
+     import cubed  # type: ignore[no-redef]
 except ImportError:
      cubed = None
 
 dask : ModuleType | None
 try:
-    import dask
-except ImportError:
-    dask = None
-
-try:
-    import dask.array
+    import dask.array  # type: ignore[no-redef]
 
     dask_array_type = dask.array.Array
 except ImportError:
+    dask = None
     dask_array_type = ()  # type: ignore[assignment, misc]
 
 
