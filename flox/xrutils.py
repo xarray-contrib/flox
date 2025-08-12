@@ -45,6 +45,15 @@ try:
 except ImportError:
     cftime = None
 
+try:
+     import cubed
+except ImportError:
+     cubed = None
+
+try:
+    import dask
+except ImportError:
+    dask = None
 
 try:
     import dask.array
@@ -79,13 +88,9 @@ def is_chunked_array(x) -> bool:
 
 
 def is_dask_collection(x):
-    try:
-        import dask
-
-        return dask.is_dask_collection(x)
-
-    except ImportError:
+    if dask is None:
         return False
+    return dask.is_dask_collection(x)
 
 
 def is_duck_dask_array(x):
@@ -93,12 +98,9 @@ def is_duck_dask_array(x):
 
 
 def is_duck_cubed_array(x):
-    try:
-        import cubed
-
-        return is_duck_array(x) and isinstance(x, cubed.Array)
-    except ImportError:
+    if cubed is None:
         return False
+    return is_duck_array(x) and isinstance(x, cubed.Array)
 
 
 class ReprObject:
