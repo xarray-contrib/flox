@@ -5,6 +5,7 @@ import datetime
 import importlib
 from collections.abc import Iterable
 from typing import Any
+from types import ModuleType
 
 import numpy as np
 import pandas as pd
@@ -45,11 +46,13 @@ try:
 except ImportError:
     cftime = None
 
+cubed : ModuleType | None
 try:
      import cubed
 except ImportError:
      cubed = None
 
+dask : ModuleType | None
 try:
     import dask
 except ImportError:
