@@ -48,9 +48,9 @@ except ImportError:
 
 cubed : ModuleType | None
 try:
-     import cubed  # type: ignore[no-redef]
+    import cubed  # type: ignore[no-redef]
 except ImportError:
-     cubed = None
+    cubed = None
 
 dask : ModuleType | None
 try:
