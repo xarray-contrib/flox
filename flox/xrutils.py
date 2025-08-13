@@ -59,7 +59,7 @@ try:
     dask_array_type = dask.array.Array
 except ImportError:
     dask = None
-    dask_array_type = ()  # type: ignore[assignment, misc]
+    dask_array_type = ()
 
 
 def asarray(data, xp=np):
@@ -189,7 +189,7 @@ def isnull(data: Any):
             # types. For full consistency with pandas, we should accept None as
             # a null value as well as NaN, but it isn't clear how to do this
             # with duck typing.
-            return data != data
+            return data != data  # type: ignore[unreachable]
 
 
 def datetime_to_numeric(array, offset=None, datetime_unit=None, dtype=float):
