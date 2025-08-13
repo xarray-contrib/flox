@@ -56,7 +56,7 @@ dask: ModuleType | None
 try:
     import dask.array
 
-    dask_array_type = dask.array.Array
+    dask_array_type = dask.array.Array  # type: ignore[union-attr]
 except ImportError:
     dask = None
     dask_array_type = ()
@@ -141,7 +141,7 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
         or isinstance(value, str | bytes | dict)
         or not (
             isinstance(value, (Iterable,) + NON_NUMPY_SUPPORTED_ARRAY_TYPES)
-            or hasattr(value, "__array_function__")
+            or hasattr(value, "__array_function__")  # type: ignore[unreachable]
         )
     )
 
@@ -183,7 +183,7 @@ def isnull(data: Any):
     else:
         # at this point, array should have dtype=object
         if isinstance(data, (np.ndarray, dask_array_type)):  # noqa
-            return pd.isnull(data)  # type: ignore[arg-type]
+            return pd.isnull(data)
         else:
             # Not reachable yet, but intended for use with other duck array
             # types. For full consistency with pandas, we should accept None as
