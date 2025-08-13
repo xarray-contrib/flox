@@ -54,7 +54,7 @@ except ImportError:
 
 dask : ModuleType | None
 try:
-    import dask.array  # type: ignore[no-redef]
+    import dask.array
 
     dask_array_type = dask.array.Array
 except ImportError:
