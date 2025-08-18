@@ -343,7 +343,9 @@ nanmean = Aggregation(
 )
 
 
-def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=None, dtype=None):
+def var_chunk(
+    group_idx, array, *, skipna: bool, engine: str, axis=-1, size=None, fill_value=None, dtype=None
+):
     from .aggregate_flox import MultiArray
 
     # Calculate length and sum - important for the adjustment terms to sum squared deviations
@@ -361,7 +363,7 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
     array_sums = generic_aggregate(
         group_idx,
         array,
-        func="nansum",
+        func="nansum" if skipna else "sum",
         engine=engine,
         axis=axis,
         size=size,
@@ -375,7 +377,7 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
     sum_squared_deviations = generic_aggregate(
         group_idx,
         (array - array_means[..., group_idx]) ** 2,
-        func="nansum",
+        func="nansum" if skipna else "sum",
         engine=engine,
         axis=axis,
         size=size,
@@ -448,6 +450,12 @@ def _var_combine(array, axis, keepdims=True):
 # return result
 
 
+def is_var_chunk_reduction(agg: Callable) -> bool:
+    if isinstance(agg, partial):
+        agg = agg.func
+    return agg is blockwise_or_numpy_var or agg is var_chunk
+
+
 def _var_finalize(multiarray, ddof=0):
     den = multiarray.arrays[2] - ddof
     # preserve nans for groups with 0 obs; so these values are -ddof
@@ -455,41 +463,20 @@ def _var_finalize(multiarray, ddof=0):
     return multiarray.arrays[0] / den
 
 
-def _std_finalize(sumsq, sum_, count, ddof=0):
-    return np.sqrt(_var_finalize(sumsq, sum_, count, ddof))
+def _std_finalize(multiarray, ddof=0):
+    return np.sqrt(_var_finalize(multiarray, ddof))
+
+
+def blockwise_or_numpy_var(*args, skipna: bool, ddof=0, std=False, **kwargs):
+    res = _var_finalize(var_chunk(*args, skipna=skipna, **kwargs), ddof)
+    return np.sqrt(res) if std else res
 
 
 # var, std always promote to float, so we set nan
 var = Aggregation(
     "var",
-    chunk=("sum_of_squares", "sum", "nanlen"),
-    combine=("sum", "sum", "sum"),
-    finalize=_var_finalize,
-    fill_value=0,
-    final_fill_value=np.nan,
-    dtypes=(None, None, np.intp),
-    final_dtype=np.floating,
-)
-# nanvar = Aggregation(
-# "nanvar",
-# chunk=("nansum_of_squares", "nansum", "nanlen"),
-# combine=("sum", "sum", "sum"),
-# finalize=_var_finalize,
-# fill_value=0,
-# final_fill_value=np.nan,
-# dtypes=(None, None, np.intp),
-# final_dtype=np.floating,
-# )
-
-
-def blockwise_or_numpy_var(*args, ddof=0, **kwargs):
-    return _var_finalize(var_chunk(*args, **kwargs), ddof)
-
-
-nanvar = Aggregation(
-    "nanvar",
-    chunk=var_chunk,
-    numpy=blockwise_or_numpy_var,
+    chunk=partial(var_chunk, skipna=False),
+    numpy=partial(blockwise_or_numpy_var, skipna=False),
     combine=(_var_combine,),
     finalize=_var_finalize,
     fill_value=((0, 0, 0),),
@@ -497,24 +484,39 @@ nanvar = Aggregation(
     dtypes=(None,),
     final_dtype=np.floating,
 )
+
+nanvar = Aggregation(
+    "nanvar",
+    chunk=partial(var_chunk, skipna=True),
+    numpy=partial(blockwise_or_numpy_var, skipna=True),
+    combine=(_var_combine,),
+    finalize=_var_finalize,
+    fill_value=((0, 0, 0),),
+    final_fill_value=np.nan,
+    dtypes=(None,),
+    final_dtype=np.floating,
+)
+
 std = Aggregation(
     "std",
-    chunk=("sum_of_squares", "sum", "nanlen"),
-    combine=("sum", "sum", "sum"),
+    chunk=partial(var_chunk, skipna=False),
+    numpy=partial(blockwise_or_numpy_var, skipna=False, std=True),
+    combine=(_var_combine,),
     finalize=_std_finalize,
-    fill_value=0,
+    fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None, None, np.intp),
+    dtypes=(None,),
     final_dtype=np.floating,
 )
 nanstd = Aggregation(
     "nanstd",
-    chunk=("nansum_of_squares", "nansum", "nanlen"),
-    combine=("sum", "sum", "sum"),
+    chunk=partial(var_chunk, skipna=True),
+    numpy=partial(blockwise_or_numpy_var, skipna=True, std=True),
+    combine=(_var_combine,),
     finalize=_std_finalize,
-    fill_value=0,
+    fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None, None, np.intp),
+    dtypes=(None,),
     final_dtype=np.floating,
 )
 

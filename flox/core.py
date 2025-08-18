@@ -43,10 +43,9 @@ from .aggregations import (
     ScanState,
     _atleast_1d,
     _initialize_aggregation,
-    blockwise_or_numpy_var,
     generic_aggregate,
+    is_var_chunk_reduction,
     quantile_new_dims_func,
-    var_chunk,
 )
 from .cache import memoize
 from .lib import ArrayLayer, dask_array_type, sparse_array_type
@@ -1291,7 +1290,7 @@ def chunk_reduce(
     previous_reduction: T_Func = ""
     for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
         # UGLY! but this is because the `var` breaks our design assumptions
-        if empty and reduction is not var_chunk:
+        if empty and not is_var_chunk_reduction(reduction):
             result = np.full(shape=final_array_shape, fill_value=fv, like=array)
         elif is_nanlen(reduction) and is_nanlen(previous_reduction):
             result = results["intermediates"][-1]
@@ -1301,7 +1300,7 @@ def chunk_reduce(
             kw_func.update(kw)
 
             # UGLY! but this is because the `var` breaks our design assumptions
-            if reduction is var_chunk or blockwise_or_numpy_var:
+            if is_var_chunk_reduction(reduction):
                 kw_func.update(engine=engine)
 
             if callable(reduction):
