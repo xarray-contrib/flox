@@ -1,8 +1,9 @@
+from collections.abc import Callable
 from typing import Self
 
 import numpy as np
 
-MULTIARRAY_HANDLED_FUNCTIONS = {}
+MULTIARRAY_HANDLED_FUNCTIONS: dict[Callable, Callable] = {}
 
 
 class MultiArray:
