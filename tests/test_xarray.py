@@ -802,16 +802,12 @@ def test_groupby_preserve_dtype(reduction):
 
 @requires_dask
 def test_resample_first_last_empty():
-    xr.set_options(use_flox=True, use_numbagg=False, use_bottleneck=False)
-
-    from dask.distributed import Client
-
-    Client()
-    arr = xr.DataArray(
-        np.nan,
-        coords={
-            "date": pd.to_datetime(["2025-03-24", "2025-06-23"]),
-        },
-        dims=["date"],
-    ).chunk(date=(1, 1))
-    arr.resample(date="QE").last().compute()
+    with xr.set_options(use_flox=True), dask.config.set(scheduler="processes"):
+        arr = xr.DataArray(
+            np.nan,
+            coords={
+                "date": pd.to_datetime(["2025-03-24", "2025-06-23"]),
+            },
+            dims=["date"],
+        ).chunk(date=(1, 1))
+        arr.resample(date="QE").last().compute()
