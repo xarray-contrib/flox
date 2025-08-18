@@ -892,6 +892,7 @@ def reindex_(
             "Currently does not support reindexing with object arrays of tuples. "
             "These occur when grouping by multi-indexed variables in xarray."
         )
+    # Use '==' instead of 'is', as Dask serialization can break identity checks.
     if fill_value == xrdtypes.NA or isnull(fill_value):
         new_dtype, fill_value = xrdtypes.maybe_promote(array.dtype)
     else:
@@ -1380,6 +1381,7 @@ def _finalize_results(
             if fill_value is None:
                 raise ValueError("Filling is required but fill_value is None.")
             # This allows us to match xarray's type promotion rules
+            # Use '==' instead of 'is', as Dask serialization can break identity checks.
             if fill_value == xrdtypes.NA:
                 new_dtype, fill_value = xrdtypes.maybe_promote(finalized[agg.name].dtype)
                 finalized[agg.name] = finalized[agg.name].astype(new_dtype)
