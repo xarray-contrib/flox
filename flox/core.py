@@ -43,6 +43,7 @@ from .aggregations import (
     ScanState,
     _atleast_1d,
     _initialize_aggregation,
+    blockwise_or_numpy_var,
     generic_aggregate,
     quantile_new_dims_func,
     var_chunk,
@@ -1300,9 +1301,7 @@ def chunk_reduce(
             kw_func.update(kw)
 
             # UGLY! but this is because the `var` breaks our design assumptions
-            if reduction is var_chunk or (
-                isinstance(reduction, tlz.functoolz.Compose) and reduction.first is var_chunk
-            ):
+            if reduction is var_chunk or blockwise_or_numpy_var:
                 kw_func.update(engine=engine)
 
             if callable(reduction):

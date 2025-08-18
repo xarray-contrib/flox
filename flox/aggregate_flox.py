@@ -26,6 +26,11 @@ class MultiArray:
     def squeeze(self, axis=None):
         return MultiArray(tuple(array.squeeze(axis) for array in self.arrays))
 
+    def __setitem__(self, key, value):
+        assert len(value) == len(self.arrays)
+        for array, val in zip(self.arrays, value):
+            array[key] = val
+
     def __array_function__(self, func, types, args, kwargs):
         if func not in MULTIARRAY_HANDLED_FUNCTIONS:
             return NotImplemented
@@ -72,20 +77,10 @@ def expand_dims_MultiArray(multiarray, axis):
 def concatenate_MultiArray(multiarrays, axis):
     n_arrays = len(multiarrays[0].arrays)
     for ma in multiarrays[1:]:
-        if not (
-            len(ma.arrays) == n_arrays
-        ):  # I don't know what trying to concatenate MultiArrays with different numbers of arrays would even mean
-            raise NotImplementedError
-
-    # There's the potential for problematic different shapes coming in here.
-    # Probably warrants some defensive programming, but I'm not sure what to check for while still being generic
-
+        assert len(ma.arrays) == n_arrays
     return MultiArray(
-        tuple(
-            np.concatenate(tuple(ma.arrays[i] for ma in multiarrays), axis)
-            for i in range(multiarrays[0].ndim)
-        )
-    )  # Is this readable?
+        tuple(np.concatenate(tuple(ma.arrays[i] for ma in multiarrays), axis) for i in range(n_arrays))
+    )
 
 
 @implements(np.transpose)

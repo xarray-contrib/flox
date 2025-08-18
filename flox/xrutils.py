@@ -146,6 +146,9 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
 
 
 def notnull(data):
+    if isinstance(data, tuple) and len(data) == 3 and data == (0, 0, 0):
+        # boo: another special case for Var
+        return True
     if not is_duck_array(data):
         data = np.asarray(data)
 
@@ -163,6 +166,9 @@ def notnull(data):
 
 
 def isnull(data: Any):
+    if isinstance(data, tuple) and len(data) == 3 and data == (0, 0, 0):
+        # boo: another special case for Var
+        return False
     if data is None:
         return False
     if not is_duck_array(data):

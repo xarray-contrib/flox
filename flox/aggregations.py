@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import numpy as np
 import pandas as pd
-import toolz as tlz
 from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
@@ -355,7 +354,7 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
         engine=engine,
         axis=axis,
         size=size,
-        fill_value=fill_value[2],  # Unpack fill value bc it's currently defined for multiarray
+        fill_value=0,  # Unpack fill value bc it's currently defined for multiarray
         dtype=dtype,
     )
 
@@ -366,7 +365,7 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
         engine=engine,
         axis=axis,
         size=size,
-        fill_value=fill_value[1],  # Unpack fill value bc it's currently defined for multiarray
+        fill_value=0,  # Unpack fill value bc it's currently defined for multiarray
         dtype=dtype,
     )
 
@@ -380,7 +379,7 @@ def var_chunk(group_idx, array, *, engine: str, axis=-1, size=None, fill_value=N
         engine=engine,
         axis=axis,
         size=size,
-        fill_value=fill_value[0],  # Unpack fill value bc it's currently defined for multiarray
+        fill_value=0,  # Unpack fill value bc it's currently defined for multiarray
         dtype=dtype,
     )
 
@@ -450,7 +449,10 @@ def _var_combine(array, axis, keepdims=True):
 
 
 def _var_finalize(multiarray, ddof=0):
-    return multiarray.arrays[0] / (multiarray.arrays[2] - ddof)
+    den = multiarray.arrays[2] - ddof
+    # preserve nans for groups with 0 obs; so these values are -ddof
+    den[den < 0] = 0
+    return multiarray.arrays[0] / den
 
 
 def _std_finalize(sumsq, sum_, count, ddof=0):
@@ -478,10 +480,16 @@ var = Aggregation(
 # dtypes=(None, None, np.intp),
 # final_dtype=np.floating,
 # )
+
+
+def blockwise_or_numpy_var(*args, ddof=0, **kwargs):
+    return _var_finalize(var_chunk(*args, **kwargs), ddof)
+
+
 nanvar = Aggregation(
     "nanvar",
     chunk=var_chunk,
-    numpy=tlz.compose(_var_finalize, var_chunk),
+    numpy=blockwise_or_numpy_var,
     combine=(_var_combine,),
     finalize=_var_finalize,
     fill_value=((0, 0, 0),),
