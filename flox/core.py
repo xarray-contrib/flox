@@ -2506,7 +2506,7 @@ def _choose_engine(by, agg: Aggregation):
 
     not_arg_reduce = not _is_arg_reduction(agg)
 
-    if agg.name in ["quantile", "nanquantile", "median", "nanmedian", "var", "nanvar", "std", "nanstd"]:
+    if agg.name in ["quantile", "nanquantile", "median", "nanmedian"]:
         logger.debug(f"_choose_engine: Choosing 'flox' since {agg.name}")
         return "flox"
 
