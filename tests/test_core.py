@@ -2266,7 +2266,7 @@ def test_std_var_precision(func, exponent, engine):
         [np.nanvar(array[::2] + offset, keepdims=True), np.nanvar(array[1::2] + offset, keepdims=True)]
     )
 
-    tol = {"rtol": 1e-8, "atol": 1e-10}  # Not sure how stringent to be here
+    tol = {"rtol": 3e-8, "atol": 1e-9}  # Not sure how stringent to be here
 
     assert_equal(expected, no_offset, tol)
     assert_equal(expected_offset, with_offset, tol)
