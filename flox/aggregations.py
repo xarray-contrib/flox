@@ -15,6 +15,7 @@ from numpy.typing import ArrayLike, DTypeLike
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
 from .lib import dask_array_type, sparse_array_type
+from .multiarray import MultiArray
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
@@ -346,8 +347,6 @@ nanmean = Aggregation(
 def var_chunk(
     group_idx, array, *, skipna: bool, engine: str, axis=-1, size=None, fill_value=None, dtype=None
 ):
-    from .aggregate_flox import MultiArray
-
     # Calculate length and sum - important for the adjustment terms to sum squared deviations
     array_lens = generic_aggregate(
         group_idx,
@@ -432,22 +431,14 @@ def _var_combine(array, axis, keepdims=True):
         "Instances where we add something to the denominator must come out to zero"
     )
 
-    return aggregate_flox.MultiArray(
+    return MultiArray(
         (
             np.sum(sum_deviations, axis=axis, keepdims=keepdims)
             + np.sum(adj_terms, axis=axis, keepdims=keepdims),  # sum of squared deviations
             np.sum(sum_X, axis=axis, keepdims=keepdims),  # sum of array items
             np.sum(sum_len, axis=axis, keepdims=keepdims),  # sum of array lengths
         )
-    )  # I'm not even pretending calling this class from there is a good idea, I think it wants to be somewhere else though
-
-
-# TODO: fix this for complex numbers
-# def _var_finalize(sumsq, sum_, count, ddof=0):
-# with np.errstate(invalid="ignore", divide="ignore"):
-# result = (sumsq - (sum_**2 / count)) / (count - ddof)
-# result[count <= ddof] = np.nan
-# return result
+    )
 
 
 def is_var_chunk_reduction(agg: Callable) -> bool:

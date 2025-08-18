@@ -236,7 +236,7 @@ def gen_array_by(size, func):
 @pytest.mark.parametrize("size", [(1, 12), (12,), (12, 9)])
 @pytest.mark.parametrize("nby", [1, 2, 3])
 @pytest.mark.parametrize("add_nan_by", [True, False])
-@pytest.mark.parametrize("func", ["var", "nanvar", "std", "nanstd"])
+@pytest.mark.parametrize("func", ALL_FUNCS)
 def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engine):
     if ("arg" in func and engine in ["flox", "numbagg"]) or (func in BLOCKWISE_FUNCS and chunks != -1):
         pytest.skip()
@@ -2242,13 +2242,12 @@ def test_sparse_nan_fill_value_reductions(chunks, fill_value, shape, func):
     assert_equal(actual, expected)
 
 
+@pytest.mark.parametrize("func", ("nanvar", "var"))
 @pytest.mark.parametrize(
-    "func", ("nanvar", "var")
-)  # Expect to expand this to other functions once written. "nanvar" has updated chunk, combine functions. "var", for the moment, still uses the old algorithm
-@pytest.mark.parametrize("engine", ("flox",))  # Expect to expand this to other engines once written
-@pytest.mark.parametrize(
-    "exponent", (2, 4, 6, 8, 10, 12)
-)  # Should fail at 10e8 for old algorithm, and survive 10e12 for current
+    # Should fail at 10e8 for old algorithm, and survive 10e12 for current
+    "exponent",
+    (2, 4, 6, 8, 10, 12),
+)
 def test_std_var_precision(func, exponent, engine):
     # Generate a dataset with small variance and big mean
     # Check that func with engine gives you the same answer as numpy
