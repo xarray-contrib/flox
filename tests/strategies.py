@@ -108,9 +108,8 @@ NON_NUMPY_FUNCS = [
     "any",
     "all",
 ] + list(SCIPY_STATS_FUNCS)
-SKIPPED_FUNCS = ["var", "std", "nanvar", "nanstd"]
 
-func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS and f not in SKIPPED_FUNCS])
+func_st = st.sampled_from([f for f in ALL_FUNCS if f not in NON_NUMPY_FUNCS])
 
 
 @st.composite
