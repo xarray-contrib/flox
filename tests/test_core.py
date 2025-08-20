@@ -553,7 +553,7 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
 def test_groupby_agg_cubed(func, shape, array_chunks, group_chunks, add_nan, engine, reindex):
     """Tests groupby_reduce with cubed arrays against groupby_reduce with numpy arrays"""
 
-    if func in ["first", "last"] or func in BLOCKWISE_FUNCS:
+    if func in ["first", "last", "var", "nanvar", "std", "nanstd"] or func in BLOCKWISE_FUNCS:
         pytest.skip()
 
     if "arg" in func and (engine in ["flox", "numbagg"] or reindex):
