@@ -16,6 +16,7 @@ from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
 from .lib import dask_array_type, sparse_array_type
 from .multiarray import MultiArray
+from .xrutils import notnull
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
@@ -427,7 +428,8 @@ def _var_combine(array, axis, keepdims=True):
         + zero_denominator.astype(int)
     )
 
-    assert np.all((adj_terms * zero_denominator) == 0), (
+    check = adj_terms * zero_denominator
+    assert np.all(check[notnull(check)] == 0), (
         "Instances where we add something to the denominator must come out to zero"
     )
 
