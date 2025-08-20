@@ -474,8 +474,8 @@ var = Aggregation(
     finalize=_var_finalize,
     fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None,),
-    final_dtype=np.floating,
+    dtypes=(np.float64,),
+    final_dtype=np.float64,
 )
 
 nanvar = Aggregation(
@@ -486,8 +486,8 @@ nanvar = Aggregation(
     finalize=_var_finalize,
     fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None,),
-    final_dtype=np.floating,
+    dtypes=(np.float64,),
+    final_dtype=np.float64,
 )
 
 std = Aggregation(
@@ -498,8 +498,8 @@ std = Aggregation(
     finalize=_std_finalize,
     fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None,),
-    final_dtype=np.floating,
+    dtypes=(np.float64,),
+    final_dtype=np.float64,
 )
 nanstd = Aggregation(
     "nanstd",
@@ -509,8 +509,8 @@ nanstd = Aggregation(
     finalize=_std_finalize,
     fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None,),
-    final_dtype=np.floating,
+    dtypes=(np.float64,),
+    final_dtype=np.float64,
 )
 
 
