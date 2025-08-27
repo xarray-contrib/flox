@@ -405,7 +405,7 @@ def _var_combine(array, axis, keepdims=True):
         not_first = [slice(None, None) for i in range(array.ndim)]
         not_first[ax] = slice(n, None)
         return array[*not_first]
-    
+
     for ax in axis:
         if array.shape[ax] == 1:
             continue
@@ -424,18 +424,21 @@ def _var_combine(array, axis, keepdims=True):
 
         # Adjustment terms to tweak the sum of squared deviations because not every chunk has the same mean
         adj_terms = (
-            clip_last(cumsum_len, ax) * clip_first(sum_X, ax) - clip_first(sum_len, ax) * clip_last(cumsum_X, ax)
+            clip_last(cumsum_len, ax) * clip_first(sum_X, ax)
+            - clip_first(sum_len, ax) * clip_last(cumsum_X, ax)
         ) ** 2 / (
-            clip_last(cumsum_len, ax) * clip_first(sum_len, ax) * (clip_last(cumsum_len, ax) + clip_first(sum_len, ax))
+            clip_last(cumsum_len, ax)
+            * clip_first(sum_len, ax)
+            * (clip_last(cumsum_len, ax) + clip_first(sum_len, ax))
             + zero_denominator.astype(int)
         )
-    
+
         check = adj_terms * zero_denominator
         assert np.all(check[notnull(check)] == 0), (
             "Instances where we add something to the denominator must come out to zero"
         )
 
-        array =  MultiArray(
+        array = MultiArray(
             (
                 np.sum(sum_deviations, axis=axis, keepdims=keepdims)
                 + np.sum(adj_terms, axis=axis, keepdims=keepdims),  # sum of squared deviations
@@ -444,7 +447,6 @@ def _var_combine(array, axis, keepdims=True):
             )
         )
     return array
-
 
 
 def is_var_chunk_reduction(agg: Callable) -> bool:

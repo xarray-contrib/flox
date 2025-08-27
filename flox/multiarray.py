@@ -78,13 +78,16 @@ def concatenate(multiarrays, axis) -> MultiArray:
         tuple(np.concatenate(tuple(ma.arrays[i] for ma in multiarrays), axis) for i in range(n_arrays))
     )
 
+
 @implements(np.transpose)
 def transpose(multiarray, axes) -> MultiArray:
     return MultiArray(tuple(np.transpose(a, axes) for a in multiarray.arrays))
 
+
 @implements(np.squeeze)
 def squeeze(multiarray, axis) -> MultiArray:
     return MultiArray(tuple(np.squeeze(a, axis) for a in multiarray.arrays))
+
 
 @implements(np.full)
 def full(shape, fill_values, *args, **kwargs) -> MultiArray:
