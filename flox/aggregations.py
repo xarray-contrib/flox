@@ -413,7 +413,7 @@ def _var_combine(array, axis, keepdims=True):
         sum_deviations, sum_X, sum_len = array.arrays
 
         # Calculate parts needed for cascading combination
-        cumsum_X = np.cumsum(sum_X, axis=ax) 
+        cumsum_X = np.cumsum(sum_X, axis=ax)
         cumsum_len = np.cumsum(sum_len, axis=ax)
 
         # There will be instances in which one or both chunks being merged are empty
