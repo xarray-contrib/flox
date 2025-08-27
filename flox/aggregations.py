@@ -458,7 +458,7 @@ def is_var_chunk_reduction(agg: Callable) -> bool:
 def _var_finalize(multiarray, ddof=0):
     den = multiarray.arrays[2] - ddof
     # preserve nans for groups with 0 obs; so these values are -ddof
-    den[den < 0] = 0
+    den[den <= 0] = np.nan
     return multiarray.arrays[0] / den
 
 
