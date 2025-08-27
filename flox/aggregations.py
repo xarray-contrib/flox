@@ -440,10 +440,10 @@ def _var_combine(array, axis, keepdims=True):
 
         array = MultiArray(
             (
-                np.sum(sum_deviations, axis=axis, keepdims=keepdims)
-                + np.sum(adj_terms, axis=axis, keepdims=keepdims),  # sum of squared deviations
-                np.sum(sum_X, axis=axis, keepdims=keepdims),  # sum of array items
-                np.sum(sum_len, axis=axis, keepdims=keepdims),  # sum of array lengths
+                np.sum(sum_deviations, axis=ax, keepdims=keepdims)
+                + np.sum(adj_terms, axis=ax, keepdims=keepdims),  # sum of squared deviations
+                np.sum(sum_X, axis=ax, keepdims=keepdims),  # sum of array items
+                np.sum(sum_len, axis=ax, keepdims=keepdims),  # sum of array lengths
             )
         )
     return array
