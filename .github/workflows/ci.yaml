@@ -41,7 +41,7 @@ jobs:
             env: "env-numpy1"
             python-version: "3.11"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set environment variables
@@ -100,7 +100,7 @@ jobs:
       run:
         shell: bash -l {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: "pydata/xarray"
           fetch-depth: 0 # Fetch all history for all branches and tags.
