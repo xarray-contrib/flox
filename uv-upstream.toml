@@ -1,0 +1,16 @@
+# Configuration for upstream development versions
+# Use with: uv sync --group upstream-dev --config-file uv-upstream.toml
+
+[[index]]
+name = "scientific-python-nightly"
+url = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple"
+
+[sources]
+numpy = { index = "scientific-python-nightly" }
+scipy = { index = "scientific-python-nightly" }
+pandas = { index = "scientific-python-nightly" }
+xarray = { index = "scientific-python-nightly" }
+dask = { git = "https://github.com/dask/dask" }
+numpy-groupies = { git = "https://github.com/ml31415/numpy-groupies" }
+sparse = { git = "https://github.com/pydata/sparse" }
+cftime = { git = "https://github.com/Unidata/cftime" }
