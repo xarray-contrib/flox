@@ -179,13 +179,6 @@ dev-dependencies = [
     "syrupy",
     "pooch",
     "codecov",
-    "dask[complete]",
-    "pdbpp",
-    "ipykernel",
-    "snakeviz",
-    "line_profiler",
-    "memory-profiler",
-    "memray",
 ]
 
 
@@ -206,7 +199,7 @@ all = ["cachey", "dask[core]", "numba", "numbagg>=0.3", "xarray"]
 complete = [
     {include-group = "test"},
     "cachey",
-    "dask[complete]",
+    "dask[core]",
     "numba",
     "numbagg>=0.3",
     "xarray",
@@ -307,6 +300,16 @@ upstream-dev = [
     "numpy-groupies",
     "sparse",
     "cftime",
+]
+dev = [
+    {include-group = "complete"},
+    "dask[all]",
+    "pdbpp",
+    "ipykernel",
+    "snakeviz",
+    "line_profiler",
+    "memory-profiler",
+    "memray",
 ]
 types = [
     "mypy",
