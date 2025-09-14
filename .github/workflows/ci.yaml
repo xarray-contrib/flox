@@ -106,7 +106,7 @@ jobs:
           uv add --dev .[complete] pint>=0.22
       - name: Install upstream flox
         run: |
-          uv add --no-deps git+https://github.com/dcherian/flox.git@${{ github.ref }}
+          uv add git+https://github.com/dcherian/flox.git@${{ github.ref }}
       - name: Version info
         run: |
           uv tree
