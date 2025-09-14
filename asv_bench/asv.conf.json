@@ -27,12 +27,6 @@
   //     "PIP_NO_BUILD_ISOLATION=false python -mpip wheel --no-deps --no-index -w {build_cache_dir} {build_dir}"
   // ],
   //
-  "build_command": [
-    "python -m build --wheel --outdir {build_cache_dir} {build_dir}"
-  ],
-  "install_command": [
-    "python -mpip install --find-links {build_cache_dir} --no-deps --no-index flox"
-  ],
 
   // List of branches to benchmark. If not provided, defaults to "master"
   // (for git) or "default" (for mercurial).
@@ -51,8 +45,13 @@
   "pythons": ["3.12"],
 
   "environment_type": "rattler",
-  "conda_channels": ["conda-forge"],
-  "requirements": "requirements.txt",
+  "conda_environment_file": "environment.yml",
+  "build_command": [
+    "python -m build --wheel --outdir {build_cache_dir} {build_dir}"
+  ],
+  "install_command": [
+    "python -m pip install --find-links {build_cache_dir} --no-deps --no-index flox"
+  ],
 
   // The directory (relative to the current directory) that benchmarks are
   // stored in.  If not provided, defaults to "benchmarks"
