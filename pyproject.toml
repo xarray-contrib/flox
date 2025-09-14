@@ -275,6 +275,7 @@ benchmark = [
     "xarray",
     "numbagg>=0.3",
     "wheel",
+    "pyarrow",
 ]
 upstream = [
     {include-group = "test"},

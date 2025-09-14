@@ -44,11 +44,7 @@ jobs:
       - name: Set environment variables
         run: |
           echo "PYTHON_VERSION=${{ matrix.python-version }}" >> $GITHUB_ENV
-          if [[ "${{ matrix.env }}" == "numpy1" ]]; then
-            echo "USE_CONFIG_FILE=true" >> $GITHUB_ENV
-          else
-            echo "USE_CONFIG_FILE=false" >> $GITHUB_ENV
-          fi
+          echo "USE_CONFIG_FILE=${{ matrix.env == 'numpy1' && 'true' || 'false' }}" >> $GITHUB_ENV
       - name: Set up Python and uv
         uses: astral-sh/setup-uv@v4
         with:
