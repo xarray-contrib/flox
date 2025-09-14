@@ -52,6 +52,7 @@ docs = [
     "jupyter",
     "sphinx-codeautolink",
     "sphinx-copybutton",
+    "pyarrow",
 ]
 
 [build-system]
@@ -178,6 +179,13 @@ dev-dependencies = [
     "syrupy",
     "pooch",
     "codecov",
+    "dask[complete]",
+    "pdbpp",
+    "ipykernel",
+    "snakeviz",
+    "line_profiler",
+    "memory-profiler",
+    "memray",
 ]
 
 
@@ -194,10 +202,14 @@ test = [
     "codecov",
     "pyarrow",
 ]
-all = ["cachey", "dask", "numba", "numbagg>=0.3", "xarray"]
+all = ["cachey", "dask[core]", "numba", "numbagg>=0.3", "xarray"]
 complete = [
-    {include-group = "all"},
     {include-group = "test"},
+    "cachey",
+    "dask[complete]",
+    "numba",
+    "numbagg>=0.3",
+    "xarray",
     "asv",
     "cftime",
     "cubed>=0.20.0",
@@ -225,7 +237,7 @@ no-numba = [
     "asv",
     "cachey",
     "cftime",
-    "dask",
+    "dask[core]",
     "sparse",
     "lxml",
     "matplotlib",
@@ -235,7 +247,7 @@ no-numba = [
 no-xarray = [
     {include-group = "test"},
     "sparse",
-    "dask",
+    "dask[core]",
     "numpydoc",
     "numba",
     "pre-commit",
@@ -266,7 +278,7 @@ benchmark = [
     "py-rattler",
     "build",
     "cachey",
-    "dask",
+    "dask[core]",
     "xarray",
     "numbagg>=0.3",
     "wheel",
@@ -291,7 +303,7 @@ upstream-dev = [
     "scipy",
     "pandas",
     "xarray",
-    "dask",
+    "dask[core]",
     "numpy-groupies",
     "sparse",
     "cftime",
