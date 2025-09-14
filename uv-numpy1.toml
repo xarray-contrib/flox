@@ -1,5 +1,6 @@
 # Configuration for numpy<2 testing
 # Use with: uv sync --group numpy1 --config-file uv-numpy1.toml
 
-[sources]
-numpy = { version = ">=1.26,<2" }
+override-dependencies = [
+    "numpy>=1.26,<2",
+]
