@@ -296,3 +296,16 @@ upstream-dev = [
     "sparse",
     "cftime",
 ]
+types = [
+    "mypy",
+    "pandas-stubs",
+    "types-PyYAML",
+    "types-Pygments",
+    "types-defusedxml",
+    "types-docutils",
+    "types-pexpect",
+    "types-psutil",
+    "types-pytz",
+    "types-requests",
+    "types-setuptools",
+]

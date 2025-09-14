@@ -93,18 +93,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --group complete
+          uv sync --group complete --group types
       - name: Version info
         run: |
           uv pip list
-      - name: Install mypy
-        run: |
-          uv pip install mypy
 
       - name: Run mypy
         run: |
           mkdir .mypy_cache
-          uv run python -m mypy --install-types --non-interactive --cache-dir=.mypy_cache/ --cobertura-xml-report mypy_report
+          uv run mypy --cache-dir=.mypy_cache/ --cobertura-xml-report mypy_report
 
       - name: Upload mypy coverage to Codecov
         uses: codecov/codecov-action@v5.5.0
