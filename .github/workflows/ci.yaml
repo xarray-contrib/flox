@@ -68,7 +68,7 @@ jobs:
         id: status
         run: |
           uv run python -c "import xarray; xarray.show_versions()" || true
-          uv run pytest --durations=20 --durations-min=0.5 -n auto --cov=./ --cov-report=xml --hypothesis-profile ci
+          uv run pytest --durations=20 --durations-min=0.5 -n auto --cov=./ --cov-report=xml --hypothesis-profile ci -x
       - name: Upload code coverage to Codecov
         uses: codecov/codecov-action@v5.5.0
         with:
@@ -103,7 +103,7 @@ jobs:
           cache-dependency-glob: "pyproject.toml"
       - name: Install xarray and dependencies
         run: |
-          uv add .[complete] pint>=0.22
+          uv add --dev .[complete] pint>=0.22
       - name: Install upstream flox
         run: |
           uv add --no-deps git+https://github.com/dcherian/flox.git@${{ github.ref }}
