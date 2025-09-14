@@ -52,7 +52,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --group complete
+          uv sync --group complete --no-dev
       - name: Version info
         run: |
           uv pip list
@@ -93,7 +93,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --group complete --group types
+          uv sync --group complete --no-dev --group types
       - name: Version info
         run: |
           uv pip list

@@ -49,7 +49,7 @@ jobs:
       - name: Install upstream dev dependencies
         run: |
           # Install with upstream development versions using separate config
-          uv sync --group upstream-dev --config-file uv-upstream.toml
+          uv sync --group upstream-dev --config-file uv-upstream.toml --no-dev
 
 
       - name: List deps

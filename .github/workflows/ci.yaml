@@ -44,6 +44,7 @@ jobs:
       - name: Set environment variables
         run: |
           echo "PYTHON_VERSION=${{ matrix.python-version }}" >> $GITHUB_ENV
+          echo "UV_CONFIG_FILE=${{ matrix.env == 'numpy1' && '--config-file uv-numpy1.toml' || '' }}" >> $GITHUB_ENV
       - name: Set up Python and uv
         uses: astral-sh/setup-uv@v4
         with:
@@ -52,7 +53,7 @@ jobs:
           cache-dependency-glob: "pyproject.toml"
       - name: Install dependencies
         run: |
-          ${{ matrix.env == 'numpy1' && 'uv sync --group numpy1 --config-file uv-numpy1.toml' || format('uv sync --group {0}', matrix.env) }}
+          uv sync --group ${{ matrix.env }} $UV_CONFIG_FILE --no-dev
 
       # https://github.com/actions/cache/blob/main/tips-and-workarounds.md#update-a-cache
       - name: Restore cached hypothesis directory
