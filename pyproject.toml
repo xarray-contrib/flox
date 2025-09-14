@@ -192,6 +192,7 @@ test = [
     "syrupy",
     "pooch",
     "codecov",
+    "pyarrow",
 ]
 all = ["cachey", "dask", "numba", "numbagg>=0.3", "xarray"]
 complete = [
