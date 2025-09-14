@@ -98,12 +98,12 @@ jobs:
       - name: Set up Python and uv
         uses: astral-sh/setup-uv@v4
         with:
-          python-version: "3.11"
+          python-version: "3.13"
           enable-cache: true
           cache-dependency-glob: "pyproject.toml"
       - name: Install xarray and dependencies
         run: |
-          uv add -e .[complete] pint>=0.22
+          uv add .[complete] pint>=0.22
       - name: Install upstream flox
         run: |
           uv add --no-deps git+https://github.com/dcherian/flox.git@${{ github.ref }}
