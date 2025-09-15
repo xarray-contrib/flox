@@ -35,6 +35,25 @@ changelog = "https://github.com/xarray-contrib/flox/releases"
 [project.optional-dependencies]
 all = ["cachey", "dask", "numba", "numbagg", "xarray"]
 test = ["netCDF4"]
+docs = [
+    "cubed>=0.20.0",
+    "cubed-xarray",
+    "dask",
+    "xarray",
+    "numpydoc",
+    "matplotlib",
+    "myst-parser",
+    "myst-nb",
+    "sparse",
+    "sphinx",
+    "sphinx-remove-toctrees",
+    "furo>=2024.08",
+    "ipykernel",
+    "jupyter",
+    "sphinx-codeautolink",
+    "sphinx-copybutton",
+    "pyarrow",
+]
 
 [build-system]
 requires = [
@@ -149,3 +168,160 @@ testpaths = ["tests"]
 [tool.codespell]
 ignore-words-list = "nd,nax,coo"
 skip = "*.html"
+
+[tool.uv]
+dev-dependencies = [
+    "hypothesis",
+    "pytest>=7",
+    "pytest-cov",
+    "pytest-pretty",
+    "pytest-xdist",
+    "syrupy",
+    "pooch",
+    "codecov",
+]
+
+
+
+[dependency-groups]
+test = [
+    "hypothesis",
+    "pytest>=7",
+    "pytest-cov",
+    "pytest-pretty",
+    "pytest-xdist",
+    "syrupy",
+    "pooch",
+    "codecov",
+    "pyarrow",
+]
+all = ["cachey", "dask[core]", "numba", "numbagg>=0.3", "xarray"]
+complete = [
+    {include-group = "test"},
+    "cachey",
+    "dask[core]",
+    "numba",
+    "numbagg>=0.3",
+    "xarray",
+    "asv",
+    "cftime",
+    "cubed>=0.20.0",
+    "lxml",
+    "matplotlib",
+    "sparse",
+    "zarr",
+    "pre-commit",
+]
+minimal = [
+    {include-group = "test"},
+]
+no-dask = [
+    {include-group = "test"},
+    "cftime",
+    "sparse",
+    "numpydoc",
+    "numba",
+    "numbagg>=0.3",
+    "xarray",
+    "pre-commit",
+]
+no-numba = [
+    {include-group = "test"},
+    "asv",
+    "cachey",
+    "cftime",
+    "dask[core]",
+    "sparse",
+    "lxml",
+    "matplotlib",
+    "xarray",
+    "pre-commit",
+]
+no-xarray = [
+    {include-group = "test"},
+    "sparse",
+    "dask[core]",
+    "numpydoc",
+    "numba",
+    "pre-commit",
+]
+numpy1 = [
+    {include-group = "complete"},
+]
+docs = [
+    "cubed>=0.20.0",
+    "cubed-xarray",
+    "dask",
+    "xarray",
+    "numpydoc",
+    "matplotlib",
+    "myst-parser",
+    "myst-nb",
+    "sparse",
+    "sphinx",
+    "sphinx-remove-toctrees",
+    "furo>=2024.08",
+    "ipykernel",
+    "jupyter",
+    "sphinx-codeautolink",
+    "sphinx-copybutton",
+]
+benchmark = [
+    "asv>=0.6.4",
+    "py-rattler",
+    "build",
+    "cachey",
+    "dask[core]",
+    "xarray",
+    "numbagg>=0.3",
+    "wheel",
+    "pyarrow",
+]
+upstream = [
+    {include-group = "test"},
+    "asv_runner",
+    "cachey",
+    "pooch",
+    "hypothesis",
+    "toolz",
+    "pytest-reportlog",
+    "cython>=0.29.20",
+    "py-cpuinfo",
+    "python-dateutil",
+    "pytz",
+]
+upstream-dev = [
+    {include-group = "upstream"},
+    # These will be overridden by tool.uv.sources when this group is used
+    "numpy",
+    "scipy",
+    "pandas",
+    "xarray",
+    "dask[core]",
+    "numpy-groupies",
+    "sparse",
+    "cftime",
+]
+dev = [
+    {include-group = "complete"},
+    "dask[all]",
+    "pdbpp",
+    "ipykernel",
+    "snakeviz",
+    "line_profiler",
+    "memory-profiler",
+    "memray",
+]
+types = [
+    "mypy",
+    "pandas-stubs",
+    "types-PyYAML",
+    "types-Pygments",
+    "types-defusedxml",
+    "types-docutils",
+    "types-pexpect",
+    "types-psutil",
+    "types-pytz",
+    "types-requests",
+    "types-setuptools",
+]
