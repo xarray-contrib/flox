@@ -58,7 +58,7 @@ jobs:
           uv pip list
       - name: Run doctests
         run: |
-          uv run python -m pytest --doctest-modules \
+          uv run --no-dev python -m pytest --doctest-modules \
           flox/aggregations.py flox/core.py flox/xarray.py \
           --ignore flox/tests \
           --cov=./ --cov-report=xml
@@ -101,7 +101,7 @@ jobs:
       - name: Run mypy
         run: |
           mkdir .mypy_cache
-          uv run mypy --cache-dir=.mypy_cache/ --cobertura-xml-report mypy_report
+          uv run --no-dev mypy --cache-dir=.mypy_cache/ --cobertura-xml-report mypy_report
 
       - name: Upload mypy coverage to Codecov
         uses: codecov/codecov-action@v5.5.0

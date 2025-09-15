@@ -30,7 +30,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --group benchmark
+          uv sync --group benchmark --no-dev
 
       - name: Run benchmarks
         id: benchmark
@@ -47,12 +47,12 @@ jobs:
         run: |
           # set -x
           # ID this runner
-          uv run asv machine --yes
+          uv run --no-dev asv machine --yes
           echo "Baseline:  $LAST_HEAD_SHA ($BASE_LABEL)"
           echo "Contender: ${GITHUB_SHA} ($HEAD_LABEL)"
           # Run benchmarks for current commit against base
           ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
-          uv run asv continuous $ASV_OPTIONS $BASE_SHA ${GITHUB_SHA} \
+          uv run --no-dev asv continuous $ASV_OPTIONS $BASE_SHA ${GITHUB_SHA} \
               | sed "/Traceback \|failed$\|PERFORMANCE DECREASED/ s/^/::error::/" \
               | tee benchmarks.log
           # Report and export results for subsequent steps

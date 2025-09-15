@@ -70,8 +70,8 @@ jobs:
       - name: Run Tests
         id: status
         run: |
-          uv run python -c "import xarray; xarray.show_versions()" || true
-          uv run pytest --durations=20 --durations-min=0.5 -n auto --cov=./ --cov-report=xml --hypothesis-profile ci
+          uv run --no-dev python -c "import xarray; xarray.show_versions()" || true
+          uv run --no-dev pytest --durations=20 --durations-min=0.5 -n auto --cov=./ --cov-report=xml --hypothesis-profile ci
       - name: Upload code coverage to Codecov
         uses: codecov/codecov-action@v5.5.0
         with:
@@ -113,19 +113,19 @@ jobs:
       - name: Version info
         run: |
           uv tree
-          uv run python xarray/util/print_versions.py
+          uv run --no-dev python xarray/util/print_versions.py
       - name: import xarray
         run: |
-          uv run python -c 'import xarray'
+          uv run --no-dev python -c 'import xarray'
       - name: import flox
         run: |
-          uv run python -c 'import flox'
+          uv run --no-dev python -c 'import flox'
       - name: Run Tests
         if: success()
         id: status
         run: |
           set -euo pipefail
-          uv run python -m pytest -n auto \
+          uv run --no-dev python -m pytest -n auto \
               xarray/tests/test_groupby.py \
               xarray/tests/test_units.py::TestDataArray::test_computation_objects \
               xarray/tests/test_units.py::TestDataArray::test_grouped_operations \
