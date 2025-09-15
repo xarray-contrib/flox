@@ -1,0 +1,24 @@
+# Conda environment file for ASV benchmarks
+# This file is used by the rattler backend in ASV to create benchmark environments
+# It includes all dependencies needed to run flox benchmarks
+name: asv-bench
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - setuptools
+  - wheel
+  - dask-core
+  - xarray
+  - numpy>=1.26
+  - scipy>=1.12
+  - pandas>=2.1
+  - toolz
+  - packaging>=21.3
+  - numbagg>=0.3
+  - cachey
+  - pyarrow
+  - pip:
+    - build
+    - numpy-groupies>=0.9.19

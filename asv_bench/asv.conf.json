@@ -27,13 +27,6 @@
   //     "PIP_NO_BUILD_ISOLATION=false python -mpip wheel --no-deps --no-index -w {build_cache_dir} {build_dir}"
   // ],
   //
-  "build_command": [
-    "python setup.py build",
-    "python -mpip wheel --no-deps --no-build-isolation --no-index -w {build_cache_dir} {build_dir}"
-  ],
-  "install_command": [
-    "in-dir={env_dir} python -mpip install {wheel_file} --no-deps"
-  ],
 
   // List of branches to benchmark. If not provided, defaults to "master"
   // (for git) or "default" (for mercurial).
@@ -49,11 +42,16 @@
 
   // The Pythons you'd like to test against.  If not provided, defaults
   // to the current version of Python used to run `asv`.
-  // "pythons": ["3.9"],
+  "pythons": ["3.12"],
 
-  "environment_type": "mamba",
-  "conda_channels": ["conda-forge"],
-  "conda_environment_file": "../ci/benchmark.yml",
+  "environment_type": "rattler",
+  "conda_environment_file": "environment.yml",
+  "build_command": [
+    "python -m build --wheel --outdir {build_cache_dir} {build_dir}"
+  ],
+  "install_command": [
+    "python -m pip install --find-links {build_cache_dir} --no-deps --no-index flox"
+  ],
 
   // The directory (relative to the current directory) that benchmarks are
   // stored in.  If not provided, defaults to "benchmarks"

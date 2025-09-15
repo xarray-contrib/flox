@@ -21,21 +21,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up conda environment
-        uses: mamba-org/setup-micromamba@v2
+      - name: Set up Python and uv
+        uses: astral-sh/setup-uv@v4
         with:
-          environment-name: flox-bench
-          create-args: >-
-            python=3.12
-            asv
-            mamba
-            libmambapy<2.0
-            conda-build
-          init-shell: bash
-          cache-environment: true
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install dependencies
+        run: |
+          uv sync --group benchmark --no-dev
 
       - name: Run benchmarks
-        shell: bash -l {0}
         id: benchmark
         env:
           OPENBLAS_NUM_THREADS: 1
@@ -50,12 +47,12 @@ jobs:
         run: |
           # set -x
           # ID this runner
-          asv machine --yes
+          uv run --no-dev asv machine --yes
           echo "Baseline:  $LAST_HEAD_SHA ($BASE_LABEL)"
           echo "Contender: ${GITHUB_SHA} ($HEAD_LABEL)"
           # Run benchmarks for current commit against base
           ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
-          asv continuous $ASV_OPTIONS $BASE_SHA ${GITHUB_SHA} \
+          uv run --no-dev asv continuous $ASV_OPTIONS $BASE_SHA ${GITHUB_SHA} \
               | sed "/Traceback \|failed$\|PERFORMANCE DECREASED/ s/^/::error::/" \
               | tee benchmarks.log
           # Report and export results for subsequent steps
