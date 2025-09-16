@@ -195,11 +195,11 @@ test = [
     "codecov",
     "pyarrow",
 ]
-all = ["cachey", "dask[core]", "numba", "numbagg>=0.3", "xarray"]
+all = ["cachey", "dask", "numba", "numbagg>=0.3", "xarray"]
 complete = [
     {include-group = "test"},
     "cachey",
-    "dask[core]",
+    "dask",
     "numba",
     "numbagg>=0.3",
     "xarray",
@@ -304,7 +304,7 @@ upstream-dev = [
 ]
 dev = [
     {include-group = "complete"},
-    "dask[all]",
+    "dask[complete]",
     "pdbpp",
     "ipykernel",
     "snakeviz",
