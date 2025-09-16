@@ -3002,6 +3002,7 @@ def groupby_reduce(
         elif is_cftime:
             asdelta = _to_pytimedelta(result, unit="us")
             nanmask = np.isnan(result)
+            print(result, asdelta, offset)
             asdelta[nanmask] = datetime.timedelta(microseconds=0)
             result = asdelta + offset
             result[nanmask] = np.timedelta64("NaT")
