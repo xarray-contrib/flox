@@ -2791,6 +2791,7 @@ def groupby_reduce(
             array = array.view(np.int64)
         elif is_cftime:
             offset = array.min()
+            assert offset is not None
             array = datetime_to_numeric(array, offset, datetime_unit="us")
 
     if nax == 1 and by_.ndim > 1 and expected_ is None:
