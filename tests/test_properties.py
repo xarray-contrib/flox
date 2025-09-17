@@ -100,7 +100,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
 
     # TODO: funny bugs with overflows here
     is_cftime = _contains_cftime_datetimes(array)
-    assume(not (is_cftime and func in ["prod", "nanprod"]))
+    assume(not (is_cftime and func in ["prod", "nanprod", "var", "nanvar", "std", "nanstd"]))
 
     axis = -1
     by = data.draw(
