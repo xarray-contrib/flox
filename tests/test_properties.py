@@ -68,6 +68,8 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
         array = array.view(np.int64)
     array = array.ravel()
     array = array[notnull(array)]
+    if array.size == 0:
+        return True
 
     if array.dtype.kind == "f":
         info = np.finfo(array.dtype)

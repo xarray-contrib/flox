@@ -372,7 +372,8 @@ def var_chunk(
     )
 
     # Calculate sum squared deviations - the main part of variance sum
-    array_means = array_sums / array_lens
+    with np.errstate(invalid="ignore", divide="ignore"):
+        array_means = array_sums / array_lens
 
     sum_squared_deviations = generic_aggregate(
         group_idx,
@@ -423,15 +424,16 @@ def _var_combine(array, axis, keepdims=True):
         zero_denominator = (clip_last(cumsum_len, ax) == 0) | (clip_first(sum_len, ax) == 0)
 
         # Adjustment terms to tweak the sum of squared deviations because not every chunk has the same mean
-        adj_terms = (
-            clip_last(cumsum_len, ax) * clip_first(sum_X, ax)
-            - clip_first(sum_len, ax) * clip_last(cumsum_X, ax)
-        ) ** 2 / (
-            clip_last(cumsum_len, ax)
-            * clip_first(sum_len, ax)
-            * (clip_last(cumsum_len, ax) + clip_first(sum_len, ax))
-            + zero_denominator.astype(int)
-        )
+        with np.errstate(invalid="ignore", divide="ignore"):
+            adj_terms = (
+                clip_last(cumsum_len, ax) * clip_first(sum_X, ax)
+                - clip_first(sum_len, ax) * clip_last(cumsum_X, ax)
+            ) ** 2 / (
+                clip_last(cumsum_len, ax)
+                * clip_first(sum_len, ax)
+                * (clip_last(cumsum_len, ax) + clip_first(sum_len, ax))
+                + zero_denominator.astype(int)
+            )
 
         check = adj_terms * zero_denominator
         assert np.all(check[notnull(check)] == 0), (
@@ -456,9 +458,12 @@ def is_var_chunk_reduction(agg: Callable) -> bool:
 
 
 def _var_finalize(multiarray, ddof=0):
-    den = multiarray.arrays[2] - ddof
+    den = multiarray.arrays[2]
+    den -= ddof
     # preserve nans for groups with 0 obs; so these values are -ddof
-    ret = multiarray.arrays[0] / den
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ret = multiarray.arrays[0]
+        ret /= den
     ret[den < 0] = np.nan
     return ret
 
