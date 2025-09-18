@@ -44,6 +44,7 @@ from .aggregations import (
     _atleast_1d,
     _initialize_aggregation,
     generic_aggregate,
+    is_var_chunk_reduction,
     quantile_new_dims_func,
 )
 from .cache import memoize
@@ -1289,7 +1290,8 @@ def chunk_reduce(
     # optimize that out.
     previous_reduction: T_Func = ""
     for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
-        if empty:
+        # UGLY! but this is because the `var` breaks our design assumptions
+        if empty and not is_var_chunk_reduction(reduction):
             result = np.full(shape=final_array_shape, fill_value=fv, like=array)
         elif is_nanlen(reduction) and is_nanlen(previous_reduction):
             result = results["intermediates"][-1]
@@ -1297,6 +1299,10 @@ def chunk_reduce(
             # fill_value here is necessary when reducing with "offset" groups
             kw_func = dict(size=size, dtype=dt, fill_value=fv)
             kw_func.update(kw)
+
+            # UGLY! but this is because the `var` breaks our design assumptions
+            if is_var_chunk_reduction(reduction):
+                kw_func.update(engine=engine)
 
             if callable(reduction):
                 # passing a custom reduction for npg to apply per-group is really slow!
@@ -2785,6 +2791,7 @@ def groupby_reduce(
             array = array.view(np.int64)
         elif is_cftime:
             offset = array.min()
+            assert offset is not None
             array = datetime_to_numeric(array, offset, datetime_unit="us")
 
     if nax == 1 and by_.ndim > 1 and expected_ is None:

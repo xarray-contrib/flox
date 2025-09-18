@@ -15,6 +15,8 @@ from numpy.typing import ArrayLike, DTypeLike
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
 from .lib import dask_array_type, sparse_array_type
+from .multiarray import MultiArray
+from .xrutils import notnull
 
 if TYPE_CHECKING:
     FuncTuple = tuple[Callable | str, ...]
@@ -161,8 +163,8 @@ class Aggregation:
         self,
         name: str,
         *,
-        numpy: str | None = None,
-        chunk: str | FuncTuple | None,
+        numpy: partial | str | None = None,
+        chunk: partial | str | FuncTuple | None,
         combine: str | FuncTuple | None,
         preprocess: Callable | None = None,
         finalize: Callable | None = None,
@@ -343,57 +345,183 @@ nanmean = Aggregation(
 )
 
 
-# TODO: fix this for complex numbers
-def _var_finalize(sumsq, sum_, count, ddof=0):
+def var_chunk(
+    group_idx, array, *, skipna: bool, engine: str, axis=-1, size=None, fill_value=None, dtype=None
+):
+    # Calculate length and sum - important for the adjustment terms to sum squared deviations
+    array_lens = generic_aggregate(
+        group_idx,
+        array,
+        func="nanlen",
+        engine=engine,
+        axis=axis,
+        size=size,
+        fill_value=0,  # Unpack fill value bc it's currently defined for multiarray
+        dtype=dtype,
+    )
+
+    array_sums = generic_aggregate(
+        group_idx,
+        array,
+        func="nansum" if skipna else "sum",
+        engine=engine,
+        axis=axis,
+        size=size,
+        fill_value=0,  # Unpack fill value bc it's currently defined for multiarray
+        dtype=dtype,
+    )
+
+    # Calculate sum squared deviations - the main part of variance sum
     with np.errstate(invalid="ignore", divide="ignore"):
-        result = (sumsq - (sum_**2 / count)) / (count - ddof)
-    result[count <= ddof] = np.nan
-    return result
+        array_means = array_sums / array_lens
+
+    sum_squared_deviations = generic_aggregate(
+        group_idx,
+        (array - array_means[..., group_idx]) ** 2,
+        func="nansum" if skipna else "sum",
+        engine=engine,
+        axis=axis,
+        size=size,
+        fill_value=0,  # Unpack fill value bc it's currently defined for multiarray
+        dtype=dtype,
+    )
+
+    return MultiArray((sum_squared_deviations, array_sums, array_lens))
 
 
-def _std_finalize(sumsq, sum_, count, ddof=0):
-    return np.sqrt(_var_finalize(sumsq, sum_, count, ddof))
+def _var_combine(array, axis, keepdims=True):
+    def clip_last(array, ax, n=1):
+        """Return array except the last element along axis
+        Purely included to tidy up the adj_terms line
+        """
+        assert n > 0, "Clipping nothing off the end isn't implemented"
+        not_last = [slice(None, None) for i in range(array.ndim)]
+        not_last[ax] = slice(None, -n)
+        return array[*not_last]
+
+    def clip_first(array, ax, n=1):
+        """Return array except the first element along axis
+        Purely included to tidy up the adj_terms line
+        """
+        not_first = [slice(None, None) for i in range(array.ndim)]
+        not_first[ax] = slice(n, None)
+        return array[*not_first]
+
+    for ax in axis:
+        if array.shape[ax] == 1:
+            continue
+
+        sum_deviations, sum_X, sum_len = array.arrays
+
+        # Calculate parts needed for cascading combination
+        cumsum_X = np.cumsum(sum_X, axis=ax)
+        cumsum_len = np.cumsum(sum_len, axis=ax)
+
+        # There will be instances in which one or both chunks being merged are empty
+        # In which case, the adjustment term should be zero, but will throw a divide-by-zero error
+        # We're going to add a constant to the bottom of the adjustment term equation on those instances
+        # and count on the zeros on the top making our adjustment term still zero
+        zero_denominator = (clip_last(cumsum_len, ax) == 0) | (clip_first(sum_len, ax) == 0)
+
+        # Adjustment terms to tweak the sum of squared deviations because not every chunk has the same mean
+        with np.errstate(invalid="ignore", divide="ignore"):
+            adj_terms = (
+                clip_last(cumsum_len, ax) * clip_first(sum_X, ax)
+                - clip_first(sum_len, ax) * clip_last(cumsum_X, ax)
+            ) ** 2 / (
+                clip_last(cumsum_len, ax)
+                * clip_first(sum_len, ax)
+                * (clip_last(cumsum_len, ax) + clip_first(sum_len, ax))
+                + zero_denominator.astype(int)
+            )
+
+        check = adj_terms * zero_denominator
+        assert np.all(check[notnull(check)] == 0), (
+            "Instances where we add something to the denominator must come out to zero"
+        )
+
+        array = MultiArray(
+            (
+                np.sum(sum_deviations, axis=ax, keepdims=keepdims)
+                + np.sum(adj_terms, axis=ax, keepdims=keepdims),  # sum of squared deviations
+                np.sum(sum_X, axis=ax, keepdims=keepdims),  # sum of array items
+                np.sum(sum_len, axis=ax, keepdims=keepdims),  # sum of array lengths
+            )
+        )
+    return array
+
+
+def is_var_chunk_reduction(agg: Callable) -> bool:
+    if isinstance(agg, partial):
+        agg = agg.func
+    return agg is blockwise_or_numpy_var or agg is var_chunk
+
+
+def _var_finalize(multiarray, ddof=0):
+    den = multiarray.arrays[2]
+    den -= ddof
+    # preserve nans for groups with 0 obs; so these values are -ddof
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ret = multiarray.arrays[0]
+        ret /= den
+    ret[den < 0] = np.nan
+    return ret
+
+
+def _std_finalize(multiarray, ddof=0):
+    return np.sqrt(_var_finalize(multiarray, ddof))
+
+
+def blockwise_or_numpy_var(*args, skipna: bool, ddof=0, std=False, **kwargs):
+    res = _var_finalize(var_chunk(*args, skipna=skipna, **kwargs), ddof)
+    return np.sqrt(res) if std else res
 
 
 # var, std always promote to float, so we set nan
 var = Aggregation(
     "var",
-    chunk=("sum_of_squares", "sum", "nanlen"),
-    combine=("sum", "sum", "sum"),
+    chunk=partial(var_chunk, skipna=False),
+    numpy=partial(blockwise_or_numpy_var, skipna=False),
+    combine=(_var_combine,),
     finalize=_var_finalize,
-    fill_value=0,
+    fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None, None, np.intp),
+    dtypes=(None,),
     final_dtype=np.floating,
 )
+
 nanvar = Aggregation(
     "nanvar",
-    chunk=("nansum_of_squares", "nansum", "nanlen"),
-    combine=("sum", "sum", "sum"),
+    chunk=partial(var_chunk, skipna=True),
+    numpy=partial(blockwise_or_numpy_var, skipna=True),
+    combine=(_var_combine,),
     finalize=_var_finalize,
-    fill_value=0,
+    fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None, None, np.intp),
+    dtypes=(None,),
     final_dtype=np.floating,
 )
+
 std = Aggregation(
     "std",
-    chunk=("sum_of_squares", "sum", "nanlen"),
-    combine=("sum", "sum", "sum"),
+    chunk=partial(var_chunk, skipna=False),
+    numpy=partial(blockwise_or_numpy_var, skipna=False, std=True),
+    combine=(_var_combine,),
     finalize=_std_finalize,
-    fill_value=0,
+    fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None, None, np.intp),
+    dtypes=(None,),
     final_dtype=np.floating,
 )
 nanstd = Aggregation(
     "nanstd",
-    chunk=("nansum_of_squares", "nansum", "nanlen"),
-    combine=("sum", "sum", "sum"),
+    chunk=partial(var_chunk, skipna=True),
+    numpy=partial(blockwise_or_numpy_var, skipna=True, std=True),
+    combine=(_var_combine,),
     finalize=_std_finalize,
-    fill_value=0,
+    fill_value=((0, 0, 0),),
     final_fill_value=np.nan,
-    dtypes=(None, None, np.intp),
+    dtypes=(None,),
     final_dtype=np.floating,
 )
 

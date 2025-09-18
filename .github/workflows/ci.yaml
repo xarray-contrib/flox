@@ -106,7 +106,7 @@ jobs:
           cache-dependency-glob: "pyproject.toml"
       - name: Install xarray and dependencies
         run: |
-          uv add --dev .[complete] pint>=0.22
+          uv add --dev ".[complete]" "pint>=0.22"
       - name: Install upstream flox
         run: |
           uv add git+https://github.com/dcherian/flox.git@${{ github.ref }}

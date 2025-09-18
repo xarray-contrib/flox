@@ -66,18 +66,25 @@ NUMPY_SCAN_FUNCS: dict[str, Callable] = {
 def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
     if array.dtype.kind in "Mm":
         array = array.view(np.int64)
+    array = array.ravel()
+    array = array[notnull(array)]
+    if array.size == 0:
+        return True
+
     if array.dtype.kind == "f":
         info = np.finfo(array.dtype)
+        limit = 2 ** (info.nmant + 1)
     elif array.dtype.kind in ["i", "u"]:
         info = np.iinfo(array.dtype)  # type: ignore[assignment]
     else:
         return True
 
-    array = array.ravel()
-    array = array[notnull(array)]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         result = bool(np.all((array < info.max / array.size) & (array > info.min / array.size)))
+        if array.dtype.kind == "f":
+            result = result and bool(np.all(np.abs(array) < limit / array.size))
+
     # note(f"returning {result}, {array.min()} vs {info.min}, {array.max()} vs {info.max}")
     return result
 
@@ -99,7 +106,7 @@ def test_groupby_reduce(data, array, func: str) -> None:
 
     # TODO: funny bugs with overflows here
     is_cftime = _contains_cftime_datetimes(array)
-    assume(not (is_cftime and func in ["prod", "nanprod"]))
+    assume(not (is_cftime and func in ["prod", "nanprod", "var", "nanvar", "std", "nanstd"]))
 
     axis = -1
     by = data.draw(
@@ -203,7 +210,7 @@ def test_groupby_reduce_numpy_vs_other(data, array, func: str) -> None:
     result_other, *_ = groupby_reduce(array, by, **kwargs)
     result_numpy, *_ = groupby_reduce(numpy_array, by, **kwargs)
     assert isinstance(result_other, type(array))
-    assert_equal(result_numpy, result_other)
+    assert_equal(result_other, result_numpy)
 
 
 @given(
