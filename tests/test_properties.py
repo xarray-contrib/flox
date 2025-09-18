@@ -70,7 +70,7 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
     array = array[notnull(array)]
 
     if array.dtype.kind == "f":
-        info = np.finfo(array.dtype)  # type: ignore[assignment]
+        info = np.finfo(array.dtype)
         limit = 2 ** (info.nmant + 1)
     elif array.dtype.kind in ["i", "u"]:
         info = np.iinfo(array.dtype)  # type: ignore[assignment]
