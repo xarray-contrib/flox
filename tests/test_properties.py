@@ -14,7 +14,7 @@ import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
-from hypothesis import assume, given, note, reproduce_failure, settings
+from hypothesis import assume, given, note, settings
 
 import flox
 from flox.core import _is_sparse_supported_reduction, groupby_reduce, groupby_scan
@@ -88,7 +88,6 @@ def not_overflowing_array(array: np.ndarray[Any, Any]) -> bool:
     func=func_st,
 )
 @settings(deadline=None)
-@reproduce_failure("6.138.16", b"AXicc2RyZHRkYHRkAmIGRwYGEM+J/QKQAvOhkNGRA8ICMgGmLQaD")
 def test_groupby_reduce(data, array, func: str) -> None:
     # overflow behaviour differs between bincount and sum (for example)
     assume(not_overflowing_array(array))
