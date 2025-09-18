@@ -169,17 +169,6 @@ testpaths = ["tests"]
 ignore-words-list = "nd,nax,coo"
 skip = "*.html"
 
-[tool.uv]
-dev-dependencies = [
-    "hypothesis",
-    "pytest>=7",
-    "pytest-cov",
-    "pytest-pretty",
-    "pytest-xdist",
-    "syrupy",
-    "pooch",
-    "codecov",
-]
 
 
 
