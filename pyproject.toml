@@ -1,13 +1,12 @@
 [project]
 name = "flox"
 description = "GroupBy operations for dask.array"
-license = {file = "LICENSE"}
+license = "Apache-2.0"
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = ["xarray", "dask", "groupby"]
 classifiers = [
     "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: Apache Software License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
