@@ -39,6 +39,7 @@ jobs:
 
       - name: Check built artifacts
         run: |
+          uv venv
           uv pip install twine
           uv run twine check --strict dist/*
           if [ -f dist/flox-999.tar.gz ]; then
