@@ -22,4 +22,4 @@ jobs:
           uv build
       - name: Publish package distributions to PyPI
         run: |
-          uv publish --index testpypi
+          uv publish

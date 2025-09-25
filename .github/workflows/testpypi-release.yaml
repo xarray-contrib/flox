@@ -55,13 +55,17 @@ jobs:
       # IMPORTANT: this permission is mandatory for Trusted Publishing
       id-token: write
     steps:
-      - uses: actions/setup-python@v5
-        name: Install Python
+      - name: Set up Python and uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
 
-      - uses: actions/download-artifact@v4
+      - name: Get built artifact
+        uses: actions/download-artifact@v4
         with:
           name: releases
           path: dist
+
       - name: List contents of built dist
         run: |
           ls -ltrh
@@ -72,8 +76,5 @@ jobs:
           pip install dist/flox*.whl
 
       - name: Publish package to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
-          verbose: true
+        run: |
+          uv publish --index testpypi
