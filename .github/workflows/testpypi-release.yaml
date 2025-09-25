@@ -78,6 +78,6 @@ jobs:
           pip install dist/flox*.whl
 
       - name: Publish package to TestPyPI
-        uses: pypa/gh-action-pypi-publish@v1.6.4
+        uses: pypa/gh-action-pypi-publish@v1
         with:
           repository_url: https://test.pypi.org/legacy/
