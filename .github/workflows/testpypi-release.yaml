@@ -29,7 +29,7 @@ jobs:
       - name: Build tarball and wheels
         run: |
           git clean -xdf
-          SETUPTOOLS_SCM_OVERRIDES_FOR_FLOX='{"local_scheme": "no-local-version"}' uv build
+          SETUPTOOLS_SCM_OVERRIDES_FOR_FLOX='local_scheme = "no-local-version"' uv build
 
       - name: Check built artifacts
         run: |
