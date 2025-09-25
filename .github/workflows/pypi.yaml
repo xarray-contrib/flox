@@ -11,6 +11,7 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v5
       - name: Set up Python and uv
         uses: astral-sh/setup-uv@v4
         with:
