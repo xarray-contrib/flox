@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeAlias, TypeVar
 
 from .types import DaskArray, Graph
 from .xrutils import module_available
@@ -7,7 +9,7 @@ from .xrutils import module_available
 if TYPE_CHECKING:
     from .aggregations import Aggregation
 
-    T_Agg = str | Aggregation
+    T_Agg: TypeAlias = str | Aggregation
 
 T = TypeVar("T")
 
@@ -69,7 +71,7 @@ def identity(x: T) -> T:
     return x
 
 
-def _is_arg_reduction(func: "T_Agg") -> bool:
+def _is_arg_reduction(func: T_Agg) -> bool:
     from .aggregations import Aggregation
 
     if isinstance(func, str) and func in ["argmin", "argmax", "nanargmax", "nanargmin"]:
@@ -79,11 +81,11 @@ def _is_arg_reduction(func: "T_Agg") -> bool:
     return False
 
 
-def _is_minmax_reduction(func: "T_Agg") -> bool:
+def _is_minmax_reduction(func: T_Agg) -> bool:
     return not _is_arg_reduction(func) and (isinstance(func, str) and ("max" in func or "min" in func))
 
 
-def _is_first_last_reduction(func: "T_Agg") -> bool:
+def _is_first_last_reduction(func: T_Agg) -> bool:
     from .aggregations import Aggregation
 
     if isinstance(func, Aggregation):
@@ -91,7 +93,7 @@ def _is_first_last_reduction(func: "T_Agg") -> bool:
     return func in ["nanfirst", "nanlast", "first", "last"]
 
 
-def _is_bool_supported_reduction(func: "T_Agg") -> bool:
+def _is_bool_supported_reduction(func: T_Agg) -> bool:
     from .aggregations import Aggregation
 
     if isinstance(func, Aggregation):
@@ -104,7 +106,7 @@ def _is_bool_supported_reduction(func: "T_Agg") -> bool:
     )
 
 
-def _is_sparse_supported_reduction(func: "T_Agg") -> bool:
+def _is_sparse_supported_reduction(func: T_Agg) -> bool:
     from .aggregations import Aggregation
 
     if isinstance(func, Aggregation):
@@ -112,7 +114,7 @@ def _is_sparse_supported_reduction(func: "T_Agg") -> bool:
     return not _is_arg_reduction(func) and any(f in func for f in ["len", "sum", "max", "min", "mean"])
 
 
-def _is_reindex_sparse_supported_reduction(func: "T_Agg") -> bool:
+def _is_reindex_sparse_supported_reduction(func: T_Agg) -> bool:
     from .aggregations import Aggregation
 
     if isinstance(func, Aggregation):
