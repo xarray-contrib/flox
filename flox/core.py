@@ -49,6 +49,13 @@ from .reindex import (
     ReindexStrategy,
     reindex_,
 )
+from .scan import (  # noqa: F401
+    _finalize_scan,
+    _zip,
+    chunk_scan,
+    groupby_scan,
+    grouped_reduce,
+)
 from .xrutils import (
     _contains_cftime_datetimes,
     _to_pytimedelta,
