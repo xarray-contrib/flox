@@ -1030,7 +1030,7 @@ def is_supported_aggregation(array, func: str) -> bool:
         array = array._meta
 
     if isinstance(array, sparse_array_type):
-        from flox.core import _is_sparse_supported_reduction
+        from flox.lib import _is_sparse_supported_reduction
 
         return _is_sparse_supported_reduction(func)
 
