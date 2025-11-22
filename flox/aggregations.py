@@ -790,7 +790,7 @@ def reverse(a: AlignedArrays) -> AlignedArrays:
 
 
 def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) -> ScanState:
-    from .core import reindex_
+    from .reindex import reindex_
 
     assert left_state.state is not None
     left = left_state.state

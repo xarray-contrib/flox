@@ -8,7 +8,7 @@ from typing import Any, TypeAlias
 import numpy as np
 import sparse
 
-from flox.core import _factorize_multiple, factorize_
+from flox.factorize import _factorize_multiple, factorize_
 from flox.lib import _is_sparse_supported_reduction
 from flox.xrdtypes import INF, NINF, _get_fill_value
 from flox.xrutils import notnull

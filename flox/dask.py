@@ -15,13 +15,12 @@ import toolz as tlz
 
 if TYPE_CHECKING:
     from .aggregations import Aggregation, Scan
-    from .core import IntermediateDict, ReindexArrayType, ReindexStrategy, T_Axes, T_Engine, T_Method
+    from .core import IntermediateDict, T_Axes, T_Engine, T_Method
     from .lib import ArrayLayer
+    from .reindex import ReindexArrayType, ReindexStrategy
     from .types import DaskArray, Graph, T_By
 
 from .core import (
-    ReindexArrayType,
-    ReindexStrategy,
     _aggregate,
     _conc2,
     _expand_dims,
@@ -37,6 +36,10 @@ from .core import (
     reindex_intermediates,
 )
 from .lib import _is_arg_reduction, _is_first_last_reduction, identity
+from .reindex import (
+    ReindexArrayType,
+    ReindexStrategy,
+)
 from .xrutils import is_duck_dask_array
 
 
@@ -450,8 +453,8 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
 
     array, by = _unify_chunks(array, by)
 
-    # Import scan-specific functions from core module
-    from .core import _finalize_scan, _zip, chunk_scan, grouped_reduce
+    # Import scan-specific functions from scan module
+    from .scan import _finalize_scan, _zip, chunk_scan, grouped_reduce
 
     # 1. zip together group indices & array
     zipped = map_blocks(

@@ -11,7 +11,6 @@ from packaging.version import Version
 
 from .aggregations import Aggregation, Dim, _atleast_1d, quantile_new_dims_func
 from .core import (
-    ReindexStrategy,
     _convert_expected_groups_to_index,
     _get_expected_groups,
     _validate_expected_groups,
@@ -19,6 +18,7 @@ from .core import (
 )
 from .core import rechunk_for_blockwise as rechunk_array_for_blockwise
 from .core import rechunk_for_cohorts as rechunk_array_for_cohorts
+from .reindex import ReindexStrategy
 
 if TYPE_CHECKING:
     from xarray.core.types import T_DataArray, T_Dataset

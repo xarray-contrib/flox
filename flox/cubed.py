@@ -18,12 +18,12 @@ if TYPE_CHECKING:
     from .types import CubedArray, T_By
 
 from .core import (
-    ReindexStrategy,
     _finalize_results,
     _get_chunk_reduction,
     _is_arg_reduction,
     _reduce_blockwise,
 )
+from .reindex import ReindexStrategy
 from .xrutils import is_chunked_array
 
 
