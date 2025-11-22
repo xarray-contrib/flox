@@ -14,6 +14,7 @@ import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
 import flox
+import flox.dask
 from flox import set_options, xrutils
 from flox import xrdtypes as dtypes
 from flox.aggregations import Aggregation, _initialize_aggregation
@@ -24,8 +25,6 @@ from flox.core import (
     _choose_engine,
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
-    _is_sparse_supported_reduction,
-    _normalize_indexes,
     _validate_reindex,
     factorize_,
     find_group_cohorts,
@@ -34,8 +33,9 @@ from flox.core import (
     rechunk_for_blockwise,
     rechunk_for_cohorts,
     reindex_,
-    subset_to_blocks,
 )
+from flox.dask import _normalize_indexes, subset_to_blocks
+from flox.lib import _is_sparse_supported_reduction
 
 from . import (
     ALL_FUNCS,
@@ -376,7 +376,7 @@ def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engi
                 else:
                     mocks = {"_simple_combine": MagicMock(side_effect=combine_error)}
 
-            with patch.multiple(flox.core, **mocks):
+            with patch.multiple(flox.dask, **mocks):
                 actual, *groups = call()
             for actual_group, expect in zip(groups, expected_groups):
                 assert_equal(actual_group, expect, tolerance)
