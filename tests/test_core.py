@@ -20,22 +20,20 @@ from flox import xrdtypes as dtypes
 from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.core import (
     HAS_NUMBAGG,
-    ReindexArrayType,
-    ReindexStrategy,
     _choose_engine,
     _convert_expected_groups_to_index,
     _get_optimal_chunks_for_groups,
     _validate_reindex,
-    factorize_,
     find_group_cohorts,
     groupby_reduce,
-    groupby_scan,
     rechunk_for_blockwise,
     rechunk_for_cohorts,
-    reindex_,
 )
 from flox.dask import _normalize_indexes, subset_to_blocks
+from flox.factorize import factorize_
 from flox.lib import _is_sparse_supported_reduction
+from flox.reindex import ReindexArrayType, ReindexStrategy, reindex_
+from flox.scan import groupby_scan
 
 from . import (
     ALL_FUNCS,
