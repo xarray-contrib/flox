@@ -78,6 +78,10 @@ def _issorted(arr, ascending=True) -> bool:
         return bool((arr[:-1] >= arr[1:]).all())
 
 
+def _is_nanlen(reduction) -> bool:
+    return isinstance(reduction, str) and reduction == "nanlen"
+
+
 def _is_arg_reduction(func: T_Agg) -> bool:
     from .aggregations import Aggregation
 

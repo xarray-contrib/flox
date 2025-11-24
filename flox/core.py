@@ -109,6 +109,7 @@ from .lib import (
     _is_bool_supported_reduction,
     _is_first_last_reduction,
     _is_minmax_reduction,
+    _is_nanlen,
     _is_reindex_sparse_supported_reduction,
     _issorted,
     _postprocess_numbagg,
@@ -130,10 +131,6 @@ def _get_chunk_reduction(reduction_type: Literal["reduce", "argreduce"]) -> Call
         return chunk_argreduce
     else:
         raise ValueError(f"Unknown reduction type: {reduction_type}")
-
-
-def is_nanlen(reduction: T_Func) -> bool:
-    return isinstance(reduction, str) and reduction == "nanlen"
 
 
 def _move_reduce_dims_to_end(arr: np.ndarray, axis: T_Axes) -> np.ndarray:
@@ -351,7 +348,7 @@ def chunk_reduce(
         # UGLY! but this is because the `var` breaks our design assumptions
         if empty and not is_var_chunk_reduction(reduction):
             result = np.full(shape=final_array_shape, fill_value=fv, like=array)
-        elif is_nanlen(reduction) and is_nanlen(previous_reduction):
+        elif _is_nanlen(reduction) and _is_nanlen(previous_reduction):
             result = results["intermediates"][-1]
         else:
             # fill_value here is necessary when reducing with "offset" groups
