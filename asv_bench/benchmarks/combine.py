@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 
 import flox
+import flox.dask
 
 from . import parameterized
 

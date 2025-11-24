@@ -39,13 +39,10 @@ from .xrutils import is_duck_dask_array, notnull
 
 
 def listify_groups(x: IntermediateDict):
-    import numpy as np
-
     return list(np.atleast_1d(x["groups"].squeeze()))
 
 
 def _find_unique_groups(x_chunk) -> np.ndarray:
-    import numpy as np
     from dask.base import flatten
     from dask.utils import deepmap
 
@@ -69,8 +66,6 @@ def _conc2(x_chunk, key1, key2=slice(None), axis=None) -> np.ndarray:
 def reindex_intermediates(
     x: IntermediateDict, agg: Aggregation, unique_groups, array_type
 ) -> IntermediateDict:
-    import numpy as np
-
     new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
     newx: IntermediateDict = {"groups": np.broadcast_to(unique_groups, new_shape)}
     newx["intermediates"] = tuple(
@@ -151,8 +146,6 @@ def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
 
 
 def _expand_dims(results: IntermediateDict) -> IntermediateDict:
-    import numpy as np
-
     results["intermediates"] = tuple(
         np.expand_dims(array, axis=DUMMY_AXIS) for array in results["intermediates"]
     )
