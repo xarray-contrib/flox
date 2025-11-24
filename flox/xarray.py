@@ -16,8 +16,8 @@ from .core import (
     _validate_expected_groups,
     groupby_reduce,
 )
-from .core import rechunk_for_blockwise as rechunk_array_for_blockwise
-from .core import rechunk_for_cohorts as rechunk_array_for_cohorts
+from .rechunk import rechunk_for_blockwise as rechunk_array_for_blockwise
+from .rechunk import rechunk_for_cohorts as rechunk_array_for_cohorts
 from .reindex import ReindexStrategy
 
 if TYPE_CHECKING:

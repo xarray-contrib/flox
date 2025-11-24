@@ -26,12 +26,11 @@ from flox.core import (
     _validate_reindex,
     find_group_cohorts,
     groupby_reduce,
-    rechunk_for_blockwise,
-    rechunk_for_cohorts,
 )
 from flox.dask import _normalize_indexes, subset_to_blocks
 from flox.factorize import factorize_
 from flox.lib import _is_sparse_supported_reduction
+from flox.rechunk import rechunk_for_blockwise, rechunk_for_cohorts
 from flox.reindex import ReindexArrayType, ReindexStrategy, reindex_
 from flox.scan import groupby_scan
 

@@ -4,12 +4,9 @@
 
 from . import cache
 from .aggregations import Aggregation, Scan, is_supported_aggregation
-from .core import (
-    groupby_reduce,
-    rechunk_for_blockwise,
-    rechunk_for_cohorts,
-)
+from .core import groupby_reduce
 from .options import set_options
+from .rechunk import rechunk_for_blockwise, rechunk_for_cohorts
 from .reindex import ReindexArrayType, ReindexStrategy
 from .scan import groupby_scan
 
