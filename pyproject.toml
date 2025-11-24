@@ -155,7 +155,6 @@ module=[
     "scipy.*",
     "sparse.*",
     "toolz.*",
-    "xarray.*",
 ]
 ignore_missing_imports = true
 
