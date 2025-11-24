@@ -71,6 +71,13 @@ def identity(x: T) -> T:
     return x
 
 
+def _issorted(arr, ascending=True) -> bool:
+    if ascending:
+        return bool((arr[:-1] <= arr[1:]).all())
+    else:
+        return bool((arr[:-1] >= arr[1:]).all())
+
+
 def _is_arg_reduction(func: T_Agg) -> bool:
     from .aggregations import Aggregation
 

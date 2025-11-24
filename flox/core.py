@@ -5,7 +5,6 @@ import itertools
 import logging
 import math
 import operator
-import warnings
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -20,7 +19,6 @@ from typing import (
 )
 
 import numpy as np
-import numpy_groupies as npg
 import pandas as pd
 import toolz as tlz
 from scipy.sparse import csc_array, csr_array
@@ -36,7 +34,6 @@ from .aggregations import (
     is_var_chunk_reduction,
     quantile_new_dims_func,
 )
-from .cache import memoize
 from .factorize import (
     _factorize_multiple,
     factorize_,
@@ -118,15 +115,9 @@ from .lib import (
     _is_first_last_reduction,
     _is_minmax_reduction,
     _is_reindex_sparse_supported_reduction,
+    _issorted,
     _postprocess_numbagg,
 )
-
-
-def _issorted(arr: np.ndarray, ascending=True) -> bool:
-    if ascending:
-        return bool((arr[:-1] <= arr[1:]).all())
-    else:
-        return bool((arr[:-1] >= arr[1:]).all())
 
 
 def _get_expected_groups(by: T_By, sort: bool) -> T_ExpectIndex:
@@ -162,42 +153,6 @@ def _collapse_axis(arr: np.ndarray, naxis: int) -> np.ndarray:
     """Reshape so that the last `naxis` axes are collapsed to one axis."""
     newshape = arr.shape[:-naxis] + (math.prod(arr.shape[-naxis:]),)
     return arr.reshape(newshape)
-
-
-@memoize
-def _get_optimal_chunks_for_groups(chunks, labels):
-    chunkidx = np.cumsum(chunks) - 1
-    # what are the groups at chunk boundaries
-    labels_at_chunk_bounds = pd.unique(labels[chunkidx])
-    # what's the last index of all groups
-    last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
-    # what's the last index of groups at the chunk boundaries.
-    lastidx = last_indexes[labels_at_chunk_bounds]
-
-    if len(chunkidx) == len(lastidx) and (chunkidx == lastidx).all():
-        return chunks
-
-    first_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="first")
-    firstidx = first_indexes[labels_at_chunk_bounds]
-
-    newchunkidx = [0]
-    for c, f, l in zip(chunkidx, firstidx, lastidx):  # noqa
-        Δf = abs(c - f)
-        Δl = abs(c - l)
-        if c == 0 or newchunkidx[-1] > l:
-            continue
-        f = f.item()  # noqa
-        l = l.item()  # noqa
-        if Δf < Δl and f > newchunkidx[-1]:
-            newchunkidx.append(f)
-        else:
-            newchunkidx.append(l + 1)
-    if newchunkidx[-1] != chunkidx[-1] + 1:
-        newchunkidx.append(chunkidx[-1] + 1)
-    newchunks = np.diff(newchunkidx)
-
-    assert sum(newchunks) == sum(chunks)
-    return tuple(newchunks)
 
 
 def _unique(a: np.ndarray) -> np.ndarray:
@@ -806,132 +761,6 @@ def _finalize_results(
     return finalized
 
 
-def _aggregate(
-    x_chunk,
-    combine: Callable,
-    agg: Aggregation,
-    expected_groups: pd.Index | None,
-    axis: T_Axes,
-    keepdims: bool,
-    fill_value: Any,
-    reindex: ReindexStrategy,
-) -> FinalResultsDict:
-    """Final aggregation step of tree reduction"""
-    results = combine(x_chunk, agg, axis, keepdims, is_aggregate=True)
-    return _finalize_results(results, agg, axis, expected_groups, reindex=reindex)
-
-
-def _expand_dims(results: IntermediateDict) -> IntermediateDict:
-    results["intermediates"] = tuple(
-        np.expand_dims(array, axis=DUMMY_AXIS) for array in results["intermediates"]
-    )
-    return results
-
-
-def _find_unique_groups(x_chunk) -> np.ndarray:
-    from dask.base import flatten
-    from dask.utils import deepmap
-
-    unique_groups = _unique(np.asarray(tuple(flatten(deepmap(listify_groups, x_chunk)))))
-    unique_groups = unique_groups[notnull(unique_groups)]
-
-    if len(unique_groups) == 0:
-        unique_groups = np.array([np.nan])
-    return unique_groups
-
-
-def _simple_combine(
-    x_chunk,
-    agg: Aggregation,
-    axis: T_Axes,
-    keepdims: bool,
-    reindex: ReindexStrategy,
-    is_aggregate: bool = False,
-) -> IntermediateDict:
-    """
-    'Simple' combination of blockwise results.
-
-    1. After the blockwise groupby-reduce, all blocks contain a value for all possible groups,
-       and are of the same shape; i.e. reindex must have been True
-    2. _expand_dims was used to insert an extra axis DUMMY_AXIS
-    3. Here we concatenate along DUMMY_AXIS, and then call the combine function along
-       DUMMY_AXIS
-    4. At the final aggregate step, we squeeze out DUMMY_AXIS
-    """
-    from dask.array.core import deepfirst
-    from dask.utils import deepmap
-
-    if not reindex.blockwise:
-        # We didn't reindex at the blockwise step
-        # So now reindex before combining by reducing along DUMMY_AXIS
-        unique_groups = _find_unique_groups(x_chunk)
-        x_chunk = deepmap(
-            partial(
-                reindex_intermediates,
-                agg=agg,
-                unique_groups=unique_groups,
-                array_type=reindex.array_type,
-            ),
-            x_chunk,
-        )
-    else:
-        unique_groups = deepfirst(x_chunk)["groups"]
-
-    results: IntermediateDict = {"groups": unique_groups}
-    results["intermediates"] = []
-    axis_ = axis[:-1] + (DUMMY_AXIS,)
-    for idx, combine in enumerate(agg.simple_combine):
-        array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis_)
-        assert array.ndim >= 2
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
-            assert callable(combine)
-            result = combine(array, axis=axis_, keepdims=True)
-        if is_aggregate:
-            # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
-            # can't just pass DUMMY_AXIS, because of sparse.COO
-            result = result.squeeze(range(result.ndim)[DUMMY_AXIS])
-        results["intermediates"].append(result)
-    return results
-
-
-def _conc2(x_chunk, key1, key2=slice(None), axis: T_Axes | None = None) -> np.ndarray:
-    """copied from dask.array.reductions.mean_combine"""
-    from dask.array.core import _concatenate2
-    from dask.utils import deepmap
-
-    mapped = deepmap(lambda x: x[key1][key2], x_chunk)
-    return _concatenate2(mapped, axes=axis)
-
-    # This doesn't seem to improve things at all; and some tests fail...
-    # from dask.array.core import concatenate3
-    # for _ in range(mapped[0].ndim-1):
-    #    mapped = [mapped]
-    # return concatenate3(mapped)
-
-
-def reindex_intermediates(
-    x: IntermediateDict, agg: Aggregation, unique_groups, array_type
-) -> IntermediateDict:
-    new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
-    newx: IntermediateDict = {"groups": np.broadcast_to(unique_groups, new_shape)}
-    newx["intermediates"] = tuple(
-        reindex_(
-            v,
-            from_=np.atleast_1d(x["groups"].squeeze()),
-            to=pd.Index(unique_groups),
-            fill_value=f,
-            array_type=array_type,
-        )
-        for v, f in zip(x["intermediates"], agg.fill_value["intermediate"])
-    )
-    return newx
-
-
-def listify_groups(x: IntermediateDict):
-    return list(np.atleast_1d(x["groups"].squeeze()))
-
-
 def _reduce_blockwise(
     array,
     by,
@@ -979,13 +808,6 @@ def _reduce_blockwise(
 
     result = _finalize_results(results, agg, axis, expected_groups, reindex=reindex)
     return result
-
-
-def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
-    from dask.array.core import deepfirst
-
-    # deepfirst should be not be needed here but sometimes we receive a list of dict?
-    return deepfirst(result_dict)[key]
 
 
 def _validate_reindex(

@@ -12,13 +12,13 @@ N = 1000
 
 def _get_combine(combine):
     if combine == "grouped":
-        return partial(flox.core._grouped_combine, engine="numpy")
+        return partial(flox.dask._grouped_combine, engine="numpy")
     else:
         try:
             reindex = flox.ReindexStrategy(blockwise=False)
         except AttributeError:
             reindex = False
-        return partial(flox.core._simple_combine, reindex=reindex)
+        return partial(flox.dask._simple_combine, reindex=reindex)
 
 
 class Combine:

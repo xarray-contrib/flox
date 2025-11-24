@@ -21,26 +21,159 @@ if TYPE_CHECKING:
     from .types import DaskArray, Graph, IntermediateDict, T_By
 
 from .core import (
-    _aggregate,
-    _conc2,
-    _expand_dims,
-    _extract_result,
-    _find_unique_groups,
+    DUMMY_AXIS,
     _get_chunk_reduction,
-    _issorted,
     _reduce_blockwise,
-    _simple_combine,
     _unique,
     chunk_argreduce,
     chunk_reduce,
-    reindex_intermediates,
 )
-from .lib import _is_arg_reduction, _is_first_last_reduction, identity
+from .lib import _is_arg_reduction, _is_first_last_reduction, _issorted, identity
 from .reindex import (
     ReindexArrayType,
     ReindexStrategy,
+    reindex_,
 )
-from .xrutils import is_duck_dask_array
+from .types import FinalResultsDict, IntermediateDict
+from .xrutils import is_duck_dask_array, notnull
+
+
+def listify_groups(x: IntermediateDict):
+    import numpy as np
+
+    return list(np.atleast_1d(x["groups"].squeeze()))
+
+
+def _find_unique_groups(x_chunk) -> np.ndarray:
+    import numpy as np
+    from dask.base import flatten
+    from dask.utils import deepmap
+
+    unique_groups = _unique(np.asarray(tuple(flatten(deepmap(listify_groups, x_chunk)))))
+    unique_groups = unique_groups[notnull(unique_groups)]
+
+    if len(unique_groups) == 0:
+        unique_groups = np.array([np.nan])
+    return unique_groups
+
+
+def _conc2(x_chunk, key1, key2=slice(None), axis=None) -> np.ndarray:
+    """copied from dask.array.reductions.mean_combine"""
+    from dask.array.core import _concatenate2
+    from dask.utils import deepmap
+
+    mapped = deepmap(lambda x: x[key1][key2], x_chunk)
+    return _concatenate2(mapped, axes=axis)
+
+
+def reindex_intermediates(
+    x: IntermediateDict, agg: Aggregation, unique_groups, array_type
+) -> IntermediateDict:
+    import numpy as np
+
+    new_shape = x["groups"].shape[:-1] + (len(unique_groups),)
+    newx: IntermediateDict = {"groups": np.broadcast_to(unique_groups, new_shape)}
+    newx["intermediates"] = tuple(
+        reindex_(
+            v,
+            from_=np.atleast_1d(x["groups"].squeeze()),
+            to=pd.Index(unique_groups),
+            fill_value=f,
+            array_type=array_type,
+        )
+        for v, f in zip(x["intermediates"], agg.fill_value["intermediate"])
+    )
+    return newx
+
+
+def _simple_combine(
+    x_chunk,
+    agg: Aggregation,
+    axis,
+    keepdims: bool,
+    reindex: ReindexStrategy,
+    is_aggregate: bool = False,
+) -> IntermediateDict:
+    """
+    'Simple' combination of blockwise results.
+
+    1. After the blockwise groupby-reduce, all blocks contain a value for all possible groups,
+       and are of the same shape; i.e. reindex must have been True
+    2. _expand_dims was used to insert an extra axis DUMMY_AXIS
+    3. Here we concatenate along DUMMY_AXIS, and then call the combine function along
+       DUMMY_AXIS
+    4. At the final aggregate step, we squeeze out DUMMY_AXIS
+    """
+    import warnings
+
+    from dask.array.core import deepfirst
+    from dask.utils import deepmap
+
+    if not reindex.blockwise:
+        # We didn't reindex at the blockwise step
+        # So now reindex before combining by reducing along DUMMY_AXIS
+        unique_groups = _find_unique_groups(x_chunk)
+        x_chunk = deepmap(
+            partial(
+                reindex_intermediates,
+                agg=agg,
+                unique_groups=unique_groups,
+                array_type=reindex.array_type,
+            ),
+            x_chunk,
+        )
+    else:
+        unique_groups = deepfirst(x_chunk)["groups"]
+
+    results: IntermediateDict = {"groups": unique_groups}
+    results["intermediates"] = []
+    axis_ = axis[:-1] + (DUMMY_AXIS,)
+    for idx, combine in enumerate(agg.simple_combine):
+        array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis_)
+        assert array.ndim >= 2
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+            assert callable(combine)
+            result = combine(array, axis=axis_, keepdims=True)
+        if is_aggregate:
+            # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
+            # can't just pass DUMMY_AXIS, because of sparse.COO
+            result = result.squeeze(range(result.ndim)[DUMMY_AXIS])
+        results["intermediates"].append(result)
+    return results
+
+
+def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
+    from dask.array.core import deepfirst
+
+    # deepfirst should be not be needed here but sometimes we receive a list of dict?
+    return deepfirst(result_dict)[key]
+
+
+def _expand_dims(results: IntermediateDict) -> IntermediateDict:
+    import numpy as np
+
+    results["intermediates"] = tuple(
+        np.expand_dims(array, axis=DUMMY_AXIS) for array in results["intermediates"]
+    )
+    return results
+
+
+def _aggregate(
+    x_chunk,
+    combine,
+    agg: Aggregation,
+    expected_groups,
+    axis,
+    keepdims: bool,
+    fill_value,
+    reindex: ReindexStrategy,
+) -> FinalResultsDict:
+    """Final aggregation step of tree reduction"""
+    from .core import _finalize_results
+
+    results = combine(x_chunk, agg, axis, keepdims, is_aggregate=True)
+    return _finalize_results(results, agg, axis, expected_groups, reindex=reindex)
 
 
 def _unify_chunks(array, by):

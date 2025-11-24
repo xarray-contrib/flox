@@ -10,8 +10,11 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy_groupies as npg
+import pandas as pd
 
 from .aggregations import _atleast_1d
+from .cache import memoize
 from .factorize import factorize_
 from .options import OPTIONS
 
@@ -22,12 +25,40 @@ if TYPE_CHECKING:
 logger = logging.getLogger("flox")
 
 
+@memoize
 def _get_optimal_chunks_for_groups(chunks, labels):
-    """Find optimal rechunking for groups."""
-    # Import here to avoid circular imports
-    from .core import _get_optimal_chunks_for_groups as _get_optimal_chunks
+    chunkidx = np.cumsum(chunks) - 1
+    # what are the groups at chunk boundaries
+    labels_at_chunk_bounds = pd.unique(labels[chunkidx])
+    # what's the last index of all groups
+    last_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="last")
+    # what's the last index of groups at the chunk boundaries.
+    lastidx = last_indexes[labels_at_chunk_bounds]
 
-    return _get_optimal_chunks(chunks, labels)
+    if len(chunkidx) == len(lastidx) and (chunkidx == lastidx).all():
+        return chunks
+
+    first_indexes = npg.aggregate_numpy.aggregate(labels, np.arange(len(labels)), func="first")
+    firstidx = first_indexes[labels_at_chunk_bounds]
+
+    newchunkidx = [0]
+    for c, f, l in zip(chunkidx, firstidx, lastidx):  # noqa
+        Δf = abs(c - f)
+        Δl = abs(c - l)
+        if c == 0 or newchunkidx[-1] > l:
+            continue
+        f = f.item()  # noqa
+        l = l.item()  # noqa
+        if Δf < Δl and f > newchunkidx[-1]:
+            newchunkidx.append(f)
+        else:
+            newchunkidx.append(l + 1)
+    if newchunkidx[-1] != chunkidx[-1] + 1:
+        newchunkidx.append(chunkidx[-1] + 1)
+    newchunks = np.diff(newchunkidx)
+
+    assert sum(newchunks) == sum(chunks)
+    return tuple(newchunks)
 
 
 def rechunk_for_cohorts(
