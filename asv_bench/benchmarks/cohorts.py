@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 import flox
+import flox.cohorts
 import flox.factorize
 
 from .helpers import codes_for_resampling
@@ -27,7 +28,7 @@ class Cohorts:
         return containment.todense()
 
     def chunks_cohorts(self):
-        return flox.core.find_group_cohorts(
+        return flox.cohorts.find_group_cohorts(
             self.by,
             [self.array.chunks[ax] for ax in self.axis],
             expected_groups=self.expected,
@@ -35,10 +36,10 @@ class Cohorts:
 
     def bitmask(self):
         chunks = [self.array.chunks[ax] for ax in self.axis]
-        return flox.core._compute_label_chunk_bitmask(self.by, chunks, self.expected[-1] + 1)
+        return flox.cohorts._compute_label_chunk_bitmask(self.by, chunks, self.expected[-1] + 1)
 
     def time_find_group_cohorts(self):
-        flox.core.find_group_cohorts(
+        flox.cohorts.find_group_cohorts(
             self.by,
             [self.array.chunks[ax] for ax in self.axis],
             expected_groups=self.expected,

@@ -18,12 +18,12 @@ import flox.dask
 from flox import set_options, xrutils
 from flox import xrdtypes as dtypes
 from flox.aggregations import Aggregation, _initialize_aggregation
+from flox.cohorts import find_group_cohorts
 from flox.core import (
     HAS_NUMBAGG,
     _choose_engine,
     _convert_expected_groups_to_index,
     _validate_reindex,
-    find_group_cohorts,
     groupby_reduce,
 )
 from flox.dask import _normalize_indexes, subset_to_blocks
