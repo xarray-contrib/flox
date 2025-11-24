@@ -16,7 +16,6 @@ from typing import (
     Literal,
     TypeAlias,
     TypeVar,
-    Union,
     overload,
 )
 
@@ -107,10 +106,9 @@ if TYPE_CHECKING:
     T_MethodOpt: TypeAlias = None | Literal["map-reduce", "blockwise", "cohorts"]
     T_IsBins: TypeAlias = bool | Sequence[bool]
 
-T = TypeVar("T")
+from .types import FinalResultsDict, IntermediateDict
 
-IntermediateDict = dict[str | Callable, Any]
-FinalResultsDict = dict[str, Union["DaskArray", "CubedArray", np.ndarray]]
+T = TypeVar("T")
 
 # This dummy axis is inserted using np.expand_dims
 # and then reduced over during the combine stage by

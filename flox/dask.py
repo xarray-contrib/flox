@@ -15,10 +15,10 @@ import toolz as tlz
 
 if TYPE_CHECKING:
     from .aggregations import Aggregation, Scan
-    from .core import IntermediateDict, T_Axes, T_Engine, T_Method
+    from .core import T_Axes, T_Engine, T_Method
     from .lib import ArrayLayer
     from .reindex import ReindexArrayType, ReindexStrategy
-    from .types import DaskArray, Graph, T_By
+    from .types import DaskArray, Graph, IntermediateDict, T_By
 
 from .core import (
     _aggregate,
