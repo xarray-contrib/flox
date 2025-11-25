@@ -790,7 +790,7 @@ def reverse(a: AlignedArrays) -> AlignedArrays:
 
 
 def scan_binary_op(left_state: ScanState, right_state: ScanState, *, agg: Scan) -> ScanState:
-    from .core import reindex_
+    from .reindex import reindex_
 
     assert left_state.state is not None
     left = left_state.state
@@ -1030,7 +1030,7 @@ def is_supported_aggregation(array, func: str) -> bool:
         array = array._meta
 
     if isinstance(array, sparse_array_type):
-        from flox.core import _is_sparse_supported_reduction
+        from flox.lib import _is_sparse_supported_reduction
 
         return _is_sparse_supported_reduction(func)
 

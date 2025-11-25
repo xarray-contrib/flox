@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 import flox
+from flox.factorize import _factorize_multiple
 
 from .helpers import codes_for_resampling
 
@@ -26,7 +27,7 @@ class Cohorts:
         return containment.todense()
 
     def chunks_cohorts(self):
-        return flox.core.find_group_cohorts(
+        return flox.cohorts.find_group_cohorts(
             self.by,
             [self.array.chunks[ax] for ax in self.axis],
             expected_groups=self.expected,
@@ -34,10 +35,10 @@ class Cohorts:
 
     def bitmask(self):
         chunks = [self.array.chunks[ax] for ax in self.axis]
-        return flox.core._compute_label_chunk_bitmask(self.by, chunks, self.expected[-1] + 1)
+        return flox.cohorts._compute_label_chunk_bitmask(self.by, chunks, self.expected[-1] + 1)
 
     def time_find_group_cohorts(self):
-        flox.core.find_group_cohorts(
+        flox.cohorts.find_group_cohorts(
             self.by,
             [self.array.chunks[ax] for ax in self.axis],
             expected_groups=self.expected,
@@ -89,7 +90,7 @@ class NWMMidwest(Cohorts):
         y = np.repeat(np.arange(30), 60)
         by = x[np.newaxis, :] * y[:, np.newaxis]
 
-        self.by = flox.core._factorize_multiple((by,), expected_groups=(None,), any_by_dask=False)[0][0]
+        self.by = _factorize_multiple((by,), expected_groups=(None,), any_by_dask=False)[0][0]
 
         self.array = dask.array.ones(self.by.shape, chunks=(350, 350))
         self.axis = (-2, -1)
@@ -105,7 +106,7 @@ class ERA5Dataset:
         self.array = dask.array.random.random((721, 1440, len(self.time)), chunks=(-1, -1, 48))
 
     def rechunk(self):
-        self.array = flox.core.rechunk_for_cohorts(
+        self.array = flox.rechunk_for_cohorts(
             self.array,
             -1,
             self.by,
@@ -149,7 +150,7 @@ class ERA5MonthHour(ERA5Dataset, Cohorts):
     def setup(self, *args, **kwargs):
         super().__init__()
         by = (self.time.dt.month.values, self.time.dt.hour.values)
-        ret = flox.core._factorize_multiple(
+        ret = _factorize_multiple(
             by,
             (pd.Index(np.arange(1, 13)), pd.Index(np.arange(1, 25))),
             any_by_dask=False,
@@ -176,7 +177,7 @@ class PerfectMonthly(Cohorts):
         self.expected = pd.RangeIndex(self.by.max() + 1)
 
     def rechunk(self):
-        self.array = flox.core.rechunk_for_cohorts(
+        self.array = flox.rechunk_for_cohorts(
             self.array,
             -1,
             self.by,
