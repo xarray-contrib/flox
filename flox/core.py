@@ -1855,7 +1855,11 @@ def dask_groupby_agg(
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
     labels_are_unknown = is_duck_dask_array(by_input) and expected_groups is None
-    do_grouped_combine = (
+    # For reductions with new_dims_func (quantile, topk), we must use _simple_combine
+    # because the intermediate results have an extra dimension that needs to be reduced
+    # along DUMMY_AXIS, not along the groups axis.
+    must_use_simple_combine = agg.new_dims_func is not None
+    do_grouped_combine = not must_use_simple_combine and (
         _is_arg_reduction(agg)
         or labels_are_unknown
         or (_is_first_last_reduction(agg) and array.dtype.kind != "f")
