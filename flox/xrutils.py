@@ -425,7 +425,7 @@ def topk(a: np.ndarray, k: int, axis, keepdims: bool = True) -> np.ndarray:
     of their LICENSE.
     """
     assert keepdims is True
-    (axis,) = normalize_axis_tuple(axis, a.ndim)
+    (axis,) = normalize_axis_tuple(axis, a.ndim)  # type: ignore[misc]
     if abs(k) >= a.shape[axis]:
         return a
 
