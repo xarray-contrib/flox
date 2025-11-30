@@ -426,3 +426,14 @@ def topk(a: np.ndarray, k: int, axis, keepdims: bool = True) -> np.ndarray:
     k_slice = slice(-k, None) if k > 0 else slice(-k)
     result = a[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
     return result.astype(a.dtype, copy=False)
+
+
+def nantopk(a: np.ndarray, k: int, axis, keepdims: bool = True) -> np.ndarray:
+    """NaN-aware version of topk.
+
+    Replaces NaN with -inf (for k > 0) or +inf (for k < 0) before calling topk,
+    so that NaN values don't end up in the top/bottom k results.
+    """
+    fill_val = -np.inf if k > 0 else np.inf
+    a = np.where(isnull(a), fill_val, a)
+    return topk(a, k=k, axis=axis, keepdims=keepdims)
