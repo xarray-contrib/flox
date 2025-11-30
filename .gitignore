@@ -113,3 +113,18 @@ venv.bak/
 
 # Git worktrees
 worktrees/
+
+# Auto-generated version file
+flox/_version.py
+
+# Temporary files
+Untitled.ipynb
+*.rej
+*.py.rej
+mutmut-cache
+mydask.png
+profile.json
+profile.html
+test.png
+uv.lock
+devel/
