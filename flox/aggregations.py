@@ -586,13 +586,28 @@ nanquantile = Aggregation(
 )
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
+
+
+def _topk_finalize(values, counts, *, k):
+    """Convert -inf fill values back to NaN for topk results."""
+    import numpy as np
+
+    # After combine with nantopk, -inf values need to be converted to NaN
+    # k > 0: -inf was used as fill value
+    # k < 0: +inf was used as fill value
+    fill_val = -np.inf if k > 0 else np.inf
+    return np.where(values == fill_val, np.nan, values)
+
+
 topk = Aggregation(
     name="topk",
+    # FIXME: set dtype.INF when k < 0
     fill_value=(dtypes.NINF, 0),
     final_fill_value=dtypes.NA,
     # FIXME: set numpy
     chunk=("topk", "nanlen"),
-    combine=(xrutils.topk, "sum"),
+    combine=(xrutils.nantopk, "sum"),
+    finalize=_topk_finalize,
     new_dims_func=topk_new_dims_func,
     preserves_dtype=True,
 )
@@ -870,9 +885,6 @@ def _initialize_aggregation(
         agg.fill_value["numpy"] = (0,)
     else:
         agg.fill_value["numpy"] = (agg.fill_value[func],)
-
-    if agg.name == "topk":
-        min_count = max(min_count or 0, abs(agg.finalize_kwargs["k"]))
 
     # This is needed for the dask pathway.
     # Because we use intermediate fill_value since a group could be
