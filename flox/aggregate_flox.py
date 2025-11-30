@@ -124,14 +124,29 @@ def quantile_or_topk(
         virtual_index = (actual_sizes - k) if k > 0 else (np.zeros_like(actual_sizes) + abs(k) - 1)
         # virtual_index is relative to group starts, so now offset that
         virtual_index[..., 1:] += offset[..., :-1]
-        kth = np.unique(virtual_index)
-        kth = kth[kth >= 0]
-        kth[kth >= array.shape[axis]] = array.shape[axis] - 1
         k_offset = param.reshape((abs(k),) + (1,) * virtual_index.ndim)
         lo_ = k_offset + virtual_index[np.newaxis, ...]
-        not_enough_elems = actual_sizes < np.abs(k)
-        lo_[..., not_enough_elems] = 0
-        badmask = np.broadcast_to(not_enough_elems, idxshape) | nanmask
+        # For groups with fewer than k elements, clamp extraction indices to valid range
+        # and mark out-of-bounds positions for filling with fill_value.
+        # Compute group boundaries: starts = [0, offset[:-1]], ends = offset
+        # We prepend 0 to offset[:-1] to get group start positions
+        group_starts = np.insert(offset[..., :-1], 0, 0, axis=-1)
+
+        # Mark positions outside group boundaries (before clamping to detect invalid indices)
+        # Broadcasting happens implicitly in comparison
+        badmask = (lo_ < group_starts) | (lo_ >= offset)
+
+        # Clamp lo_ in-place to [group_starts, array.shape[axis]-1]
+        # Using out= avoids intermediate array allocations
+        np.clip(lo_, group_starts, array.shape[axis] - 1, out=lo_)
+        # Note: we don't include nanmask here because for intermediate chunk results,
+        # we want to keep partial results. nanmask is used separately for final output.
+        # kth must include ALL indices we'll extract, not just the starting index per group.
+        # np.partition only guarantees correct values at kth positions; other positions may
+        # have elements from different groups due to how introselect works with complex numbers.
+        kth = np.unique(lo_)
+        kth = kth[kth >= 0]
+        kth[kth >= array.shape[axis]] = array.shape[axis] - 1
 
     # partition the complex array in-place
     labels_broadcast = np.broadcast_to(group_idx, array.shape)
