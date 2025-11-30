@@ -7,9 +7,13 @@ sphinx:
 build:
   os: "ubuntu-lts-latest"
   tools:
-    python: "mambaforge-latest"
+    python: "3.12"
 
-conda:
-  environment: ci/docs.yml
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - docs
 
 formats: []

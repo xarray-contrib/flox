@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
+import toolz
 import xarray as xr
 from packaging.version import Version
 
@@ -16,14 +17,14 @@ from .aggregations import (
     topk_new_dims_func,
 )
 from .core import (
-    ReindexStrategy,
     _convert_expected_groups_to_index,
     _get_expected_groups,
     _validate_expected_groups,
     groupby_reduce,
 )
-from .core import rechunk_for_blockwise as rechunk_array_for_blockwise
-from .core import rechunk_for_cohorts as rechunk_array_for_cohorts
+from .rechunk import rechunk_for_blockwise as rechunk_array_for_blockwise
+from .rechunk import rechunk_for_cohorts as rechunk_array_for_cohorts
+from .reindex import ReindexStrategy
 
 if TYPE_CHECKING:
     from xarray.core.types import T_DataArray, T_Dataset
@@ -267,7 +268,7 @@ def xarray_reduce(
     try:
         from xarray.indexes import PandasMultiIndex
     except ImportError:
-        PandasMultiIndex = tuple()  # type: ignore[assignment, misc]
+        PandasMultiIndex = tuple()  # type: ignore[misc,assignment,unused-ignore]
 
     more_drop = set()
     for var in maybe_drop:
@@ -604,7 +605,7 @@ def rechunk_for_blockwise(obj: T_DataArray | T_Dataset, dim: str, labels: T_Data
     DataArray or Dataset
         Xarray object with rechunked arrays.
     """
-    return _rechunk(rechunk_array_for_blockwise, obj, dim, labels)
+    return _rechunk(toolz.compose(toolz.last, rechunk_array_for_blockwise), obj, dim, labels)
 
 
 def _rechunk(func, obj, dim, labels, **kwargs):

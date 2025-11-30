@@ -4,6 +4,7 @@
 import datetime
 import importlib
 from collections.abc import Iterable
+from types import ModuleType
 from typing import Any
 
 import numpy as np
@@ -46,13 +47,20 @@ try:
 except ImportError:
     cftime = None
 
+cubed: ModuleType | None
+try:
+    import cubed  # type: ignore[no-redef]
+except ImportError:
+    cubed = None
 
+dask: ModuleType | None
 try:
     import dask.array
 
-    dask_array_type = dask.array.Array
+    dask_array_type = dask.array.Array  # type: ignore[union-attr]
 except ImportError:
-    dask_array_type = ()  # type: ignore[assignment, misc]
+    dask = None
+    dask_array_type = ()
 
 
 def asarray(data, xp=np):
@@ -80,13 +88,9 @@ def is_chunked_array(x) -> bool:
 
 
 def is_dask_collection(x):
-    try:
-        import dask
-
-        return dask.is_dask_collection(x)
-
-    except ImportError:
+    if dask is None:
         return False
+    return dask.is_dask_collection(x)
 
 
 def is_duck_dask_array(x):
@@ -94,12 +98,9 @@ def is_duck_dask_array(x):
 
 
 def is_duck_cubed_array(x):
-    try:
-        import cubed
-
-        return is_duck_array(x) and isinstance(x, cubed.Array)
-    except ImportError:
+    if cubed is None:
         return False
+    return is_duck_array(x) and isinstance(x, cubed.Array)
 
 
 class ReprObject:
@@ -141,12 +142,15 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
         or isinstance(value, str | bytes | dict)
         or not (
             isinstance(value, (Iterable,) + NON_NUMPY_SUPPORTED_ARRAY_TYPES)
-            or hasattr(value, "__array_function__")
+            or hasattr(value, "__array_function__")  # type: ignore[unreachable]
         )
     )
 
 
 def notnull(data):
+    if isinstance(data, tuple) and len(data) == 3 and data == (0, 0, 0):
+        # boo: another special case for Var
+        return True
     if not is_duck_array(data):
         data = np.asarray(data)
 
@@ -164,6 +168,9 @@ def notnull(data):
 
 
 def isnull(data: Any):
+    if isinstance(data, tuple) and len(data) == 3 and data == (0, 0, 0):
+        # boo: another special case for Var
+        return False
     if data is None:
         return False
     if not is_duck_array(data):
@@ -183,13 +190,13 @@ def isnull(data: Any):
     else:
         # at this point, array should have dtype=object
         if isinstance(data, (np.ndarray, dask_array_type)):  # noqa
-            return pd.isnull(data)  # type: ignore[arg-type]
+            return pd.isnull(data)
         else:
             # Not reachable yet, but intended for use with other duck array
             # types. For full consistency with pandas, we should accept None as
             # a null value as well as NaN, but it isn't clear how to do this
             # with duck typing.
-            return data != data
+            return data != data  # type: ignore[unreachable]
 
 
 def datetime_to_numeric(array, offset=None, datetime_unit=None, dtype=float):

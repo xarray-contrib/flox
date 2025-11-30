@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from .core import _unique, find_group_cohorts
+from .cohorts import find_group_cohorts
+from .core import _unique
 
 
 def draw_mesh(

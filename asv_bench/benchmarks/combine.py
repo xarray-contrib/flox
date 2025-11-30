@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 
 import flox
+from flox.dask import _grouped_combine, _simple_combine
 
 from . import parameterized
 
@@ -12,13 +13,13 @@ N = 1000
 
 def _get_combine(combine):
     if combine == "grouped":
-        return partial(flox.core._grouped_combine, engine="numpy")
+        return partial(_grouped_combine, engine="numpy")
     else:
         try:
             reindex = flox.ReindexStrategy(blockwise=False)
         except AttributeError:
             reindex = False
-        return partial(flox.core._simple_combine, reindex=reindex)
+        return partial(_simple_combine, reindex=reindex)
 
 
 class Combine:

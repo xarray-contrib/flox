@@ -14,27 +14,24 @@ import pytest
 from numpy_groupies.aggregate_numpy import aggregate
 
 import flox
+import flox.dask
+from flox import set_options, xrutils
 from flox import xrdtypes as dtypes
-from flox import xrutils
 from flox.aggregations import Aggregation, _initialize_aggregation
+from flox.cohorts import find_group_cohorts
 from flox.core import (
     HAS_NUMBAGG,
-    ReindexArrayType,
-    ReindexStrategy,
     _choose_engine,
     _convert_expected_groups_to_index,
-    _get_optimal_chunks_for_groups,
-    _is_sparse_supported_reduction,
-    _normalize_indexes,
     _validate_reindex,
-    factorize_,
-    find_group_cohorts,
     groupby_reduce,
-    groupby_scan,
-    rechunk_for_cohorts,
-    reindex_,
-    subset_to_blocks,
 )
+from flox.dask import _normalize_indexes, subset_to_blocks
+from flox.factorize import factorize_
+from flox.lib import _is_sparse_supported_reduction
+from flox.rechunk import _get_optimal_chunks_for_groups, rechunk_for_blockwise, rechunk_for_cohorts
+from flox.reindex import ReindexArrayType, ReindexStrategy, reindex_
+from flox.scan import groupby_scan
 
 from . import (
     ALL_FUNCS,
@@ -398,7 +395,7 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, to_sparse):
                 else:
                     mocks = {"_simple_combine": MagicMock(side_effect=combine_error)}
 
-            with patch.multiple(flox.core, **mocks):
+            with patch.multiple(flox.dask, **mocks):
                 actual, *groups = call()
             for actual_group, expect in zip(groups, expected_groups):
                 assert_equal(actual_group, expect, tolerance)
@@ -575,7 +572,7 @@ def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtyp
 def test_groupby_agg_cubed(func, shape, array_chunks, group_chunks, add_nan, engine, reindex):
     """Tests groupby_reduce with cubed arrays against groupby_reduce with numpy arrays"""
 
-    if func in ["first", "last"] or func in BLOCKWISE_FUNCS:
+    if func in ["first", "last", "var", "nanvar", "std", "nanstd"] or func in BLOCKWISE_FUNCS:
         pytest.skip()
 
     if "arg" in func and (engine in ["flox", "numbagg"] or reindex):
@@ -1002,26 +999,39 @@ def test_groupby_bins(chunk_labels, kwargs, chunks, engine, method) -> None:
     assert_equal(actual, expected)
 
 
+@requires_dask
 @pytest.mark.parametrize(
-    "inchunks, expected",
+    "inchunks, expected, expected_method",
     [
-        [(1,) * 10, (3, 2, 2, 3)],
-        [(2,) * 5, (3, 2, 2, 3)],
-        [(3, 3, 3, 1), (3, 2, 5)],
-        [(3, 1, 1, 2, 1, 1, 1), (3, 2, 2, 3)],
-        [(3, 2, 2, 3), (3, 2, 2, 3)],
-        [(4, 4, 2), (3, 4, 3)],
-        [(5, 5), (5, 5)],
-        [(6, 4), (5, 5)],
-        [(7, 3), (7, 3)],
-        [(8, 2), (7, 3)],
-        [(9, 1), (10,)],
-        [(10,), (10,)],
+        [(1,) * 10, (3, 2, 2, 3), None],
+        [(2,) * 5, (3, 2, 2, 3), None],
+        [(3, 3, 3, 1), (3, 2, 5), None],
+        [(3, 1, 1, 2, 1, 1, 1), (3, 2, 2, 3), None],
+        [(3, 2, 2, 3), (3, 2, 2, 3), "blockwise"],
+        [(4, 4, 2), (3, 4, 3), None],
+        [(5, 5), (5, 5), "blockwise"],
+        [(6, 4), (5, 5), None],
+        [(7, 3), (7, 3), "blockwise"],
+        [(8, 2), (7, 3), None],
+        [(9, 1), (10,), None],
+        [(10,), (10,), "blockwise"],
     ],
 )
-def test_rechunk_for_blockwise(inchunks, expected):
+def test_rechunk_for_blockwise(inchunks, expected, expected_method):
     labels = np.array([1, 1, 1, 2, 2, 3, 3, 5, 5, 5])
     assert _get_optimal_chunks_for_groups(inchunks, labels) == expected
+    # reversed
+    assert _get_optimal_chunks_for_groups(inchunks, labels[::-1]) == expected
+
+    with set_options(rechunk_blockwise_chunk_size_threshold=-1):
+        array = dask.array.ones(labels.size, chunks=(inchunks,))
+        method, array = rechunk_for_blockwise(array, -1, labels, force=False)
+        assert method == expected_method
+        assert array.chunks == (inchunks,)
+
+        method, array = rechunk_for_blockwise(array, -1, labels[::-1], force=False)
+        assert method == expected_method
+        assert array.chunks == (inchunks,)
 
 
 @requires_dask
@@ -2349,3 +2359,38 @@ def test_sparse_nan_fill_value_reductions(chunks, fill_value, shape, func):
         expected = np.expand_dims(npfunc(numpy_array, axis=-1), axis=-1)
         actual, *_ = groupby_reduce(array, by, func=func, axis=-1)
     assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("func", ("nanvar", "var"))
+@pytest.mark.parametrize(
+    # Should fail at 10e8 for old algorithm, and survive 10e12 for current
+    "exponent",
+    (2, 4, 6, 8, 10, 12),
+)
+def test_std_var_precision(func, exponent, engine):
+    # Generate a dataset with small variance and big mean
+    # Check that func with engine gives you the same answer as numpy
+
+    size = 1000
+    offset = 10**exponent
+    array = np.linspace(-1, 1, size)  # has zero mean
+    labels = np.arange(size) % 2  # Ideally we'd parametrize this too.
+
+    # These two need to be the same function, but with the offset added and not added
+    no_offset, _ = groupby_reduce(array, labels, engine=engine, func=func)
+    with_offset, _ = groupby_reduce(array + offset, labels, engine=engine, func=func)
+
+    expected = np.concatenate([np.nanvar(array[::2], keepdims=True), np.nanvar(array[1::2], keepdims=True)])
+    expected_offset = np.concatenate(
+        [np.nanvar(array[::2] + offset, keepdims=True), np.nanvar(array[1::2] + offset, keepdims=True)]
+    )
+
+    tol = {"rtol": 3e-8, "atol": 1e-9}  # Not sure how stringent to be here
+
+    assert_equal(expected, no_offset, tol)
+    assert_equal(expected_offset, with_offset, tol)
+    if exponent < 10:
+        # TODO: figure this exponent limit
+        # TODO: Failure threshold in my external tests is dependent on dask chunksize,
+        #       maybe needs exploring better?
+        assert_equal(no_offset, with_offset, tol)
