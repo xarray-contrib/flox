@@ -379,6 +379,11 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, to_sparse):
                 with pytest.raises(NotImplementedError):
                     call()
                 continue
+            if func == "topk" and reindex is False:
+                # topk with reindex=False not yet supported
+                with pytest.raises(NotImplementedError, match="topk with reindex=False"):
+                    call()
+                continue
 
             if method == "blockwise":
                 # no combine necessary

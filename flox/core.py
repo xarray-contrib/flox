@@ -2671,6 +2671,12 @@ def groupby_reduce(
     if not is_duck_array(array):
         array = np.asarray(array)
 
+    # topk with reindex=False not yet supported
+    if func == "topk" and reindex is False:
+        raise NotImplementedError(
+            "topk with reindex=False is not yet supported. Use reindex=True or reindex=None."
+        )
+
     reindex = _validate_reindex(
         reindex,
         func,

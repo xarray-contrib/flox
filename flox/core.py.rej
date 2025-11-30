@@ -1,0 +1,10 @@
+diff a/flox/core.py b/flox/core.py	(rejected hunks)
+@@ -951,7 +951,7 @@ def factorize_(
+     if expected_groups is None:
+         expected_groups = (None,) * len(by)
+
+-    if len(by) > 2:
++    if len(by) > 4:
+         with ThreadPoolExecutor() as executor:
+             futures = [
+                 executor.submit(partial(_factorize_single, sort=sort, reindex=reindex), groupvar, expect)

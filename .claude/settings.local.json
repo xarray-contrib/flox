@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(git worktree:*)",
+      "Bash(python:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(y)",
+      "Bash(grep:*)",
+      "Bash(git push:*)",
+      "Bash(git rebase:*)",
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(gh pr checkout:*)",
+      "Bash(pytest:*)",
+      "WebSearch",
+      "Bash(uv sync:*)",
+      "Bash(uv run asv:*)",
+      "Bash(xargs ls:*)",
+      "Bash(pre-commit run:*)",
+      "Bash(twine check:*)",
+      "Bash(uv run:*)",
+      "Bash(/Users/deepak/repos/flox/flox/dask.py)",
+      "Bash(/tmp/core_after_2.py)",
+      "Bash(/tmp/scan_after_2.py)",
+      "Bash(/Users/deepak/repos/flox/tests/test_core.py)",
+      "Bash(git merge-base:*)",
+      "Bash(git stash:*)",
+      "Bash(/tmp/scan.py:*)",
+      "Bash(/tmp/factorize.py)",
+      "Bash(/tmp/reindex.py)",
+      "Bash(/tmp/dask.py)",
+      "Bash(/tmp/cubed.py)"
+    ],
+    "deny": []
+  }
+}

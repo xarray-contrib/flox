@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run asv:*)",
+      "Bash(asv run:*)",
+      "Bash(python -c:*)",
+      "Bash(uv run python:*)",
+      "Bash(cat:*)",
+      "Bash(uv run:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
