@@ -601,7 +601,6 @@ def _topk_finalize(values, counts, *, k):
 
 topk = Aggregation(
     name="topk",
-    # FIXME: set dtype.INF when k < 0
     fill_value=(dtypes.NINF, 0),
     final_fill_value=dtypes.NA,
     # FIXME: set numpy

@@ -2200,6 +2200,106 @@ def test_reindex_sparse(size):
             assert mocked_reindex_func.call_count > 1
 
 
+@pytest.mark.parametrize(
+    "k,expected",
+    [
+        # k=3: top 3 largest from each group (NaNs excluded)
+        # Group 0: [5.0, 2.0, nan, 8.0] -> top 3: [8.0, 5.0, 2.0]
+        # Group 1: [1.0, nan, 9.0, 3.0] -> top 3: [9.0, 3.0, 1.0]
+        (3, np.array([[8.0, 5.0, 2.0], [9.0, 3.0, 1.0]])),
+        # k=-3: bottom 3 smallest from each group (NaNs excluded)
+        # Group 0: [5.0, 2.0, nan, 8.0] -> bottom 3: [2.0, 5.0, 8.0]
+        # Group 1: [1.0, nan, 9.0, 3.0] -> bottom 3: [1.0, 3.0, 9.0]
+        (-3, np.array([[2.0, 5.0, 8.0], [1.0, 3.0, 9.0]])),
+    ],
+)
+def test_topk_with_nan(k, expected):
+    """Test topk handles NaN values correctly for both k > 0 and k < 0."""
+    # Test data with NaNs
+    array = np.array([5.0, 2.0, np.nan, 8.0, 1.0, np.nan, 9.0, 3.0])
+    by = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+
+    actual, groups = groupby_reduce(array, by, func="topk", finalize_kwargs={"k": k})
+
+    # Verify shape: should be (abs(k), num_groups)
+    assert actual.shape == (abs(k), 2)
+
+    # Sort for comparison since order within topk is not guaranteed
+    actual_sorted = np.sort(actual, axis=0)
+    expected_sorted = np.sort(expected.T, axis=0)
+    assert_equal(actual_sorted, expected_sorted)
+
+    # Verify no NaNs in the results
+    assert not np.isnan(actual).any()
+
+
+@pytest.mark.parametrize(
+    "k,expected",
+    [
+        (5, np.array([[2.0, 5.0, 8.0, np.nan, np.nan]])),
+        (-5, np.array([[2.0, 5.0, 8.0, np.nan, np.nan]])),
+    ],
+)
+def test_topk_fewer_than_k_elements(k, expected):
+    """Test topk when group has fewer than k elements."""
+    # Group has only 3 elements but k=5
+    array = np.array([5.0, 2.0, 8.0])
+    by = np.array([0, 0, 0])
+
+    actual, groups = groupby_reduce(array, by, func="topk", finalize_kwargs={"k": k})
+
+    # Should return all elements plus NaN padding
+    assert actual.shape == (abs(k), 1)
+
+    # Sort for comparison (order not guaranteed)
+    actual_sorted = np.sort(actual, axis=0)
+    expected_sorted = np.sort(expected.T, axis=0)
+    assert_equal(actual_sorted, expected_sorted)
+
+
+@pytest.mark.parametrize(
+    "k,expected",
+    [
+        (2, np.array([[1.0, 2.0], [np.nan, np.nan]])),
+        (-2, np.array([[1.0, 2.0], [np.nan, np.nan]])),
+    ],
+)
+def test_topk_all_nan_group(k, expected):
+    """Test topk when a group has all NaN values."""
+    array = np.array([1.0, 2.0, np.nan, np.nan])
+    by = np.array([0, 0, 1, 1])
+
+    actual, groups = groupby_reduce(array, by, func="topk", finalize_kwargs={"k": k})
+
+    assert actual.shape == (abs(k), 2)
+
+    # Sort for comparison (order not guaranteed for group 0)
+    actual_sorted = np.sort(actual, axis=0)
+    expected_sorted = np.sort(expected.T, axis=0)
+    assert_equal(actual_sorted, expected_sorted)
+
+
+@pytest.mark.parametrize("k", [3, -3])
+def test_topk_fill_value_correctness(k):
+    """Test that fill_value is correctly set based on sign of k."""
+    # Create array with missing groups
+    array = np.array([5.0, 2.0, 8.0])
+    by = np.array([0, 0, 2])  # Missing group 1
+
+    actual, groups = groupby_reduce(
+        array,
+        by,
+        func="topk",
+        finalize_kwargs={"k": k},
+        expected_groups=([0, 1, 2],),
+    )
+
+    assert actual.shape == (abs(k), 3)
+
+    # Group 1 (missing) should be all NaN (final_fill_value)
+    assert np.isnan(actual[:, 1]).all()
+
+
 @requires_dask
 def test_sparse_errors():
     call = partial(
