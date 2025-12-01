@@ -342,7 +342,8 @@ def chunk_reduce(
     for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
         # UGLY! but this is because the `var` breaks our design assumptions
         if empty and not is_var_chunk_reduction(reduction):
-            result = np.full(shape=final_array_shape, fill_value=fv, like=array)
+            empty_shape = (abs(kw["k"]), *final_array_shape) if reduction == "topk" else final_array_shape
+            result = np.full(shape=empty_shape, fill_value=fv, like=array)
         elif _is_nanlen(reduction) and _is_nanlen(previous_reduction):
             result = results["intermediates"][-1]
         else:
