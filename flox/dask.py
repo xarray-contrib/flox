@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import operator
+import warnings
 from collections.abc import Callable, Sequence
 from functools import partial
 from numbers import Integral
@@ -21,7 +22,6 @@ if TYPE_CHECKING:
     from .types import DaskArray, Graph, IntermediateDict, T_By
 
 from .core import (
-    DUMMY_AXIS,
     _get_chunk_reduction,
     _reduce_blockwise,
     _unique,
@@ -36,6 +36,11 @@ from .reindex import (
 )
 from .types import FinalResultsDict, IntermediateDict
 from .xrutils import is_duck_dask_array, notnull
+
+# This dummy axis is inserted using np.expand_dims
+# and then reduced over during the combine stage by
+# _simple_combine.
+DUMMY_AXIS = -2
 
 
 def listify_groups(x: IntermediateDict):
@@ -99,8 +104,6 @@ def _simple_combine(
        DUMMY_AXIS
     4. At the final aggregate step, we squeeze out DUMMY_AXIS
     """
-    import warnings
-
     from dask.array.core import deepfirst
     from dask.utils import deepmap
 

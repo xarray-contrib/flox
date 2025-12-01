@@ -95,12 +95,6 @@ from .types import FinalResultsDict, IntermediateDict
 
 T = TypeVar("T")
 
-# This dummy axis is inserted using np.expand_dims
-# and then reduced over during the combine stage by
-# _simple_combine.
-DUMMY_AXIS = -2
-
-
 logger = logging.getLogger("flox")
 
 
