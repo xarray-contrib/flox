@@ -304,6 +304,8 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, to_sparse):
                     expected = array_func(array_[..., ~nanmask], axis=-1, **kwargs)
                 if func == "topk":
                     if (~nanmask).sum(axis=-1) < kwargs["k"]:
+                        # FIXME: update this expectation
+                        assert False
                         expected = np.full(expected.shape[:-1] + (abs(kwargs["k"]),), np.nan)
                     expected = np.sort(np.swapaxes(expected, array.ndim - 1, 0), axis=0)
         for _ in range(nby):

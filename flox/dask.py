@@ -125,8 +125,11 @@ def _simple_combine(
 
     results: IntermediateDict = {"groups": unique_groups}
     results["intermediates"] = []
-    axis_ = axis[:-1] + (DUMMY_AXIS,)
     for idx, combine in enumerate(agg.simple_combine):
+        if agg.name == "topk" and idx == 0:
+            axis_ = axis[:-1] + (0,)
+        else:
+            axis_ = axis[:-1] + (DUMMY_AXIS,)
         array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis_)
         assert array.ndim >= 2
         with warnings.catch_warnings():
@@ -150,6 +153,7 @@ def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
 
 def _expand_dims(results: IntermediateDict, agg: Aggregation) -> IntermediateDict:
     if agg.name == "topk":
+        # don't expand the topk intermediates, but expand all else
         results["intermediates"] = tuple(results["intermediates"][:1]) + tuple(
             np.expand_dims(array, axis=DUMMY_AXIS) for array in results["intermediates"][1:]
         )
