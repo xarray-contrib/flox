@@ -140,7 +140,7 @@ def _atleast_1d(inp, min_length: int = 1):
     return inp
 
 
-def returns_empty_tuple(*args, **kwargs):
+def returns_empty_tuple(*args, **kwargs) -> tuple:
     return ()
 
 
@@ -392,7 +392,7 @@ def var_chunk(
 
 def _var_combine(array, axis, keepdims=True):
     # Ensure axis is always a tuple for iteration
-    if isinstance(axis, int):
+    if not isinstance(axis, tuple):
         axis = (axis,)
 
     def clip_last(array, ax, n=1):

@@ -130,7 +130,7 @@ def _simple_combine(
             axis_ = axis[:-1] + (0,)
         else:
             axis_ = axis[:-1] + (DUMMY_AXIS,)
-        # Convert single-element tuple to integer for numpy functions that don't accept tuple axis
+
         array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis_)
         assert array.ndim >= 2
         with warnings.catch_warnings():
@@ -387,10 +387,11 @@ def dask_groupby_agg(
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
     labels_are_unknown = is_duck_dask_array(by_input) and expected_groups is None
-    # For reductions with new_dims_func (quantile, topk), we must use _simple_combine
-    # because the intermediate results have an extra dimension that needs to be reduced
-    # along DUMMY_AXIS, not along the groups axis.
-    must_use_simple_combine = agg.new_dims_func is not None
+    # For reductions with new_dims_func that actually add dimensions (quantile, topk),
+    # we must use _simple_combine because the intermediate results have an extra dimension
+    # that needs to be reduced along DUMMY_AXIS, not along the groups axis.
+    # Check if new_dims_func actually returns non-empty dimensions
+    must_use_simple_combine = bool(agg.new_dims_func) and bool(agg.new_dims_func(**agg.finalize_kwargs))
     do_grouped_combine = not must_use_simple_combine and (
         _is_arg_reduction(agg)
         or labels_are_unknown
