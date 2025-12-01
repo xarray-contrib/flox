@@ -416,9 +416,11 @@ def xarray_reduce(
     input_core_dims = [[d for d in grouper_dims if d not in dim_tuple] + list(dim_tuple)]
     input_core_dims += [list(b.dims) for b in by_da]
 
-    newdims: tuple[Dim, ...] = (
-        quantile_new_dims_func(**finalize_kwargs) if func in ["quantile", "nanquantile"] else ()
-    )
+    newdims: tuple[Dim, ...] = ()
+    if func in ["quantile", "nanquantile"]:
+        newdims = quantile_new_dims_func(**finalize_kwargs)
+    elif func == "topk":
+        newdims = topk_new_dims_func(**finalize_kwargs)
 
     output_core_dims = [d for d in input_core_dims[0] if d not in dim_tuple]
     output_core_dims.extend(group_names)
