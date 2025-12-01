@@ -131,13 +131,12 @@ def _simple_combine(
         else:
             axis_ = axis[:-1] + (DUMMY_AXIS,)
         # Convert single-element tuple to integer for numpy functions that don't accept tuple axis
-        axis_arg = axis_[0] if len(axis_) == 1 else axis_
         array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis_)
         assert array.ndim >= 2
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
             assert callable(combine)
-            result = combine(array, axis=axis_arg, keepdims=True)
+            result = combine(array, axis=axis_, keepdims=True)
         if is_aggregate and agg.name != "topk":
             # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
             # can't just pass DUMMY_AXIS, because of sparse.COO
