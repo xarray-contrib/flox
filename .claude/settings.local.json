@@ -32,7 +32,8 @@
       "Bash(/tmp/factorize.py)",
       "Bash(/tmp/reindex.py)",
       "Bash(/tmp/dask.py)",
-      "Bash(/tmp/cubed.py)"
+      "Bash(/tmp/cubed.py)",
+      "Bash(conda activate:*)"
     ],
     "deny": []
   }

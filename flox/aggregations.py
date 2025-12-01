@@ -287,6 +287,7 @@ class Aggregation:
             self.finalize,
             self.fill_value,
             self.dtype,
+            tuple(sorted(self.finalize_kwargs.items())) if self.finalize_kwargs else (),
         )
 
     def __repr__(self) -> str:
@@ -997,7 +998,7 @@ def _initialize_aggregation(
         assert isinstance(finalize_kwargs, dict)
         agg.finalize_kwargs = finalize_kwargs
 
-    if agg.name == "topk" and agg.finalize_kwargs["k"] < 0:
+    if agg.name == "topk" and agg.finalize_kwargs.get("k", 1) < 0:
         agg.fill_value["intermediate"] = (dtypes.INF, 0)
     # Replace sentinel fill values according to dtype
     agg.fill_value["user"] = fill_value

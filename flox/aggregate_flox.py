@@ -144,7 +144,7 @@ def quantile_or_topk(
         # kth must include ALL indices we'll extract, not just the starting index per group.
         # np.partition only guarantees correct values at kth positions; other positions may
         # have elements from different groups due to how introselect works with complex numbers.
-        kth = np.unique(lo_)
+        kth = np.unique(np.concatenate([np.unique(offset), np.unique(lo_)]))
         kth = kth[kth >= 0]
         kth[kth >= array.shape[axis]] = array.shape[axis] - 1
 
