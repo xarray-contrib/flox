@@ -38,7 +38,7 @@ jobs:
             env: "numpy1"
             python-version: "3.11"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags.
       - name: Set environment variables
@@ -94,7 +94,7 @@ jobs:
     name: xarray-groupby
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           repository: "pydata/xarray"
           fetch-depth: 0 # Fetch all history for all branches and tags.
