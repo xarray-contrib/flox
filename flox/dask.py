@@ -133,7 +133,7 @@ def _simple_combine(
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
             assert callable(combine)
             result = combine(array, axis=axis_, keepdims=True)
-        if is_aggregate:
+        if is_aggregate and agg.name != "topk":
             # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
             # can't just pass DUMMY_AXIS, because of sparse.COO
             result = result.squeeze(range(result.ndim)[DUMMY_AXIS])
