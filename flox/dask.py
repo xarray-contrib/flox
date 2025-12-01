@@ -391,7 +391,7 @@ def dask_groupby_agg(
     # we must use _simple_combine because the intermediate results have an extra dimension
     # that needs to be reduced along DUMMY_AXIS, not along the groups axis.
     # Check if new_dims_func actually returns non-empty dimensions
-    must_use_simple_combine = bool(agg.new_dims_func) and bool(agg.new_dims_func(**agg.finalize_kwargs))
+    must_use_simple_combine = agg.num_new_vector_dims > 0
     do_grouped_combine = not must_use_simple_combine and (
         _is_arg_reduction(agg)
         or labels_are_unknown
