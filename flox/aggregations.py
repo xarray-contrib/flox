@@ -391,6 +391,10 @@ def var_chunk(
 
 
 def _var_combine(array, axis, keepdims=True):
+    # Ensure axis is always a tuple for iteration
+    if isinstance(axis, int):
+        axis = (axis,)
+
     def clip_last(array, ax, n=1):
         """Return array except the last element along axis
         Purely included to tidy up the adj_terms line
