@@ -403,6 +403,8 @@ def test_groupby_reduce_all(nby, size, chunks, func, add_nan_by, to_sparse):
                 assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
+            if func == "topk":
+                actual = np.sort(actual, axis=0)
             if isinstance(reindex, ReindexStrategy):
                 import sparse
 
