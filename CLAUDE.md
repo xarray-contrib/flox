@@ -149,3 +149,70 @@ asv preview
 - Integration testing with xarray upstream development branch
 - **Python Support**: Minimum version 3.11 (updated from 3.10)
 - **Git Worktrees**: `worktrees/` directory is ignored for development workflows
+- **Running Tests**: Always use `uv run pytest` to run tests (not just `pytest`)
+
+## Key Implementation Details
+
+### Map-Reduce Combine Strategies (`flox/dask.py`)
+
+There are two strategies for combining intermediate results in dask's tree reduction:
+
+1. **`_simple_combine`**: Used for most reductions. Tree-reduces the reduction itself (not the groupby-reduction) for performance. Requirements:
+
+   - All blocks must contain all groups after blockwise step (reindex.blockwise=True)
+   - Must know expected_groups
+   - Inserts DUMMY_AXIS=-2 via `_expand_dims`, reduces along it, then squeezes it out
+   - Used when: not an arg reduction, not first/last with non-float dtype, and labels are known
+
+1. **`_grouped_combine`**: More general solution that tree-reduces the groupby-reduction itself. Used for:
+
+   - Arg reductions (argmax, argmin, etc.)
+   - When labels are unknown (dask arrays without expected_groups)
+   - First/last reductions with non-float dtypes
+
+### Aggregations with New Dimensions
+
+Some aggregations add new dimensions to the output (e.g., topk, quantile):
+
+- **`new_dims_func`**: Function that returns tuple of Dim objects for new dimensions
+- These MUST use `_simple_combine` because intermediate results have an extra dimension that needs to be reduced along DUMMY_AXIS
+- Check if `new_dims_func(**finalize_kwargs)` returns non-empty tuple to determine if aggregation actually adds dimensions
+- **Note**: argmax/argmin have `new_dims_func` but return empty tuple, so they use `_grouped_combine`
+
+### topk Implementation
+
+The topk aggregation is special:
+
+- Uses `_simple_combine` (has non-empty new_dims_func)
+- First intermediate (topk values) combines along axis 0, not DUMMY_AXIS
+- Does NOT squeeze out DUMMY_AXIS in final aggregate step
+- `_expand_dims` only expands non-topk intermediates (the second one, nanlen)
+
+### Axis Parameter Handling
+
+- **`_simple_combine`**: Always receives axis as tuple (e.g., `(-2,)` for DUMMY_AXIS)
+- **numpy functions**: Most accept both tuple and integer axis (e.g., np.max, np.sum)
+- **Exception**: argmax/argmin don't accept tuple axis, but these use `_grouped_combine`
+- **Custom functions**: Like `_var_combine` should normalize axis to tuple if needed for iteration
+
+### Test Organization
+
+- **`test_groupby_reduce_all`**: Comprehensive test for all aggregations with various parameters (nby, chunks, etc.)
+
+  - Tests both with and without NaN handling
+  - For topk: sorts results along axis 0 before comparison (k dimension is at axis 0)
+  - Uses `np.moveaxis` not `np.swapaxes` for topk to avoid swapping other dimensions
+
+- **`test_groupby_reduce_axis_subset_against_numpy`**: Tests reductions over subsets of axes
+
+  - Compares dask results against numpy results
+  - Tests various axis combinations: None, single int, tuples
+  - Skip arg reductions with axis=None or multiple axes (not supported)
+
+### Common Pitfalls
+
+1. **Axis transformations for topk**: Use `np.moveaxis(expected, src, 0)` not `np.swapaxes(expected, src, 0)` to move k dimension to position 0 without reordering other dimensions
+
+1. **new_dims_func checking**: Check if it returns non-empty dimensions, not just if it exists (argmax has one that returns `()`)
+
+1. **Axis parameter types**: Custom combine functions should handle both tuple and integer axis by normalizing at the start
