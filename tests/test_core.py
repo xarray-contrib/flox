@@ -90,7 +90,7 @@ def _get_array_func(func: str) -> Callable:
             x = np.asarray(x)
             return (~xrutils.isnull(x)).sum(**kwargs)
 
-    elif func in ["nanfirst", "nanlast"]:
+    elif func in ["nanfirst", "nanlast", "topk"]:
         npfunc = getattr(xrutils, func)
 
     elif func in SCIPY_STATS_FUNCS:
@@ -266,6 +266,10 @@ def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engi
         ]
         fill_value = None
         tolerance = None
+    elif func == "topk":
+        finalize_kwargs = [{"k": 3}, {"k": -3}]
+        fill_value = None
+        tolerance = None
     else:
         fill_value = None
         tolerance = None
@@ -275,6 +279,8 @@ def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engi
 
     for kwargs in finalize_kwargs:
         if "quantile" in func and isinstance(kwargs["q"], list) and engine != "flox":
+            continue
+        if "topk" in func and engine != "flox":
             continue
         flox_kwargs = dict(func=func, engine=engine, finalize_kwargs=kwargs, fill_value=fill_value)
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -295,6 +301,12 @@ def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engi
                     expected = getattr(np, func_)(array_, axis=-1, **kwargs)
                 else:
                     expected = array_func(array_[..., ~nanmask], axis=-1, **kwargs)
+                if func == "topk":
+                    if (~nanmask).sum(axis=-1) < kwargs["k"]:
+                        # FIXME: update this expectation
+                        assert False
+                        expected = np.full(expected.shape[:-1] + (abs(kwargs["k"]),), np.nan)
+                    expected = np.sort(np.swapaxes(expected, array.ndim - 1, 0), axis=0)
         for _ in range(nby):
             expected = np.expand_dims(expected, axis=-1)
 
@@ -302,7 +314,7 @@ def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engi
             assert chunks == -1
 
         actual, *groups = groupby_reduce(array, *by, **flox_kwargs)
-        if "quantile" in func and isinstance(kwargs["q"], list):
+        if ("quantile" in func and isinstance(kwargs["q"], list)) or func == "topk":
             assert actual.ndim == expected.ndim == (array.ndim + nby)
         else:
             assert actual.ndim == expected.ndim == (array.ndim + nby - 1)
@@ -312,9 +324,12 @@ def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engi
             assert_equal(actual_group, expect)
         if "arg" in func:
             assert actual.dtype.kind == "i"
+        if func == "topk":
+            actual = np.sort(actual, axis=0)
         assert_equal(expected, actual, tolerance)
 
-        if "nan" not in func and "arg" not in func:
+        # FIXME: topk vs nantopk
+        if "nan" not in func and "arg" not in func and "topk" not in func:
             # test non-NaN skipping behaviour when NaNs are present
             nanned = array_.copy()
             # remove nans in by to reduce complexity
@@ -324,6 +339,10 @@ def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engi
             nanned.reshape(-1)[0] = np.nan
             actual, *_ = groupby_reduce(nanned, *by_, **flox_kwargs)
             expected_0 = array_func(nanned, axis=-1, **kwargs)
+            if func == "topk":
+                expected_0 = np.sort(np.swapaxes(expected_0, array.ndim - 1, 0), axis=-1)
+                actual = np.sort(actual, axis=-1)
+
             for _ in range(nby):
                 expected_0 = np.expand_dims(expected_0, -1)
             assert_equal(expected_0, actual, tolerance)
@@ -358,6 +377,11 @@ def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engi
                 with pytest.raises(NotImplementedError):
                     call()
                 continue
+            if func == "topk" and reindex is False:
+                # topk with reindex=False not yet supported
+                with pytest.raises(NotImplementedError, match="topk with reindex=False"):
+                    call()
+                continue
 
             if method == "blockwise":
                 # no combine necessary
@@ -378,6 +402,8 @@ def test_groupby_reduce_all(to_sparse, nby, size, chunks, func, add_nan_by, engi
                 assert_equal(actual_group, expect, tolerance)
             if "arg" in func:
                 assert actual.dtype.kind == "i"
+            if func == "topk":
+                actual = np.sort(actual, axis=0)
             if isinstance(reindex, ReindexStrategy):
                 import sparse
 
@@ -2185,6 +2211,106 @@ def test_reindex_sparse(size):
 
             # once during graph construction, 10 times afterward
             assert mocked_reindex_func.call_count > 1
+
+
+@pytest.mark.parametrize(
+    "k,expected",
+    [
+        # k=3: top 3 largest from each group (NaNs excluded)
+        # Group 0: [5.0, 2.0, nan, 8.0] -> top 3: [8.0, 5.0, 2.0]
+        # Group 1: [1.0, nan, 9.0, 3.0] -> top 3: [9.0, 3.0, 1.0]
+        (3, np.array([[8.0, 5.0, 2.0], [9.0, 3.0, 1.0]])),
+        # k=-3: bottom 3 smallest from each group (NaNs excluded)
+        # Group 0: [5.0, 2.0, nan, 8.0] -> bottom 3: [2.0, 5.0, 8.0]
+        # Group 1: [1.0, nan, 9.0, 3.0] -> bottom 3: [1.0, 3.0, 9.0]
+        (-3, np.array([[2.0, 5.0, 8.0], [1.0, 3.0, 9.0]])),
+    ],
+)
+def test_topk_with_nan(k, expected):
+    """Test topk handles NaN values correctly for both k > 0 and k < 0."""
+    # Test data with NaNs
+    array = np.array([5.0, 2.0, np.nan, 8.0, 1.0, np.nan, 9.0, 3.0])
+    by = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+
+    actual, groups = groupby_reduce(array, by, func="topk", finalize_kwargs={"k": k})
+
+    # Verify shape: should be (abs(k), num_groups)
+    assert actual.shape == (abs(k), 2)
+
+    # Sort for comparison since order within topk is not guaranteed
+    actual_sorted = np.sort(actual, axis=0)
+    expected_sorted = np.sort(expected.T, axis=0)
+    assert_equal(actual_sorted, expected_sorted)
+
+    # Verify no NaNs in the results
+    assert not np.isnan(actual).any()
+
+
+@pytest.mark.parametrize(
+    "k,expected",
+    [
+        (5, np.array([[2.0, 5.0, 8.0, np.nan, np.nan]])),
+        (-5, np.array([[2.0, 5.0, 8.0, np.nan, np.nan]])),
+    ],
+)
+def test_topk_fewer_than_k_elements(k, expected):
+    """Test topk when group has fewer than k elements."""
+    # Group has only 3 elements but k=5
+    array = np.array([5.0, 2.0, 8.0])
+    by = np.array([0, 0, 0])
+
+    actual, groups = groupby_reduce(array, by, func="topk", finalize_kwargs={"k": k})
+
+    # Should return all elements plus NaN padding
+    assert actual.shape == (abs(k), 1)
+
+    # Sort for comparison (order not guaranteed)
+    actual_sorted = np.sort(actual, axis=0)
+    expected_sorted = np.sort(expected.T, axis=0)
+    assert_equal(actual_sorted, expected_sorted)
+
+
+@pytest.mark.parametrize(
+    "k,expected",
+    [
+        (2, np.array([[1.0, 2.0], [np.nan, np.nan]])),
+        (-2, np.array([[1.0, 2.0], [np.nan, np.nan]])),
+    ],
+)
+def test_topk_all_nan_group(k, expected):
+    """Test topk when a group has all NaN values."""
+    array = np.array([1.0, 2.0, np.nan, np.nan])
+    by = np.array([0, 0, 1, 1])
+
+    actual, groups = groupby_reduce(array, by, func="topk", finalize_kwargs={"k": k})
+
+    assert actual.shape == (abs(k), 2)
+
+    # Sort for comparison (order not guaranteed for group 0)
+    actual_sorted = np.sort(actual, axis=0)
+    expected_sorted = np.sort(expected.T, axis=0)
+    assert_equal(actual_sorted, expected_sorted)
+
+
+@pytest.mark.parametrize("k", [3, -3])
+def test_topk_fill_value_correctness(k):
+    """Test that fill_value is correctly set based on sign of k."""
+    # Create array with missing groups
+    array = np.array([5.0, 2.0, 8.0])
+    by = np.array([0, 0, 2])  # Missing group 1
+
+    actual, groups = groupby_reduce(
+        array,
+        by,
+        func="topk",
+        finalize_kwargs={"k": k},
+        expected_groups=([0, 1, 2],),
+    )
+
+    assert actual.shape == (abs(k), 3)
+
+    # Group 1 (missing) should be all NaN (final_fill_value)
+    assert np.isnan(actual[:, 1]).all()
 
 
 @requires_dask

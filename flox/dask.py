@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import operator
+import warnings
 from collections.abc import Callable, Sequence
 from functools import partial
 from numbers import Integral
@@ -21,7 +22,6 @@ if TYPE_CHECKING:
     from .types import DaskArray, Graph, IntermediateDict, T_By
 
 from .core import (
-    DUMMY_AXIS,
     _get_chunk_reduction,
     _reduce_blockwise,
     _unique,
@@ -36,6 +36,11 @@ from .reindex import (
 )
 from .types import FinalResultsDict, IntermediateDict
 from .xrutils import is_duck_dask_array, notnull
+
+# This dummy axis is inserted using np.expand_dims
+# and then reduced over during the combine stage by
+# _simple_combine.
+DUMMY_AXIS = -2
 
 
 def listify_groups(x: IntermediateDict):
@@ -99,8 +104,6 @@ def _simple_combine(
        DUMMY_AXIS
     4. At the final aggregate step, we squeeze out DUMMY_AXIS
     """
-    import warnings
-
     from dask.array.core import deepfirst
     from dask.utils import deepmap
 
@@ -122,15 +125,19 @@ def _simple_combine(
 
     results: IntermediateDict = {"groups": unique_groups}
     results["intermediates"] = []
-    axis_ = axis[:-1] + (DUMMY_AXIS,)
     for idx, combine in enumerate(agg.simple_combine):
+        if agg.name == "topk" and idx == 0:
+            axis_ = axis[:-1] + (0,)
+        else:
+            axis_ = axis[:-1] + (DUMMY_AXIS,)
+
         array = _conc2(x_chunk, key1="intermediates", key2=idx, axis=axis_)
         assert array.ndim >= 2
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
             assert callable(combine)
             result = combine(array, axis=axis_, keepdims=True)
-        if is_aggregate:
+        if is_aggregate and agg.name != "topk":
             # squeeze out DUMMY_AXIS if this is the last step i.e. called from _aggregate
             # can't just pass DUMMY_AXIS, because of sparse.COO
             result = result.squeeze(range(result.ndim)[DUMMY_AXIS])
@@ -145,10 +152,16 @@ def _extract_result(result_dict: FinalResultsDict, key) -> np.ndarray:
     return deepfirst(result_dict)[key]
 
 
-def _expand_dims(results: IntermediateDict) -> IntermediateDict:
-    results["intermediates"] = tuple(
-        np.expand_dims(array, axis=DUMMY_AXIS) for array in results["intermediates"]
-    )
+def _expand_dims(results: IntermediateDict, agg: Aggregation) -> IntermediateDict:
+    if agg.name == "topk":
+        # don't expand the topk intermediates, but expand all else
+        results["intermediates"] = tuple(results["intermediates"][:1]) + tuple(
+            np.expand_dims(array, axis=DUMMY_AXIS) for array in results["intermediates"][1:]
+        )
+    else:
+        results["intermediates"] = tuple(
+            np.expand_dims(array, axis=DUMMY_AXIS) for array in results["intermediates"]
+        )
     return results
 
 
@@ -374,7 +387,12 @@ def dask_groupby_agg(
     #       This allows us to discover groups at compute time, support argreductions, lower intermediate
     #       memory usage (but method="cohorts" would also work to reduce memory in some cases)
     labels_are_unknown = is_duck_dask_array(by_input) and expected_groups is None
-    do_grouped_combine = (
+    # For reductions with new_dims_func that actually add dimensions (quantile, topk),
+    # we must use _simple_combine because the intermediate results have an extra dimension
+    # that needs to be reduced along DUMMY_AXIS, not along the groups axis.
+    # Check if new_dims_func actually returns non-empty dimensions
+    must_use_simple_combine = agg.num_new_vector_dims > 0
+    do_grouped_combine = not must_use_simple_combine and (
         _is_arg_reduction(agg)
         or labels_are_unknown
         or (_is_first_last_reduction(agg) and array.dtype.kind != "f")
@@ -385,6 +403,9 @@ def dask_groupby_agg(
         #  use the "non dask" code path, but applied blockwise
         blockwise_method = partial(_reduce_blockwise, agg=agg, fill_value=fill_value, reindex=reindex)
     else:
+        extra = {}
+        if agg.name == "topk":
+            extra["kwargs"] = (agg.finalize_kwargs, *(({},) * (len(agg.chunk) - 1)))
         # choose `chunk_reduce` or `chunk_argreduce`
         blockwise_method = partial(
             _get_chunk_reduction(agg.reduction_type),
@@ -393,10 +414,11 @@ def dask_groupby_agg(
             fill_value=agg.fill_value["intermediate"],
             dtype=agg.dtype["intermediate"],
             user_dtype=agg.dtype["user"],
+            **extra,
         )
         if do_simple_combine:
             # Add a dummy dimension that then gets reduced over
-            blockwise_method = tlz.compose(_expand_dims, blockwise_method)
+            blockwise_method = tlz.compose(partial(_expand_dims, agg=agg), blockwise_method)
 
     # apply reduction on chunk
     intermediate = dask.array.blockwise(

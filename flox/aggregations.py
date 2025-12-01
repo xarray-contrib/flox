@@ -140,7 +140,7 @@ def _atleast_1d(inp, min_length: int = 1):
     return inp
 
 
-def returns_empty_tuple(*args, **kwargs):
+def returns_empty_tuple(*args, **kwargs) -> tuple:
     return ()
 
 
@@ -287,6 +287,7 @@ class Aggregation:
             self.finalize,
             self.fill_value,
             self.dtype,
+            tuple(sorted(self.finalize_kwargs.items())) if self.finalize_kwargs else (),
         )
 
     def __repr__(self) -> str:
@@ -390,6 +391,10 @@ def var_chunk(
 
 
 def _var_combine(array, axis, keepdims=True):
+    # Ensure axis is always a tuple for iteration
+    if not isinstance(axis, tuple):
+        axis = (axis,)
+
     def clip_last(array, ax, n=1):
         """Return array except the last element along axis
         Purely included to tidy up the adj_terms line
@@ -689,6 +694,10 @@ def quantile_new_dims_func(q) -> tuple[Dim]:
     return (Dim(name="quantile", values=q),)
 
 
+def topk_new_dims_func(k) -> tuple[Dim]:
+    return (Dim(name="k", values=np.arange(abs(k))),)
+
+
 # if the input contains integers or floats smaller than float64,
 # the output data-type is float64. Otherwise, the output data-type is the same as that
 # of the input.
@@ -710,6 +719,30 @@ nanquantile = Aggregation(
 )
 mode = Aggregation(name="mode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
 nanmode = Aggregation(name="nanmode", fill_value=dtypes.NA, chunk=None, combine=None, preserves_dtype=True)
+
+
+def _topk_finalize(values, counts, *, k):
+    """Convert -inf fill values back to NaN for topk results."""
+    import numpy as np
+
+    # After combine with nantopk, -inf values need to be converted to NaN
+    # k > 0: -inf was used as fill value
+    # k < 0: +inf was used as fill value
+    fill_val = -np.inf if k > 0 else np.inf
+    return np.where(values == fill_val, np.nan, values)
+
+
+topk = Aggregation(
+    name="topk",
+    fill_value=(dtypes.NINF, 0),
+    final_fill_value=dtypes.NA,
+    # FIXME: set numpy
+    chunk=("topk", "nanlen"),
+    combine=(xrutils.nantopk, "sum"),
+    finalize=_topk_finalize,
+    new_dims_func=topk_new_dims_func,
+    preserves_dtype=True,
+)
 
 
 @dataclass
@@ -910,6 +943,7 @@ AGGREGATIONS: dict[str, Aggregation | Scan] = {
     "nanquantile": nanquantile,
     "mode": mode,
     "nanmode": nanmode,
+    "topk": topk,
     "cumsum": cumsum,
     "nancumsum": nancumsum,
     "ffill": ffill,
@@ -964,6 +998,12 @@ def _initialize_aggregation(
         ),
     }
 
+    if finalize_kwargs is not None:
+        assert isinstance(finalize_kwargs, dict)
+        agg.finalize_kwargs = finalize_kwargs
+
+    if agg.name == "topk" and agg.finalize_kwargs.get("k", 1) < 0:
+        agg.fill_value["intermediate"] = (dtypes.INF, 0)
     # Replace sentinel fill values according to dtype
     agg.fill_value["user"] = fill_value
     agg.fill_value["intermediate"] = tuple(
@@ -977,10 +1017,6 @@ def _initialize_aggregation(
         agg.fill_value["numpy"] = (0,)
     else:
         agg.fill_value["numpy"] = (agg.fill_value[func],)
-
-    if finalize_kwargs is not None:
-        assert isinstance(finalize_kwargs, dict)
-        agg.finalize_kwargs = finalize_kwargs
 
     # This is needed for the dask pathway.
     # Because we use intermediate fill_value since a group could be
@@ -1018,6 +1054,11 @@ def _initialize_aggregation(
             else:
                 simple_combine.append(getattr(np, combine))
         else:
+            # TODO: bah, we need to pass `k` to the combine topk function
+            # this is ugly.
+            if agg.name == "topk" and not isinstance(combine, str):
+                assert combine is not None
+                combine = partial(combine, **agg.finalize_kwargs)
             simple_combine.append(combine)
 
     agg.simple_combine = tuple(simple_combine)

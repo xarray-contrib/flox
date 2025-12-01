@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from numpy.lib.array_utils import normalize_axis_tuple
 from packaging.version import Version
 
 
@@ -410,3 +411,36 @@ def nanlast(values, axis, keepdims=False):
         return np.expand_dims(result, axis=axis)
     else:
         return result
+
+
+def topk(a: np.ndarray, k: int, axis, keepdims: bool = True) -> np.ndarray:
+    """Chunk and combine function of topk
+
+    Extract the k largest elements from a on the given axis.
+    If k is negative, extract the -k smallest elements instead.
+    Note that, unlike in the parent function, the returned elements
+    are not sorted internally.
+
+    NOTE: This function was copied from the dask project under the terms
+    of their LICENSE.
+    """
+    assert keepdims is True
+    (axis,) = normalize_axis_tuple(axis, a.ndim)  # type: ignore[misc]
+    if abs(k) >= a.shape[axis]:
+        return a
+
+    a.partition(-k, axis=axis)
+    k_slice = slice(-k, None) if k > 0 else slice(-k)
+    result = a[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
+    return result.astype(a.dtype, copy=False)
+
+
+def nantopk(a: np.ndarray, k: int, axis, keepdims: bool = True) -> np.ndarray:
+    """NaN-aware version of topk.
+
+    Replaces NaN with -inf (for k > 0) or +inf (for k < 0) before calling topk,
+    so that NaN values don't end up in the top/bottom k results.
+    """
+    fill_val = -np.inf if k > 0 else np.inf
+    a = np.where(isnull(a), fill_val, a)
+    return topk(a, k=k, axis=axis, keepdims=keepdims)

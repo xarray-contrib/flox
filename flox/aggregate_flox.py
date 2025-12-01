@@ -47,14 +47,32 @@ def _lerp(a, b, *, t, dtype, out=None):
     return out
 
 
-def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=None):
+def quantile_or_topk(
+    array,
+    inv_idx,
+    *,
+    q=None,
+    k=None,
+    axis,
+    skipna,
+    group_idx,
+    dtype=None,
+    out=None,
+    fill_value=None,
+):
+    assert q is not None or k is not None
+    assert axis == -1
+
     inv_idx = np.concatenate((inv_idx, [array.shape[-1]]))
 
     array_validmask = notnull(array)
     actual_sizes = np.add.reduceat(array_validmask, inv_idx[:-1], axis=axis)
     newshape = (1,) * (array.ndim - 1) + (inv_idx.size - 1,)
-    full_sizes = np.reshape(np.diff(inv_idx), newshape)
-    nanmask = full_sizes != actual_sizes
+    if k is not None:
+        nanmask = actual_sizes < abs(k)
+    else:
+        full_sizes = np.reshape(np.diff(inv_idx), newshape)
+        nanmask = full_sizes != actual_sizes
 
     # The approach here is to use (complex_array.partition) because
     # 1. The full np.lexsort((array, labels), axis=-1) is slow and unnecessary
@@ -72,36 +90,63 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
     # So we determine which indices we need using the fact that NaNs get sorted to the end.
     # This *was* partly inspired by https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
     # but not any more now that I use partition and avoid replacing NaNs
-    qin = q
-    q = np.atleast_1d(qin)
-    q = np.reshape(q, (len(q),) + (1,) * array.ndim)
+    if k is not None:
+        is_scalar_param = False
+        param = np.sort(np.arange(abs(k)) * np.sign(k))
+    else:
+        is_scalar_param = is_scalar(q)
+        param = np.atleast_1d(q)
+    param = np.reshape(param, (param.size,) + (1,) * array.ndim)
 
     # This is numpy's method="linear"
     # TODO: could support all the interpolations here
     offset = actual_sizes.cumsum(axis=-1)
-    actual_sizes -= 1
-    virtual_index = q * actual_sizes
-    # virtual_index is relative to group starts, so now offset that
-    virtual_index[..., 1:] += offset[..., :-1]
+    # For topk(.., k=+1 or -1), we always return the singleton dimension.
+    idxshape = (param.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
 
-    is_scalar_q = is_scalar(qin)
-    if is_scalar_q:
-        virtual_index = virtual_index.squeeze(axis=0)
-        idxshape = array.shape[:-1] + (actual_sizes.shape[-1],)
+    if q is not None:
+        # This is numpy's method="linear"
+        # TODO: could support all the interpolations here
+        actual_sizes -= 1
+        virtual_index = param * actual_sizes
+        # virtual_index is relative to group starts, so now offset that
+        virtual_index[..., 1:] += offset[..., :-1]
+
+        if is_scalar_param:
+            virtual_index = virtual_index.squeeze(axis=0)
+            idxshape = array.shape[:-1] + (actual_sizes.shape[-1],)
+
+        lo_ = np.floor(virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64))
+        hi_ = np.ceil(virtual_index, casting="unsafe", out=np.empty(virtual_index.shape, dtype=np.int64))
+        kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
+
     else:
-        idxshape = (q.shape[0],) + array.shape[:-1] + (actual_sizes.shape[-1],)
+        virtual_index = (actual_sizes - k) if k > 0 else (np.zeros_like(actual_sizes) + abs(k) - 1)
+        # virtual_index is relative to group starts, so now offset that
+        virtual_index[..., 1:] += offset[..., :-1]
+        k_offset = param.reshape((abs(k),) + (1,) * virtual_index.ndim)
+        lo_ = k_offset + virtual_index[np.newaxis, ...]
+        # For groups with fewer than k elements, clamp extraction indices to valid range
+        # and mark out-of-bounds positions for filling with fill_value.
+        # Compute group boundaries: starts = [0, offset[:-1]], ends = offset
+        # We prepend 0 to offset[:-1] to get group start positions
+        group_starts = np.insert(offset[..., :-1], 0, 0, axis=-1)
 
-    lo_ = np.floor(
-        virtual_index,
-        casting="unsafe",
-        out=np.empty(virtual_index.shape, dtype=np.int64),
-    )
-    hi_ = np.ceil(
-        virtual_index,
-        casting="unsafe",
-        out=np.empty(virtual_index.shape, dtype=np.int64),
-    )
-    kth = np.unique(np.concatenate([lo_.reshape(-1), hi_.reshape(-1)]))
+        # Mark positions outside group boundaries (before clamping to detect invalid indices)
+        # Broadcasting happens implicitly in comparison
+        badmask = (lo_ < group_starts) | (lo_ >= offset)
+
+        # Clamp lo_ in-place to [group_starts, array.shape[axis]-1]
+        # Using out= avoids intermediate array allocations
+        np.clip(lo_, group_starts, array.shape[axis] - 1, out=lo_)
+        # Note: we don't include nanmask here because for intermediate chunk results,
+        # we want to keep partial results. nanmask is used separately for final output.
+        # kth must include ALL indices we'll extract, not just the starting index per group.
+        # np.partition only guarantees correct values at kth positions; other positions may
+        # have elements from different groups due to how introselect works with complex numbers.
+        kth = np.unique(np.concatenate([np.unique(offset), np.unique(lo_)]))
+        kth = kth[kth >= 0]
+        kth[kth >= array.shape[axis]] = array.shape[axis] - 1
 
     # partition the complex array in-place
     labels_broadcast = np.broadcast_to(group_idx, array.shape)
@@ -111,20 +156,33 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
         # a simple (labels + 1j * array) will yield `nan+inf * 1j` instead of `0 + inf * j`
         cmplx.real = labels_broadcast
     cmplx.partition(kth=kth, axis=-1)
-    if is_scalar_q:
-        a_ = cmplx.imag
-    else:
-        a_ = np.broadcast_to(cmplx.imag, (q.shape[0],) + array.shape)
 
-    # get bounds, Broadcast to (num quantiles, ..., num labels)
+    a_ = cmplx.imag
+    if not is_scalar_param:
+        a_ = np.broadcast_to(cmplx.imag, (param.shape[0],) + array.shape)
+
+    if array.dtype.kind in "Mm":
+        a_ = a_.view(array.dtype)
+
     loval = np.take_along_axis(a_, np.broadcast_to(lo_, idxshape), axis=axis)
-    hival = np.take_along_axis(a_, np.broadcast_to(hi_, idxshape), axis=axis)
+    if q is not None:
+        # get bounds, Broadcast to (num quantiles, ..., num labels)
+        hival = np.take_along_axis(a_, np.broadcast_to(hi_, idxshape), axis=axis)
 
-    # TODO: could support all the interpolations here
-    gamma = np.broadcast_to(virtual_index, idxshape) - lo_
-    result = _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
-    if not skipna and np.any(nanmask):
-        result[..., nanmask] = np.nan
+        # TODO: could support all the interpolations here
+        gamma = np.broadcast_to(virtual_index, idxshape) - lo_
+        result = _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
+        if not skipna and np.any(nanmask):
+            result[..., nanmask] = fill_value
+    else:
+        result = loval
+        if badmask.any():
+            result[badmask] = fill_value
+
+    if k is not None:
+        result = result.astype(dtype, copy=False)
+        if out is not None:
+            np.copyto(out, result)
     return result
 
 
@@ -158,12 +216,14 @@ def _np_grouped_op(
 
     if out is None:
         q = kwargs.get("q", None)
-        if q is None:
+        k = kwargs.get("k", None)
+        if q is None and k is None:
             out = np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
         else:
-            nq = len(np.atleast_1d(q))
+            nq = len(np.atleast_1d(q)) if q is not None else abs(k)
             out = np.full((nq,) + array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
             kwargs["group_idx"] = group_idx
+            kwargs["fill_value"] = fill_value
 
     if (len(uniques) == size) and (uniques == np.arange(size, like=aux)).all():
         # The previous version of this if condition
@@ -200,10 +260,11 @@ max = partial(_np_grouped_op, op=np.maximum.reduceat)
 nanmax = partial(_nan_grouped_op, func=max, fillna=dtypes.NINF)
 min = partial(_np_grouped_op, op=np.minimum.reduceat)
 nanmin = partial(_nan_grouped_op, func=min, fillna=dtypes.INF)
-quantile = partial(_np_grouped_op, op=partial(quantile_, skipna=False))
-nanquantile = partial(_np_grouped_op, op=partial(quantile_, skipna=True))
-median = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=False))
-nanmedian = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_, skipna=True))
+topk = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=True))
+quantile = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=False))
+nanquantile = partial(_np_grouped_op, op=partial(quantile_or_topk, skipna=True))
+median = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_or_topk, skipna=False))
+nanmedian = partial(partial(_np_grouped_op, q=0.5), op=partial(quantile_or_topk, skipna=True))
 # TODO: all, any
 
 

@@ -9,7 +9,13 @@ import toolz
 import xarray as xr
 from packaging.version import Version
 
-from .aggregations import Aggregation, Dim, _atleast_1d, quantile_new_dims_func
+from .aggregations import (
+    Aggregation,
+    Dim,
+    _atleast_1d,
+    quantile_new_dims_func,
+    topk_new_dims_func,
+)
 from .core import (
     _convert_expected_groups_to_index,
     _get_expected_groups,
@@ -92,7 +98,7 @@ def xarray_reduce(
         Variables with which to group by ``obj``
     func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
             "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
-            "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
+            "quantile", "nanquantile", "median", "nanmedian", "topk", "mode", "nanmode", \
             "first", "nanfirst", "last", "nanlast"} or Aggregation
         Single function name or an Aggregation instance
     expected_groups : str or sequence
@@ -180,6 +186,11 @@ def xarray_reduce(
     -------
     DataArray or Dataset
         Reduced object
+
+    Notes
+    -----
+    ``topk`` and ``quantile`` are implemented by converting to a complex number and so are limited to values between +-``2**53-1``
+    i.e. the limit of a ``float64`` dtype. Offset your data appropriately if you need the larger range.
 
     See Also
     --------
@@ -372,16 +383,20 @@ def xarray_reduce(
 
         result, *groups = groupby_reduce(array, *by, func=func, **kwargs)
 
-        # Transpose the new quantile dimension to the end. This is ugly.
+        # Transpose the new quantile or topk dimension to the end. This is ugly.
         # but new core dimensions are expected at the end :/
         # but groupby_reduce inserts them at the beginning
         if func in ["quantile", "nanquantile"]:
             (newdim,) = quantile_new_dims_func(**finalize_kwargs)
-            if not newdim.is_scalar:
-                # NOTE: _restore_dim_order will move any new dims to the end anyway.
-                # This transpose is simply makes it easy to specify output_core_dims
-                # output dim order: (*broadcast_dims, *group_dims, quantile_dim)
-                result = np.moveaxis(result, 0, -1)
+        elif func == "topk":
+            (newdim,) = topk_new_dims_func(**finalize_kwargs)
+        else:
+            newdim = None
+        if newdim is not None and not newdim.is_scalar:
+            # NOTE: _restore_dim_order will move any new dims to the end anyway.
+            # This transpose is simply makes it easy to specify output_core_dims
+            # output dim order: (*broadcast_dims, *group_dims, quantile_dim)
+            result = np.moveaxis(result, 0, -1)
 
         return result
 
@@ -401,9 +416,11 @@ def xarray_reduce(
     input_core_dims = [[d for d in grouper_dims if d not in dim_tuple] + list(dim_tuple)]
     input_core_dims += [list(b.dims) for b in by_da]
 
-    newdims: tuple[Dim, ...] = (
-        quantile_new_dims_func(**finalize_kwargs) if func in ["quantile", "nanquantile"] else ()
-    )
+    newdims: tuple[Dim, ...] = ()
+    if func in ["quantile", "nanquantile"]:
+        newdims = quantile_new_dims_func(**finalize_kwargs)
+    elif func == "topk":
+        newdims = topk_new_dims_func(**finalize_kwargs)
 
     output_core_dims = [d for d in input_core_dims[0] if d not in dim_tuple]
     output_core_dims.extend(group_names)

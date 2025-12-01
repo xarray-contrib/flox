@@ -27,6 +27,7 @@ from .aggregations import (
     generic_aggregate,
     is_var_chunk_reduction,
     quantile_new_dims_func,
+    topk_new_dims_func,
 )
 from .factorize import (
     _factorize_multiple,
@@ -93,12 +94,6 @@ if TYPE_CHECKING:
 from .types import FinalResultsDict, IntermediateDict
 
 T = TypeVar("T")
-
-# This dummy axis is inserted using np.expand_dims
-# and then reduced over during the combine stage by
-# _simple_combine.
-DUMMY_AXIS = -2
-
 
 logger = logging.getLogger("flox")
 
@@ -347,7 +342,8 @@ def chunk_reduce(
     for reduction, fv, kw, dt in zip(funcs, fill_values, kwargss, dtypes):
         # UGLY! but this is because the `var` breaks our design assumptions
         if empty and not is_var_chunk_reduction(reduction):
-            result = np.full(shape=final_array_shape, fill_value=fv, like=array)
+            empty_shape = (abs(kw["k"]), *final_array_shape) if reduction == "topk" else final_array_shape
+            result = np.full(shape=empty_shape, fill_value=fv, like=array)
         elif _is_nanlen(reduction) and _is_nanlen(previous_reduction):
             result = results["intermediates"][-1]
         else:
@@ -383,6 +379,8 @@ def chunk_reduce(
             # TODO: Figure out how to generalize this
             if reduction in ("quantile", "nanquantile"):
                 new_dims_shape = tuple(dim.size for dim in quantile_new_dims_func(**kw) if not dim.is_scalar)
+            elif reduction == "topk":
+                new_dims_shape = tuple(dim.size for dim in topk_new_dims_func(**kw) if not dim.is_scalar)
             else:
                 new_dims_shape = tuple()
             result = result.reshape(new_dims_shape + final_array_shape[:-1] + found_groups_shape)
@@ -713,7 +711,7 @@ def _choose_engine(by, agg: Aggregation):
 
     not_arg_reduce = not _is_arg_reduction(agg)
 
-    if agg.name in ["quantile", "nanquantile", "median", "nanmedian"]:
+    if agg.name in ["quantile", "nanquantile", "median", "nanmedian", "topk"]:
         logger.debug(f"_choose_engine: Choosing 'flox' since {agg.name}")
         return "flox"
 
@@ -764,7 +762,7 @@ def groupby_reduce(
         equality check are for dimensions of size 1 in ``by``.
     func : {"all", "any", "count", "sum", "nansum", "mean", "nanmean", \
             "max", "nanmax", "min", "nanmin", "argmax", "nanargmax", "argmin", "nanargmin", \
-            "quantile", "nanquantile", "median", "nanmedian", "mode", "nanmode", \
+            "quantile", "nanquantile", "median", "nanmedian", "topk", "mode", "nanmode", \
             "first", "nanfirst", "last", "nanlast"} or Aggregation
         Single function name or an Aggregation instance
     expected_groups : (optional) Sequence
@@ -840,6 +838,11 @@ def groupby_reduce(
     finalize_kwargs : dict, optional
         Kwargs passed to finalize the reduction such as ``ddof`` for var, std or ``q`` for quantile.
 
+    Notes
+    -----
+    ``topk`` and ``quantile`` are implemented by converting to a complex number and so are limited to values between +-``2**53-1``
+    i.e. the limit of a ``float64`` dtype. Offset your data appropriately if you need the larger range.
+
     Returns
     -------
     result
@@ -876,6 +879,8 @@ def groupby_reduce(
                     "Use engine='flox' instead (it is also much faster), "
                     "or set engine=None to use the default."
                 )
+    if func == "topk" and (finalize_kwargs is None or "k" not in finalize_kwargs):
+        raise ValueError("Please pass `k` in ``finalize_kwargs`` for topk calculations.")
 
     bys: T_Bys = tuple(np.asarray(b) if not is_duck_array(b) else b for b in by)
     nby = len(bys)
@@ -901,6 +906,12 @@ def groupby_reduce(
 
     if not is_duck_array(array):
         array = np.asarray(array)
+
+    # topk with reindex=False not yet supported
+    if func == "topk" and reindex is False:
+        raise NotImplementedError(
+            "topk with reindex=False is not yet supported. Use reindex=True or reindex=None."
+        )
 
     reindex = _validate_reindex(
         reindex,
