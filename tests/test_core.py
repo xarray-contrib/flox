@@ -2279,6 +2279,8 @@ def test_sparse_is_supported_aggregation():
 
     array = sparse.COO.from_numpy(np.array([1, 2, 3]))
     assert flox.is_supported_aggregation(array, "sum")
+    assert not flox.is_supported_aggregation(array, "cumsum")
+    assert not flox.is_supported_aggregation(array, "ffill")
 
 
 @requires_dask
@@ -2286,6 +2288,8 @@ def test_dask_is_supported_aggregation():
     # Test dask array wrapping numpy
     array = da.from_array(np.array([1, 2, 3]), chunks=2)
     assert flox.is_supported_aggregation(array, "sum")
+    assert flox.is_supported_aggregation(array, "cumsum")
+    assert flox.is_supported_aggregation(array, "ffill")
 
     # Test dask array wrapping sparse
     if has_sparse:
@@ -2294,16 +2298,23 @@ def test_dask_is_supported_aggregation():
         sparse_array = sparse.COO.from_numpy(np.array([1, 2, 3]))
         dask_sparse = da.from_array(sparse_array, chunks=2)
         assert flox.is_supported_aggregation(dask_sparse, "sum")
+        assert not flox.is_supported_aggregation(dask_sparse, "cumsum")
+        assert not flox.is_supported_aggregation(dask_sparse, "ffill")
 
 
 @requires_cubed
 def test_cubed_is_supported_aggregation():
     array = cubed.from_array(np.array([1, 2, 3]), chunks=2)
     assert flox.is_supported_aggregation(array, "sum")
+    assert not flox.is_supported_aggregation(array, "cumsum")
+    assert not flox.is_supported_aggregation(array, "ffill")
 
 
 def test_is_supported_aggregation_quantile_method():
     array = np.array([1, 2, 3])
     assert flox.is_supported_aggregation(array, "quantile")
     assert flox.is_supported_aggregation(array, "quantile", method="linear")
-    assert flox.is_supported_aggregation(array, "quantile", method="nearest")
+    assert not flox.is_supported_aggregation(array, "quantile", method="nearest")
+    assert flox.is_supported_aggregation(array, "nanquantile")
+    assert flox.is_supported_aggregation(array, "nanquantile", method="linear")
+    assert not flox.is_supported_aggregation(array, "nanquantile", method="nearest")

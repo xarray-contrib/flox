@@ -878,7 +878,7 @@ bfill = Scan(
 # cumprod = Scan("cumprod", binary_op=np.multiply, preop="prod", scan="cumprod")
 
 
-AGGREGATIONS: dict[str, Aggregation | Scan] = {
+REDUCTIONS: dict[str, Aggregation] = {
     "any": any_,
     "all": all_,
     "count": count,
@@ -910,11 +910,16 @@ AGGREGATIONS: dict[str, Aggregation | Scan] = {
     "nanquantile": nanquantile,
     "mode": mode,
     "nanmode": nanmode,
+}
+
+SCANS: dict[str, Scan] = {
     "cumsum": cumsum,
     "nancumsum": nancumsum,
     "ffill": ffill,
     "bfill": bfill,
 }
+
+AGGREGATIONS: dict[str, Aggregation | Scan] = {**REDUCTIONS, **SCANS}
 
 
 def _initialize_aggregation(
@@ -1038,9 +1043,11 @@ def is_supported_aggregation(array, func: str, **kwargs) -> bool:
     module, *_ = type(array).__module__.split(".")
 
     if module in ["numpy", "cubed", "xarray"]:
-        if func not in AGGREGATIONS:
+        if "quantile" in func and kwargs.get("method", "linear") != "linear":
             return False
-        if func == "quantile" and kwargs.get("method", "linear") != "linear":
+        if func in REDUCTIONS:
+            return True
+        if module == "cubed" and func in SCANS:
             return False
         return True
     else:

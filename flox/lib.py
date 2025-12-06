@@ -118,10 +118,12 @@ def _is_bool_supported_reduction(func: T_Agg) -> bool:
 
 
 def _is_sparse_supported_reduction(func: T_Agg) -> bool:
-    from .aggregations import Aggregation
+    from .aggregations import SCANS, Aggregation
 
     if isinstance(func, Aggregation):
         func = func.name
+    if func in SCANS:
+        return False
     return not _is_arg_reduction(func) and any(f in func for f in ["len", "sum", "max", "min", "mean"])
 
 
