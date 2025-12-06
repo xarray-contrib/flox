@@ -1025,8 +1025,9 @@ def _initialize_aggregation(
     return agg
 
 
-def is_supported_aggregation(array, func: str) -> bool:
+def is_supported_aggregation(array, func: str, **kwargs) -> bool:
     if isinstance(array, dask_array_type):
+        # need to check the underlying array type
         array = array._meta
 
     if isinstance(array, sparse_array_type):
@@ -1036,7 +1037,11 @@ def is_supported_aggregation(array, func: str) -> bool:
 
     module, *_ = type(array).__module__.split(".")
 
-    if module in ["numpy", "cubed"]:
-        return func in AGGREGATIONS
+    if module in ["numpy", "cubed", "xarray"]:
+        if func not in AGGREGATIONS:
+            return False
+        if func == "quantile" and kwargs.get("method", "linear") != "linear":
+            return False
+        return True
     else:
         return False
