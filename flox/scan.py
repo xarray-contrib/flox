@@ -110,20 +110,12 @@ def groupby_scan(
             'month', dayofyear' etc. Optimize chunking ``array`` for this
             method by first rechunking using ``rechunk_for_cohorts``
             (for 1D ``by`` only).
-    engine : {"flox", "numpy", "numba", "numbagg"}, optional
-        Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
-          * ``"numpy"``:
-            Use the vectorized implementations in ``numpy_groupies.aggregate_numpy``.
-            This is the default choice because it works for most array types.
+    engine : {"flox"}, optional
+        Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:\
           * ``"flox"``:
             Use an internal implementation where the data is sorted so that
             all members of a group occur sequentially, and then numpy.ufunc.reduceat
             is to used for the reduction. This will fall back to ``numpy_groupies.aggregate_numpy``
-            for a reduction that is not yet implemented.
-          * ``"numba"``:
-            Use the implementations in ``numpy_groupies.aggregate_numba``.
-          * ``"numbagg"``:
-            Use the reductions supported by ``numbagg.grouped``. This will fall back to ``numpy_groupies.aggregate_numpy``
             for a reduction that is not yet implemented.
 
     Returns
@@ -148,7 +140,7 @@ def groupby_scan(
 
     axis_ = normalize_axis_tuple(axis, array.ndim)
 
-    if engine is not None:
+    if engine is not None and engine != "flox":
         raise NotImplementedError("Setting `engine` is not supported for scans yet.")
     if method is not None:
         raise NotImplementedError("Setting `method` is not supported for scans yet.")
