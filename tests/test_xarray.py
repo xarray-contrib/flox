@@ -6,6 +6,7 @@ import pytest
 xr = pytest.importorskip("xarray")
 # isort: on
 
+from flox import is_supported_aggregation
 from flox import xrdtypes as dtypes
 from flox.xarray import rechunk_for_blockwise, xarray_reduce
 
@@ -811,3 +812,16 @@ def test_resample_first_last_empty():
             dims=["date"],
         ).chunk(date=(1, 1))
         arr.resample(date="QE").last().compute()
+
+
+def test_xarray_indexing_array_support():
+    from xarray.core.indexing import LazilyIndexedArray
+
+    data = np.array([[5, 1, 3, 8], [2, 9, 4, 7], [6, 0, 10, 1]])
+
+    da = xr.DataArray(
+        LazilyIndexedArray(data),
+        dims=("x", "y"),
+        coords={"labels": ("y", ["a", "a", "b", "b"])},
+    )
+    assert is_supported_aggregation(da.variable._data, "sum")
