@@ -9,9 +9,10 @@ import copy
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 
 from .aggregations import (
-    AGGREGATIONS,
+    SCANS,
     AlignedArrays,
     Scan,
     ScanState,
@@ -37,19 +38,17 @@ if TYPE_CHECKING:
     from .types import DaskArray
 
 
-def _validate_expected_groups_for_scan(nby, expected_groups):
+def _validate_expected_groups(nby, expected_groups):
     """Validate expected_groups for scan operations."""
     if expected_groups is None:
         return (None,) * nby
     return expected_groups
 
 
-def _convert_expected_groups_to_index_for_scan(expected_groups, isbin, sort):
+def _convert_expected_groups_to_index(expected_groups):
     """Convert expected_groups to index for scan operations."""
-    import pandas as pd
-
     result = []
-    for expect, isbin_ in zip(expected_groups, isbin):
+    for expect in expected_groups:
         if expect is None:
             result.append(None)
         elif isinstance(expect, pd.Index):
@@ -159,21 +158,18 @@ def groupby_scan(
     if not is_duck_array(array):
         array = np.asarray(array)
 
-    if isinstance(func, str):
-        agg = AGGREGATIONS[func]
+    agg = SCANS[func] if isinstance(func, str) else func
     assert isinstance(agg, Scan)
     agg = copy.deepcopy(agg)
 
-    if (agg == AGGREGATIONS["ffill"] or agg == AGGREGATIONS["bfill"]) and array.dtype.kind != "f":
+    if (agg == SCANS["ffill"] or agg == SCANS["bfill"]) and array.dtype.kind != "f":
         # nothing to do, no NaNs!
         return array
 
     if expected_groups is not None:
-        raise NotImplementedError("Setting `expected_groups` and binning is not supported yet.")
-    expected_groups = _validate_expected_groups_for_scan(nby, expected_groups)
-    expected_groups = _convert_expected_groups_to_index_for_scan(
-        expected_groups, isbin=(False,) * nby, sort=False
-    )
+        raise NotImplementedError("Setting `expected_groups` with scans is not supported yet.")
+    expected_groups = _validate_expected_groups(nby, expected_groups)
+    expected_groups = _convert_expected_groups_to_index(expected_groups)
 
     # Don't factorize early only when
     # grouping by dask arrays, and not having expected_groups
