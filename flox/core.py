@@ -113,6 +113,7 @@ from .lib import (
     _is_reindex_sparse_supported_reduction,
     _issorted,
     _postprocess_numbagg,
+    _should_auto_rechunk_blockwise,
 )
 
 
@@ -962,7 +963,7 @@ def groupby_reduce(
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
     has_cubed = is_duck_cubed_array(array) or is_duck_cubed_array(by_)
 
-    if method is None and is_duck_dask_array(array) and not any_by_dask and by_.ndim == 1 and _issorted(by_):
+    if _should_auto_rechunk_blockwise(method, array, any_by_dask, by_):
         # Let's try rechunking for sorted 1D by.
         (single_axis,) = axis_
         method, array = rechunk_for_blockwise(array, single_axis, by_, force=False)

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeAlias, TypeVar
 
 from .types import DaskArray, Graph
-from .xrutils import module_available
+from .xrutils import is_duck_dask_array, module_available
 
 if TYPE_CHECKING:
     from .aggregations import Aggregation
@@ -76,6 +76,11 @@ def _issorted(arr, ascending=True) -> bool:
         return bool((arr[:-1] <= arr[1:]).all())
     else:
         return bool((arr[:-1] >= arr[1:]).all())
+
+
+def _should_auto_rechunk_blockwise(method, array, any_by_dask: bool, by) -> bool:
+    """Check if we should attempt automatic rechunking for blockwise operations."""
+    return method is None and is_duck_dask_array(array) and not any_by_dask and by.ndim == 1 and _issorted(by)
 
 
 def _is_nanlen(reduction) -> bool:
