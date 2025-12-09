@@ -572,15 +572,13 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
     from dask.array.reductions import cumreduction as scan
 
     from .aggregations import scan_binary_op
+    from .scan import _finalize_scan, _zip, chunk_scan, grouped_reduce
 
     if len(axes) > 1:
         raise NotImplementedError("Scans are only supported along a single axis.")
     (axis,) = axes
 
     array, by = _unify_chunks(array, by)
-
-    # Import scan-specific functions from scan module
-    from .scan import _finalize_scan, _zip, chunk_scan, grouped_reduce
 
     # 1. zip together group indices & array
     zipped = map_blocks(
