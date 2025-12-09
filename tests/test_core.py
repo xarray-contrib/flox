@@ -2072,6 +2072,52 @@ def test_blockwise_nans() -> None:
     assert_equal(expected, actual)
 
 
+@requires_dask
+@pytest.mark.parametrize("func", ["nancumsum", "ffill", "bfill"])
+@pytest.mark.parametrize("method", ["blockwise", "blelloch"])
+def test_groupby_scan_method(func, method) -> None:
+    """Test that groupby_scan works correctly with explicit method parameter."""
+    # Create array where groups fit within chunks (suitable for blockwise)
+    # Include NaN values for ffill/bfill to actually test gap filling
+    if "fill" in func:
+        data = [1.0, np.nan, 3.0, 4.0, np.nan, 6.0]
+    else:
+        data = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    array = dask.array.from_array(data, chunks=3)
+    by = np.array([0, 0, 0, 1, 1, 1])
+
+    expected = groupby_scan(array.compute(), by, func=func, axis=-1)
+    actual = groupby_scan(array, by, func=func, axis=-1, method=method)
+
+    assert_equal(expected, actual)
+
+
+@requires_dask
+def test_groupby_scan_blockwise_auto_rechunk() -> None:
+    """Test that blockwise scan auto-rechunks when groups are sorted but span chunks."""
+    from flox import scan
+    from flox.rechunk import rechunk_for_blockwise as real_rechunk
+
+    # Create array with sorted groups that span chunk boundaries
+    array = dask.array.from_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], chunks=2)
+    by = np.array([0, 0, 0, 1, 1, 1])  # sorted, but group 0 spans chunks 0 and 1
+
+    expected = groupby_scan(array.compute(), by, func="nancumsum", axis=-1)
+
+    # This should auto-rechunk to enable blockwise
+    with patch.object(scan, "rechunk_for_blockwise", wraps=real_rechunk) as rechunk_spy:
+        actual = groupby_scan(array, by, func="nancumsum", axis=-1)
+        assert_equal(expected, actual)
+        # Verify rechunk_for_blockwise was called
+        assert rechunk_spy.call_count >= 1
+
+    # Explicit method="blockwise" should also rechunk and produce correct results
+    with patch.object(scan, "rechunk_for_blockwise", wraps=real_rechunk) as rechunk_spy:
+        actual_explicit = groupby_scan(array, by, func="nancumsum", axis=-1, method="blockwise")
+        assert_equal(expected, actual_explicit)
+        assert rechunk_spy.call_count >= 1
+
+
 @pytest.mark.parametrize("func", ["sum", "prod", "count", "nansum"])
 @pytest.mark.parametrize("engine", ["flox", "numpy"])
 def test_agg_dtypes(func, engine) -> None:

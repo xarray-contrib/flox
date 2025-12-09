@@ -14,12 +14,17 @@ import pandas as pd
 import toolz as tlz
 
 if TYPE_CHECKING:
-    from .aggregations import Aggregation, Scan
+    from typing import Literal
+
+    from .aggregations import Aggregation
     from .core import T_Axes, T_Engine, T_Method
     from .lib import ArrayLayer
     from .reindex import ReindexArrayType, ReindexStrategy
     from .types import DaskArray, Graph, IntermediateDict, T_By
 
+    T_ScanMethod = Literal["blelloch", "blockwise"]
+
+from .aggregations import Scan, scan_binary_op
 from .core import (
     DUMMY_AXIS,
     _get_chunk_reduction,
@@ -34,6 +39,7 @@ from .reindex import (
     ReindexStrategy,
     reindex_,
 )
+from .scan import _finalize_scan, _zip, chunk_scan, grouped_reduce
 from .types import FinalResultsDict, IntermediateDict
 from .xrutils import is_duck_dask_array, notnull
 
@@ -567,18 +573,43 @@ def dask_groupby_agg(
     return (result, groups)
 
 
-def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
+def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan, method: T_ScanMethod = "blelloch") -> DaskArray:
+    """Grouped scan for dask arrays.
+
+    Parameters
+    ----------
+    array : DaskArray
+        Input array to scan.
+    by : DaskArray
+        Group labels array, must have same chunks as array along scan axis.
+    axes : T_Axes
+        Tuple of axes to scan along (must be single axis).
+    agg : Scan
+        Scan aggregation specification.
+    method : {"blelloch", "blockwise"}, optional
+        Scan method to use:
+        - "blelloch": Blelloch parallel prefix scan algorithm, allows scanning
+          across chunk boundaries using tree reduction. Default.
+        - "blockwise": Each chunk is processed independently. Only valid when
+          all members of each group are contained within a single chunk.
+
+    Returns
+    -------
+    DaskArray
+        Result of the grouped scan with same shape and chunks as input.
+    """
     from dask.array import map_blocks
     from dask.array.reductions import cumreduction as scan
-
-    from .aggregations import scan_binary_op
-    from .scan import _finalize_scan, _zip, chunk_scan, grouped_reduce
+    from dask.base import tokenize
 
     if len(axes) > 1:
         raise NotImplementedError("Scans are only supported along a single axis.")
     (axis,) = axes
 
     array, by = _unify_chunks(array, by)
+
+    # Include method in token to differentiate task graphs
+    token = tokenize(array, by, agg, axes, method)
 
     # 1. zip together group indices & array
     zipped = map_blocks(
@@ -587,28 +618,45 @@ def dask_groupby_scan(array, by, axes: T_Axes, agg: Scan) -> DaskArray:
         array,
         dtype=array.dtype,
         meta=array._meta,
-        name="groupby-scan-preprocess",
+        name=f"groupby-scan-preprocess-{token}",
     )
-
-    scan_ = partial(chunk_scan, agg=agg)
-    # dask tokenizing error workaround
-    scan_.__name__ = scan_.func.__name__  # type: ignore[attr-defined]
 
     # 2. Run the scan
-    accumulated = scan(
-        func=scan_,
-        binop=partial(scan_binary_op, agg=agg),
-        ident=agg.identity,
-        x=zipped,
-        axis=axis,
-        # TODO: support method="sequential" here.
-        method="blelloch",
-        preop=partial(grouped_reduce, agg=agg),
-        dtype=agg.dtype,
-    )
+    if method == "blockwise":
+        # Apply chunk_scan blockwise - each block independently
+        scan_func = partial(chunk_scan, agg=agg, axis=axis, dtype=agg.dtype)
+        scanned = map_blocks(
+            scan_func,
+            zipped,
+            dtype=agg.dtype,
+            meta=array._meta,
+            name=f"groupby-scan-{token}",
+        )
+    else:
+        # Use Blelloch parallel prefix scan algorithm
+        scan_ = partial(chunk_scan, agg=agg)
+        # dask tokenizing error workaround
+        scan_.__name__ = scan_.func.__name__  # type: ignore[attr-defined]
 
-    # 3. Unzip and extract the final result array, discard groups
-    result = map_blocks(partial(_finalize_scan, dtype=agg.dtype), accumulated, dtype=agg.dtype)
+        scanned = scan(
+            func=scan_,
+            binop=partial(scan_binary_op, agg=agg),
+            ident=agg.identity,
+            x=zipped,
+            axis=axis,
+            # TODO: support method="sequential" here.
+            method="blelloch",
+            preop=partial(grouped_reduce, agg=agg),
+            dtype=agg.dtype,
+        )
+
+    # 3. Extract final result
+    result = map_blocks(
+        partial(_finalize_scan, dtype=agg.dtype),
+        scanned,
+        dtype=agg.dtype,
+        name=f"groupby-scan-finalize-{token}",
+    )
 
     assert result.chunks == array.chunks
 

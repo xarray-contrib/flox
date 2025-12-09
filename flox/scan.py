@@ -19,7 +19,10 @@ from .aggregations import (
     _atleast_1d,
     generic_aggregate,
 )
+from .cohorts import find_group_cohorts
 from .factorize import _factorize_multiple
+from .lib import _should_auto_rechunk_blockwise
+from .rechunk import rechunk_for_blockwise
 from .xrutils import is_duck_array, is_duck_dask_array, module_available
 
 if module_available("numpy", minversion="2.0.0"):
@@ -28,6 +31,8 @@ else:
     from numpy.core.numeric import normalize_axis_tuple  # type: ignore[no-redef]
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     from .core import (
         T_By,
         T_EngineOpt,
@@ -36,6 +41,41 @@ if TYPE_CHECKING:
         T_Scan,
     )
     from .types import DaskArray
+
+    T_ScanMethod = Literal["blockwise", "blelloch"]
+
+
+def _choose_scan_method(
+    method: T_MethodOpt, preferred_method: T_ScanMethod, nax: int, by_ndim: int
+) -> T_ScanMethod:
+    """Choose the scan method based on user input and preferred method.
+
+    Parameters
+    ----------
+    method : T_MethodOpt
+        User-specified method, or None for automatic selection.
+    preferred_method : T_ScanMethod
+        The preferred method based on data layout analysis.
+    nax : int
+        Number of axes being reduced.
+    by_ndim : int
+        Number of dimensions in the `by` array.
+
+    Returns
+    -------
+    T_ScanMethod
+        The chosen scan method: "blockwise" or "blelloch".
+    """
+    if method is None:
+        # Scans must reduce along all dimensions of by for blockwise
+        if nax != by_ndim:
+            return "blelloch"
+        return preferred_method
+    elif method == "blockwise":
+        return "blockwise"
+    else:
+        # For any other method (including map-reduce, cohorts), use blelloch
+        return "blelloch"
 
 
 def _validate_expected_groups(nby, expected_groups):
@@ -91,8 +131,8 @@ def groupby_scan(
         Value to assign when a label in ``expected_groups`` is not present.
     dtype : data-type , optional
         DType for the output. Can be anything that is accepted by ``np.dtype``.
-    method : {"blockwise", "cohorts"}, optional
-        Strategy for reduction of dask arrays only:
+    method : {"blockwise", "blelloch"}, optional
+        Strategy for scan of dask arrays only:
           * ``"blockwise"``:
             Only scan using blockwise and avoid aggregating blocks
             together. Useful for resampling-style groupby problems where group
@@ -101,14 +141,10 @@ def groupby_scan(
             i.e. each block contains all members of any group present
             in that block. For nD `by`, you must make sure that all members of a group
             are present in a single block.
-          * ``"cohorts"``:
-            Finds group labels that tend to occur together ("cohorts"),
-            indexes out cohorts and reduces that subset using "map-reduce",
-            repeat for all cohorts. This works well for many time groupings
-            where the group labels repeat at regular intervals like 'hour',
-            'month', dayofyear' etc. Optimize chunking ``array`` for this
-            method by first rechunking using ``rechunk_for_cohorts``
-            (for 1D ``by`` only).
+          * ``"blelloch"``:
+            Use Blelloch's parallel prefix scan algorithm, which allows
+            scanning across chunk boundaries. This is the default when groups
+            span multiple chunks.
     engine : {"flox", "numpy", "numba", "numbagg"}, optional
         Algorithm to compute the groupby reduction on non-dask arrays and on each dask chunk:
           * ``"numpy"``:
@@ -149,8 +185,6 @@ def groupby_scan(
 
     if engine is not None:
         raise NotImplementedError("Setting `engine` is not supported for scans yet.")
-    if method is not None:
-        raise NotImplementedError("Setting `method` is not supported for scans yet.")
     if engine is None:
         engine = "flox"
     assert engine == "flox"
@@ -191,6 +225,38 @@ def groupby_scan(
     by_: np.ndarray
     (by_,) = bys
     has_dask = is_duck_dask_array(array) or is_duck_dask_array(by_)
+    nax = len(axis_)
+
+    # Method selection for dask arrays
+    scan_method: T_ScanMethod = "blelloch"
+    if has_dask:
+        (single_axis,) = axis_  # type: ignore[misc]
+
+        # Try rechunking for sorted 1D by when method is not specified
+        if _should_auto_rechunk_blockwise(method, array, any_by_dask, by_):
+            rechunk_method, array = rechunk_for_blockwise(array, single_axis, by_, force=False)
+            if rechunk_method == "blockwise":
+                method = "blockwise"
+
+        # Determine preferred method based on data layout
+        if not any_by_dask and method is None:
+            cohorts_method, _ = find_group_cohorts(
+                by_,
+                [array.chunks[ax] for ax in range(-by_.ndim, 0)],  # type: ignore[union-attr]
+                expected_groups=None,
+                merge=False,
+            )
+            # Map groupby_reduce methods to scan methods
+            preferred_method: T_ScanMethod = "blockwise" if cohorts_method == "blockwise" else "blelloch"
+        else:
+            preferred_method = "blelloch"
+
+        # Choose the final method
+        scan_method = _choose_scan_method(method, preferred_method, nax, by_.ndim)
+
+        # Rechunk if blockwise was explicitly requested but data isn't aligned
+        if preferred_method != "blockwise" and scan_method == "blockwise" and by_.ndim == 1:
+            _, array = rechunk_for_blockwise(array, axis=-1, labels=by_)
 
     if array.dtype.kind in "Mm":
         cast_to = array.dtype
@@ -237,7 +303,7 @@ def groupby_scan(
     else:
         from .dask import dask_groupby_scan
 
-        result = dask_groupby_scan(inp.array, inp.group_idx, axes=axis_, agg=agg)
+        result = dask_groupby_scan(inp.array, inp.group_idx, axes=axis_, agg=agg, method=scan_method)
 
     # Made a design choice here to have `postprocess` handle both array and group_idx
     out = AlignedArrays(array=result, group_idx=by_)
