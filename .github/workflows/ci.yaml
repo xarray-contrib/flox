@@ -73,7 +73,7 @@ jobs:
           uv run --no-dev python -c "import xarray; xarray.show_versions()" || true
           uv run --no-dev pytest --durations=20 --durations-min=0.5 -n auto --cov=./ --cov-report=xml --hypothesis-profile ci
       - name: Upload code coverage to Codecov
-        uses: codecov/codecov-action@v5.5.1
+        uses: codecov/codecov-action@v5.5.2
         with:
           file: ./coverage.xml
           flags: unittests
