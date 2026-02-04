@@ -91,7 +91,7 @@ class ReindexStrategy:
 
 def reindex_numpy(array, from_: pd.Index, to: pd.Index, fill_value, dtype, axis: int):
     idx = from_.get_indexer(to)
-    indexer = [slice(None, None)] * array.ndim
+    indexer: list[slice | np.ndarray] = [slice(None, None)] * array.ndim
     indexer[axis] = idx
     reindexed = array[tuple(indexer)]
     if (idx == -1).any():

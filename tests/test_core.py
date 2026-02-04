@@ -200,7 +200,7 @@ def test_groupby_reduce(
     elif isinstance(expected_groups, np.ndarray):
         g_dtype = expected_groups.dtype
     else:
-        g_dtype = np.int64
+        g_dtype = np.dtype(np.int64)
 
     assert_equal(groups_array, np.array([0, 1, 2], g_dtype))
     assert_equal(expected_result, result)
