@@ -24,7 +24,7 @@ jobs:
       - name: Set up Python and uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Build tarball and wheels
         run: |
@@ -63,7 +63,7 @@ jobs:
       - name: Set up Python and uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Get built artifact
         uses: actions/download-artifact@v6

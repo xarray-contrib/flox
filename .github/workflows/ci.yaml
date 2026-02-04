@@ -23,14 +23,14 @@ jobs:
       matrix:
         os: ["ubuntu-latest"]
         env: ["complete"]
-        python-version: ["3.11", "3.13"]
+        python-version: ["3.11", "3.14"]
         include:
           - os: "windows-latest"
             env: "complete"
-            python-version: "3.13"
+            python-version: "3.14"
           - os: "ubuntu-latest"
             env: "no-dask"
-            python-version: "3.13"
+            python-version: "3.14"
           - os: "ubuntu-latest"
             env: "minimal"
             python-version: "3.11"
@@ -101,7 +101,7 @@ jobs:
       - name: Set up Python and uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           enable-cache: true
           cache-dependency-glob: "pyproject.toml"
       - name: Install xarray and dependencies
