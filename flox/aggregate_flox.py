@@ -146,6 +146,19 @@ def _np_grouped_op(
     # assumes input is sorted, which I do in core._prepare_for_flox
     aux = group_idx
 
+    # Handle empty group_idx case
+    if aux.size == 0:
+        if size is None:
+            size = 0
+        if dtype is None:
+            dtype = array.dtype
+        q = kwargs.get("q", None)
+        if q is None:
+            return np.full(array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
+        else:
+            nq = len(np.atleast_1d(q))
+            return np.full((nq,) + array.shape[:-1] + (size,), fill_value=fill_value, dtype=dtype)
+
     flag = np.concatenate((np.asarray([True], like=aux), aux[1:] != aux[:-1]))
     uniques = aux[flag]
     (inv_idx,) = flag.nonzero()
