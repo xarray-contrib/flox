@@ -83,7 +83,7 @@ def _factorize_single(by, expect, *, sort: bool, reindex: bool) -> tuple[pd.Inde
     else:
         if expect is not None and reindex:
             sorter = np.argsort(expect)
-            groups = expect[(sorter,)] if sort else expect
+            groups = expect[sorter] if sort else expect
             idx = np.searchsorted(expect, flat, sorter=sorter)
             mask = ~np.isin(flat, expect) | isnull(flat) | (idx == len(expect))
             if not sort:
