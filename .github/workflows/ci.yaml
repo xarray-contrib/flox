@@ -108,6 +108,7 @@ jobs:
         run: |
           uv add --dev ".[dev]" "pint>=0.22"
           uv pip uninstall h5netcdf
+          uv pip install pytz
       - name: Install upstream flox
         run: |
           uv add git+https://github.com/dcherian/flox.git@${{ github.ref }}
