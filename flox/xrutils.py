@@ -141,7 +141,7 @@ def is_scalar(value: Any, include_0d: bool = True) -> bool:
         or isinstance(value, str | bytes | dict)
         or not (
             isinstance(value, (Iterable,) + NON_NUMPY_SUPPORTED_ARRAY_TYPES)
-            or hasattr(value, "__array_function__")  # type: ignore[unreachable]
+            or hasattr(value, "__array_function__")
         )
     )
 
@@ -195,7 +195,7 @@ def isnull(data: Any):
             # types. For full consistency with pandas, we should accept None as
             # a null value as well as NaN, but it isn't clear how to do this
             # with duck typing.
-            return data != data  # type: ignore[unreachable]
+            return data != data
 
 
 def datetime_to_numeric(array, offset=None, datetime_unit=None, dtype=float):
