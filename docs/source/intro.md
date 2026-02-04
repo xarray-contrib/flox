@@ -181,6 +181,6 @@ xarray_reduce(
 
 ## Resampling
 
-Use the xarray interface i.e. `da.resample(time="M").mean()`.
+Use the xarray interface i.e. `da.resample(time="ME").mean()`.
 
-Optionally pass [`method="blockwise"`](method-blockwise): `da.resample(time="M").mean(method="blockwise")`
+Optionally pass [`method="blockwise"`](method-blockwise): `da.resample(time="ME").mean(method="blockwise")`

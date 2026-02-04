@@ -7,7 +7,11 @@ sphinx:
 build:
   os: "ubuntu-lts-latest"
   tools:
-    python: "3.12"
+    python: "3.14"
+  jobs:
+    build:
+      html:
+        - NOCOLOR=1 sphinx-build -T -b html docs/source $READTHEDOCS_OUTPUT/html
 
 python:
   install:

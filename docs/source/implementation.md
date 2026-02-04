@@ -142,7 +142,7 @@ has a value for all 12 months. One could use `reindex=False` to control memory u
 ## `method="blockwise"`
 
 One case where `method="map-reduce"` doesn't work well is the case of "resampling" reductions. An
-example here is resampling from daily frequency to monthly frequency data: `da.resample(time="M").mean()`
+example here is resampling from daily frequency to monthly frequency data: `da.resample(time="ME").mean()`
 For resampling type reductions,
 
 1. Group members occur sequentially (all days in January 2001 occur one after the other)
