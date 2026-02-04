@@ -61,13 +61,21 @@ def _factorize_single(by, expect, *, sort: bool, reindex: bool) -> tuple[pd.Inde
         # make it behave like pd.cut which uses -1:
         if len(bins) > 1:
             right = expect.closed_right
+            # For datetime64, convert both flat and bins to int64 for comparison
+            is_datetime = bins.dtype.kind == "M"
+            flat_for_digitize = flat.view(np.int64) if is_datetime else flat
+            bins_for_digitize = bins.view(np.int64) if is_datetime else bins
             idx = np.digitize(
-                flat,
-                bins=bins.view(np.int64) if bins.dtype.kind == "M" else bins,
+                flat_for_digitize,
+                bins=bins_for_digitize,
                 right=right,
             )
             idx -= 1
-            within_bins = flat <= bins.max() if right else flat < bins.max()
+            within_bins = (
+                flat_for_digitize <= bins_for_digitize.max()
+                if right
+                else flat_for_digitize < bins_for_digitize.max()
+            )
             idx[~within_bins] = -1
         else:
             idx = np.zeros_like(flat, dtype=np.intp) - 1
