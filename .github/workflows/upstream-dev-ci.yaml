@@ -48,8 +48,20 @@ jobs:
 
       - name: Install upstream dev dependencies
         run: |
-          # Install with upstream development versions using separate config
-          uv sync --group upstream-dev --config-file uv-upstream.toml --no-dev
+          # First sync the upstream group without the overridden packages
+          uv sync --group upstream --no-dev
+
+          # Install upstream development versions from nightly/git
+          uv pip install \
+            --extra-index-url https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
+            --pre \
+            numpy scipy pandas xarray
+
+          uv pip install \
+            "dask[core] @ git+https://github.com/dask/dask" \
+            "numpy-groupies @ git+https://github.com/ml31415/numpy-groupies" \
+            "sparse @ git+https://github.com/pydata/sparse" \
+            "cftime @ git+https://github.com/Unidata/cftime"
 
 
       - name: List deps
