@@ -2136,7 +2136,7 @@ def test_blockwise_avoid_rechunk() -> None:
     array = dask.array.zeros((6,), chunks=(2, 4), dtype=np.int64)
     by = np.array(["1", "1", "0", "", "0", ""], dtype="<U1")
     actual, *groups = groupby_reduce(array, by, func="first")
-    assert_equal(groups, [["", "0", "1"]])
+    assert_equal(groups, np.asarray([["", "0", "1"]], dtype="<U1"))
     assert_equal(actual, np.array([0, 0, 0], dtype=np.int64))
 
 
