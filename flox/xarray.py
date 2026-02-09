@@ -467,12 +467,9 @@ def xarray_reduce(
             actual = actual.drop_vars(name)
         # When grouping by MultiIndex, expect is an pd.Index wrapping
         # an object array of tuples
-        if (
-            name in ds_broad.xindexes
-            and isinstance(ds_broad.xindexes[name], PandasMultiIndex)
-            and not isinstance(expect3, pd.RangeIndex)
-        ):
-            levelnames = ds_broad.xindexes[name].index.names
+        xindex = ds_broad.xindexes.get(name)
+        if isinstance(xindex, PandasMultiIndex) and not isinstance(expect3, pd.RangeIndex):
+            levelnames = xindex.index.names
             if isinstance(expect3, np.ndarray):
                 # TODO: workaround for IntervalIndex issue.
                 raise NotImplementedError
