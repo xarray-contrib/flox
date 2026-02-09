@@ -20,6 +20,12 @@ from .rechunk import rechunk_for_blockwise as rechunk_array_for_blockwise
 from .rechunk import rechunk_for_cohorts as rechunk_array_for_cohorts
 from .reindex import ReindexStrategy
 
+try:
+    from xarray.indexes import PandasMultiIndex
+except ImportError:
+    PandasMultiIndex = tuple()  # type: ignore[misc,assignment,unused-ignore]
+
+
 if TYPE_CHECKING:
     from xarray.core.types import T_DataArray, T_Dataset
 
@@ -238,7 +244,7 @@ def xarray_reduce(
     unindexed_dims = tuple(
         b
         for b, isbin_ in zip(by, isbins)
-        if isinstance(b, Hashable) and not isbin_ and b in obj.dims and b not in obj.indexes
+        if isinstance(b, Hashable) and not isbin_ and b in obj.dims and b not in obj.xindexes
     )
 
     by_da = tuple(obj[g] if isinstance(g, Hashable) else g for g in by)
@@ -253,12 +259,6 @@ def xarray_reduce(
         ds = cast(xr.Dataset, obj)
     else:
         ds = obj._to_temp_dataset()
-
-    try:
-        from xarray.indexes import PandasMultiIndex
-    except ImportError:
-        PandasMultiIndex = tuple()  # type: ignore[misc,assignment,unused-ignore]
-
     more_drop = set()
     for var in maybe_drop:
         maybe_midx = ds._indexes.get(var, None)
@@ -468,11 +468,11 @@ def xarray_reduce(
         # When grouping by MultiIndex, expect is an pd.Index wrapping
         # an object array of tuples
         if (
-            name in ds_broad.indexes
-            and isinstance(ds_broad.indexes[name], pd.MultiIndex)
+            name in ds_broad.xindexes
+            and isinstance(ds_broad.xindexes[name], PandasMultiIndex)
             and not isinstance(expect3, pd.RangeIndex)
         ):
-            levelnames = ds_broad.indexes[name].names
+            levelnames = ds_broad.xindexes[name].index.names
             if isinstance(expect3, np.ndarray):
                 # TODO: workaround for IntervalIndex issue.
                 raise NotImplementedError
