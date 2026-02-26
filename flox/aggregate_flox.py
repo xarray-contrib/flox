@@ -123,8 +123,10 @@ def quantile_(array, inv_idx, *, q, axis, skipna, group_idx, dtype=None, out=Non
     # TODO: could support all the interpolations here
     gamma = np.broadcast_to(virtual_index, idxshape) - lo_
     result = _lerp(loval, hival, t=gamma, out=out, dtype=dtype)
+    tomask = actual_sizes == -1
     if not skipna and np.any(nanmask):
-        result[..., nanmask] = np.nan
+        tomask |= nanmask
+    result[..., tomask] = np.nan
     return result
 
 

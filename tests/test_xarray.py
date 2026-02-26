@@ -825,3 +825,22 @@ def test_xarray_indexing_array_support():
         coords={"labels": ("y", ["a", "a", "b", "b"])},
     )
     assert is_supported_aggregation(da.variable._data, "sum")
+
+
+def test_nanmedian_gh_494():
+    n = 100
+    dt = pd.date_range("2020-01-01", periods=n, freq="D")
+
+    data = np.random.randn(n)
+    data[0:35] = np.nan  # groups 0, 1, 2 fully NaN; group 3 partially NaN
+    data[50:80] = np.nan  # groups 5, 6, 7 fully NaN  <-- interior all-NaN groups
+    data[90:] = np.nan  # group 9 fully NaN
+
+    da = xr.DataArray(data, dims=["time"], coords={"time": dt}, name="data")
+    group = xr.DataArray([i // 10 for i in range(n)], dims=["time"], coords={"time": dt}, name="group")
+
+    result_flox = xarray_reduce(da, group, func="nanmedian").compute().to_pandas()
+
+    result_pandas = pd.Series(data).rename("data").groupby(group.values).agg("median")
+    result_pandas.index.name = "group"
+    pd.testing.assert_series_equal(result_flox, result_pandas)
