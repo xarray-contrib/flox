@@ -14,7 +14,7 @@ import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
-from hypothesis import assume, given, note, settings
+from hypothesis import assume, event, given, note, settings
 
 import flox
 from flox.core import groupby_reduce
@@ -127,6 +127,19 @@ def test_groupby_reduce(data, array, func: str) -> None:
             shape=st.just((array.shape[-1],)),
         )
     )
+    event(f"{array.dtype.kind=!r}")
+    event(f"{by.dtype.kind=!r}")
+
+    # Add some all-NaN groups
+    if data.draw(st.sampled_from([True, True, True, True, False])) and array.dtype.kind == "f":
+        groups = pd.unique(by.ravel())
+        toset = data.draw(st.lists(st.sampled_from(groups), min_size=1, max_size=len(groups)))
+        note("Setting all-NaN groups")
+        event("all-NaN groups")
+        mask = np.zeros(by.shape, dtype=bool)
+        for g in toset:
+            mask |= by == g
+        array[..., mask] = np.nan
     if func in BLOCKWISE_FUNCS and isinstance(array, dask.array.Array):
         array = array.rechunk({axis: -1})
     assert len(np.unique(by)) == 1
