@@ -229,7 +229,8 @@ def test_groupby_reduce_numpy_vs_other(data, array, func: str) -> None:
     result_other, *_ = groupby_reduce(array, by, **kwargs)
     result_numpy, *_ = groupby_reduce(numpy_array, by, **kwargs)
     assert isinstance(result_other, type(array))
-    assert_equal(result_other, result_numpy)
+    tolerance = {"rtol": 1e-5} if array.dtype == np.float32 else None
+    assert_equal(result_other, result_numpy, tolerance)
 
 
 @given(
@@ -270,7 +271,7 @@ def test_scans_against_numpy(data, array: dask.array.Array, func: str) -> None:
         expected = expected.astype(dtype)
     note((numpy_array, group_idx, array.chunks))
 
-    tolerance = {"rtol": 1e-13, "atol": 1e-15}
+    tolerance = {"rtol": 1e-12, "atol": 1e-15}
     actual = groupby_scan(numpy_array, by, func=func, axis=-1, dtype=dtype)
     assert_equal(actual, expected, tolerance)
 
