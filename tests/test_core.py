@@ -488,7 +488,9 @@ def test_numpy_reduce_nd_md():
         ((10, 12), (3, 3), 3),  # form 3
     ],
 )
-def test_groupby_agg_dask(func, shape, array_chunks, group_chunks, add_nan, dtype, engine, reindex, chunked_array_api):
+def test_groupby_agg_dask(
+    func, shape, array_chunks, group_chunks, add_nan, dtype, engine, reindex, chunked_array_api
+):
     """Tests groupby_reduce with dask arrays against groupby_reduce with numpy arrays"""
 
     if func in ["first", "last"] or func in BLOCKWISE_FUNCS:

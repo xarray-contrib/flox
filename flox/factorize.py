@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 import numpy as np
 import pandas as pd
 
-from .types import FactorizeKwargs, FactorProps
 from .lib import contains_standalone_dask_array, is_standalone_dask_array
+from .types import FactorizeKwargs, FactorProps
 from .xrutils import is_duck_dask_array, isnull
 
 if TYPE_CHECKING:

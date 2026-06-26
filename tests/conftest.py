@@ -1,7 +1,7 @@
 import pytest
 from hypothesis import HealthCheck, Verbosity, settings
 
-from . import has_dask_array, requires_dask, requires_dask_array, requires_numbagg
+from . import has_dask_array, requires_numbagg
 
 settings.register_profile(
     "ci",

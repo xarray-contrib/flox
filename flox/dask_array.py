@@ -42,7 +42,6 @@ from .xrutils import is_duck_dask_array
 if TYPE_CHECKING:
     from .aggregations import Aggregation
     from .core import T_Axes, T_Engine, T_Method
-    from .types import T_By
 
 
 def is_dask_array(x: Any) -> bool:
