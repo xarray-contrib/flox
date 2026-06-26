@@ -7,8 +7,6 @@ import sys
 import numpy as np
 import pytest
 
-dax = pytest.importorskip("dask_array")
-
 from flox.core import groupby_reduce
 
 
@@ -25,7 +23,8 @@ def _contains_expr(expr, name, seen=None):
     return any(_contains_expr(getattr(dep, "expr", dep), name, seen) for dep in expr.dependencies())
 
 
-def test_groupby_reduce_with_dask_array_returns_dask_array():
+def test_groupby_reduce_with_dask_array_returns_dask_array(dask_array_api):
+    dax = dask_array_api
     x = dax.from_array(np.arange(6), chunks=(3,))
     labels = np.array([0, 0, 1, 1, 2, 2])
 
@@ -42,7 +41,8 @@ def test_groupby_reduce_with_dask_array_returns_dask_array():
     assert "FromGraph" not in type(result.expr).__name__
 
 
-def test_groupby_reduce_with_dask_array_labels():
+def test_groupby_reduce_with_dask_array_labels(dask_array_api):
+    dax = dask_array_api
     x = dax.from_array(np.arange(6), chunks=(3,))
     labels = dax.from_array(np.array([0, 0, 1, 1, 2, 2]), chunks=(3,))
 
@@ -58,7 +58,8 @@ def test_groupby_reduce_with_dask_array_labels():
     np.testing.assert_array_equal(result.compute(), np.array([1, 5, 9]))
 
 
-def test_groupby_reduce_with_dask_array_unknown_groups_uses_expression():
+def test_groupby_reduce_with_dask_array_unknown_groups_uses_expression(dask_array_api):
+    dax = dask_array_api
     x = dax.from_array(np.arange(6), chunks=(3,))
     labels = dax.from_array(np.array([0, 0, 1, 1, 2, 2]), chunks=(3,))
 
@@ -71,7 +72,8 @@ def test_groupby_reduce_with_dask_array_unknown_groups_uses_expression():
     np.testing.assert_array_equal(result.compute(), np.array([1, 5, 9]))
 
 
-def test_groupby_reduce_with_dask_array_cohorts_uses_subset_expression():
+def test_groupby_reduce_with_dask_array_cohorts_uses_subset_expression(dask_array_api):
+    dax = dask_array_api
     x = dax.from_array(np.arange(12).reshape(3, 4), chunks=(1, 2))
     labels = np.array([[0, 0, 1, 1], [0, 0, 1, 1], [2, 2, 3, 3]])
 
@@ -91,7 +93,8 @@ def test_groupby_reduce_with_dask_array_cohorts_uses_subset_expression():
     np.testing.assert_array_equal(result.compute(), np.array([10, 18, 17, 21]))
 
 
-def test_xarray_reduce_with_dask_array_data():
+def test_xarray_reduce_with_dask_array_data(dask_array_api):
+    dax = dask_array_api
     xr = pytest.importorskip("xarray")
     from flox.xarray import xarray_reduce
 
@@ -128,7 +131,8 @@ np.testing.assert_array_equal(result.compute().values, np.array([1, 5, 9]))
     )
 
 
-def test_mixed_dask_backends_raise_clear_error():
+def test_mixed_dask_backends_raise_clear_error(dask_array_api):
+    dax = dask_array_api
     legacy_da = pytest.importorskip("dask.array")
     x = dax.from_array(np.arange(6), chunks=(3,))
     labels = legacy_da.from_array(np.array([0, 0, 1, 1, 2, 2]), chunks=(3,))

@@ -187,6 +187,26 @@ def _unify_chunks(array, by, chunkmanager):
     return array, by
 
 
+def _argreduce_preprocess(array, axis, chunkmanager):
+    assert len(axis) == 1
+    axis = axis[0]
+
+    idx = chunkmanager.array_api.arange(array.shape[axis], chunks=array.chunks[axis], dtype=np.intp)
+    idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(array.ndim))]
+
+    def _zip_index(array_, idx_):
+        return (array_, idx_)
+
+    return chunkmanager.map_blocks(
+        _zip_index,
+        array,
+        idx,
+        dtype=array.dtype,
+        meta=array._meta,
+        name="groupby-argreduce-preprocess",
+    )
+
+
 def dask_groupby_agg(
     array: Array,
     by: Any,
@@ -225,7 +245,10 @@ def dask_groupby_agg(
     token = dask.base.tokenize(array, by, agg, expected_groups, axis, method)
 
     if agg.preprocess and method != "blockwise":
-        array = agg.preprocess(array, axis=axis)
+        if _is_arg_reduction(agg):
+            array = _argreduce_preprocess(array, axis=axis, chunkmanager=chunkmanager)
+        else:
+            array = agg.preprocess(array, axis=axis)
 
     labels_are_unknown = is_duck_dask_array(by_input) and expected_groups is None
     do_grouped_combine = (

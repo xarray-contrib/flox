@@ -1,4 +1,5 @@
 import importlib
+import importlib.util
 from contextlib import nullcontext
 from typing import Any
 
@@ -7,7 +8,7 @@ import packaging.version
 import pandas as pd
 import pytest
 
-from flox.lib import dask_array_type, sparse_array_type
+from flox.lib import sparse_array_type
 from flox.xrutils import is_duck_dask_array
 
 pd_types = (pd.Index,)
@@ -33,6 +34,12 @@ def _importorskip(modname, minversion=None):
     return has, func
 
 
+def _module_available_without_import(modname):
+    has = importlib.util.find_spec(modname) is not None
+    func = pytest.mark.skipif(not has, reason=f"requires {modname}")
+    return has, func
+
+
 def LooseVersion(vstring):
     # Our development version is something like '0.10.9+aac7bfc'
     # This function just ignored the git commit id.
@@ -43,6 +50,7 @@ def LooseVersion(vstring):
 has_cftime, requires_cftime = _importorskip("cftime")
 has_cubed, requires_cubed = _importorskip("cubed")
 has_dask, requires_dask = _importorskip("dask")
+has_dask_array, requires_dask_array = _module_available_without_import("dask_array")
 has_sparse, requires_sparse = _importorskip("sparse")
 has_numba, requires_numba = _importorskip("numba")
 has_numbagg, requires_numbagg = _importorskip("numbagg")
@@ -105,11 +113,10 @@ def assert_equal(a, b, tolerance=None):
     if a.dtype != b.dtype:
         raise AssertionError(f"a and b have different dtypes: (a: {a.dtype}, b: {b.dtype})")
 
-    if has_dask:
-        a_eager = a.compute() if isinstance(a, dask_array_type) else a
-        b_eager = b.compute() if isinstance(b, dask_array_type) else b
-    else:
-        a_eager, b_eager = a, b
+    a_is_chunked = is_duck_dask_array(a)
+    b_is_chunked = is_duck_dask_array(b)
+    a_eager = a.compute() if a_is_chunked else a
+    b_eager = b.compute() if b_is_chunked else b
 
     if has_sparse:
         one_is_sparse = isinstance(a_eager, sparse_array_type) or isinstance(b_eager, sparse_array_type)
@@ -123,7 +130,7 @@ def assert_equal(a, b, tolerance=None):
     else:
         np.testing.assert_allclose(a_eager, b_eager, equal_nan=True, **tolerance)
 
-    if has_dask and isinstance(a, dask_array_type) or isinstance(b, dask_array_type):
+    if a_is_chunked or b_is_chunked:
         # does some validation of the dask graph
         dask_assert_eq(a, b, equal_nan=True, check_type=not one_is_sparse)
 
