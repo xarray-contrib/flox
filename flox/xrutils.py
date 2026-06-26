@@ -56,7 +56,7 @@ dask: ModuleType | None
 try:
     import dask.array
 
-    dask_array_type = dask.array.Array  # type: ignore[union-attr]
+    dask_array_type = (dask.array.Array,)  # type: ignore[union-attr]
 except ImportError:
     dask = None
     dask_array_type = ()

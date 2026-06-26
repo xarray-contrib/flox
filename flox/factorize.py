@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from .types import FactorizeKwargs, FactorProps
+from .lib import contains_standalone_dask_array, is_standalone_dask_array
 from .xrutils import is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
@@ -234,9 +235,19 @@ def _factorize_multiple(
         sort=sort,
     )
     if any_by_dask:
-        import dask.array
-
         from . import dask_array_ops  # noqa
+
+        dask_bys = tuple(by_ for by_ in by if is_duck_dask_array(by_))
+        if contains_standalone_dask_array(*dask_bys):
+            if not all(is_standalone_dask_array(by_) for by_ in dask_bys):
+                raise TypeError("Cannot mix dask_array.Array with other Dask-backed array types.")
+            from .dask_array import get_chunkmanager
+
+            chunkmanager = get_chunkmanager(*by)
+        else:
+            import dask.array
+
+            chunkmanager = dask.array
 
         # unifying chunks will make sure all arrays in `by` are dask arrays
         # with compatible chunks, even if there was originally a numpy array
@@ -251,9 +262,9 @@ def _factorize_multiple(
         )
         grp_shape = tuple(map(len, found_groups))
 
-        chunks, by_chunked = dask.array.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
+        chunks, by_chunked = chunkmanager.unify_chunks(*itertools.chain(*zip(by, (inds,) * len(by))))
         group_idxs = [
-            dask.array.map_blocks(
+            chunkmanager.map_blocks(
                 _lazy_factorize_wrapper,
                 by_,
                 expected_groups=(expect_,),
@@ -264,7 +275,7 @@ def _factorize_multiple(
         ]
         # This could be avoied but we'd use `np.where`
         # instead `_ravel_factorized` instead i.e. a copy.
-        group_idx = dask.array.map_blocks(
+        group_idx = chunkmanager.map_blocks(
             _ravel_factorized, *group_idxs, grp_shape=grp_shape, chunks=tuple(chunks.values()), dtype=np.int64
         )
 

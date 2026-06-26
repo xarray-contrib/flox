@@ -13,12 +13,13 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
+dask_array_type = ()
 try:
     import dask.array as da
 
-    dask_array_type = da.Array
+    dask_array_type += (da.Array,)
 except ImportError:
-    dask_array_type = ()  # type: ignore[assignment, misc]
+    pass
 
 try:
     import sparse
@@ -28,6 +29,14 @@ except ImportError:
     sparse_array_type = ()
 
 HAS_SPARSE = module_available("sparse")
+
+
+def is_standalone_dask_array(x) -> bool:
+    return type(x).__module__.split(".", 1)[0] == "dask_array" and is_duck_dask_array(x)
+
+
+def contains_standalone_dask_array(*args) -> bool:
+    return any(is_standalone_dask_array(arg) for arg in args)
 
 
 @dataclass

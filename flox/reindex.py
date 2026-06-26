@@ -13,8 +13,8 @@ import numpy as np
 import pandas as pd
 
 from . import xrdtypes
-from .lib import dask_array_type, sparse_array_type
-from .xrutils import isnull
+from .lib import sparse_array_type
+from .xrutils import is_duck_dask_array, isnull
 
 if TYPE_CHECKING:
     from .core import T_Axis
@@ -77,7 +77,7 @@ class ReindexStrategy:
 
     def get_dask_meta(self, other, *, fill_value, dtype) -> Any:
         if self.array_type is ReindexArrayType.AUTO:
-            other = other._meta if isinstance(other, dask_array_type) else other
+            other = other._meta if is_duck_dask_array(other) else other
             if isinstance(other, sparse_array_type):
                 return type(other).from_numpy(np.array([], dtype=dtype))
             return type(other)([], dtype=dtype)

@@ -32,7 +32,7 @@ from .factorize import (
     _factorize_multiple,
     factorize_,
 )
-from .lib import sparse_array_type
+from .lib import contains_standalone_dask_array, is_standalone_dask_array, sparse_array_type
 from .rechunk import rechunk_for_blockwise
 from .reindex import (
     ReindexArrayType,
@@ -1154,7 +1154,13 @@ def groupby_reduce(
         if kwargs["fill_value"] is None:
             kwargs["fill_value"] = agg.fill_value[agg.name]
 
-        from .dask import dask_groupby_agg
+        dask_inputs = tuple(arg for arg in (array, by_) if is_duck_dask_array(arg))
+        if contains_standalone_dask_array(*dask_inputs):
+            if not all(is_standalone_dask_array(arg) for arg in dask_inputs):
+                raise TypeError("Cannot mix dask_array.Array with other Dask-backed array types.")
+            from .dask_array import dask_groupby_agg
+        else:
+            from .dask import dask_groupby_agg
 
         partial_agg = partial(dask_groupby_agg, **kwargs)
 
