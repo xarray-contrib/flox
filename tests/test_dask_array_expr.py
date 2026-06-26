@@ -9,6 +9,8 @@ import pytest
 
 from flox.core import groupby_reduce
 
+from . import requires_dask
+
 
 def _contains_expr(expr, name, seen=None):
     if seen is None:
@@ -107,6 +109,7 @@ def test_xarray_reduce_with_dask_array_data(dask_array_api):
     np.testing.assert_array_equal(result.compute().values, np.array([1, 5, 9]))
 
 
+@requires_dask
 def test_importing_flox_does_not_register_dask_array_for_legacy_xarray_dask():
     code = """
 import sys

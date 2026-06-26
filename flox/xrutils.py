@@ -53,6 +53,7 @@ except ImportError:
     cubed = None
 
 dask: ModuleType | None
+dask_array_type: tuple[type[Any], ...]
 try:
     import dask.array
 

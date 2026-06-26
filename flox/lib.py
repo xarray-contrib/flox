@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar
 
 from .types import DaskArray, Graph
 from .xrutils import is_duck_dask_array, module_available
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
-dask_array_type = ()
+dask_array_type: tuple[type[Any], ...] = ()
 try:
     import dask.array as da
 
