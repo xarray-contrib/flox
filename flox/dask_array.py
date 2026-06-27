@@ -239,6 +239,9 @@ def dask_groupby_agg(
         raise ValueError("reindex.blockwise must be False-y if method is 'cohorts'.")
 
     by_input = by
+    array = new_collection(array.expr.simplify())
+    if is_dask_array(by):
+        by = new_collection(by.expr.simplify())
     array, by = _unify_chunks(array, by, chunkmanager)
 
     token = dask.base.tokenize(array, by, agg, expected_groups, axis, method)

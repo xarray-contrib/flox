@@ -109,6 +109,57 @@ def test_xarray_reduce_with_dask_array_data(dask_array_api):
     np.testing.assert_array_equal(result.compute().values, np.array([1, 5, 9]))
 
 
+@pytest.mark.parametrize("method", ["xarray", "map-reduce", "cohorts", "blockwise"])
+def test_xarray_reduce_with_dask_array_rolling_groupby(method, dask_array_api):
+    dax = dask_array_api
+    xr = pytest.importorskip("xarray")
+    from flox.xarray import xarray_reduce
+
+    time = np.arange(
+        np.datetime64("2015-12-30T00"),
+        np.datetime64("2016-01-03T00"),
+        np.timedelta64(1, "h"),
+    )
+    data = np.arange(time.size * 2 * 3, dtype=np.float32).reshape(time.size, 2, 3)
+    x = xr.DataArray(
+        dax.from_array(data, chunks=(6, 2, 3)),
+        dims=("time", "lat", "lon"),
+        coords={"time": time},
+    )
+    expected = (
+        xr.DataArray(data, dims=("time", "lat", "lon"), coords={"time": time})
+        .rolling(time=3, min_periods=3)
+        .sum()
+        .groupby("time.year")
+        .max("time")
+    )
+
+    rolled = x.rolling(time=3, min_periods=3).sum()
+    labels = xr.DataArray(
+        rolled.time.dt.year.data,
+        name="year",
+        dims="time",
+        coords={"time": rolled.time},
+    )
+
+    if method == "xarray":
+        result = rolled.groupby("time.year").max("time")
+    else:
+        result = xarray_reduce(
+            rolled,
+            labels,
+            func="max",
+            dim="time",
+            expected_groups=np.array([2015, 2016]),
+            method=method,
+        )
+
+    assert isinstance(result.data, dax.Array)
+    expected_chunks = ((2,), (2,), (3,)) if method in ("xarray", "map-reduce") else ((1, 1), (2,), (3,))
+    assert result.data.chunks == expected_chunks
+    xr.testing.assert_identical(result.compute().rename(None), expected)
+
+
 @requires_dask
 def test_importing_flox_does_not_register_dask_array_for_legacy_xarray_dask():
     code = """
