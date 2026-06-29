@@ -23,8 +23,8 @@ from dask._task_spec import Alias, Task, TaskRef
 from dask_array._collection import Array
 from dask_array._expr import ArrayExpr
 from dask_array._new_collection import new_collection
-from dask_array.reductions._reduction import _tree_reduce
 
+from .cohorts import find_group_cohorts
 from .core import _get_chunk_reduction, _reduce_blockwise
 from .dask import (
     _aggregate,
@@ -50,6 +50,10 @@ def is_dask_array(x: Any) -> bool:
 
 def contains_dask_array(*args: Any) -> bool:
     return any(is_dask_array(arg) for arg in args)
+
+
+def _passthrough_chunk(x, axis=None, keepdims=None):
+    return x
 
 
 class _DirectChunkManager:
@@ -243,6 +247,13 @@ def dask_groupby_agg(
     if is_dask_array(by):
         by = new_collection(by.expr.simplify())
     array, by = _unify_chunks(array, by, chunkmanager)
+    if method == "cohorts":
+        _, chunks_cohorts = find_group_cohorts(
+            by_input,
+            [array.chunks[ax] for ax in range(-by.ndim, 0)],
+            expected_groups=expected_groups,
+            merge=True,
+        )
 
     token = dask.base.tokenize(array, by, agg, expected_groups, axis, method)
 
@@ -305,8 +316,9 @@ def dask_groupby_agg(
         aggregate = partial(_aggregate, combine=combine, agg=agg, fill_value=fill_value, reindex=reindex)
 
         if method == "map-reduce":
-            reduced = _tree_reduce(
-                intermediate.expr,
+            reduced = array_api.reduction(
+                intermediate,
+                chunk=_passthrough_chunk,
                 aggregate=partial(aggregate, expected_groups=expected_groups),
                 axis=axis,
                 keepdims=True,
@@ -353,8 +365,9 @@ def dask_groupby_agg(
                 )
                 new_reindex = ReindexStrategy(blockwise=do_simple_combine, array_type=reindex.array_type)
                 cohort_results.append(
-                    _tree_reduce(
-                        subset.expr,
+                    array_api.reduction(
+                        subset,
+                        chunk=_passthrough_chunk,
                         aggregate=partial(
                             aggregate,
                             expected_groups=cohort_index,
