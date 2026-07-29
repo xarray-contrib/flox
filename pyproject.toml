@@ -36,13 +36,12 @@ changelog = "https://github.com/xarray-contrib/flox/releases"
 all = ["cachey", "dask", "numba", "numbagg", "xarray"]
 test = ["netCDF4"]
 docs = [
-    "cubed>=0.20.0",
+    "cubed[diagnostics]>=0.20.0",
     "cubed-xarray",
     "dask",
     "xarray",
     "numpydoc",
     "matplotlib",
-    "rich",
     "myst-parser",
     "myst-nb",
     "sparse",
@@ -239,13 +238,12 @@ numpy1 = [
     {include-group = "complete"},
 ]
 docs = [
-    "cubed>=0.20.0",
+    "cubed[diagnostics]>=0.20.0",
     "cubed-xarray",
     "dask",
     "xarray",
     "numpydoc",
     "matplotlib",
-    "rich",
     "myst-parser",
     "myst-nb",
     "sparse",
