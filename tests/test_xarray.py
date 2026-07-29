@@ -17,6 +17,7 @@ from . import (
     raise_if_dask_computes,
     requires_cftime,
     requires_dask,
+    requires_dask_array,
 )
 
 if has_dask:
@@ -29,6 +30,10 @@ if has_dask:
 xr.set_options(use_flox=False, use_numbagg=False, use_bottleneck=False)
 tolerance64 = {"rtol": 1e-15, "atol": 1e-18}
 np.random.seed(123)
+CHUNKED_ARRAY_BACKENDS = (
+    pytest.param("dask", marks=requires_dask, id="dask"),
+    pytest.param("dask_array", marks=requires_dask_array, id="dask-array"),
+)
 
 
 @pytest.mark.parametrize("reindex", [None, False, True])
@@ -214,14 +219,14 @@ def test_xarray_reduce_cftime_var(engine, indexer, expected_groups, func):
 
 
 @requires_cftime
-@requires_dask
-def test_xarray_reduce_single_grouper(engine):
+@pytest.mark.parametrize("chunked_array_api", CHUNKED_ARRAY_BACKENDS, indirect=True)
+def test_xarray_reduce_single_grouper(engine, chunked_array_api):
     # DataArray
     ds = xr.Dataset(
         {
             "Tair": (
                 ("time", "x", "y"),
-                dask.array.ones((36, 205, 275), chunks=(9, -1, -1)),
+                chunked_array_api.ones((36, 205, 275), chunks=(9, -1, -1)),
             )
         },
         coords={"time": xr.date_range("1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap")},
@@ -395,15 +400,15 @@ def test_xarray_groupby_bins(chunks, engine):
     xr.testing.assert_equal(actual, expected)
 
 
-@requires_dask
-def test_func_is_aggregation():
+@pytest.mark.parametrize("chunked_array_api", CHUNKED_ARRAY_BACKENDS, indirect=True)
+def test_func_is_aggregation(chunked_array_api):
     from flox.aggregations import mean
 
     ds = xr.Dataset(
         {
             "Tair": (
                 ("time", "x", "y"),
-                dask.array.ones((36, 205, 275), chunks=(9, -1, -1)),
+                chunked_array_api.ones((36, 205, 275), chunks=(9, -1, -1)),
             )
         },
         coords={"time": xr.date_range("1980-09-01 00:00", "1983-09-18 00:00", freq="ME", calendar="noleap")},

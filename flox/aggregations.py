@@ -14,7 +14,7 @@ from numpy.typing import ArrayLike, DTypeLike
 
 from . import aggregate_flox, aggregate_npg, xrutils
 from . import xrdtypes as dtypes
-from .lib import dask_array_type, sparse_array_type
+from .lib import sparse_array_type
 from .multiarray import MultiArray
 from .xrutils import notnull
 
@@ -1031,7 +1031,7 @@ def _initialize_aggregation(
 
 
 def is_supported_aggregation(array, func: str, **kwargs) -> bool:
-    if isinstance(array, dask_array_type):
+    if xrutils.is_duck_dask_array(array):
         # need to check the underlying array type
         array = array._meta
 

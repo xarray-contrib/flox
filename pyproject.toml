@@ -53,6 +53,7 @@ docs = [
     "sphinx-codeautolink",
     "sphinx-copybutton",
     "pyarrow",
+    "rich",
 ]
 
 [build-system]
@@ -146,6 +147,8 @@ module=[
     "cftime",
     "cubed.*",
     "dask.*",
+    "dask_array",
+    "dask_array.*",
     "importlib_metadata",
     "numba",
     "numbagg.*",
@@ -254,6 +257,7 @@ docs = [
     "jupyter",
     "sphinx-codeautolink",
     "sphinx-copybutton",
+    "rich",
 ]
 benchmark = [
     "asv>=0.6.4",

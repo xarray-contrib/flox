@@ -16,6 +16,7 @@ import pandas as pd
 from .aggregations import _atleast_1d
 from .cache import memoize
 from .factorize import factorize_
+from .lib import is_standalone_dask_array
 from .options import OPTIONS
 
 if TYPE_CHECKING:
@@ -180,6 +181,11 @@ def rechunk_for_blockwise(
     DaskArray
         Rechunked array
     """
+
+    if is_standalone_dask_array(array):
+        from dask_array._new_collection import new_collection
+
+        array = new_collection(array.expr.simplify())
 
     chunks = array.chunks[axis]
     if len(chunks) == 1:
