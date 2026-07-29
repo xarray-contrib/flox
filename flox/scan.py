@@ -300,15 +300,28 @@ def groupby_scan(
     if not has_dask:
         final_state = chunk_scan(inp, axis=single_axis, agg=agg, dtype=agg.dtype)
         result = _finalize_scan(final_state, dtype=agg.dtype)
+        out = AlignedArrays(array=result, group_idx=by_)
+        if agg.finalize:
+            out = agg.finalize(out)
     else:
-        from .dask import dask_groupby_scan
+        from .expr import EXPR_ENABLED
 
-        result = dask_groupby_scan(inp.array, inp.group_idx, axes=axis_, agg=agg, method=scan_method)
+        if EXPR_ENABLED:
+            from .expr import dask_groupby_scan
 
-    # Made a design choice here to have `postprocess` handle both array and group_idx
-    out = AlignedArrays(array=result, group_idx=by_)
-    if agg.finalize:
-        out = agg.finalize(out)
+            # Expression mode handles finalize internally to avoid slicing optimization issues
+            result = dask_groupby_scan(
+                inp.array, inp.group_idx, axes=axis_, agg=agg, method=scan_method,
+                reverse_result=(agg.finalize is not None)
+            )
+            out = AlignedArrays(array=result, group_idx=by_)
+        else:
+            from .dask import dask_groupby_scan
+
+            result = dask_groupby_scan(inp.array, inp.group_idx, axes=axis_, agg=agg, method=scan_method)
+            out = AlignedArrays(array=result, group_idx=by_)
+            if agg.finalize:
+                out = agg.finalize(out)
 
     if cast_to is not None:
         return out.array.astype(cast_to)

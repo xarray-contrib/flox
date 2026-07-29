@@ -1154,7 +1154,12 @@ def groupby_reduce(
         if kwargs["fill_value"] is None:
             kwargs["fill_value"] = agg.fill_value[agg.name]
 
-        from .dask import dask_groupby_agg
+        from .expr import EXPR_ENABLED
+
+        if EXPR_ENABLED:
+            from .expr import dask_groupby_agg
+        else:
+            from .dask import dask_groupby_agg
 
         partial_agg = partial(dask_groupby_agg, **kwargs)
 
