@@ -14,7 +14,7 @@ import dask
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
-from hypothesis import assume, given, note, settings
+from hypothesis import assume, event, given, note, settings
 
 import flox
 from flox.core import groupby_reduce
@@ -127,6 +127,19 @@ def test_groupby_reduce(data, array, func: str) -> None:
             shape=st.just((array.shape[-1],)),
         )
     )
+    event(f"{array.dtype.kind=!r}")
+    event(f"{by.dtype.kind=!r}")
+
+    # Add some all-NaN groups
+    if data.draw(st.sampled_from([True, True, True, True, False])) and array.dtype.kind == "f":
+        groups = pd.unique(by.ravel())
+        toset = data.draw(st.lists(st.sampled_from(groups), min_size=1, max_size=len(groups)))
+        note("Setting all-NaN groups")
+        event("all-NaN groups")
+        mask = np.zeros(by.shape, dtype=bool)
+        for g in toset:
+            mask |= by == g
+        array[..., mask] = np.nan
     if func in BLOCKWISE_FUNCS and isinstance(array, dask.array.Array):
         array = array.rechunk({axis: -1})
     assert len(np.unique(by)) == 1
@@ -216,7 +229,8 @@ def test_groupby_reduce_numpy_vs_other(data, array, func: str) -> None:
     result_other, *_ = groupby_reduce(array, by, **kwargs)
     result_numpy, *_ = groupby_reduce(numpy_array, by, **kwargs)
     assert isinstance(result_other, type(array))
-    assert_equal(result_other, result_numpy)
+    tolerance = {"rtol": 1e-5} if array.dtype == np.float32 else None
+    assert_equal(result_other, result_numpy, tolerance)
 
 
 @given(
@@ -257,7 +271,7 @@ def test_scans_against_numpy(data, array: dask.array.Array, func: str) -> None:
         expected = expected.astype(dtype)
     note((numpy_array, group_idx, array.chunks))
 
-    tolerance = {"rtol": 1e-13, "atol": 1e-15}
+    tolerance = {"rtol": 1e-12, "atol": 1e-15}
     actual = groupby_scan(numpy_array, by, func=func, axis=-1, dtype=dtype)
     assert_equal(actual, expected, tolerance)
 

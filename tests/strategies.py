@@ -9,6 +9,7 @@ import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
 import sparse
+from hypothesis import assume
 
 from . import ALL_FUNCS, SCIPY_STATS_FUNCS
 
@@ -81,16 +82,16 @@ def insert_nans(draw: st.DrawFn, array: np.ndarray) -> np.ndarray:
 
 
 numeric_dtypes = (
-    npst.integer_dtypes(endianness="=")
+    npst.floating_dtypes(endianness="=", sizes=(32, 64))
+    | npst.integer_dtypes(endianness="=")
     | npst.unsigned_integer_dtypes(endianness="=")
-    | npst.floating_dtypes(endianness="=", sizes=(32, 64))
     # TODO: add complex here not in supported_dtypes
 )
 numeric_like_dtypes = (
-    npst.boolean_dtypes()
-    | numeric_dtypes
+    numeric_dtypes
     | npst.datetime64_dtypes(endianness="=")
     | npst.timedelta64_dtypes(endianness="=")
+    | npst.boolean_dtypes()
 )
 supported_dtypes = (
     numeric_like_dtypes
@@ -120,7 +121,74 @@ def numpy_arrays(draw: st.DrawFn, *, dtype) -> np.ndarray:
 
 
 numeric_arrays = numpy_arrays(dtype=numeric_dtypes)
-numeric_like_arrays = numpy_arrays(dtype=numeric_like_dtypes)
+
+
+@st.composite
+def non_overflowing_float_arrays(draw: st.DrawFn) -> np.ndarray[Any, Any]:
+    """Generate float arrays that satisfy not_overflowing_array by construction.
+
+    Bounds element magnitudes to 2^(nmant+1) / array.size so that sums
+    cannot overflow the mantissa, avoiding rejection by the assume() filter.
+    """
+    dtype = draw(npst.floating_dtypes(endianness="=", sizes=(32, 64)))
+    shape = draw(npst.array_shapes())
+    size = int(np.prod(shape))
+    info = np.finfo(dtype)
+    limit = float(2 ** (info.nmant + 1))
+    # Cast to target dtype so the bound is exactly representable (required by hypothesis)
+    max_val = float(dtype.type(limit / max(size, 1)))
+    array = draw(
+        npst.arrays(
+            dtype=st.just(dtype),
+            shape=st.just(shape),
+            elements={"min_value": -max_val, "max_value": max_val, "allow_subnormal": False},
+        )
+    )
+    array = insert_nans(draw, array)
+    return array
+
+
+@st.composite
+def non_overflowing_int_arrays(draw: st.DrawFn) -> np.ndarray[Any, Any]:
+    """Generate integer arrays that satisfy not_overflowing_array by construction.
+
+    Bounds elements so that summing the entire array cannot overflow the dtype.
+    """
+    dtype = draw(npst.integer_dtypes(endianness="=") | npst.unsigned_integer_dtypes(endianness="="))
+    shape = draw(npst.array_shapes())
+    size = max(int(np.prod(shape)), 1)
+    imax = int(np.iinfo(dtype).max)
+    imin = int(np.iinfo(dtype).min)
+
+    # Strict <: largest int strictly less than imax / size
+    max_val = imax // size
+    if imax % size == 0:
+        max_val -= 1
+
+    # Strict >: smallest int strictly greater than imin / size
+    if imin < 0:
+        min_val = -((-imin) // size)
+        if (-imin) % size == 0:
+            min_val += 1
+    else:
+        # unsigned: imin == 0, need array > 0
+        min_val = 1
+
+    assume(min_val <= max_val)
+
+    array = draw(
+        npst.arrays(
+            dtype=st.just(dtype),
+            shape=st.just(shape),
+            elements={"min_value": min_val, "max_value": max_val},
+        )
+    )
+    return array
+
+
+numeric_like_arrays = (
+    non_overflowing_float_arrays() | non_overflowing_int_arrays() | numpy_arrays(dtype=numeric_like_dtypes)
+)
 all_arrays = numeric_like_arrays | cftime_arrays()
 
 
