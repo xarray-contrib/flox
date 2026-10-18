@@ -182,7 +182,10 @@ def rechunk_for_blockwise(
     """
 
     chunks = array.chunks[axis]
-    if len(chunks) == 1:
+    # Automatic rechunking leaves one chunk alone: it is already blockwise.
+    # ``force`` still has to cut sequential groups, because this chunk has no
+    # interior boundary for the snap below to move.
+    if len(chunks) == 1 and not force:
         return "blockwise", array
 
     # import dask
@@ -199,6 +202,19 @@ def rechunk_for_blockwise(
 
     # FIXME: this should be unnecessary?
     labels = factorize_((labels,), axes=())[0]
+    if len(chunks) == 1:
+        changes = np.flatnonzero(labels[1:] != labels[:-1]) + 1
+        n_runs = int(changes.size) + (1 if labels.size else 0)
+        # A repeated label is one group in two places. Splitting those runs
+        # would make blockwise combine the same group from two chunks.
+        if labels.size and n_runs == len(pd.unique(labels)):
+            bounds = np.concatenate(([0], changes, [labels.size]))
+            newchunks = tuple(np.diff(bounds))
+            if newchunks != chunks:
+                logger.debug("Rechunking to enable blockwise.")
+                return "blockwise", array.rechunk({axis: newchunks})
+        return "blockwise", array
+
     newchunks = _get_optimal_chunks_for_groups(new_input_chunks, labels)
     if newchunks == chunks:
         return "blockwise", array
