@@ -1012,6 +1012,27 @@ def test_rechunk_for_blockwise(inchunks, expected, expected_method):
 
 
 @requires_dask
+def test_rechunk_for_blockwise_single_chunk_follows_group_edges():
+    labels = np.array([1, 1, 1, 2, 2])
+    array = dask.array.zeros(5)
+    assert array.chunks == ((5,),)
+
+    method, rechunked = rechunk_for_blockwise(array, 0, labels)
+    assert method == "blockwise"
+    assert rechunked.chunks == ((3, 2),)
+
+    method, untouched = rechunk_for_blockwise(array, 0, labels, force=False)
+    assert method == "blockwise"
+    assert untouched.chunks == ((5,),)
+
+    repeated = np.array([1, 2, 1, 2])
+    repeated_array = dask.array.zeros(repeated.size)
+    method, rechunked = rechunk_for_blockwise(repeated_array, 0, repeated)
+    assert method == "blockwise"
+    assert rechunked.chunks == ((4,),)
+
+
+@requires_dask
 @pytest.mark.parametrize(
     "expected, labels, chunks",
     [
