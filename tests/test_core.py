@@ -20,6 +20,7 @@ from flox import xrdtypes as dtypes
 from flox.aggregations import Aggregation, _initialize_aggregation
 from flox.cohorts import find_group_cohorts
 from flox.core import (
+    HAS_NPG_DATETIME,
     HAS_NUMBAGG,
     _choose_engine,
     _convert_expected_groups_to_index,
@@ -45,6 +46,7 @@ from . import (
     raise_if_dask_computes,
     requires_cubed,
     requires_dask,
+    requires_numba,
     requires_sparse,
     to_numpy,
 )
@@ -2151,6 +2153,61 @@ def test_datetime_minmax(engine) -> None:
     expected = array[[1, 2]]
     actual, *_ = flox.groupby_reduce(array, by, func="nanmax", engine=engine)
     assert_equal(expected, actual)
+
+
+@pytest.mark.parametrize("func", ["mean", "nanmean"])
+def test_large_int_mean(engine: str, func: str) -> None:
+    # GH520: numpy_groupies>=0.14 refuses integer means that are not exact in float64
+    array = np.full(745, 2**60, dtype=np.int64)
+    by = np.arange(745) // 5
+    actual, *_ = flox.groupby_reduce(array, by, func=func, engine=engine)
+    assert_equal(np.full(149, 2.0**60), actual)
+
+
+@pytest.mark.parametrize("func", ["mean", "nanmean"])
+def test_datetime_mean(engine: str, func: str) -> None:
+    # GH520
+    array = pd.date_range("2020-01-01", periods=745, freq="h", unit="ns").to_numpy()
+    by = np.arange(745) // 5
+    actual, *_ = flox.groupby_reduce(array, by, func=func, engine=engine)
+    assert_equal(array[2::5], actual)
+
+    array = np.array(["2020-01-01", "NaT", "2020-01-03", "NaT", "NaT"], dtype="M8[s]")
+    by = np.array([0, 0, 0, 1, 1])
+    actual, *_ = flox.groupby_reduce(array, by, func=func, engine=engine)
+    expected = np.array(["2020-01-02" if func == "nanmean" else "NaT", "NaT"], dtype="M8[s]")
+    assert_equal(expected, actual)
+
+    array = np.array([1, 3, "NaT", 6], dtype="m8[h]")
+    by = np.array([0, 0, 1, 1])
+    actual, *_ = flox.groupby_reduce(array, by, func=func, engine=engine)
+    expected = np.array([2, 6 if func == "nanmean" else "NaT"], dtype="m8[h]")
+    assert_equal(expected, actual)
+
+
+@pytest.mark.skipif(not HAS_NPG_DATETIME, reason="requires numpy_groupies>=0.16.2")
+@pytest.mark.parametrize("engine", [None, "numpy", pytest.param("numba", marks=requires_numba)])
+@pytest.mark.parametrize("func", ["mean", "nanmean"])
+def test_datetime_mean_exact(engine: str | None, func: str) -> None:
+    # float64 cannot hold 2**62 + 2, numpy_groupies computes the mean of the int64 ticks exactly
+    array = np.array([1, 2**62 + 3], dtype="M8[ns]")
+    actual, *_ = flox.groupby_reduce(array, np.zeros(2, dtype=int), func=func, engine=engine)
+    assert_equal(np.array([2**61 + 2], dtype="M8[ns]"), actual)
+
+
+@requires_dask
+@pytest.mark.parametrize("method", ["blockwise", "map-reduce", "cohorts"])
+def test_datetime_mean_dask(engine: str, method: str) -> None:
+    # GH520: the offset is taken from the first block, which is all NaT here
+    array = pd.date_range("2020-01-01", periods=745, freq="h", unit="ns").to_numpy().copy()
+    array[:100] = np.datetime64("NaT")
+    by = np.arange(745) // 5
+    expected, *_ = flox.groupby_reduce(array, by, func="nanmean", engine=engine)
+    actual, *_ = flox.groupby_reduce(
+        dask.array.from_array(array, chunks=100), by, func="nanmean", engine=engine, method=method
+    )
+    assert_equal(expected, actual)
+    assert_equal(array[102::5], expected[20:])
 
 
 @pytest.mark.parametrize("func", ["first", "last", "nanfirst", "nanlast"])

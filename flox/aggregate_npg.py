@@ -109,6 +109,18 @@ len = partial(_len, func="len")
 nanlen = partial(_len, func="nanlen")
 
 
+def _mean(group_idx, array, engine, *, func, axis=-1, **kwargs):
+    # numpy_groupies>=0.14 refuses integer means that are not exact in float64,
+    # cast to float first like np.mean does
+    if array.dtype.kind in "biu":
+        array = array.astype(np.float64)
+    return _get_aggregate(engine).aggregate(group_idx, array, axis=axis, func=func, **kwargs)
+
+
+mean = partial(_mean, func="mean")
+nanmean = partial(_mean, func="nanmean")
+
+
 def _var_std_wrapper(group_idx, array, engine, *, axis=-1, **kwargs):
     # Attempt to increase numerical stability by subtracting the first element.
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance

@@ -58,6 +58,7 @@ else:
 
 HAS_NUMBAGG = module_available("numbagg", minversion="0.3.0")
 HAS_SPARSE = module_available("sparse")
+HAS_NPG_DATETIME = module_available("numpy_groupies", minversion="0.16.2")
 
 if TYPE_CHECKING:
     from .types import CubedArray, DaskArray
@@ -736,6 +737,19 @@ def _choose_engine(by, agg: Aggregation):
         return "numpy"
 
 
+def _datetime_mean_offset(array: DaskArray | np.ndarray) -> DaskArray | np.ndarray:
+    """Smallest non-NaT value of a datetime64/timedelta64 array as int64, or 0 if all are NaT.
+
+    For dask arrays only the first block is used, so that every output chunk does not depend
+    on a reduction over the full array. Any value close to the data is good enough to center on.
+    """
+    if is_duck_dask_array(array):
+        array = array.blocks[(0,) * array.ndim]  # type: ignore[union-attr]
+    sentinel = np.iinfo(np.int64).max
+    offset = np.where(np.isnat(array), sentinel, array.view(np.int64)).min()
+    return np.where(offset == sentinel, 0, offset)
+
+
 def groupby_reduce(
     array: np.ndarray | DaskArray,
     *by: T_By,
@@ -984,7 +998,22 @@ def groupby_reduce(
 
     is_npdatetime = array.dtype.kind in "Mm"
     is_cftime = _contains_cftime_datetimes(array)
-    requires_numeric = (
+    is_npdatetime_mean = is_npdatetime and func in ["mean", "nanmean"]
+    # numpy_groupies>=0.16.2 computes exact means of datetimes and handles NaT.
+    # The map-reduce of dask and cubed sums datetimes, which numpy_groupies refuses.
+    # Not used for timedelta64, since numpy_groupies fails on its NaT fill value.
+    npg_datetime_mean = (
+        is_npdatetime_mean
+        and array.dtype.kind == "M"
+        and HAS_NPG_DATETIME
+        and not has_dask
+        and not has_cubed
+        and engine in [None, "numpy", "numba"]
+    )
+    if npg_datetime_mean:
+        engine = engine or "numpy"
+        dtype = dtype or array.dtype
+    requires_numeric = not npg_datetime_mean and (
         (func not in ["count", "any", "all"] and not is_first_last)
         # Flox's count works with non-numeric and its faster than converting.
         or (func == "count" and engine != "flox")
@@ -992,7 +1021,16 @@ def groupby_reduce(
         or (is_first_last and is_cftime)
     )
     if requires_numeric:
-        if is_npdatetime:
+        # Means of datetimes are computed as float64, centered on an offset to keep precision,
+        # with NaT represented as NaN.
+        if is_npdatetime_mean:
+            datetime_dtype = array.dtype
+            timedelta_dtype = np.dtype(f"m8[{np.datetime_data(datetime_dtype)[0]}]")  # type: ignore[arg-type]
+            offset = _datetime_mean_offset(array)
+            nat = np.isnat(array)
+            ints = array.view(np.int64)
+            array = np.where(nat, np.nan, (np.where(nat, offset, ints) - offset).astype(np.float64))
+        elif is_npdatetime:
             datetime_dtype = array.dtype
             array = array.view(np.int64)
         elif is_cftime:
@@ -1207,7 +1245,10 @@ def groupby_reduce(
 
     # Output of count has an int dtype.
     if requires_numeric and func != "count":
-        if is_npdatetime:
+        if is_npdatetime_mean:
+            # casting NaN to timedelta64 gives NaT, which propagates through the addition
+            result = np.round(result).astype(timedelta_dtype) + offset.astype(datetime_dtype)
+        elif is_npdatetime:
             result = result.astype(datetime_dtype)
         elif is_cftime:
             asdelta = _to_pytimedelta(result, unit="us")
