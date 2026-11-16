@@ -1041,6 +1041,12 @@ def test_find_cohorts_missing_groups():
     expected, _ = groupby_reduce(array.compute(), by, **kwargs)
     assert_equal(expected, actual)
 
+    # without fill_value, absent expected groups get the aggregation's default
+    del kwargs["fill_value"]
+    actual, _ = groupby_reduce(array, by, method="cohorts", **kwargs)
+    expected, _ = groupby_reduce(array.compute(), by, **kwargs)
+    assert_equal(expected, actual)
+
 
 @pytest.mark.parametrize("chunksize", [12, 13, 14, 24, 36, 48, 72, 71])
 def test_verify_complex_cohorts(chunksize: int) -> None:

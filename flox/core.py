@@ -1151,8 +1151,10 @@ def groupby_reduce(
 
         # TODO: just do this in dask_groupby_agg
         # we always need some fill_value (see above) so choose the default if needed
-        if kwargs["fill_value"] is None:
-            kwargs["fill_value"] = agg.fill_value[agg.name]
+        # This is also used below to reindex "cohorts" and "blockwise" results to expected_groups.
+        if fill_value is None:
+            fill_value = agg.fill_value[agg.name]
+        kwargs["fill_value"] = fill_value
 
         from .dask import dask_groupby_agg
 
